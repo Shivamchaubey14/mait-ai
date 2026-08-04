@@ -16,6 +16,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
+from apps.accounts.admin_serializers import MPPAssignmentSerializer
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin, IsAdminOrReadOnlyOperator, IsMait
 from apps.core.services import record_audit
@@ -161,7 +162,47 @@ class MPPViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
         return queryset
 
     def get_serializer_class(self):
+        if self.action == "assign_mait":
+            return MPPAssignmentSerializer
         return MPPDetailSerializer if self.action == "retrieve" else MPPListSerializer
+
+    @extend_schema(
+        summary="Reassign this MPP to a different Mait",
+        description=(
+            "Overrides the SAP-derived default (SRS §6.2.2). The assignment is what scopes "
+            "a Mait's app, so this moves the MPP and its members out of one Mait's view and "
+            "into another's. Pass null to unassign."
+        ),
+        request=MPPAssignmentSerializer,
+        responses={200: MPPDetailSerializer},
+    )
+    @action(detail=True, methods=["patch"], url_path="assign-mait", permission_classes=[IsAdmin])
+    def assign_mait(self, request, mpp_code=None):
+        mpp = self.get_object()
+        serializer = MPPAssignmentSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        previous = mpp.mait
+        mpp.mait = serializer.context.get("mait")
+        mpp.save(update_fields=["mait", "updated_at"])
+
+        record_audit(
+            action=AuditLog.Action.UPDATE,
+            entity_type="mpp",
+            entity_id=mpp.id,
+            request=request,
+            meta={
+                "mpp_code": mpp.mpp_code,
+                "before": previous.sahayak_vendor_code if previous else None,
+                "after": mpp.mait.sahayak_vendor_code if mpp.mait else None,
+            },
+        )
+        mpp = (
+            MPP.objects.select_related("mait")
+            .annotate(member_count=Count("members"))
+            .get(pk=mpp.pk)
+        )
+        return Response(MPPDetailSerializer(mpp).data)
 
 
 @extend_schema(tags=["master-data"])

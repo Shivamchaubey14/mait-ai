@@ -17,6 +17,7 @@ from drf_spectacular.views import (
 
 api_v1 = [
     path("auth/", include("apps.accounts.urls")),
+    path("", include("apps.accounts.admin_urls")),
     path("", include("apps.masterdata.urls")),
     path("", include("apps.animals.urls")),
     path("", include("apps.inventory.urls")),
