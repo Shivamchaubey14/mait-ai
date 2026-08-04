@@ -86,8 +86,8 @@ omit = ["*/migrations/*", "*/tests/*", "*/apps.py", "*/admin.py"]
 # It may only ever be raised. If a change drops coverage, the fix is a test, not a lower
 # number here.
 #
-#   current: 61%  ·  ai_events/services 68%  ·  inventory/services 67%  ·  masterdata 80%
-fail_under = 60
+#   current: 68%  ·  accounts 95%  ·  masterdata 80%  ·  ai_events/services 68%
+fail_under = 65
 show_missing = true
 exclude_lines = [
     "pragma: no cover",

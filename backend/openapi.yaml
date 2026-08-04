@@ -6,6 +6,197 @@ info:
     Producer Company. Serves the Mait mobile app, the admin web portal and the Indent
     Easy integration.
 paths:
+  /api/v1/auth/login/:
+    post:
+      operationId: auth_login_create
+      description: For Admin and MPP Operator accounts. Maits authenticate through
+        `/auth/otp/send/` and `/auth/otp/verify/` instead.
+      summary: Log in with a username and password
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordLoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordLoginRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+          description: ''
+  /api/v1/auth/otp/send/:
+    post:
+      operationId: auth_otp_send_create
+      description: |-
+        Always returns 200, whether or not the number is registered. Confirming which numbers exist would let anyone enumerate the field workforce.
+
+        A Mait whose SAP record has no mobile number cannot receive an OTP at all; an Admin sets one at activation (SRS §6.8.2).
+      summary: Send a login OTP
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OTPSendRequest'
+            examples:
+              Request:
+                value:
+                  mobile_no: '9795402473'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OTPSendRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OTPSendRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                Request:
+                  value:
+                    mobile_no: '9795402473'
+          description: ''
+  /api/v1/auth/otp/verify/:
+    post:
+      operationId: auth_otp_verify_create
+      description: Expires after 5 minutes; 3 wrong attempts force a resend (SRS §6.5.1).
+        Every send and every attempt is logged for fraud review.
+      summary: Verify a login OTP
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OTPVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OTPVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OTPVerifyRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+          description: ''
+  /api/v1/auth/refresh/:
+    post:
+      operationId: auth_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      description: Blacklists the refresh token so it cannot be exchanged again. The
+        access token remains valid until it expires — it is short-lived by design
+        (~15 min), and revoking it would mean a database lookup on every request,
+        which is exactly what stateless JWT avoids.
+      summary: Log out
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '205':
+          description: No response body
+  /api/v1/auth/me/:
+    get:
+      operationId: auth_me_retrieve
+      description: The first call the mobile app makes after login. For a Mait it
+        returns their assigned MPP codes, which scope everything the app will show.
+      summary: Current user
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+          description: ''
+  /api/v1/auth/time/:
+    get:
+      operationId: auth_time_retrieve
+      description: |-
+        Server time, for the offline queue.
+
+        The app timestamps events captured without connectivity, and field devices drift. This
+        lets the client measure its own offset so a synced event reports when the insemination
+        actually happened rather than when the phone thought it did (SRS §6.3.2).
+      summary: Server time
+      tags:
+      - auth
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/admin/uploads/:
     get:
       operationId: admin_uploads_list
@@ -496,6 +687,72 @@ paths:
           description: ''
 components:
   schemas:
+    CurrentUser:
+      type: object
+      description: |-
+        The authenticated user's profile (`GET /auth/me/`).
+
+        For a Mait this also carries their assigned MPP codes, because it is the first call the
+        app makes after login and the answer scopes everything the app will show (SRS §6.2.3).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        mobile_no:
+          type: string
+          readOnly: true
+          description: Required for Maits — this is where the login OTP is sent.
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        role_display:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        last_login_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        mait_id:
+          type: integer
+          nullable: true
+          readOnly: true
+        sahayak_vendor_code:
+          type: string
+          nullable: true
+          readOnly: true
+        assigned_mpp_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - assigned_mpp_codes
+      - email
+      - full_name
+      - id
+      - is_active
+      - last_login_at
+      - mait_id
+      - mobile_no
+      - role
+      - role_display
+      - sahayak_vendor_code
+      - username
     DataUploadLog:
       type: object
       description: |-
@@ -581,6 +838,16 @@ components:
       - upload_type_display
       - uploaded_by
       - uploaded_by_name
+    LogoutRequest:
+      type: object
+      description: Blacklist a refresh token so a stolen one cannot outlive the session
+        (SRS §16).
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
     MPPDetail:
       type: object
       properties:
@@ -981,6 +1248,31 @@ components:
       - mobile_no
       - mpp
       - name
+    OTPSendRequest:
+      type: object
+      description: Request a login OTP for a Mait (SRS §6.8.2).
+      properties:
+        mobile_no:
+          type: string
+          minLength: 1
+          pattern: ^[6-9]\d{9}$
+      required:
+      - mobile_no
+    OTPVerifyRequest:
+      type: object
+      description: Verify the login OTP and exchange it for tokens.
+      properties:
+        mobile_no:
+          type: string
+          minLength: 1
+          pattern: ^[6-9]\d{9}$
+        otp:
+          type: string
+          minLength: 4
+          maxLength: 8
+      required:
+      - mobile_no
+      - otp
     PaginatedDataUploadLogList:
       type: object
       required:
@@ -1073,6 +1365,37 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/UploadErrorRow'
+    PasswordLoginRequest:
+      type: object
+      description: |-
+        Username/password login for Admin and MPP Operator (SRS §9.1).
+
+        Maits are excluded by design: they authenticate by mobile OTP and their accounts carry
+        an unusable password. Allowing a password here would create a second, weaker way into a
+        field account.
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - password
+      - username
+    RoleEnum:
+      enum:
+      - super_admin
+      - admin
+      - mpp_operator
+      - mait
+      type: string
+      description: |-
+        * `super_admin` - Super Admin
+        * `admin` - Admin / Back-office
+        * `mpp_operator` - MPP Operator
+        * `mait` - Mait (Field Agent)
     StatusEnum:
       enum:
       - queued
@@ -1087,6 +1410,38 @@ components:
         * `completed` - Completed
         * `completed_with_errors` - Completed with errors
         * `failed` - Failed
+    TokenPair:
+      type: object
+      description: The JWT pair every successful login returns.
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - refresh
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
     UploadErrorRow:
       type: object
       description: One rejected row in the downloadable error report (SRS §6.1.4).

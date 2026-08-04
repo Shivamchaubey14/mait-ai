@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.core.exceptions import (
@@ -66,17 +67,24 @@ def issue_otp(*, mobile_no: str, purpose: str, payment: Payment | None = None) -
     return otp
 
 
-@transaction.atomic
 def verify_otp(*, mobile_no: str, purpose: str, code: str) -> OTPLog:
     """
     Verify a submitted OTP (SRS §6.5.1).
 
     Failure modes are distinguished deliberately — expired, wrong, and out of attempts each
     need a different action from the Mait standing in the field.
+
+    **Deliberately not wrapped in a transaction.** It used to be, and that silently disabled
+    the attempt limit entirely: the counter was incremented and saved, then the function
+    raised on the wrong code, and the rollback took the increment with it. Every guess was
+    the first guess, so a six-digit OTP could be brute-forced at will.
+
+    The counter is therefore bumped with an ``F()`` expression that commits on its own,
+    before the code is compared. It is a security control, so it must survive the failure
+    path — that is the whole point of it.
     """
     otp = (
-        OTPLog.objects.select_for_update()
-        .filter(mobile_no=mobile_no, purpose=purpose, is_verified=False)
+        OTPLog.objects.filter(mobile_no=mobile_no, purpose=purpose, is_verified=False)
         .order_by("-created_at")
         .first()
     )
@@ -89,10 +97,12 @@ def verify_otp(*, mobile_no: str, purpose: str, code: str) -> OTPLog:
     if otp.attempts_exhausted:
         raise OTPAttemptsExceeded()
 
-    otp.attempt_count += 1
+    # Count the attempt before judging it. F() makes the increment atomic at the database,
+    # so two simultaneous guesses cannot both read the same starting count.
+    OTPLog.objects.filter(pk=otp.pk).update(attempt_count=F("attempt_count") + 1)
+    otp.refresh_from_db(fields=["attempt_count"])
 
     if not otp.matches(code):
-        otp.save(update_fields=["attempt_count"])
         remaining = settings.OTP_MAX_ATTEMPTS - otp.attempt_count
         if remaining <= 0:
             raise OTPAttemptsExceeded()
@@ -100,7 +110,7 @@ def verify_otp(*, mobile_no: str, purpose: str, code: str) -> OTPLog:
 
     otp.is_verified = True
     otp.verified_at = timezone.now()
-    otp.save(update_fields=["attempt_count", "is_verified", "verified_at"])
+    otp.save(update_fields=["is_verified", "verified_at"])
     return otp
 
 
