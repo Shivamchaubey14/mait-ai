@@ -24,5 +24,5 @@ bandit==1.7.9
 # Developer experience
 django-extensions==3.2.3
 django-debug-toolbar==4.4.6
-ipython==8.27.0
+ipython==9.16.0
 flower==2.0.1
