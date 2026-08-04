@@ -19,7 +19,7 @@ pre-commit==3.8.0
 
 # Security
 pip-audit==2.7.3
-bandit==1.7.9
+bandit==1.9.4
 
 # Developer experience
 django-extensions==3.2.3
