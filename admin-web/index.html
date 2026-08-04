@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard · Mait AI Admin</title>
+    <meta
+      name="description"
+      content="Mait AI admin portal — AI activity, inventory oversight and SAP master data."
+    />
+    <link rel="stylesheet" href="assets/css/main.css" />
+  </head>
+
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <h1 class="visually-hidden">Mait AI Admin</h1>
+        <nav aria-label="Main">
+          <a class="nav-link is-active" href="index.html">Dashboard</a>
+          <a class="nav-link" href="ai-events.html">AI events</a>
+          <a class="nav-link" href="maits.html">Maits &amp; MPPs</a>
+          <a class="nav-link" href="inventory.html">Inventory</a>
+          <a class="nav-link" href="indents.html">Indents</a>
+          <a class="nav-link" href="uploads.html">SAP uploads</a>
+          <a class="nav-link" href="users.html">Users</a>
+        </nav>
+      </aside>
+
+      <header class="topbar">
+        <h2>Dashboard</h2>
+        <div>
+          <span id="current-user" class="kpi-label">—</span>
+          <button type="button" class="btn btn--ghost" id="logout">Sign out</button>
+        </div>
+      </header>
+
+      <main class="main">
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- SRS §6.7.1–6.7.2 -->
+        <section class="kpi-grid" aria-label="AI event summary">
+          <article class="card card--success">
+            <p class="kpi-label">Today</p>
+            <p class="kpi-value" data-kpi="today">—</p>
+          </article>
+          <article class="card card--info">
+            <p class="kpi-label">This week</p>
+            <p class="kpi-value" data-kpi="week">—</p>
+          </article>
+          <article class="card card--info">
+            <p class="kpi-label">This month</p>
+            <p class="kpi-value" data-kpi="month">—</p>
+            <p class="kpi-label" data-kpi="month-delta"></p>
+          </article>
+          <article class="card">
+            <p class="kpi-label">Lifetime</p>
+            <p class="kpi-value" data-kpi="lifetime">—</p>
+          </article>
+          <article class="card card--warning">
+            <p class="kpi-label">Highest single day</p>
+            <p class="kpi-value" data-kpi="highest-day">—</p>
+            <p class="kpi-label" data-kpi="highest-day-on"></p>
+          </article>
+          <article class="card card--warning">
+            <p class="kpi-label">Highest single month</p>
+            <p class="kpi-value" data-kpi="highest-month">—</p>
+            <p class="kpi-label" data-kpi="highest-month-on"></p>
+          </article>
+        </section>
+
+        <!-- SRS §6.7.3 -->
+        <section class="card" aria-labelledby="trend-title">
+          <h3 class="card__title" id="trend-title">AI events over time</h3>
+          <canvas id="trend-chart" height="90" aria-label="AI event trend" role="img"></canvas>
+        </section>
+
+        <!-- SRS §6.7.6 -->
+        <section class="card card--error" aria-labelledby="exceptions-title">
+          <h3 class="card__title" id="exceptions-title">Needs attention</h3>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Exception</th>
+                  <th scope="col">Count</th>
+                  <th scope="col"></th>
+                </tr>
+              </thead>
+              <tbody id="exceptions-body">
+                <tr>
+                  <td colspan="3" class="empty-state">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!--
+      Vendor scripts are pinned and served locally rather than from a CDN. This portal
+      handles member PII, and a third-party script on the page can read anything the page
+      can. Place jQuery and Chart.js in assets/vendor/ — see README.md.
+    -->
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/vendor/chart-4.4.4.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/dashboard.js"></script>
+  </body>
+</html>

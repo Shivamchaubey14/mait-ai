@@ -1,0 +1,56 @@
+{
+  "common": {
+    "next": "Next",
+    "back": "Back",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "save": "Save",
+    "search": "Search",
+    "loading": "Loading…"
+  },
+  "auth": {
+    "mobileNumber": "Mobile number",
+    "sendOtp": "Send OTP",
+    "enterOtp": "Enter the OTP",
+    "otpSent": "OTP sent to {{mobile}}",
+    "attemptsRemaining": "{{count}} attempt(s) remaining"
+  },
+  "aiFlow": {
+    "selectMpp": "Select MPP",
+    "selectFarmer": "Select farmer",
+    "member": "Member",
+    "nonMember": "Non-member",
+    "selectAnimal": "Select animal",
+    "animalType": "Animal type",
+    "breed": "Breed",
+    "earTag": "Ear tag number",
+    "earTagOptional": "Ear tag (optional)",
+    "scanStraw": "Scan the straw",
+    "strawNumber": "Straw number",
+    "capturePhoto": "Take the AI photo",
+    "collectPayment": "Collect payment",
+    "stepOf": "Step {{current}} of {{total}}"
+  },
+  "payment": {
+    "mode": "Payment mode",
+    "online": "Online",
+    "cod": "Cash",
+    "amount": "Amount",
+    "utrNumber": "UTR number",
+    "screenshot": "Payment screenshot",
+    "confirmCash": "Confirm cash received"
+  },
+  "inventory": {
+    "strawsRemaining": "{{count}} straws remaining",
+    "lowStock": "Running low on straws",
+    "requestStock": "Request stock"
+  },
+  "errors": {
+    "notInStock": "This straw is not in your stock. Raise a new indent.",
+    "alreadyUsed": "This straw has already been used.",
+    "otpIncorrect": "Incorrect OTP.",
+    "otpExpired": "This OTP has expired. Request a new one.",
+    "offline": "No connection. This will be saved and sent automatically.",
+    "generic": "Something went wrong. Please try again."
+  }
+}

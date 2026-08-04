@@ -1,0 +1,66 @@
+# Hooks run the same checks CI does, so failures surface before a push costs a round trip.
+# Install once with: pre-commit install
+
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      # A 28 MB SAP export committed by accident is both a repo problem and a PII incident.
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        files: ^backend/
+        args: [--line-length=100]
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        files: ^(mobile|admin-web)/.*\.(js|jsx|ts|tsx|json|css|html)$
+        exclude: ^mobile/(android|ios)/
+
+  - repo: local
+    hooks:
+      # PII belongs nowhere near git history. .gitignore already blocks these; this is the
+      # second lock, because the first one is one `git add -f` away from being bypassed.
+      - id: block-data-files
+        name: block spreadsheet/dump files
+        entry: >-
+          Refusing to commit a data file. SAP exports and database dumps contain member
+          PII and must never enter git history — see SECURITY.md.
+        language: fail
+        files: \.(xlsx|xls|csv|sql|dump)$
+        exclude: ^docs/samples/.*\.template\.csv$
+
+      - id: conventional-commit-scope
+        name: remind about Conventional Commits
+        entry: bash -c 'exit 0'
+        language: system
+        stages: [commit-msg]

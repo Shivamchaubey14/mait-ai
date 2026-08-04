@@ -1,0 +1,28 @@
+# Review ownership.
+#
+# Replace the placeholder handles with real GitHub usernames or teams before enabling
+# "require review from Code Owners" in branch protection — GitHub silently ignores rules
+# that name accounts without write access, which reads as protection that is not there.
+
+# Default owner for anything not matched below.
+*                           @Shivamchaubey14
+
+# --- Workstreams -------------------------------------------------------------------------
+/backend/                   @Shivamchaubey14
+/mobile/                    @Shivamchaubey14
+/admin-web/                 @Shivamchaubey14
+/infra/                     @Shivamchaubey14
+
+# --- High-consequence paths ----------------------------------------------------------------
+# The inventory invariant and the payment flow are where a subtle bug becomes a stock
+# dispute or an unauthorised collection. These deserve a deliberate second pair of eyes.
+/backend/apps/inventory/    @Shivamchaubey14
+/backend/apps/ai_events/    @Shivamchaubey14
+/backend/apps/payments/     @Shivamchaubey14
+/backend/config/settings/   @Shivamchaubey14
+
+# --- Contract & policy ----------------------------------------------------------------------
+/docs/API_CONTRACT.md       @Shivamchaubey14
+/docs/adr/                  @Shivamchaubey14
+/.github/workflows/         @Shivamchaubey14
+/SECURITY.md                @Shivamchaubey14

@@ -1,0 +1,61 @@
+name: Feature / task
+description: New functionality or a scheduled deliverable
+labels: ["enhancement", "triage"]
+body:
+  - type: dropdown
+    id: workstream
+    attributes:
+      label: Workstream
+      options: [Backend API, Mobile app, Admin web portal, Indent Easy integration, Infra / CI, Docs]
+    validations:
+      required: true
+
+  - type: input
+    id: srs-ref
+    attributes:
+      label: SRS reference
+      description: The requirement this implements, e.g. FR-6.4.2 or §9.6.
+      placeholder: FR-6.4.2
+
+  - type: input
+    id: roadmap-day
+    attributes:
+      label: Roadmap phase / day
+      description: See docs/ROADMAP.md.
+      placeholder: Phase 3, Day 11
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is not possible today, and who is blocked by it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] A Mait holding 0 straws is blocked at the scan step with a clear reason
+        - [ ] The block is enforced server-side, not only in the app
+        - [ ] Covered by a test
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Touches
+      options:
+        - label: The frozen API contract (docs/API_CONTRACT.md)
+        - label: Inventory or payment logic
+        - label: PII handling
+        - label: A database migration

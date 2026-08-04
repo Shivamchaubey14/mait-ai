@@ -1,0 +1,38 @@
+# Normalise line endings. Development happens on Windows, CI and production run on Linux —
+# without this, every file touched on a Windows machine shows up as wholly rewritten.
+* text=auto eol=lf
+
+# These MUST stay LF regardless of platform. A shell script or a Dockerfile with CRLF fails
+# at runtime inside a Linux container with an error that does not mention line endings.
+*.sh          text eol=lf
+Dockerfile    text eol=lf
+Makefile      text eol=lf
+*.yml         text eol=lf
+*.yaml        text eol=lf
+gradlew       text eol=lf
+
+# Windows-only files keep CRLF.
+*.bat         text eol=crlf
+*.cmd         text eol=crlf
+gradlew.bat   text eol=crlf
+
+# Binary — never diffed, never converted.
+*.png         binary
+*.jpg         binary
+*.jpeg        binary
+*.gif         binary
+*.ico         binary
+*.pdf         binary
+*.woff        binary
+*.woff2       binary
+*.ttf         binary
+*.keystore    binary
+*.jks         binary
+*.aab         binary
+*.apk         binary
+*.xlsx        binary
+*.xls         binary
+
+# Generated — collapsed in pull request diffs so review stays on the hand-written change.
+backend/openapi.yaml   linguist-generated=true
+package-lock.json      linguist-generated=true

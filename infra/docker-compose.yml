@@ -1,0 +1,133 @@
+# =======================================================================================
+# Local development stack (SRS §12 Day 1).
+#
+# Run from the repository root with the Makefile: `make up`.
+# This file is for development only — production runs on Kubernetes/Swarm per
+# docs/DEPLOYMENT.md, and none of the credentials here are used anywhere real.
+# =======================================================================================
+
+name: maitai
+
+services:
+  mysql:
+    image: mysql:8.0
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # Reject bad data instead of truncating it — matches the production setting.
+      - --sql-mode=STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: maitai
+      MYSQL_USER: maitai
+      MYSQL_PASSWORD: maitai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        REQUIREMENTS: requirements/dev.txt
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DATABASE_URL: mysql://maitai:maitai@mysql:3306/maitai
+      REDIS_URL: redis://redis:6379/0
+      DJANGO_DEBUG: "True"
+      # Development-only Fernet key. Never reuse this anywhere that holds real PII.
+      FIELD_ENCRYPTION_KEY: ZGV2LW9ubHktZmVybmV0LWtleS0zMi1ieXRlcy1sb25nPT0=
+    volumes:
+      - ../backend:/app
+      - media_data:/app/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        REQUIREMENTS: requirements/dev.txt
+    command: celery -A config worker --loglevel=info --concurrency=2
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DATABASE_URL: mysql://maitai:maitai@mysql:3306/maitai
+      REDIS_URL: redis://redis:6379/0
+      FIELD_ENCRYPTION_KEY: ZGV2LW9ubHktZmVybmV0LWtleS0zMi1ieXRlcy1sb25nPT0=
+    volumes:
+      - ../backend:/app
+      - media_data:/app/media
+    depends_on:
+      - api
+      - redis
+
+  celery-beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        REQUIREMENTS: requirements/dev.txt
+    command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DATABASE_URL: mysql://maitai:maitai@mysql:3306/maitai
+      REDIS_URL: redis://redis:6379/0
+      FIELD_ENCRYPTION_KEY: ZGV2LW9ubHktZmVybmV0LWtleS0zMi1ieXRlcy1sb25nPT0=
+    volumes:
+      - ../backend:/app
+    depends_on:
+      - api
+      - redis
+
+  flower:
+    image: mher/flower:2.0
+    command: celery --broker=redis://redis:6379/0 flower --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+
+  admin-web:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ../admin-web:/usr/share/nginx/html:ro
+      - ./nginx/admin-web.dev.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+
+volumes:
+  mysql_data:
+  redis_data:
+  media_data:

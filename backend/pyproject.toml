@@ -1,0 +1,100 @@
+[project]
+name = "maitai-backend"
+version = "0.1.0"
+description = "Mait AI — Artificial Insemination field operations platform API"
+requires-python = ">=3.12"
+
+# --------------------------------------------------------------------------------------
+# Ruff — linting and import sorting
+# --------------------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations", ".venv", "staticfiles"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "DJ",   # flake8-django
+    "S",    # bandit
+    "T20",  # no stray print()
+    "SIM",  # simplify
+    "RUF",
+]
+ignore = [
+    "S101",  # assert — pytest is built on it
+    "B008",  # function call in default arg — the DRF idiom
+    "RUF012",  # mutable class attrs need ClassVar — noisy against Django conventions
+]
+
+[tool.ruff.lint.per-file-ignores]
+"*/tests/*" = ["S105", "S106", "S311"]     # test fixtures use dummy secrets
+"conftest.py" = ["S105", "S106"]
+"*/settings/*" = ["F403", "F405"]          # star-imports are the settings-split idiom
+"apps/payments/services.py" = ["T20"]      # console SMS provider prints by design
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+# --------------------------------------------------------------------------------------
+# Black
+# --------------------------------------------------------------------------------------
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+extend-exclude = "migrations"
+
+# --------------------------------------------------------------------------------------
+# Pytest
+# --------------------------------------------------------------------------------------
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py", "*_test.py"]
+testpaths = ["apps"]
+addopts = [
+    "--strict-markers",
+    "--reuse-db",
+    "--cov=apps",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: tests that take more than a second",
+    "integration: exercises an external service",
+]
+filterwarnings = ["error::DeprecationWarning:apps.*"]
+
+[tool.coverage.run]
+source = ["apps"]
+omit = ["*/migrations/*", "*/tests/*", "*/apps.py", "*/admin.py"]
+
+[tool.coverage.report]
+# SRS §7 Maintainability — ≥80% on the transactional core. CI enforces this.
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "def __str__",
+]
+
+# --------------------------------------------------------------------------------------
+# Mypy
+# --------------------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+exclude = ["migrations/"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"
