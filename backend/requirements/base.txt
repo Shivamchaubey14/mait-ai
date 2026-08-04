@@ -37,7 +37,7 @@ openpyxl==3.1.5
 requests==2.32.3
 
 # PII encryption at rest
-cryptography==43.0.1
+cryptography==50.0.0
 
 # Serving
 gunicorn==23.0.0
