@@ -34,7 +34,7 @@ Pillow==10.4.0
 openpyxl==3.1.5
 
 # Outbound HTTP (Indent Easy connector, SMS gateway)
-requests==2.32.3
+requests==2.34.2
 
 # PII encryption at rest
 cryptography==43.0.1
