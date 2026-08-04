@@ -6,8 +6,8 @@ instance, not SQLite — the inventory invariant depends on InnoDB row locking a
 constraints (ADR 0002), and SQLite would let a broken implementation pass.
 """
 
-from .base import *  # noqa: F401,F403
-from .base import DATABASES, env
+from .base import *
+from .base import DATABASES
 
 DEBUG = False
 SECRET_KEY = "test-only-key"
@@ -25,6 +25,6 @@ CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"
 SMS_GATEWAY = {"PROVIDER": "dummy", "API_KEY": "", "SENDER_ID": "TEST"}
 
 # Throttling off by default; the throttle tests re-enable it explicitly.
-REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {  # noqa: F405
-    k: None for k in REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]  # noqa: F405
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+    k: None for k in REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
 }

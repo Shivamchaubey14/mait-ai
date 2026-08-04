@@ -57,7 +57,9 @@ class IndentEasyClient:
         data = self._post("/api/indents", payload)
         ref = data.get("indent_ref_no") or data.get("ref_no")
         if not ref:
-            raise IndentEasyError(f"Indent Easy accepted the request but returned no reference: {data}")
+            raise IndentEasyError(
+                f"Indent Easy accepted the request but returned no reference: {data}"
+            )
         return str(ref)
 
     def fetch_grn(self, indent_ref_no: str) -> dict[str, Any] | None:

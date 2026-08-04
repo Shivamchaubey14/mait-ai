@@ -1,0 +1,71 @@
+openapi: 3.0.3
+info:
+  title: Mait AI Platform API
+  version: 1.0.0
+  description: Artificial Insemination field operations platform for Shwetdhara Milk
+    Producer Company. Serves the Mait mobile app, the admin web portal and the Indent
+    Easy integration.
+paths:
+  /api/v1/health/:
+    get:
+      operationId: health_retrieve
+      description: Liveness — the process is up. Used by the Kubernetes liveness probe.
+      summary: Liveness check
+      tags:
+      - ops
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/health/ready/:
+    get:
+      operationId: health_ready_retrieve
+      description: |-
+        Readiness — dependencies are reachable.
+
+        Failing readiness pulls the pod out of rotation without killing it, so a brief Redis
+        blip degrades capacity instead of causing a crash loop (docs/DEPLOYMENT.md).
+      summary: Readiness check
+      tags:
+      - ops
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+components: {}
+tags:
+- name: auth
+  description: Authentication and session management
+- name: master-data
+  description: SAP-sourced MPP, Mait and Member data
+- name: animals
+  description: Animal registry and breed configuration
+- name: inventory
+  description: Semen batches and Mait stock
+- name: ai-events
+  description: The AI event capture state machine
+- name: payments
+  description: Payment collection and OTP verification
+- name: indents
+  description: Stock requests and Indent Easy integration
+- name: dashboard
+  description: Aggregated reporting and exports

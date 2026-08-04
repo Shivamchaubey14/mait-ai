@@ -57,16 +57,28 @@ class EncryptedFieldMixin:
 class EncryptedCharField(EncryptedFieldMixin, models.CharField):
     """CharField stored as Fernet ciphertext.
 
-    ``max_length`` describes the plaintext. The column is widened automatically because
-    ciphertext is substantially longer than its input.
+    ``max_length`` describes the **plaintext**. The column is widened automatically, because
+    Fernet ciphertext is substantially longer than its input.
+
+    ``deconstruct`` deliberately reports the original plaintext length rather than the
+    widened one. Without that, every ``makemigrations`` run would read back the widened
+    value, widen it again, and emit an endless series of no-op AlterField migrations.
     """
 
     def __init__(self, *args, **kwargs):
-        plaintext_length = kwargs.get("max_length", 100)
-        kwargs["max_length"] = base64.urlsafe_b64encode(
-            b"x" * (plaintext_length + 100)
-        ).decode().__len__()
+        self.plaintext_max_length = kwargs.get("max_length", 100)
+        kwargs["max_length"] = self._column_width(self.plaintext_max_length)
         super().__init__(*args, **kwargs)
+
+    @staticmethod
+    def _column_width(plaintext_length: int) -> int:
+        """Column width needed to hold the ciphertext for a plaintext of this length."""
+        return len(base64.urlsafe_b64encode(b"x" * (plaintext_length + 100)).decode())
+
+    def deconstruct(self):
+        name, path, args, kwargs = super().deconstruct()
+        kwargs["max_length"] = self.plaintext_max_length
+        return name, path, args, kwargs
 
 
 def mask(value: str | None, visible: int = 4) -> str:

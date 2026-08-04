@@ -1,9 +1,12 @@
 """Celery application and the scheduled job table (SRS §3.2 Async/Jobs)."""
 
+import logging
 import os
 
 from celery import Celery
 from celery.schedules import crontab
+
+logger = logging.getLogger(__name__)
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
 
@@ -39,4 +42,5 @@ app.conf.beat_schedule = {
 
 @app.task(bind=True, ignore_result=True)
 def debug_task(self):
-    print(f"Request: {self.request!r}")
+    """Smoke test that a worker is alive and consuming from the broker."""
+    logger.info("Celery debug task ran: %r", self.request)

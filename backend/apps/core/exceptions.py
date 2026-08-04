@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import logging
 
-from django.conf import settings
 from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.views import exception_handler as drf_exception_handler
@@ -140,7 +139,7 @@ def problem_details_handler(exc, context):
 
 
 def _as_list(value) -> list[str]:
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [str(v) for v in value]
     return [str(value)]
 

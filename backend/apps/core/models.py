@@ -62,7 +62,8 @@ class AuditLog(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.action} {self.entity_type}#{self.entity_id} @ {self.created_at:%Y-%m-%d %H:%M}"
+        when = f"{self.created_at:%Y-%m-%d %H:%M}"
+        return f"{self.action} {self.entity_type}#{self.entity_id} @ {when}"
 
 
 class IdempotencyRecord(TimeStampedModel):

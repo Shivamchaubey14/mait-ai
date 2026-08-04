@@ -142,9 +142,8 @@ class TestInventoryFloor:
         inventory = MaitInventory.objects.create(
             mait=mait, product_type=ProductType.STRAW, product_ref_id=1, qty_available=0
         )
-        with pytest.raises(IntegrityError):
-            with transaction.atomic():
-                MaitInventory.objects.filter(pk=inventory.pk).update(qty_available=-1)
+        with pytest.raises(IntegrityError), transaction.atomic():
+            MaitInventory.objects.filter(pk=inventory.pk).update(qty_available=-1)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -189,7 +188,7 @@ class TestConcurrentCompletion:
                 target = AIEvent.objects.get(pk=target_id)
                 complete_ai_event(target)
                 results.append("ok")
-            except Exception as exc:  # noqa: BLE001 — the failure is the assertion
+            except Exception as exc:
                 results.append(exc)
             finally:
                 connections.close_all()

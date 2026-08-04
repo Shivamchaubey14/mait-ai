@@ -50,7 +50,7 @@ def dispatch_otp(self, otp_log_id: int, code: str) -> None:
     otp = OTPLog.objects.get(pk=otp_log_id)
     try:
         message_id = send_sms(mobile_no=otp.mobile_no, code=code, purpose=otp.purpose)
-    except Exception as exc:  # noqa: BLE001 — retry any gateway failure
+    except Exception as exc:
         logger.warning("OTP dispatch failed, retrying", extra={"otp_log_id": otp_log_id})
         raise self.retry(exc=exc) from exc
 

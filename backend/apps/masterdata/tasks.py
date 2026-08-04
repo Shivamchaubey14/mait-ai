@@ -18,14 +18,15 @@ Three behaviours matter and are easy to get wrong:
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from .models import DataUploadLog, Mait, Member, MPP
+from .models import MPP, DataUploadLog, Mait, Member
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def process_master_upload(self, upload_id: int) -> dict[str, int]:
 
     try:
         result = _import_workbook(upload)
-    except Exception as exc:  # noqa: BLE001 — the failure must land on the upload record
+    except Exception as exc:
         logger.exception("Master upload %s failed", upload_id)
         upload.status = DataUploadLog.Status.FAILED
         upload.error_report = [{"row": None, "error": str(exc)[:500]}]
@@ -138,7 +139,7 @@ def _commit_batch(batch, handler, errors) -> tuple[int, int]:
             with transaction.atomic():
                 handler(item["data"])
             ok += 1
-        except Exception as exc:  # noqa: BLE001 — per-row isolation is the point
+        except Exception as exc:
             bad += 1
             if len(errors) < MAX_ERRORS_STORED:
                 errors.append({"row": item["row_number"], "error": str(exc)[:300]})
@@ -179,7 +180,7 @@ def _iter_rows(sheet, header_row_index: int, headers: list[str]) -> Iterator[tup
     ):
         if row is None or all(cell in (None, "") for cell in row):
             continue
-        yield header_row_index + 1 + offset, dict(zip(headers, row))
+        yield header_row_index + 1 + offset, dict(zip(headers, row, strict=False))
 
 
 def _normalise(value) -> str:

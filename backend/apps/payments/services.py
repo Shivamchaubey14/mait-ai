@@ -200,7 +200,7 @@ def send_sms(*, mobile_no: str, code: str, purpose: str) -> str | None:
         return None
 
     if provider == "console":
-        print(f"[SMS→{mobile_no}] Mait AI OTP for {purpose}: {code}")  # noqa: T201
+        print(f"[SMS→{mobile_no}] Mait AI OTP for {purpose}: {code}")
         return "console"
 
     raise NotImplementedError(

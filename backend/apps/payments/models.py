@@ -134,7 +134,8 @@ class OTPLog(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.purpose} → {self.mobile_no} ({'verified' if self.is_verified else 'pending'})"
+        state = "verified" if self.is_verified else "pending"
+        return f"{self.purpose} → {self.mobile_no} ({state})"
 
     @staticmethod
     def hash_code(code: str, mobile_no: str) -> str:

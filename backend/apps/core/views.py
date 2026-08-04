@@ -50,7 +50,7 @@ class ReadinessView(APIView):
                 cursor.execute("SELECT 1")
                 cursor.fetchone()
             return "ok"
-        except Exception as exc:  # noqa: BLE001 - report, never crash the probe
+        except Exception as exc:
             return f"error: {exc.__class__.__name__}"
 
     @staticmethod
@@ -58,5 +58,5 @@ class ReadinessView(APIView):
         try:
             cache.set("healthcheck", "1", timeout=5)
             return "ok" if cache.get("healthcheck") == "1" else "error: readback failed"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return f"error: {exc.__class__.__name__}"

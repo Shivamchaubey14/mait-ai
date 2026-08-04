@@ -13,7 +13,7 @@ from apps.accounts.models import Role, User
 from apps.ai_events.models import AIEvent
 from apps.animals.models import Animal, AnimalType
 from apps.inventory.models import MaitInventory, ProductType, SemenBatch
-from apps.masterdata.models import Mait, Member, MPP
+from apps.masterdata.models import MPP, Mait, Member
 from apps.payments.models import Payment
 
 

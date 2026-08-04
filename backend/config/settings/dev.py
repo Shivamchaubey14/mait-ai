@@ -1,6 +1,6 @@
 """Local development settings. Never used outside a developer machine."""
 
-from .base import *  # noqa: F401,F403
+from .base import *
 from .base import INSTALLED_APPS, MIDDLEWARE, env
 
 DEBUG = True

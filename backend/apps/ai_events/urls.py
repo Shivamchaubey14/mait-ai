@@ -1,8 +1,9 @@
 """
 URL routes for the ai events domain.
 
-Endpoints are specified in ``docs/API_CONTRACT.md`` (§9.6 AI event) and are implemented in
-Phase 3, Days 11-13 of ``docs/ROADMAP.md``.
+Endpoints are specified in
+``docs/API_CONTRACT.md`` (AI event)
+and are implemented per ``docs/ROADMAP.md``.
 
 The contract is frozen: add routes to match it rather than inventing new shapes. If a route
 genuinely needs to change, update the contract and the OpenAPI schema in the same pull
