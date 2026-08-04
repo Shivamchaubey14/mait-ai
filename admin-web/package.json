@@ -13,7 +13,7 @@
   },
   "devDependencies": {
     "cypress": "^13.14.2",
-    "eslint": "^8.57.1",
+    "eslint": "^10.8.0",
     "html-validate": "^8.24.1",
     "prettier": "^3.3.3"
   },
