@@ -1,0 +1,371 @@
+/**
+ * Admin portal base styles (SRS §10.3).
+ *
+ * Every colour, size and radius comes from tokens.css. CI rejects a hex literal in this
+ * file — see .github/workflows/admin-web-ci.yml.
+ */
+
+@import url('tokens.css');
+
+/* --- reset ------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body,
+h1,
+h2,
+h3,
+p,
+figure,
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+/* --- base -------------------------------------------------------------------------- */
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  background: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.kpi-value {
+  font-family: var(--font-heading);
+  line-height: var(--leading-tight);
+  color: var(--color-primary-dark);
+}
+
+h1 {
+  font-size: var(--text-h1);
+}
+h2 {
+  font-size: var(--text-h2);
+}
+h3 {
+  font-size: var(--text-h3);
+}
+
+a {
+  color: var(--color-info);
+  text-decoration: none;
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration: underline;
+}
+
+/* Visible focus everywhere. Removing outlines makes the portal unusable by keyboard. */
+:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
+
+/* --- layout ------------------------------------------------------------------------ */
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-rows: var(--topbar-height) 1fr;
+  grid-template-areas:
+    'sidebar topbar'
+    'sidebar main';
+  min-height: 100vh;
+}
+
+.sidebar {
+  grid-area: sidebar;
+  background: var(--color-primary-dark);
+  padding: var(--space-4);
+}
+
+.topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 0 var(--space-5);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.main {
+  grid-area: main;
+  padding: var(--space-5);
+  max-width: var(--content-max-width);
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'topbar'
+      'main';
+  }
+
+  .sidebar {
+    display: none;
+  }
+}
+
+/* --- nav --------------------------------------------------------------------------- */
+.nav-link {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--color-surface);
+  opacity: 0.85;
+}
+
+.nav-link:hover,
+.nav-link.is-active {
+  background: rgb(255 255 255 / 12%);
+  opacity: 1;
+  text-decoration: none;
+}
+
+/* --- cards ------------------------------------------------------------------------- */
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.card__title {
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  margin-bottom: var(--space-3);
+}
+
+/* Status is a left border, consistently, across every card in the portal. */
+.card--success {
+  border-left: 4px solid var(--color-success);
+}
+.card--warning {
+  border-left: 4px solid var(--color-warning);
+}
+.card--error {
+  border-left: 4px solid var(--color-error);
+}
+.card--info {
+  border-left: 4px solid var(--color-info);
+}
+
+/* --- KPI tiles --------------------------------------------------------------------- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.kpi-value {
+  font-size: var(--text-display);
+  font-weight: 700;
+}
+
+.kpi-label {
+  font-size: var(--text-label);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kpi-delta--up {
+  color: var(--color-success-alt);
+}
+.kpi-delta--down {
+  color: var(--color-error);
+}
+
+/* --- buttons ----------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn--primary {
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+
+.btn--accent {
+  background: var(--color-accent);
+  color: var(--color-surface);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.btn--danger {
+  background: var(--color-error);
+  color: var(--color-surface);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- forms ------------------------------------------------------------------------- */
+.field {
+  margin-bottom: var(--space-4);
+}
+
+/* Label above the input, always visible. A placeholder-as-label disappears exactly when a
+   hesitant user needs it (docs/DESIGN_SYSTEM.md). */
+.field__label {
+  display: block;
+  font-size: var(--text-label);
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+
+.field__input {
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  color: var(--color-text);
+}
+
+.field__input:focus {
+  border-color: var(--color-primary);
+}
+
+/* Errors carry an icon as well as colour — colour alone excludes colour-blind users. */
+.field__error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  font-size: var(--text-caption);
+  color: var(--color-error);
+}
+
+/* --- tables ------------------------------------------------------------------------ */
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body);
+}
+
+.table th,
+.table td {
+  padding: var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table th {
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.table tbody tr:hover {
+  background: var(--color-background);
+}
+
+/* --- badges ------------------------------------------------------------------------ */
+.badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.badge--completed {
+  background: var(--color-success);
+  color: var(--color-surface);
+}
+
+/* Yellow fails contrast against white, so it never carries light text — dark text on the
+   fill instead (docs/DESIGN_SYSTEM.md). */
+.badge--pending {
+  background: var(--color-warning);
+  color: var(--color-text);
+}
+
+.badge--blocked {
+  background: var(--color-error);
+  color: var(--color-surface);
+}
+
+.badge--draft {
+  background: var(--color-neutral);
+  color: var(--color-surface);
+}
+
+/* --- states ------------------------------------------------------------------------ */
+.empty-state {
+  padding: var(--space-7) var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.alert {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-4);
+}
+
+.alert--error {
+  background: var(--color-error);
+  color: var(--color-surface);
+}
+
+.alert--info {
+  background: var(--color-info);
+  color: var(--color-surface);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

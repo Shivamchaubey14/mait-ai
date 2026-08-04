@@ -1,0 +1,23 @@
+Copyright (c) 2026 Shwetdhara Milk Producer Company. All rights reserved.
+
+PROPRIETARY AND CONFIDENTIAL
+
+This software and its accompanying documentation are the confidential and proprietary
+property of Shwetdhara Milk Producer Company ("the Company").
+
+No part of this repository may be copied, reproduced, modified, published, distributed,
+sublicensed, or disclosed to any third party in any form or by any means without the prior
+written permission of the Company.
+
+Access to this repository is granted solely to authorised employees, contractors and
+partners of the Company, and only for the purpose of developing, operating and maintaining
+the Mait AI platform. Access does not transfer any ownership or licence beyond that purpose.
+
+The platform processes personal data of dairy producers, including Aadhaar numbers, PAN
+numbers and bank account details. Anyone with access to this repository or to any deployed
+environment is responsible for handling that data in line with SECURITY.md and applicable
+Indian data protection law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT.

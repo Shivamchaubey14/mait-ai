@@ -1,0 +1,56 @@
+{
+  "common": {
+    "next": "आगे",
+    "back": "पीछे",
+    "cancel": "रद्द करें",
+    "retry": "फिर से",
+    "save": "सेव करें",
+    "search": "खोजें",
+    "loading": "लोड हो रहा है…"
+  },
+  "auth": {
+    "mobileNumber": "मोबाइल नंबर",
+    "sendOtp": "OTP भेजें",
+    "enterOtp": "OTP डालें",
+    "otpSent": "{{mobile}} पर OTP भेजा गया",
+    "attemptsRemaining": "{{count}} प्रयास बाकी"
+  },
+  "aiFlow": {
+    "selectMpp": "MPP चुनें",
+    "selectFarmer": "किसान चुनें",
+    "member": "सदस्य",
+    "nonMember": "गैर-सदस्य",
+    "selectAnimal": "पशु चुनें",
+    "animalType": "पशु का प्रकार",
+    "breed": "नस्ल",
+    "earTag": "कान का टैग नंबर",
+    "earTagOptional": "कान का टैग (वैकल्पिक)",
+    "scanStraw": "स्ट्रॉ स्कैन करें",
+    "strawNumber": "स्ट्रॉ नंबर",
+    "capturePhoto": "AI फोटो लें",
+    "collectPayment": "भुगतान लें",
+    "stepOf": "चरण {{current}} / {{total}}"
+  },
+  "payment": {
+    "mode": "भुगतान का तरीका",
+    "online": "ऑनलाइन",
+    "cod": "नकद",
+    "amount": "राशि",
+    "utrNumber": "UTR नंबर",
+    "screenshot": "भुगतान का स्क्रीनशॉट",
+    "confirmCash": "नकद मिलने की पुष्टि करें"
+  },
+  "inventory": {
+    "strawsRemaining": "{{count}} स्ट्रॉ बाकी",
+    "lowStock": "स्ट्रॉ कम हैं",
+    "requestStock": "स्टॉक मांगें"
+  },
+  "errors": {
+    "notInStock": "यह स्ट्रॉ आपके स्टॉक में नहीं है। नया इंडेंट बनाएं।",
+    "alreadyUsed": "यह स्ट्रॉ पहले ही इस्तेमाल हो चुका है।",
+    "otpIncorrect": "गलत OTP।",
+    "otpExpired": "यह OTP समाप्त हो गया है। नया मांगें।",
+    "offline": "कनेक्शन नहीं है। यह सेव होकर अपने आप भेज दिया जाएगा।",
+    "generic": "कुछ गलत हुआ। फिर से कोशिश करें।"
+  }
+}

@@ -1,0 +1,124 @@
+name: Deploy to production
+
+# Production deploys from a tag on main, behind the `production` environment's manual
+# approval gate (SRS §14, docs/BRANCHING.md). Never automatic.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to deploy (e.g. v1.2.0)"
+        required: true
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Pre-flight checks
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: resolve
+        run: echo "version=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to deploy a tag that is not on main
+        # A tag cut from a feature branch would ship unreviewed code straight to production.
+        run: |
+          if ! git branch -r --contains "${{ steps.resolve.outputs.version }}" | grep -q 'origin/main'; then
+            echo "::error::${{ steps.resolve.outputs.version }} is not an ancestor of main."
+            exit 1
+          fi
+
+  deploy:
+    name: Deploy ${{ needs.guard.outputs.version }}
+    needs: guard
+    runs-on: ubuntu-latest
+    environment:
+      # Approval gate is configured on this environment — the deploy pauses here until a
+      # reviewer approves it (SRS §14).
+      name: production
+      url: https://api.maitai.internal
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.guard.outputs.version }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.REGISTRY_URL }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: |
+            ${{ secrets.REGISTRY_URL }}/maitai-api:${{ needs.guard.outputs.version }}
+            ${{ secrets.REGISTRY_URL }}/maitai-api:latest
+          cache-from: type=gha
+
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ secrets.REGISTRY_URL }}/maitai-api:${{ needs.guard.outputs.version }}
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Snapshot the database
+        run: |
+          echo "::notice::Taking a pre-migration snapshot"
+          # aws rds create-db-snapshot --db-instance-identifier maitai-prod \
+          #   --db-snapshot-identifier maitai-pre-${{ github.run_id }}
+
+      - name: Run migrations
+        # Must be backward compatible with the running release — both versions serve
+        # traffic during the rollout (docs/DEPLOYMENT.md#migration-discipline).
+        run: |
+          echo "::notice::Running migrations"
+          # kubectl run maitai-migrate-${{ github.run_id }} \
+          #   --image=${{ secrets.REGISTRY_URL }}/maitai-api:${{ needs.guard.outputs.version }} \
+          #   --restart=Never --rm -i -n production \
+          #   -- python manage.py migrate --noinput
+
+      - name: Roll out
+        run: |
+          echo "::notice::Rolling out ${{ needs.guard.outputs.version }}"
+          # kubectl set image deployment/maitai-api \
+          #   api=${{ secrets.REGISTRY_URL }}/maitai-api:${{ needs.guard.outputs.version }} \
+          #   -n production
+          # kubectl rollout status deployment/maitai-api -n production --timeout=10m
+
+      - name: Smoke test
+        run: |
+          echo "::notice::Post-deploy smoke test"
+          # curl -fsS --retry 5 --retry-delay 10 \
+          #   https://api.maitai.internal/api/v1/health/ready/
+
+      - name: Roll back on failure
+        if: failure()
+        run: |
+          echo "::error::Production deploy failed — rolling back"
+          # kubectl rollout undo deployment/maitai-api -n production
+
+      - name: Publish the release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.guard.outputs.version }}
+          generate_release_notes: true

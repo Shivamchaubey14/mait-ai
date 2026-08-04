@@ -1,0 +1,23 @@
+{
+  "name": "maitai-admin-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mait AI admin portal \u2014 HTML/CSS/JS with jQuery and AJAX",
+  "scripts": {
+    "lint": "eslint assets/js --ext .js --max-warnings=0",
+    "format": "prettier --write \"**/*.{js,css,html}\"",
+    "format:check": "prettier --check \"**/*.{js,css,html}\"",
+    "validate:html": "html-validate \"**/*.html\"",
+    "test:e2e": "cypress run",
+    "test:e2e:open": "cypress open"
+  },
+  "devDependencies": {
+    "cypress": "^13.14.2",
+    "eslint": "^8.57.1",
+    "html-validate": "^8.24.1",
+    "prettier": "^3.3.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

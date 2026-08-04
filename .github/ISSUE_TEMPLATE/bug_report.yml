@@ -1,0 +1,77 @@
+name: Bug report
+description: Something is broken
+labels: ["bug", "triage"]
+body:
+  - type: dropdown
+    id: workstream
+    attributes:
+      label: Workstream
+      options: [Backend API, Mobile app, Admin web portal, Indent Easy integration, Infra / CI]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: >-
+        Anything touching stock counts, payment verification or PII exposure is critical
+        regardless of how often it happens.
+      options:
+        - Critical — data loss, wrong stock, unauthorised payment, or PII exposed
+        - High — a core flow is blocked with no workaround
+        - Medium — a flow is degraded but has a workaround
+        - Low — cosmetic or minor
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Log in as a Mait assigned to MPP ...
+        2. Start an AI event for ...
+        3. Scan straw ...
+    validations:
+      required: true
+
+  - type: input
+    id: request-id
+    attributes:
+      label: Request ID
+      description: The `X-Request-ID` response header, if you have it — it links straight to the server logs.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: |
+        Environment: staging / production
+        App version:
+        Device / OS:
+        Connectivity: online / offline queue / intermittent
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: >-
+        Redact before pasting. Never attach Aadhaar, PAN, bank details, OTP codes or JWTs.
+      render: shell

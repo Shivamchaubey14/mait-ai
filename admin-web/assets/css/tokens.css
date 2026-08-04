@@ -1,0 +1,95 @@
+/**
+ * Design tokens for the admin portal (SRS §10, docs/DESIGN_SYSTEM.md).
+ *
+ * The single source of colour, type and spacing for the web portal, mirrored for the mobile
+ * app in `mobile/src/theme/tokens.ts`. CI rejects a hardcoded hex anywhere else in this
+ * workstream — use `var(--color-*)`.
+ */
+
+:root {
+  /* --- Typography ------------------------------------------------------------------- */
+  --font-heading: "Lexend", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: "Quicksand", -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --text-display: 2rem;      /* 32px — dashboard KPI numbers */
+  --text-h1: 1.5rem;         /* 24px */
+  --text-h2: 1.25rem;        /* 20px */
+  --text-h3: 1.0625rem;      /* 17px */
+  --text-body: 0.9375rem;    /* 15px */
+  --text-label: 0.8125rem;   /* 13px */
+  --text-caption: 0.75rem;   /* 12px */
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+
+  /* --- Brand ------------------------------------------------------------------------ */
+  --color-primary: #43637e;
+  --color-primary-dark: #325e6a;
+  --color-secondary: #8fa28a;
+
+  /* --- Status ----------------------------------------------------------------------- */
+  --color-success: #66bb6a;
+  --color-success-alt: #249d8f;
+  --color-error: #bd4444;
+  --color-error-dark: #b34a44;
+  --color-warning: #fff449;
+  --color-info: #78a4cb;
+
+  /* --- Accents ---------------------------------------------------------------------- */
+  --color-accent: #e98b50;
+  --color-accent-alt: #ec5b38;
+  --color-highlight: #c8a96b;
+  --color-highlight-alt: #ba6a4c;
+
+  /* --- Text & surfaces -------------------------------------------------------------- */
+  --color-text: #2c3639;
+  --color-text-muted: #524646;
+  --color-neutral: #464858;
+  --color-surface: #ffffff;
+  --color-background: #f7f8f9;
+  --color-border: #e3e6e8;
+
+  /* --- Spacing (4px scale) ----------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 48px;
+
+  /* --- Radius & elevation ------------------------------------------------------------ */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 3px rgb(44 54 57 / 12%);
+  --shadow-raised: 0 4px 12px rgb(44 54 57 / 16%);
+
+  /* --- Chart series ------------------------------------------------------------------ */
+  /* Slate and teal lead; orange and coral are reserved for alerts and highlighted series,
+     so an orange line on a dashboard always means "look here". */
+  --chart-1: var(--color-primary-dark);
+  --chart-2: var(--color-success-alt);
+  --chart-3: var(--color-info);
+  --chart-4: var(--color-highlight);
+  --chart-5: var(--color-secondary);
+  --chart-alert: var(--color-accent-alt);
+
+  /* --- Layout ------------------------------------------------------------------------ */
+  --sidebar-width: 248px;
+  --topbar-height: 60px;
+  --content-max-width: 1440px;
+}
+
+/**
+ * Status colour coding, identical to the mobile app.
+ * `--color-warning` is a bright yellow that fails contrast against white — it is a fill or
+ * a border here, never a text colour on a light surface.
+ */
+.status-completed { color: var(--color-success); }
+.status-pending   { border-color: var(--color-warning); }
+.status-blocked   { color: var(--color-error); }
+.status-info      { color: var(--color-info); }
