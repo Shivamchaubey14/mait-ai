@@ -49,4 +49,4 @@ django-prometheus==2.3.1
 
 # Utilities
 python-dateutil==2.9.0.post0
-phonenumbers==8.13.44
+phonenumbers==9.0.36
