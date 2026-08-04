@@ -41,7 +41,7 @@ cryptography==43.0.1
 
 # Serving
 gunicorn==23.0.0
-whitenoise==6.7.0
+whitenoise==6.12.0
 
 # Observability
 sentry-sdk==2.13.0
