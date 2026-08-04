@@ -6,6 +6,449 @@ info:
     Producer Company. Serves the Mait mobile app, the admin web portal and the Indent
     Easy integration.
 paths:
+  /api/v1/admin/uploads/:
+    get:
+      operationId: admin_uploads_list
+      description: SAP master-data upload and its history (SRS §6.1).
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - completed
+          - completed_with_errors
+          - failed
+          - processing
+          - queued
+        description: |-
+          * `queued` - Queued
+          * `processing` - Processing
+          * `completed` - Completed
+          * `completed_with_errors` - Completed with errors
+          * `failed` - Failed
+      - in: query
+        name: upload_type
+        schema:
+          type: string
+          enum:
+          - mait
+          - member
+          - mpp
+        description: |-
+          * `member` - Member Master
+          * `mait` - Mait / Vendor Master
+          * `mpp` - MPP / Sahayak Master
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDataUploadLogList'
+          description: ''
+  /api/v1/admin/uploads/maits/:
+    post:
+      operationId: admin_uploads_maits_create
+      description: SAP master-data upload and its history (SRS §6.1).
+      summary: Upload the SAP Mait/Vendor Master
+      tags:
+      - master-data
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataUploadLog'
+          description: ''
+  /api/v1/admin/uploads/members/:
+    post:
+      operationId: admin_uploads_members_create
+      description: Accepts Member.xlsx and queues it for asynchronous import. The
+        real export is ~105,000 rows with the header on row 6; both are handled. Upload
+        the MPP master first — member rows referencing an unknown MPP are rejected
+        individually.
+      summary: Upload the SAP Member Master
+      tags:
+      - master-data
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataUploadLog'
+          description: ''
+  /api/v1/admin/uploads/mpp/:
+    post:
+      operationId: admin_uploads_mpp_create
+      description: Accepts Sahyak.xlsx. This file carries both the MPP and its assigned
+        Sahayak (Mait), so it creates or refreshes both, and it is what establishes
+        the MPP-to-Mait link. Upload it before the Member master.
+      summary: Upload the SAP MPP/Sahayak Master
+      tags:
+      - master-data
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataUploadLog'
+          description: ''
+  /api/v1/admin/uploads/{id}/:
+    get:
+      operationId: admin_uploads_retrieve
+      description: SAP master-data upload and its history (SRS §6.1).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Data upload.
+        required: true
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataUploadLog'
+          description: ''
+  /api/v1/admin/uploads/{id}/errors/:
+    get:
+      operationId: admin_uploads_errors_list
+      description: Rows rejected during import, with the spreadsheet row number so
+        they can be corrected at source (SRS §6.1.4). Valid rows from the same file
+        are already committed.
+      summary: Row-level error report
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Data upload.
+        required: true
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - completed
+          - completed_with_errors
+          - failed
+          - processing
+          - queued
+        description: |-
+          * `queued` - Queued
+          * `processing` - Processing
+          * `completed` - Completed
+          * `completed_with_errors` - Completed with errors
+          * `failed` - Failed
+      - in: query
+        name: upload_type
+        schema:
+          type: string
+          enum:
+          - mait
+          - member
+          - mpp
+        description: |-
+          * `member` - Member Master
+          * `mait` - Mait / Vendor Master
+          * `mpp` - MPP / Sahayak Master
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUploadErrorRowList'
+          description: ''
+  /api/v1/mpp/:
+    get:
+      operationId: mpp_list
+      description: MPP directory (SRS §9.3).
+      parameters:
+      - in: query
+        name: district_code
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: mait
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: tehsil_code
+        schema:
+          type: string
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMPPListList'
+          description: ''
+  /api/v1/mpp/{mpp_code}/:
+    get:
+      operationId: mpp_retrieve
+      description: MPP directory (SRS §9.3).
+      parameters:
+      - in: path
+        name: mpp_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MPPDetail'
+          description: ''
+  /api/v1/members/:
+    get:
+      operationId: members_list
+      description: |-
+        Member search (SRS §9.3).
+
+        Backed by the ``member_mpp_name_idx`` composite index — the table holds 105k+ rows, so an
+        unindexed search here would be the slowest thing a Mait does all day.
+      summary: Search members
+      parameters:
+      - in: query
+        name: activation_status
+        schema:
+          type: string
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: mobile_no
+        schema:
+          type: string
+      - in: query
+        name: mpp__mpp_code
+        schema:
+          type: string
+        description: Restrict to one MPP. The mobile app always sends this.
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Matches member name, member code or mobile number.
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMemberListList'
+          description: ''
+  /api/v1/members/{member_code}/:
+    get:
+      operationId: members_retrieve
+      description: |-
+        Member search (SRS §9.3).
+
+        Backed by the ``member_mpp_name_idx`` composite index — the table holds 105k+ rows, so an
+        unindexed search here would be the slowest thing a Mait does all day.
+      parameters:
+      - in: path
+        name: member_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberDetail'
+          description: ''
+  /api/v1/non-members/:
+    post:
+      operationId: non_members_create
+      description: Non-member registration by a Mait in the field (SRS §9.3).
+      tags:
+      - master-data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NonMemberRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NonMemberRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NonMemberRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NonMember'
+          description: ''
+  /api/v1/non-members/{id}/:
+    get:
+      operationId: non_members_retrieve
+      description: Non-member registration by a Mait in the field (SRS §9.3).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this non member.
+        required: true
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NonMember'
+          description: ''
   /api/v1/health/:
     get:
       operationId: health_retrieve
@@ -51,7 +494,626 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
-components: {}
+components:
+  schemas:
+    DataUploadLog:
+      type: object
+      description: |-
+        Upload status, polled by the admin UI while a large import runs (SRS §6.1.6).
+
+        ``error_report`` is excluded here on purpose — it can hold thousands of rows, and the
+        history list would become enormous. It has its own endpoint.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        upload_type:
+          allOf:
+          - $ref: '#/components/schemas/UploadTypeEnum'
+          readOnly: true
+        upload_type_display:
+          type: string
+          readOnly: true
+        file_name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        uploaded_by:
+          type: integer
+          readOnly: true
+        uploaded_by_name:
+          type: string
+          readOnly: true
+        total_rows:
+          type: integer
+          readOnly: true
+        processed_rows:
+          type: integer
+          readOnly: true
+          description: Drives the progress endpoint (SRS §6.1.6).
+        success_rows:
+          type: integer
+          readOnly: true
+        failed_rows:
+          type: integer
+          readOnly: true
+        progress_percent:
+          type: integer
+          readOnly: true
+        error_count:
+          type: integer
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - error_count
+      - failed_rows
+      - file_name
+      - finished_at
+      - id
+      - processed_rows
+      - progress_percent
+      - started_at
+      - status
+      - status_display
+      - success_rows
+      - total_rows
+      - upload_type
+      - upload_type_display
+      - uploaded_by
+      - uploaded_by_name
+    MPPDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        mpp_code:
+          type: string
+          readOnly: true
+        mpp_name:
+          type: string
+          readOnly: true
+        district_code:
+          type: string
+          readOnly: true
+        tehsil_code:
+          type: string
+          readOnly: true
+        village_code:
+          type: string
+          readOnly: true
+        mobile_no:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        mait:
+          allOf:
+          - $ref: '#/components/schemas/Mait'
+          readOnly: true
+        mait_name:
+          type: string
+          readOnly: true
+        plant_code:
+          type: string
+          readOnly: true
+        plant_name:
+          type: string
+          readOnly: true
+        mpp_category:
+          type: string
+          readOnly: true
+        state_code:
+          type: string
+          readOnly: true
+        panchayat_code:
+          type: string
+          readOnly: true
+        hamlet_code:
+          type: string
+          readOnly: true
+        address_line:
+          type: string
+          readOnly: true
+        start_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        end_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        member_count:
+          type: integer
+          readOnly: true
+      required:
+      - address_line
+      - district_code
+      - end_date
+      - hamlet_code
+      - id
+      - is_active
+      - mait
+      - mait_name
+      - member_count
+      - mobile_no
+      - mpp_category
+      - mpp_code
+      - mpp_name
+      - panchayat_code
+      - plant_code
+      - plant_name
+      - start_date
+      - state_code
+      - tehsil_code
+      - village_code
+    MPPList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        mpp_code:
+          type: string
+          readOnly: true
+        mpp_name:
+          type: string
+          readOnly: true
+        district_code:
+          type: string
+          readOnly: true
+        tehsil_code:
+          type: string
+          readOnly: true
+        village_code:
+          type: string
+          readOnly: true
+        mobile_no:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        mait:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Assigned Sahayak/Mait. Admin can override the SAP default (SRS
+            §6.2.2).
+        mait_name:
+          type: string
+          readOnly: true
+      required:
+      - district_code
+      - id
+      - is_active
+      - mait
+      - mait_name
+      - mobile_no
+      - mpp_code
+      - mpp_name
+      - tehsil_code
+      - village_code
+    Mait:
+      type: object
+      description: |-
+        Mait detail.
+
+        PII is masked by default (SRS §16). The unmasked values are reachable only from the
+        restricted, audit-logged admin endpoint — never from here.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sahayak_vendor_code:
+          type: string
+          readOnly: true
+          description: SAP Sahayak Vendor / Customer ID — the upsert key.
+        name:
+          type: string
+          readOnly: true
+        mobile_no:
+          type: string
+          readOnly: true
+        aadhar_no:
+          type: string
+          readOnly: true
+        bank_account_no:
+          type: string
+          readOnly: true
+        ifsc_code:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        has_login:
+          type: boolean
+          readOnly: true
+        can_receive_otp:
+          type: boolean
+          description: |-
+            Whether this Mait can actually log in.
+
+            Surfaced explicitly because the SAP export leaves ~93% of Sahayak mobile numbers
+            blank, and a Mait without one cannot receive the OTP that is their only way in
+            (docs/DATA_FINDINGS.md §1).
+          readOnly: true
+      required:
+      - aadhar_no
+      - bank_account_no
+      - can_receive_otp
+      - has_login
+      - id
+      - ifsc_code
+      - is_active
+      - mobile_no
+      - name
+      - sahayak_vendor_code
+    MasterUploadRequest:
+      type: object
+      description: Validates the uploaded workbook before anything is queued.
+      properties:
+        file:
+          type: string
+          format: binary
+          writeOnly: true
+      required:
+      - file
+    MemberDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        member_code:
+          type: string
+          readOnly: true
+        member_name:
+          type: string
+          readOnly: true
+        father_husband_name:
+          type: string
+          readOnly: true
+        gender:
+          type: string
+          readOnly: true
+        age:
+          type: integer
+          readOnly: true
+          nullable: true
+        category:
+          type: string
+          readOnly: true
+        education:
+          type: string
+          readOnly: true
+        mobile_no:
+          type: string
+          readOnly: true
+          description: Payment authorisation OTPs are sent here (SRS §6.5).
+        aadhar_no:
+          type: string
+          readOnly: true
+        cattle_holding:
+          type: integer
+          readOnly: true
+          nullable: true
+        bank_name:
+          type: string
+          readOnly: true
+        ifsc_code:
+          type: string
+          readOnly: true
+        folio_no:
+          type: string
+          readOnly: true
+        activation_status:
+          type: string
+          readOnly: true
+        activation_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        mpp_code:
+          type: string
+          readOnly: true
+        mpp_name:
+          type: string
+          readOnly: true
+        can_receive_otp:
+          type: boolean
+          description: |-
+            Whether a payment can be authorised for this member (SRS §6.5).
+
+            1.5% of members have an unusable number. The app checks this before starting the
+            flow, rather than stranding the Mait at the payment step with a completed
+            insemination and no way to close the event (docs/DATA_FINDINGS.md §2).
+          readOnly: true
+      required:
+      - aadhar_no
+      - activation_date
+      - activation_status
+      - age
+      - bank_name
+      - can_receive_otp
+      - category
+      - cattle_holding
+      - education
+      - father_husband_name
+      - folio_no
+      - gender
+      - id
+      - ifsc_code
+      - member_code
+      - member_name
+      - mobile_no
+      - mpp_code
+      - mpp_name
+    MemberList:
+      type: object
+      description: |-
+        Trimmed for the mobile app's member picker (SRS §6.3 step 2).
+
+        A Mait standing at an MPP needs a name, a code and a number to confirm identity — not 54
+        columns over a rural connection.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        member_code:
+          type: string
+          readOnly: true
+        member_name:
+          type: string
+          readOnly: true
+        father_husband_name:
+          type: string
+          readOnly: true
+        mobile_no:
+          type: string
+          readOnly: true
+          description: Payment authorisation OTPs are sent here (SRS §6.5).
+        mpp_code:
+          type: string
+          readOnly: true
+        activation_status:
+          type: string
+          readOnly: true
+      required:
+      - activation_status
+      - father_husband_name
+      - id
+      - member_code
+      - member_name
+      - mobile_no
+      - mpp_code
+    NonMember:
+      type: object
+      description: Quick-capture registration by a Mait in the field (SRS §6.3 step
+        2).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        mobile_no:
+          type: string
+          pattern: ^[6-9]\d{9}$
+          maxLength: 15
+        address:
+          type: string
+          maxLength: 255
+        mpp:
+          type: integer
+          description: Nearest/served MPP.
+        created_by_mait:
+          type: integer
+          readOnly: true
+        consent_captured_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the farmer consented to their details being stored.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - created_by_mait
+      - id
+      - mobile_no
+      - mpp
+      - name
+    NonMemberRequest:
+      type: object
+      description: Quick-capture registration by a Mait in the field (SRS §6.3 step
+        2).
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        mobile_no:
+          type: string
+          minLength: 1
+          pattern: ^[6-9]\d{9}$
+          maxLength: 15
+        address:
+          type: string
+          maxLength: 255
+        mpp:
+          type: integer
+          description: Nearest/served MPP.
+        consent_captured_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the farmer consented to their details being stored.
+      required:
+      - mobile_no
+      - mpp
+      - name
+    PaginatedDataUploadLogList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataUploadLog'
+    PaginatedMPPListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MPPList'
+    PaginatedMemberListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemberList'
+    PaginatedUploadErrorRowList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadErrorRow'
+    StatusEnum:
+      enum:
+      - queued
+      - processing
+      - completed
+      - completed_with_errors
+      - failed
+      type: string
+      description: |-
+        * `queued` - Queued
+        * `processing` - Processing
+        * `completed` - Completed
+        * `completed_with_errors` - Completed with errors
+        * `failed` - Failed
+    UploadErrorRow:
+      type: object
+      description: One rejected row in the downloadable error report (SRS §6.1.4).
+      properties:
+        row:
+          type: integer
+          nullable: true
+        error:
+          type: string
+      required:
+      - error
+      - row
+    UploadTypeEnum:
+      enum:
+      - member
+      - mait
+      - mpp
+      type: string
+      description: |-
+        * `member` - Member Master
+        * `mait` - Mait / Vendor Master
+        * `mpp` - MPP / Sahayak Master
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
 tags:
 - name: auth
   description: Authentication and session management

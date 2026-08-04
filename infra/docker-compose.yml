@@ -60,7 +60,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       DJANGO_DEBUG: "True"
       # Development-only Fernet key. Never reuse this anywhere that holds real PII.
-      FIELD_ENCRYPTION_KEY: ZGV2LW9ubHktZmVybmV0LWtleS0zMi1ieXRlcy1sb25nPT0=
+      FIELD_ENCRYPTION_KEY: bWFpdGFpLWRldi1rZXktLWRvLW5vdC11c2UtcmVhbCE=
     volumes:
       - ../backend:/app
       - media_data:/app/media
@@ -83,7 +83,7 @@ services:
       DJANGO_SETTINGS_MODULE: config.settings.dev
       DATABASE_URL: mysql://maitai:maitai@mysql:3306/maitai
       REDIS_URL: redis://redis:6379/0
-      FIELD_ENCRYPTION_KEY: ZGV2LW9ubHktZmVybmV0LWtleS0zMi1ieXRlcy1sb25nPT0=
+      FIELD_ENCRYPTION_KEY: bWFpdGFpLWRldi1rZXktLWRvLW5vdC11c2UtcmVhbCE=
     volumes:
       - ../backend:/app
       - media_data:/app/media
@@ -102,7 +102,7 @@ services:
       DJANGO_SETTINGS_MODULE: config.settings.dev
       DATABASE_URL: mysql://maitai:maitai@mysql:3306/maitai
       REDIS_URL: redis://redis:6379/0
-      FIELD_ENCRYPTION_KEY: ZGV2LW9ubHktZmVybmV0LWtleS0zMi1ieXRlcy1sb25nPT0=
+      FIELD_ENCRYPTION_KEY: bWFpdGFpLWRldi1rZXktLWRvLW5vdC11c2UtcmVhbCE=
     volumes:
       - ../backend:/app
     depends_on:

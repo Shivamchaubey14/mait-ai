@@ -11,7 +11,7 @@ from .base import DATABASES
 
 DEBUG = False
 SECRET_KEY = "test-only-key"
-FIELD_ENCRYPTION_KEY = "dGVzdC1vbmx5LWZlcm5ldC1rZXktMzItYnl0ZXMtbG9uZyE="
+FIELD_ENCRYPTION_KEY = "bWFpdGFpLXRlc3Qta2V5LWRvLW5vdC11c2UtcmVhbCE="
 
 DATABASES["default"]["TEST"] = {"CHARSET": "utf8mb4", "COLLATION": "utf8mb4_unicode_ci"}
 

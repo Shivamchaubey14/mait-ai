@@ -4,19 +4,25 @@ SAP master-data import (SRS §6.1).
 The Member Master is ~105,000 rows across 54 columns in a ~28 MB workbook, so this runs as a
 Celery job with progress reporting and never inline on a request (SRS §6.1.6).
 
-Three behaviours matter and are easy to get wrong:
+Four behaviours matter and are easy to get wrong:
 
+* **Header detection.** ``Member.xlsx`` opens with four title rows and a blank line; the real
+  header is row 6. The first row cannot be assumed (SRS §6.1.2).
 * **Upsert by natural key**, so re-uploading last month's file refreshes rather than
   duplicates (SRS §6.1.3).
 * **Partial success.** Invalid rows are skipped and reported; valid rows still commit
-  (SRS §6.1.4). Rejecting a 105k-row file because 12 rows have a malformed mobile number
-  would make the feature unusable.
+  (SRS §6.1.4). Rejecting 105k rows because twelve have a malformed mobile number would make
+  the feature unusable.
 * **Streamed reading.** ``read_only=True`` keeps openpyxl from materialising the whole
-  workbook, which is the difference between a few hundred MB of memory and a worker kill.
+  workbook, which is the difference between a few hundred MB of memory and a killed worker.
+
+Column spellings live in ``columns.py`` — see the notes there on the duplicate ``Mobile No``
+in ``Sahyak.xlsx`` and SAP's *Tahsil* spelling.
 """
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 from collections.abc import Iterator
 from typing import Any
@@ -26,18 +32,19 @@ from django.db import transaction
 from django.utils import timezone
 from openpyxl import load_workbook
 
+from . import columns as cols
 from .models import MPP, DataUploadLog, Mait, Member
 
 logger = logging.getLogger(__name__)
 
 CHUNK_SIZE = 1000
+HEADER_SEARCH_ROWS = 15  # Member.xlsx puts its header on row 6
 MAX_ERRORS_STORED = 5000  # bounded so one bad file cannot blow up the JSON column
 
-# Natural keys per upload type (SRS §6.1.3).
-REQUIRED_COLUMNS: dict[str, set[str]] = {
-    DataUploadLog.UploadType.MEMBER: {"mpp code", "member code", "member name"},
-    DataUploadLog.UploadType.MAIT: {"customer id", "name"},
-    DataUploadLog.UploadType.MPP: {"mpp code", "mpp name"},
+REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
+    DataUploadLog.UploadType.MEMBER: cols.REQUIRED_MEMBER,
+    DataUploadLog.UploadType.MPP: cols.REQUIRED_MPP,
+    DataUploadLog.UploadType.MAIT: cols.REQUIRED_VENDOR,
 }
 
 
@@ -70,23 +77,55 @@ def process_master_upload(self, upload_id: int) -> dict[str, int]:
     return result
 
 
+class ImportContext:
+    """
+    Per-run state shared across rows.
+
+    Exists for two reasons. The MPP lookup is cached because resolving it per row costs one
+    query per member, and there are 105,000 of them against a table of only ~3,100 — the
+    whole map fits in memory many times over.
+
+    ``seen_keys`` catches a natural key appearing twice *within one file*. The real Member
+    export contains 50 such duplicates, and because rows are upserted, the later row would
+    silently overwrite the earlier one and the count would look clean. Flagging them turns a
+    silent data loss into a reported row (SRS §6.1.4).
+    """
+
+    def __init__(self) -> None:
+        self.mpp_ids: dict[str, int] = {}
+        self.seen_keys: set[str] = set()
+
+    def load_mpp_map(self) -> None:
+        self.mpp_ids = dict(MPP.objects.values_list("mpp_code", "id"))
+
+    def check_duplicate(self, key: str) -> None:
+        if key in self.seen_keys:
+            raise ValueError(f"Duplicate key '{key}' appears more than once in this file.")
+        self.seen_keys.add(key)
+
+
 def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
     handler = {
         DataUploadLog.UploadType.MEMBER: _upsert_member,
-        DataUploadLog.UploadType.MAIT: _upsert_mait,
-        DataUploadLog.UploadType.MPP: _upsert_mpp,
+        DataUploadLog.UploadType.MAIT: _upsert_vendor,
+        DataUploadLog.UploadType.MPP: _upsert_mpp_and_sahayak,
     }[upload.upload_type]
+
+    context = ImportContext()
+    if upload.upload_type == DataUploadLog.UploadType.MEMBER:
+        context.load_mpp_map()
 
     workbook = load_workbook(upload.file, read_only=True, data_only=True)
     sheet = workbook.active
 
     header_row_index, headers = _detect_header(sheet, upload.upload_type)
-    missing = REQUIRED_COLUMNS[upload.upload_type] - set(headers)
+    missing = set(REQUIRED_COLUMNS[upload.upload_type]) - set(headers)
     if missing:
-        # SRS §6.1.2 — reject the whole file, with a usable message.
+        # SRS §6.1.2 — reject the whole file, and say what was actually found so the fix is
+        # obvious rather than a guessing game.
+        found = ", ".join(sorted(h for h in headers if h)[:25])
         raise ValueError(
-            f"Required column(s) missing: {', '.join(sorted(missing))}. "
-            f"Found: {', '.join(sorted(h for h in headers if h))}."
+            f"Required column(s) missing: {', '.join(sorted(missing))}. Found: {found}"
         )
 
     errors: list[dict[str, Any]] = []
@@ -98,14 +137,14 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
         batch.append({"row_number": row_number, "data": row})
 
         if len(batch) >= CHUNK_SIZE:
-            ok, bad = _commit_batch(batch, handler, errors)
+            ok, bad = _commit_batch(batch, handler, errors, context)
             success += ok
             failed += bad
             batch = []
             _report_progress(upload, processed, success, failed)
 
     if batch:
-        ok, bad = _commit_batch(batch, handler, errors)
+        ok, bad = _commit_batch(batch, handler, errors, context)
         success += ok
         failed += bad
 
@@ -124,11 +163,12 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
             "updated_at",
         ]
     )
+    workbook.close()
     logger.info("Upload %s finished: %s ok, %s failed of %s", upload.id, success, failed, processed)
     return {"total": processed, "success": success, "failed": failed}
 
 
-def _commit_batch(batch, handler, errors) -> tuple[int, int]:
+def _commit_batch(batch, handler, errors, context: ImportContext) -> tuple[int, int]:
     """
     Commit one chunk.
 
@@ -139,7 +179,7 @@ def _commit_batch(batch, handler, errors) -> tuple[int, int]:
     for item in batch:
         try:
             with transaction.atomic():
-                handler(item["data"])
+                handler(item["data"], context)
             ok += 1
         except Exception as exc:
             bad += 1
@@ -162,35 +202,45 @@ def _detect_header(sheet, upload_type: str) -> tuple[int, list[str]]:
     """
     Find the header row (SRS §6.1.2).
 
-    SAP exports frequently carry a title or a blank line above the real header, so the
-    first row cannot be assumed. The header is the first row within the top 20 that
-    contains all the required columns.
+    ``Member.xlsx`` carries a company name, a description, a status line, a member count and
+    a blank row before the real header on row 6, so the first row cannot be assumed.
+
+    The header is the first row within the search window containing every required column.
     """
-    required = REQUIRED_COLUMNS[upload_type]
-    for index, row in enumerate(sheet.iter_rows(min_row=1, max_row=20, values_only=True)):
-        headers = [_normalise(c) for c in row]
+    required = set(REQUIRED_COLUMNS[upload_type])
+    for index, raw in enumerate(
+        sheet.iter_rows(min_row=1, max_row=HEADER_SEARCH_ROWS, values_only=True)
+    ):
+        headers = cols.build_header_index(raw)
         if required <= set(headers):
             return index + 1, headers
     raise ValueError(
-        "Could not locate a header row in the first 20 rows. Expected columns: "
-        f"{', '.join(sorted(required))}."
+        f"Could not locate a header row in the first {HEADER_SEARCH_ROWS} rows. "
+        f"Expected column(s): {', '.join(sorted(required))}."
     )
 
 
 def _iter_rows(sheet, header_row_index: int, headers: list[str]) -> Iterator[tuple[int, dict]]:
-    """Yield (row_number, {column: value}) for every non-empty row below the header."""
+    """Yield (row_number, {normalised_column: value}) for each non-empty row below the header."""
     for offset, row in enumerate(sheet.iter_rows(min_row=header_row_index + 1, values_only=True)):
         if row is None or all(cell in (None, "") for cell in row):
             continue
         yield header_row_index + 1 + offset, dict(zip(headers, row, strict=False))
 
 
-def _normalise(value) -> str:
-    return str(value).strip().lower() if value is not None else ""
+# --------------------------------------------------------------------------------------
+# Value coercion
+# --------------------------------------------------------------------------------------
 
 
 def _clean(value) -> str:
-    return str(value).strip() if value not in (None, "") else ""
+    if value in (None, "", "None"):
+        return ""
+    text = str(value).strip()
+    # openpyxl hands numeric-looking codes back as floats; "001301.0" is not an MPP code.
+    if text.endswith(".0") and text[:-2].isdigit():
+        text = text[:-2]
+    return text
 
 
 def _mobile(value) -> str:
@@ -198,12 +248,10 @@ def _mobile(value) -> str:
     Normalise an Indian mobile number.
 
     SAP exports carry these inconsistently — as floats, with +91, with spaces. Returns ""
-    when the value cannot be salvaged rather than guessing, because a wrong number means
-    the payment OTP goes to a stranger.
+    when the value cannot be salvaged rather than guessing, because a wrong number means the
+    payment authorisation OTP goes to a stranger (SRS §6.5).
     """
     raw = _clean(value).replace(" ", "").replace("-", "")
-    if raw.endswith(".0"):
-        raw = raw[:-2]
     if raw.startswith("+91"):
         raw = raw[3:]
     elif raw.startswith("91") and len(raw) == 12:
@@ -211,104 +259,171 @@ def _mobile(value) -> str:
     return raw if len(raw) == 10 and raw[0] in "6789" and raw.isdigit() else ""
 
 
-# -- per-type upserts --------------------------------------------------------------------
+def _int_or_none(value) -> int | None:
+    try:
+        return int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return None
 
 
-def _upsert_mpp(row: dict) -> None:
-    mpp_code = _clean(row.get("mpp code"))
+def _date_or_none(value):
+    """
+    Parse a SAP date.
+
+    9999-12-31 is SAP's "no end date" sentinel and is stored as NULL — a real date that far
+    out would distort any range query it landed in.
+    """
+    if value in (None, "", "None"):
+        return None
+    if isinstance(value, dt.datetime):
+        parsed = value.date()
+    elif isinstance(value, dt.date):
+        parsed = value
+    else:
+        text = str(value).strip()
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%Y%m%d"):
+            try:
+                parsed = dt.datetime.strptime(text, fmt).date()
+                break
+            except ValueError:
+                continue
+        else:
+            return None
+    return None if parsed.year >= 9999 else parsed
+
+
+def _is_active(value) -> bool:
+    """SAP marks an active row with 'X'; the Member export uses 'Yes'."""
+    return _clean(value).lower() in ("x", "yes", "true", "1", "active", "y")
+
+
+# --------------------------------------------------------------------------------------
+# Per-type upserts
+# --------------------------------------------------------------------------------------
+
+
+def _upsert_mpp_and_sahayak(row: dict, context: ImportContext) -> None:
+    """
+    Upsert one row of ``Sahyak.xlsx``.
+
+    This file carries both records: the MPP and the Sahayak (Mait) assigned to it. The Mait
+    is upserted first so the MPP can link to it in the same row — that link is what scopes a
+    Mait's app to their own MPPs (SRS §6.2.3), and it is the reason this file is the
+    authoritative Mait source rather than the separately-numbered vendor export.
+    """
+    mpp_code = _clean(cols.pick(row, *cols.MPP["mpp_code"]))
     if not mpp_code:
         raise ValueError("MPP Code is blank.")
 
     mait = None
-    vendor_code = _clean(row.get("sahayak vendor") or row.get("sahayak vendor code"))
+    vendor_code = _clean(cols.pick(row, *cols.SAHAYAK["sahayak_vendor_code"]))
     if vendor_code:
-        mait = Mait.objects.filter(sahayak_vendor_code=vendor_code).first()
+        mait, _ = Mait.objects.update_or_create(
+            sahayak_vendor_code=vendor_code,
+            defaults={
+                "name": _clean(cols.pick(row, *cols.SAHAYAK["name"])),
+                "mobile_no": _mobile(cols.pick(row, *cols.SAHAYAK["mobile_no"])),
+                "pan_no": _clean(cols.pick(row, *cols.SAHAYAK["pan_no"])),
+                "aadhar_no": _clean(cols.pick(row, *cols.SAHAYAK["aadhar_no"])),
+                "bank_account_no": _clean(cols.pick(row, *cols.SAHAYAK["bank_account_no"])),
+                "ifsc_code": _clean(cols.pick(row, *cols.SAHAYAK["ifsc_code"]))[:15],
+                "is_active": True,
+            },
+        )
 
     MPP.objects.update_or_create(
         mpp_code=mpp_code,
         defaults={
-            "plant_code": _clean(row.get("plant") or row.get("plant code")),
-            "plant_name": _clean(row.get("plant name")),
-            "mpp_name": _clean(row.get("mpp name")),
-            "mpp_category": _clean(row.get("mpp category")),
-            "mpp_sub_category": _clean(row.get("mpp sub category")),
-            "state_code": _clean(row.get("state")),
-            "district_code": _clean(row.get("district")),
-            "tehsil_code": _clean(row.get("tehsil")),
-            "panchayat_code": _clean(row.get("panchayat")),
-            "village_code": _clean(row.get("village")),
-            "hamlet_code": _clean(row.get("hamlet")),
-            "mobile_no": _mobile(row.get("mobile no") or row.get("mobile")),
-            "address_line": _clean(row.get("address")),
-            "is_active": _clean(row.get("active")).lower() in ("x", "yes", "true", "1", "active"),
+            "plant_code": _clean(cols.pick(row, *cols.MPP["plant_code"])),
+            "plant_name": _clean(cols.pick(row, *cols.MPP["plant_name"])),
+            "mpp_name": _clean(cols.pick(row, *cols.MPP["mpp_name"])),
+            "mpp_category": _clean(cols.pick(row, *cols.MPP["mpp_category"])),
+            "mpp_sub_category": _clean(cols.pick(row, *cols.MPP["mpp_sub_category"])),
+            "state_code": _clean(cols.pick(row, *cols.MPP["state_code"])),
+            "district_code": _clean(cols.pick(row, *cols.MPP["district_code"])),
+            "tehsil_code": _clean(cols.pick(row, *cols.MPP["tehsil_code"])),
+            "panchayat_code": _clean(cols.pick(row, *cols.MPP["panchayat_code"])),
+            "village_code": _clean(cols.pick(row, *cols.MPP["village_code"])),
+            "hamlet_code": _clean(cols.pick(row, *cols.MPP["hamlet_code"])),
+            "mobile_no": _mobile(cols.pick(row, *cols.MPP["mobile_no"])),
+            "address_line": _clean(cols.pick(row, *cols.MPP["address_line"])),
+            "is_active": _is_active(cols.pick(row, *cols.MPP["is_active"])),
+            "start_date": _date_or_none(cols.pick(row, *cols.MPP["start_date"])),
+            "end_date": _date_or_none(cols.pick(row, *cols.MPP["end_date"])),
+            "revival_date": _date_or_none(cols.pick(row, *cols.MPP["revival_date"])),
             "mait": mait,
         },
     )
 
 
-def _upsert_mait(row: dict) -> None:
-    vendor_code = _clean(row.get("customer id") or row.get("sahayak vendor"))
+def _upsert_vendor(row: dict, context: ImportContext) -> None:
+    """
+    Upsert one row of ``Maits Vendor C.xlsx``.
+
+    This file's ``CUSTOMER ID`` occupies a different number range (9900000000+) from the
+    ``Sahayak Vendor`` codes in ``Sahyak.xlsx`` (5500000003+), so rows loaded here link to no
+    MPP. Pending business confirmation of what the file represents, it is imported as its own
+    set of Mait records rather than merged into the Sahayak ones — merging on a guess would
+    silently corrupt the MPP assignment.
+    """
+    vendor_code = _clean(cols.pick(row, *cols.VENDOR["sahayak_vendor_code"]))
     if not vendor_code:
-        raise ValueError("Customer ID is blank.")
+        raise ValueError("CUSTOMER ID is blank.")
 
     Mait.objects.update_or_create(
         sahayak_vendor_code=vendor_code,
         defaults={
-            "name": _clean(row.get("name")),
-            "mobile_no": _mobile(row.get("contact number") or row.get("mobile no")),
-            "mobile_no_alt": _mobile(row.get("alternate number")),
-            "pan_no": _clean(row.get("pan") or row.get("pan no")),
-            "aadhar_no": _clean(row.get("aadhar") or row.get("aadhar no")),
-            "bank_account_no": _clean(row.get("account number")),
-            "ifsc_code": _clean(row.get("ifsc") or row.get("bank key")),
-            "gst_no": _clean(row.get("gst") or row.get("gst no")),
+            "name": _clean(cols.pick(row, *cols.VENDOR["name"])),
+            "mobile_no": _mobile(cols.pick(row, *cols.VENDOR["mobile_no"])),
+            "pan_no": _clean(cols.pick(row, *cols.VENDOR["pan_no"])),
+            "aadhar_no": _clean(cols.pick(row, *cols.VENDOR["aadhar_no"])),
+            "gst_no": _clean(cols.pick(row, *cols.VENDOR["gst_no"]))[:20],
+            "bank_account_no": _clean(cols.pick(row, *cols.VENDOR["bank_account_no"])),
+            "ifsc_code": _clean(cols.pick(row, *cols.VENDOR["ifsc_code"]))[:15],
             "is_active": True,
         },
     )
 
 
-def _upsert_member(row: dict) -> None:
-    member_code = _clean(row.get("member code"))
+def _upsert_member(row: dict, context: ImportContext) -> None:
+    """Upsert one row of ``Member.xlsx``."""
+    member_code = _clean(cols.pick(row, *cols.MEMBER["member_code"]))
     if not member_code:
-        raise ValueError("Member Code is blank.")
+        raise ValueError("Member code is blank.")
 
-    mpp_code = _clean(row.get("mpp") or row.get("mpp code"))
-    mpp = MPP.objects.filter(mpp_code=mpp_code).only("id").first()
-    if mpp is None:
-        # Skipped rather than auto-created: inventing an MPP from a member row would put a
+    context.check_duplicate(member_code)
+
+    mpp_code = _clean(cols.pick(row, *cols.MEMBER["mpp_code"]))
+    mpp_id = context.mpp_ids.get(mpp_code)
+    if mpp_id is None:
+        # Skipped rather than auto-created: inventing an MPP from a member row would place a
         # member at a collection point that may not exist (SRS §6.1.4).
         raise ValueError(f"MPP '{mpp_code}' not found. Upload the MPP master first.")
 
     Member.objects.update_or_create(
         member_code=member_code,
         defaults={
-            "mpp_id": mpp.id,
-            "member_name": _clean(row.get("member name")),
-            "father_husband_name": _clean(
-                row.get("father/husband name") or row.get("father husband name")
-            ),
-            "gender": _clean(row.get("gender")),
-            "age": _int_or_none(row.get("age")),
-            "category": _clean(row.get("category")),
-            "education": _clean(row.get("education")),
-            "social_class": _clean(row.get("class")),
-            "sap_vendor_code": _clean(row.get("sap vendor")),
-            "form_no": _clean(row.get("form no")),
-            "folio_no": _clean(row.get("folio no")),
-            "mobile_no": _mobile(row.get("mobile no")),
-            "aadhar_no": _clean(row.get("aadhar no")),
-            "cattle_holding": _int_or_none(row.get("cattle holding")),
-            "bank_ac_no": _clean(row.get("bank a/c no") or row.get("account number")),
-            "bank_name": _clean(row.get("bank name")),
-            "bank_branch": _clean(row.get("bank branch")),
-            "ifsc_code": _clean(row.get("ifsc code")),
-            "activation_status": _clean(row.get("activation status")),
+            "mpp_id": mpp_id,
+            "member_name": _clean(cols.pick(row, *cols.MEMBER["member_name"])),
+            "father_husband_name": _clean(cols.pick(row, *cols.MEMBER["father_husband_name"])),
+            "gender": _clean(cols.pick(row, *cols.MEMBER["gender"]))[:10],
+            "age": _int_or_none(cols.pick(row, *cols.MEMBER["age"])),
+            "category": _clean(cols.pick(row, *cols.MEMBER["category"]))[:30],
+            "education": _clean(cols.pick(row, *cols.MEMBER["education"]))[:50],
+            "social_class": _clean(cols.pick(row, *cols.MEMBER["social_class"]))[:30],
+            "sap_vendor_code": _clean(cols.pick(row, *cols.MEMBER["sap_vendor_code"]))[:20],
+            "form_no": _clean(cols.pick(row, *cols.MEMBER["form_no"]))[:20],
+            "folio_no": _clean(cols.pick(row, *cols.MEMBER["folio_no"]))[:20],
+            "mobile_no": _mobile(cols.pick(row, *cols.MEMBER["mobile_no"])),
+            "aadhar_no": _clean(cols.pick(row, *cols.MEMBER["aadhar_no"])),
+            "cattle_holding": _int_or_none(cols.pick(row, *cols.MEMBER["cattle_holding"])),
+            "bank_ac_no": _clean(cols.pick(row, *cols.MEMBER["bank_ac_no"])),
+            "bank_name": _clean(cols.pick(row, *cols.MEMBER["bank_name"]))[:100],
+            "bank_branch": _clean(cols.pick(row, *cols.MEMBER["bank_branch"]))[:100],
+            "ifsc_code": _clean(cols.pick(row, *cols.MEMBER["ifsc_code"]))[:15],
+            "activation_status": _clean(cols.pick(row, *cols.MEMBER["activation_status"]))[:20],
+            "activation_date": _date_or_none(cols.pick(row, *cols.MEMBER["activation_date"])),
+            "deactivation_date": _date_or_none(cols.pick(row, *cols.MEMBER["deactivation_date"])),
+            "remarks": _clean(cols.pick(row, *cols.MEMBER["remarks"])),
         },
     )
-
-
-def _int_or_none(value) -> int | None:
-    try:
-        return int(float(str(value).strip()))
-    except (TypeError, ValueError):
-        return None
