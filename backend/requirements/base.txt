@@ -40,7 +40,7 @@ requests==2.32.3
 cryptography==43.0.1
 
 # Serving
-gunicorn==23.0.0
+gunicorn==26.0.0
 whitenoise==6.7.0
 
 # Observability
