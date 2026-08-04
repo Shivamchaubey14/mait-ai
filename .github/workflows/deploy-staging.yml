@@ -65,7 +65,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Scan the image
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ secrets.REGISTRY_URL }}/maitai-api:${{ github.sha }}
           format: table
