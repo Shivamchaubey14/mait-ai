@@ -32,7 +32,7 @@
     "@sentry/react-native": "^5.33.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.2",
+    "@babel/core": "^8.0.1",
     "@react-native/babel-preset": "0.75.4",
     "@react-native/eslint-config": "0.75.4",
     "@react-native/typescript-config": "0.75.4",
