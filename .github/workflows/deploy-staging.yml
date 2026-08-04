@@ -11,8 +11,31 @@ concurrency:
   cancel-in-progress: false      # never abandon a deploy mid-rollout
 
 jobs:
+  preflight:
+    name: Check deploy target is configured
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      # The `secrets` context is not available in a job-level `if`, so the check has to
+      # happen in a step and be passed on as an output.
+      - id: check
+        env:
+          REGISTRY_URL: ${{ secrets.REGISTRY_URL }}
+        run: |
+          if [ -n "$REGISTRY_URL" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No REGISTRY_URL secret set — skipping the deploy. Add the registry and cluster secrets to the 'staging' environment to enable it."
+          fi
+
   deploy:
     name: Build, migrate, deploy, smoke
+    needs: preflight
+    # Skips rather than fails while the infrastructure does not exist yet. A permanently
+    # red develop trains everyone to ignore a red develop.
+    if: needs.preflight.outputs.configured == 'true'
     runs-on: ubuntu-latest
     environment:
       name: staging
@@ -42,7 +65,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Scan the image
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ secrets.REGISTRY_URL }}/maitai-api:${{ github.sha }}
           format: table
