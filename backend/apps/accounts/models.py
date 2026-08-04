@@ -95,7 +95,9 @@ class MPPOperatorAssignment(TimeStampedModel):
     """Which MPPs an operator may read (SRS §5 — operator access is read-only and scoped)."""
 
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="mpp_assignments",
+        User,
+        on_delete=models.CASCADE,
+        related_name="mpp_assignments",
         limit_choices_to={"role": Role.MPP_OPERATOR},
     )
     mpp = models.ForeignKey(

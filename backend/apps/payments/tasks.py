@@ -54,6 +54,4 @@ def dispatch_otp(self, otp_log_id: int, code: str) -> None:
         logger.warning("OTP dispatch failed, retrying", extra={"otp_log_id": otp_log_id})
         raise self.retry(exc=exc) from exc
 
-    OTPLog.objects.filter(pk=otp_log_id).update(
-        gateway_message_id=message_id or "", sent_via="sms"
-    )
+    OTPLog.objects.filter(pk=otp_log_id).update(gateway_message_id=message_id or "", sent_via="sms")

@@ -68,14 +68,11 @@ def consume_straw(*, mait, straw: SemenBatch, ai_event_id: int, actor=None) -> M
     the time it reads ``qty_available`` the first deduction is already visible.
     """
     if not transaction.get_connection().in_atomic_block:
-        raise RuntimeError(
-            "consume_straw() must run inside a transaction — see ADR 0002."
-        )
+        raise RuntimeError("consume_straw() must run inside a transaction — see ADR 0002.")
 
     try:
-        inventory = (
-            MaitInventory.objects.select_for_update()
-            .get(mait=mait, product_type=ProductType.STRAW, product_ref_id=straw.id)
+        inventory = MaitInventory.objects.select_for_update().get(
+            mait=mait, product_type=ProductType.STRAW, product_ref_id=straw.id
         )
     except MaitInventory.DoesNotExist:
         raise InsufficientStock(
@@ -85,9 +82,7 @@ def consume_straw(*, mait, straw: SemenBatch, ai_event_id: int, actor=None) -> M
     # Re-checked after acquiring the lock, not before. Checking first would be the exact
     # race this lock exists to prevent.
     if inventory.qty_available < 1:
-        raise InsufficientStock(
-            f"Straw {straw.unique_straw_no} is no longer in your stock."
-        )
+        raise InsufficientStock(f"Straw {straw.unique_straw_no} is no longer in your stock.")
 
     # Re-read under the lock as well: a concurrent completion may have consumed it between
     # validation and here.
@@ -114,8 +109,12 @@ def consume_straw(*, mait, straw: SemenBatch, ai_event_id: int, actor=None) -> M
     )
 
     logger.info(
-        "Straw consumed", extra={"mait_id": mait.id, "ai_event_id": ai_event_id,
-                                 "balance_after": inventory.qty_available},
+        "Straw consumed",
+        extra={
+            "mait_id": mait.id,
+            "ai_event_id": ai_event_id,
+            "balance_after": inventory.qty_available,
+        },
     )
     return inventory
 
@@ -180,7 +179,5 @@ def reconcile_balance(inventory: MaitInventory) -> tuple[int, int]:
     Used by the low-stock job as a cheap integrity probe. They should never differ; if they
     do, something wrote the balance outside this module and that is worth an alert.
     """
-    ledger_sum = (
-        inventory.ledger_entries.aggregate(total=Sum("qty"))["total"] or 0
-    )
+    ledger_sum = inventory.ledger_entries.aggregate(total=Sum("qty"))["total"] or 0
     return inventory.qty_available, ledger_sum

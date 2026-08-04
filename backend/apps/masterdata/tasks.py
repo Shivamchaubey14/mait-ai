@@ -116,13 +116,15 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
     upload.error_report = errors[:MAX_ERRORS_STORED]
     upload.save(
         update_fields=[
-            "total_rows", "processed_rows", "success_rows", "failed_rows",
-            "error_report", "updated_at",
+            "total_rows",
+            "processed_rows",
+            "success_rows",
+            "failed_rows",
+            "error_report",
+            "updated_at",
         ]
     )
-    logger.info(
-        "Upload %s finished: %s ok, %s failed of %s", upload.id, success, failed, processed
-    )
+    logger.info("Upload %s finished: %s ok, %s failed of %s", upload.id, success, failed, processed)
     return {"total": processed, "success": success, "failed": failed}
 
 
@@ -149,7 +151,9 @@ def _commit_batch(batch, handler, errors) -> tuple[int, int]:
 def _report_progress(upload: DataUploadLog, processed: int, success: int, failed: int) -> None:
     """Update the counters the progress endpoint polls (SRS §6.1.6)."""
     DataUploadLog.objects.filter(pk=upload.pk).update(
-        processed_rows=processed, success_rows=success, failed_rows=failed,
+        processed_rows=processed,
+        success_rows=success,
+        failed_rows=failed,
         updated_at=timezone.now(),
     )
 
@@ -175,9 +179,7 @@ def _detect_header(sheet, upload_type: str) -> tuple[int, list[str]]:
 
 def _iter_rows(sheet, header_row_index: int, headers: list[str]) -> Iterator[tuple[int, dict]]:
     """Yield (row_number, {column: value}) for every non-empty row below the header."""
-    for offset, row in enumerate(
-        sheet.iter_rows(min_row=header_row_index + 1, values_only=True)
-    ):
+    for offset, row in enumerate(sheet.iter_rows(min_row=header_row_index + 1, values_only=True)):
         if row is None or all(cell in (None, "") for cell in row):
             continue
         yield header_row_index + 1 + offset, dict(zip(headers, row, strict=False))
@@ -210,6 +212,7 @@ def _mobile(value) -> str:
 
 
 # -- per-type upserts --------------------------------------------------------------------
+
 
 def _upsert_mpp(row: dict) -> None:
     mpp_code = _clean(row.get("mpp code"))
@@ -281,8 +284,9 @@ def _upsert_member(row: dict) -> None:
         defaults={
             "mpp_id": mpp.id,
             "member_name": _clean(row.get("member name")),
-            "father_husband_name": _clean(row.get("father/husband name")
-                                          or row.get("father husband name")),
+            "father_husband_name": _clean(
+                row.get("father/husband name") or row.get("father husband name")
+            ),
             "gender": _clean(row.get("gender")),
             "age": _int_or_none(row.get("age")),
             "category": _clean(row.get("category")),

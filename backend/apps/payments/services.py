@@ -133,8 +133,7 @@ def initiate_payment(*, ai_event, mode: str, amount, actor=None) -> Payment:
         payment.save(update_fields=["mode", "amount", "updated_at"])
 
     purpose = (
-        OTPLog.Purpose.PAYMENT_ONLINE if mode == Payment.Mode.ONLINE
-        else OTPLog.Purpose.PAYMENT_COD
+        OTPLog.Purpose.PAYMENT_ONLINE if mode == Payment.Mode.ONLINE else OTPLog.Purpose.PAYMENT_COD
     )
     issue_otp(mobile_no=mobile_no, purpose=purpose, payment=payment)
 

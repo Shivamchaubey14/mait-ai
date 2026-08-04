@@ -28,14 +28,13 @@ class IndentRequest(TimeStampedModel):
         SYNCED = "synced", "Pushed to Indent Easy"
         FAILED = "failed", "Push failed"
 
-    mait = models.ForeignKey(
-        "masterdata.Mait", on_delete=models.PROTECT, related_name="indents"
-    )
+    mait = models.ForeignKey("masterdata.Mait", on_delete=models.PROTECT, related_name="indents")
     product_type = models.CharField(max_length=12, choices=ProductType.choices)
     product_ref_id = models.BigIntegerField(
-        null=True, blank=True,
+        null=True,
+        blank=True,
         help_text="Consumable.id where applicable. Straw requests are by breed, not by "
-                  "straw — the specific straws are chosen at issue time.",
+        "straw — the specific straws are chosen at issue time.",
     )
     breed = models.CharField(
         max_length=30, blank=True, help_text="For straw requests (SRS §6.6.1)."
@@ -47,7 +46,9 @@ class IndentRequest(TimeStampedModel):
         max_length=12, choices=Status.choices, default=Status.REQUESTED, db_index=True
     )
     indent_easy_ref_no = models.CharField(
-        max_length=50, blank=True, db_index=True,
+        max_length=50,
+        blank=True,
+        db_index=True,
         help_text="Reference returned by Indent Easy; dedupes GRN callbacks (SRS §6.6.5).",
     )
     sync_status = models.CharField(

@@ -47,7 +47,7 @@ STORAGES = {
             "bucket_name": env("AWS_STORAGE_BUCKET_NAME"),
             "region_name": env("AWS_S3_REGION_NAME", default="ap-south-1"),
             "default_acl": "private",
-            "querystring_auth": True,      # signed URLs only
+            "querystring_auth": True,  # signed URLs only
             "querystring_expire": 3600,
             "file_overwrite": False,
             "object_parameters": {"ServerSideEncryption": "AES256"},

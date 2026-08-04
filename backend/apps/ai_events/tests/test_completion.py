@@ -108,8 +108,12 @@ class TestStrawValidation:
     def test_straw_not_in_stock_is_rejected(self, db, mait, mpp, member, animal):
         """SRS §6.4.2 — the 11th attempt on 10 straws is blocked at the scan step."""
         event = AIEvent.objects.create(
-            client_uuid=uuid.uuid4(), mait=mait, mpp=mpp,
-            owner_type=AIEvent.OwnerType.MEMBER, member=member, animal=animal,
+            client_uuid=uuid.uuid4(),
+            mait=mait,
+            mpp=mpp,
+            owner_type=AIEvent.OwnerType.MEMBER,
+            member=member,
+            animal=animal,
         )
         with pytest.raises(InsufficientStock):
             verify_straw(event, "STRAW-NOT-HELD")
@@ -117,14 +121,19 @@ class TestStrawValidation:
         event.refresh_from_db()
         assert event.status == AIEvent.Status.DRAFT
 
-    def test_consumed_straw_is_rejected(self, ai_event_ready_to_complete, db, mait, mpp,
-                                        member, animal):
+    def test_consumed_straw_is_rejected(
+        self, ai_event_ready_to_complete, db, mait, mpp, member, animal
+    ):
         first, straw = ai_event_ready_to_complete()
         complete_ai_event(first)
 
         second = AIEvent.objects.create(
-            client_uuid=uuid.uuid4(), mait=mait, mpp=mpp,
-            owner_type=AIEvent.OwnerType.MEMBER, member=member, animal=animal,
+            client_uuid=uuid.uuid4(),
+            mait=mait,
+            mpp=mpp,
+            owner_type=AIEvent.OwnerType.MEMBER,
+            member=member,
+            animal=animal,
         )
         with pytest.raises((StrawAlreadyConsumed, InsufficientStock)):
             verify_straw(second, straw.unique_straw_no)
@@ -174,8 +183,11 @@ class TestConcurrentCompletion:
             status=AIEvent.Status.PAYMENT_PENDING,
         )
         Payment.objects.create(
-            ai_event=rival, amount=event.payment.amount, mode=Payment.Mode.COD,
-            member_otp_verified=True, cod_otp_verified=True,
+            ai_event=rival,
+            amount=event.payment.amount,
+            mode=Payment.Mode.COD,
+            member_otp_verified=True,
+            cod_otp_verified=True,
             status=Payment.Status.VERIFIED,
         )
 
@@ -204,7 +216,5 @@ class TestConcurrentCompletion:
 
         assert results.count("ok") == 1, f"exactly one completion must win, got {results}"
         assert available_straw_count(mait) == 0
-        assert MaitInventory.objects.filter(
-            mait=mait, qty_available__lt=0
-        ).exists() is False
+        assert MaitInventory.objects.filter(mait=mait, qty_available__lt=0).exists() is False
         assert AIEvent.objects.filter(status=AIEvent.Status.COMPLETED).count() == 1

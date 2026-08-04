@@ -28,7 +28,9 @@ class Mait(TimeStampedModel):
         help_text="Login identity. Null until an Admin activates the account (SRS §6.8.2).",
     )
     sahayak_vendor_code = models.CharField(
-        max_length=15, unique=True, db_index=True,
+        max_length=15,
+        unique=True,
+        db_index=True,
         help_text="SAP Sahayak Vendor / Customer ID — the upsert key.",
     )
     name = models.CharField(max_length=150, db_index=True)
@@ -89,7 +91,11 @@ class MPP(TimeStampedModel):
     revival_date = models.DateField(null=True, blank=True)
 
     mait = models.ForeignKey(
-        Mait, null=True, blank=True, on_delete=models.SET_NULL, related_name="mpps",
+        Mait,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="mpps",
         help_text="Assigned Sahayak/Mait. Admin can override the SAP default (SRS §6.2.2).",
     )
 
@@ -126,7 +132,8 @@ class Member(TimeStampedModel):
     category = models.CharField(max_length=30, blank=True)
     education = models.CharField(max_length=50, blank=True)
     social_class = models.CharField(
-        max_length=30, blank=True,
+        max_length=30,
+        blank=True,
         help_text="SAP 'Class' column — renamed, `class` is a Python keyword.",
     )
 
@@ -135,7 +142,9 @@ class Member(TimeStampedModel):
     folio_no = models.CharField(max_length=20, blank=True, db_index=True)
 
     mobile_no = models.CharField(
-        max_length=15, blank=True, db_index=True,
+        max_length=15,
+        blank=True,
+        db_index=True,
         help_text="Payment authorisation OTPs are sent here (SRS §6.5).",
     )
     aadhar_no = EncryptedCharField(max_length=20, blank=True)
@@ -181,14 +190,17 @@ class NonMember(TimeStampedModel):
     mobile_no = models.CharField(max_length=15, validators=[mobile_validator], db_index=True)
     address = models.CharField(max_length=255, blank=True)
     mpp = models.ForeignKey(
-        MPP, on_delete=models.PROTECT, related_name="non_members",
+        MPP,
+        on_delete=models.PROTECT,
+        related_name="non_members",
         help_text="Nearest/served MPP.",
     )
     created_by_mait = models.ForeignKey(
         Mait, on_delete=models.PROTECT, related_name="registered_non_members"
     )
     consent_captured_at = models.DateTimeField(
-        null=True, blank=True,
+        null=True,
+        blank=True,
         help_text="When the farmer consented to their details being stored.",
     )
 
@@ -239,7 +251,8 @@ class DataUploadLog(TimeStampedModel):
         default=0, help_text="Drives the progress endpoint (SRS §6.1.6)."
     )
     error_report = models.JSONField(
-        default=list, blank=True,
+        default=list,
+        blank=True,
         help_text="Row-level failures, downloadable as a report (SRS §6.1.4).",
     )
     celery_task_id = models.CharField(max_length=64, blank=True, db_index=True)

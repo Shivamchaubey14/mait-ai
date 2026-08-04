@@ -32,8 +32,7 @@ def flag_low_stock_maits() -> list[int]:
     for row in low:
         logger.warning(
             "Mait low on straws",
-            extra={"mait_id": row["mait_id"], "balance": row["total"],
-                   "threshold": threshold},
+            extra={"mait_id": row["mait_id"], "balance": row["total"], "threshold": threshold},
         )
     return mait_ids
 
@@ -54,7 +53,10 @@ def verify_ledger_integrity() -> list[int]:
             broken.append(inventory.id)
             logger.error(
                 "Inventory balance diverges from its ledger",
-                extra={"inventory_id": inventory.id, "balance": inventory.qty_available,
-                       "ledger_sum": ledger_sum},
+                extra={
+                    "inventory_id": inventory.id,
+                    "balance": inventory.qty_available,
+                    "ledger_sum": ledger_sum,
+                },
             )
     return broken

@@ -61,8 +61,7 @@ def push_indent_to_indent_easy(self, indent_id: int) -> None:
             if indent.sync_attempts >= MAX_SYNC_ATTEMPTS
             else IndentRequest.SyncStatus.PENDING
         )
-        indent.save(update_fields=["sync_attempts", "last_sync_error", "sync_status",
-                                   "updated_at"])
+        indent.save(update_fields=["sync_attempts", "last_sync_error", "sync_status", "updated_at"])
         if indent.sync_attempts < MAX_SYNC_ATTEMPTS:
             raise self.retry(exc=exc) from exc
         logger.error("Indent %s gave up after %s attempts", indent_id, indent.sync_attempts)
@@ -71,8 +70,9 @@ def push_indent_to_indent_easy(self, indent_id: int) -> None:
     indent.indent_easy_ref_no = ref_no
     indent.sync_status = IndentRequest.SyncStatus.SYNCED
     indent.last_sync_error = ""
-    indent.save(update_fields=["indent_easy_ref_no", "sync_status", "last_sync_error",
-                               "updated_at"])
+    indent.save(
+        update_fields=["indent_easy_ref_no", "sync_status", "last_sync_error", "updated_at"]
+    )
 
 
 @shared_task(name="apps.integrations.tasks.reconcile_indent_easy_grn")

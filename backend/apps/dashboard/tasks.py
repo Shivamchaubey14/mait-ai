@@ -34,9 +34,7 @@ def aggregate_daily_ai_counts(lookback_days: int = 2) -> int:
     since = timezone.localdate() - timedelta(days=lookback_days)
 
     rows = (
-        AIEvent.objects.filter(
-            status=AIEvent.Status.COMPLETED, completed_at__date__gte=since
-        )
+        AIEvent.objects.filter(status=AIEvent.Status.COMPLETED, completed_at__date__gte=since)
         .annotate(day=TruncDate("completed_at"))
         .values("day", "mpp_id", "mait_id", "mpp__district_code")
         .annotate(

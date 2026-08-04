@@ -65,8 +65,12 @@ def apply_grn(*, indent: IndentRequest, grn: dict[str, Any], source: str) -> boo
         action="state_change",
         entity_type="indent_request",
         entity_id=indent.id,
-        meta={"to": "issued", "qty_issued": qty_issued, "source": source,
-              "grn_no": grn.get("grn_no", "")},
+        meta={
+            "to": "issued",
+            "qty_issued": qty_issued,
+            "source": source,
+            "grn_no": grn.get("grn_no", ""),
+        },
     )
     logger.info("Credited indent %s with %s units via %s", indent.id, qty_issued, source)
     return True

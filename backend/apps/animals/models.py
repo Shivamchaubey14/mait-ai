@@ -59,18 +59,28 @@ class Animal(TimeStampedModel):
 
     owner_type = models.CharField(max_length=12, choices=OwnerType.choices, db_index=True)
     member = models.ForeignKey(
-        "masterdata.Member", null=True, blank=True, on_delete=models.PROTECT,
+        "masterdata.Member",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
         related_name="animals",
     )
     non_member = models.ForeignKey(
-        "masterdata.NonMember", null=True, blank=True, on_delete=models.PROTECT,
+        "masterdata.NonMember",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
         related_name="animals",
     )
 
     animal_type = models.CharField(max_length=4, choices=AnimalType.choices, db_index=True)
     breed = models.CharField(max_length=30, help_text="BreedConfig.code at time of capture.")
     ear_tag_no = models.CharField(
-        max_length=20, null=True, blank=True, unique=True, db_index=True,
+        max_length=20,
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
         help_text="Optional, but unique across the platform when present (SRS §6.3 step 3).",
     )
 

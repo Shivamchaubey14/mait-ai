@@ -33,7 +33,8 @@ class SemenBatch(TimeStampedModel):
     semen_station = models.CharField(max_length=100, blank=True)
     received_date = models.DateField(null=True, blank=True)
     is_consumed = models.BooleanField(
-        default=False, db_index=True,
+        default=False,
+        db_index=True,
         help_text="Set when an AI event completes against this straw. Never reset.",
     )
 
@@ -73,9 +74,7 @@ class MaitInventory(TimeStampedModel):
     database refuses to let stock go negative (ADR 0002).
     """
 
-    mait = models.ForeignKey(
-        "masterdata.Mait", on_delete=models.PROTECT, related_name="inventory"
-    )
+    mait = models.ForeignKey("masterdata.Mait", on_delete=models.PROTECT, related_name="inventory")
     product_type = models.CharField(max_length=12, choices=ProductType.choices)
     product_ref_id = models.BigIntegerField(
         help_text="SemenBatch.id for straws, Consumable.id for consumables."
@@ -131,13 +130,16 @@ class MaitInventoryLedger(models.Model):
     qty = models.IntegerField(help_text="Positive for credits, negative for debits.")
     balance_after = models.IntegerField(
         help_text="Balance immediately after this movement — makes the ledger auditable "
-                  "without replaying every prior row."
+        "without replaying every prior row."
     )
     ref_type = models.CharField(max_length=12, choices=RefType.choices)
     ref_id = models.BigIntegerField(null=True, blank=True)
     note = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="inventory_movements",
     )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

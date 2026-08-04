@@ -34,7 +34,9 @@ class DailyAIAggregate(TimeStampedModel):
         "masterdata.Mait", on_delete=models.CASCADE, related_name="daily_aggregates"
     )
     district_code = models.CharField(
-        max_length=10, blank=True, db_index=True,
+        max_length=10,
+        blank=True,
+        db_index=True,
         help_text="Denormalised from the MPP so district filters avoid a join.",
     )
 

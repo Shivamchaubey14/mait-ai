@@ -56,8 +56,9 @@ class AuditLog(models.Model):
         db_table = "audit_log"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["entity_type", "entity_id", "-created_at"],
-                         name="audit_entity_time_idx"),
+            models.Index(
+                fields=["entity_type", "entity_id", "-created_at"], name="audit_entity_time_idx"
+            ),
             models.Index(fields=["actor", "-created_at"], name="audit_actor_time_idx"),
         ]
 

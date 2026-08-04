@@ -128,8 +128,9 @@ class OTPLog(models.Model):
         db_table = "otp_log"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["mobile_no", "purpose", "-created_at"],
-                         name="otp_mobile_purpose_idx"),
+            models.Index(
+                fields=["mobile_no", "purpose", "-created_at"], name="otp_mobile_purpose_idx"
+            ),
             models.Index(fields=["expires_at", "is_verified"], name="otp_expiry_idx"),
         ]
 

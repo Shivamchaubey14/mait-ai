@@ -31,8 +31,8 @@ class AIEvent(TimeStampedModel):
         Status.STRAW_VERIFIED: (Status.PHOTO_CAPTURED, Status.CANCELLED),
         Status.PHOTO_CAPTURED: (Status.PAYMENT_PENDING, Status.CANCELLED),
         Status.PAYMENT_PENDING: (Status.COMPLETED, Status.CANCELLED),
-        Status.COMPLETED: (),   # terminal
-        Status.CANCELLED: (),   # terminal
+        Status.COMPLETED: (),  # terminal
+        Status.CANCELLED: (),  # terminal
     }
 
     class OwnerType(models.TextChoices):
@@ -41,36 +41,42 @@ class AIEvent(TimeStampedModel):
 
     # Client-generated UUID, also the Idempotency-Key for this event's writes (ADR 0003).
     client_uuid = models.UUIDField(
-        unique=True, db_index=True,
+        unique=True,
+        db_index=True,
         help_text="Generated on the device before the first sync attempt.",
     )
 
-    mait = models.ForeignKey(
-        "masterdata.Mait", on_delete=models.PROTECT, related_name="ai_events"
-    )
-    mpp = models.ForeignKey(
-        "masterdata.MPP", on_delete=models.PROTECT, related_name="ai_events"
-    )
+    mait = models.ForeignKey("masterdata.Mait", on_delete=models.PROTECT, related_name="ai_events")
+    mpp = models.ForeignKey("masterdata.MPP", on_delete=models.PROTECT, related_name="ai_events")
 
     owner_type = models.CharField(max_length=12, choices=OwnerType.choices)
     member = models.ForeignKey(
-        "masterdata.Member", null=True, blank=True, on_delete=models.PROTECT,
+        "masterdata.Member",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
         related_name="ai_events",
     )
     non_member = models.ForeignKey(
-        "masterdata.NonMember", null=True, blank=True, on_delete=models.PROTECT,
+        "masterdata.NonMember",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
         related_name="ai_events",
     )
 
-    animal = models.ForeignKey(
-        "animals.Animal", on_delete=models.PROTECT, related_name="ai_events"
-    )
+    animal = models.ForeignKey("animals.Animal", on_delete=models.PROTECT, related_name="ai_events")
     semen_batch = models.ForeignKey(
-        "inventory.SemenBatch", null=True, blank=True, on_delete=models.PROTECT,
+        "inventory.SemenBatch",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
         related_name="ai_events",
     )
     straw_unique_no = models.CharField(
-        max_length=30, blank=True, db_index=True,
+        max_length=30,
+        blank=True,
+        db_index=True,
         help_text="Denormalised from the batch so history survives any master-data cleanup.",
     )
 
@@ -82,9 +88,10 @@ class AIEvent(TimeStampedModel):
         max_length=20, choices=Status.choices, default=Status.DRAFT, db_index=True
     )
     performed_at = models.DateTimeField(
-        null=True, blank=True,
+        null=True,
+        blank=True,
         help_text="When the AI was actually performed — set at photo capture, not at sync, "
-                  "so an offline event reports the real time.",
+        "so an offline event reports the real time.",
     )
     completed_at = models.DateTimeField(null=True, blank=True)
     cancelled_reason = models.CharField(max_length=255, blank=True)
@@ -155,14 +162,15 @@ class AIEventTimeline(models.Model):
     rather than raw before/after payloads.
     """
 
-    ai_event = models.ForeignKey(
-        AIEvent, on_delete=models.CASCADE, related_name="timeline_entries"
-    )
+    ai_event = models.ForeignKey(AIEvent, on_delete=models.CASCADE, related_name="timeline_entries")
     from_status = models.CharField(max_length=20, blank=True)
     to_status = models.CharField(max_length=20)
     note = models.CharField(max_length=255, blank=True)
     actor = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="ai_event_transitions",
     )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

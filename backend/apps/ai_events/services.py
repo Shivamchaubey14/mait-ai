@@ -51,9 +51,7 @@ def assert_mait_assigned_to_mpp(mait, mpp) -> None:
     if not mpp.mpp_code:
         raise MPPNotAssigned()
     if mpp.mait_id != mait.id:
-        raise MPPNotAssigned(
-            f"You are not assigned to MPP {mpp.mpp_code}."
-        )
+        raise MPPNotAssigned(f"You are not assigned to MPP {mpp.mpp_code}.")
 
 
 @transaction.atomic
@@ -67,8 +65,12 @@ def verify_straw(event: AIEvent, straw_unique_no: str, *, actor=None) -> AIEvent
     """
     straw = get_straw_for_mait(event.mait, straw_unique_no)
 
-    _transition(event, AIEvent.Status.STRAW_VERIFIED, actor=actor,
-                note=f"Straw {straw_unique_no} validated against stock")
+    _transition(
+        event,
+        AIEvent.Status.STRAW_VERIFIED,
+        actor=actor,
+        note=f"Straw {straw_unique_no} validated against stock",
+    )
     event.semen_batch = straw
     event.straw_unique_no = straw.unique_straw_no
     event.save(update_fields=["semen_batch", "straw_unique_no", "status", "updated_at"])
@@ -77,8 +79,13 @@ def verify_straw(event: AIEvent, straw_unique_no: str, *, actor=None) -> AIEvent
 
 @transaction.atomic
 def attach_photo(
-    event: AIEvent, *, photo_url: str, gps_lat=None, gps_lng=None,
-    performed_at=None, actor=None,
+    event: AIEvent,
+    *,
+    photo_url: str,
+    gps_lat=None,
+    gps_lng=None,
+    performed_at=None,
+    actor=None,
 ) -> AIEvent:
     """
     Record the proof photo and advance to ``photo_captured`` (SRS §6.3 step 5).
@@ -94,7 +101,12 @@ def attach_photo(
     event.performed_at = performed_at or timezone.now()
     event.save(
         update_fields=[
-            "ai_photo_url", "gps_lat", "gps_lng", "performed_at", "status", "updated_at",
+            "ai_photo_url",
+            "gps_lat",
+            "gps_lng",
+            "performed_at",
+            "status",
+            "updated_at",
         ]
     )
     return event
@@ -125,9 +137,7 @@ def complete_ai_event(event: AIEvent, *, actor=None) -> AIEvent:
         return event
 
     if not event.can_transition_to(AIEvent.Status.COMPLETED):
-        raise InvalidStateTransition(
-            f"Cannot complete an AI event in state '{event.status}'."
-        )
+        raise InvalidStateTransition(f"Cannot complete an AI event in state '{event.status}'.")
 
     # SRS §6.5.3 — payment must be verified first. Checked inside the transaction so a
     # concurrent payment change cannot slip in between the check and the deduction.
@@ -145,8 +155,9 @@ def complete_ai_event(event: AIEvent, *, actor=None) -> AIEvent:
         actor=actor,
     )
 
-    _transition(event, AIEvent.Status.COMPLETED, actor=actor,
-                note="Payment verified, straw deducted")
+    _transition(
+        event, AIEvent.Status.COMPLETED, actor=actor, note="Payment verified, straw deducted"
+    )
     event.completed_at = timezone.now()
     event.save(update_fields=["status", "completed_at", "updated_at"])
 
