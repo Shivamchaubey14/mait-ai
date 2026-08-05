@@ -431,6 +431,93 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/animals/:
+    post:
+      operationId: animals_create
+      description: Belongs to exactly one of a member or a non-member. The ear tag
+        is optional but unique across the platform when given, so a tag that already
+        exists is rejected with the clash named rather than silently accepted.
+      summary: Register an animal
+      tags:
+      - animals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnimalCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnimalCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnimalCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Animal'
+          description: ''
+  /api/v1/animals/{id}/:
+    get:
+      operationId: animals_retrieve
+      description: Animals belonging to members and non-members at this Mait's MPPs
+        (SRS §9.4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this animal.
+        required: true
+      tags:
+      - animals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Animal'
+          description: ''
+    patch:
+      operationId: animals_partial_update
+      description: Animals belonging to members and non-members at this Mait's MPPs
+        (SRS §9.4).
+      summary: Correct a breed or add an ear tag
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this animal.
+        required: true
+      tags:
+      - animals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAnimalUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAnimalUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAnimalUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Animal'
+          description: ''
   /api/v1/auth/login/:
     post:
       operationId: auth_login_create
@@ -622,6 +709,32 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/config/breeds/:
+    get:
+      operationId: config_breeds_list
+      description: Filter with `?animal_type=COW` or `BUFF`. The app pulls the whole
+        list at login and caches it, so the picker keeps working with no signal (SRS
+        §6.3.2).
+      summary: Breed options by animal type
+      parameters:
+      - in: query
+        name: animal_type
+        schema:
+          type: string
+        description: COW or BUFF
+      tags:
+      - animals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BreedConfig'
+          description: ''
   /api/v1/health/:
     get:
       operationId: health_retrieve
@@ -666,6 +779,121 @@ paths:
               schema:
                 type: object
                 additionalProperties: {}
+          description: ''
+  /api/v1/mait/inventory/:
+    get:
+      operationId: mait_inventory_retrieve
+      description: |-
+        The Mait's current stock, in the shape the app gates on (SRS §6.4.1).
+
+        Refreshed at login and after every completed AI and fulfilled indent.
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/mait/inventory/check/:
+    get:
+      operationId: mait_inventory_check_retrieve
+      description: |-
+        Compare the stored balance against the ledger sum.
+
+        Exposed because the two must never disagree — the balance is a materialised convenience
+        and the ledger is the truth. A mismatch here is the earliest visible sign that something
+        wrote stock without going through the service layer.
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/mait/inventory/ledger/:
+    get:
+      operationId: mait_inventory_ledger_list
+      description: |-
+        Stock movement history (SRS §9.5).
+
+        Append-only. Summing it must always reproduce the balance; a divergence means something
+        wrote stock outside the service layer and is worth investigating.
+      summary: Stock movement history
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLedgerEntryList'
+          description: ''
+  /api/v1/mait/inventory/lines/:
+    get:
+      operationId: mait_inventory_lines_list
+      description: The individual stock lines behind the summary.
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMaitInventoryList'
           description: ''
   /api/v1/members/:
     get:
@@ -910,6 +1138,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/NonMember'
           description: ''
+  /api/v1/semen-batches/{unique_no}/validate/:
+    get:
+      operationId: semen_batches_validate_retrieve
+      description: |-
+        Two rejections are kept distinct because the Mait's next action differs:
+
+        - `not_in_stock` — the straw is not theirs. Raise an indent.
+        - `already_used` — it was consumed by another AI event. A data problem worth reporting, not something to retry.
+
+        Returns 200 with `valid: false` rather than an error status: a rejected scan is a normal outcome of the flow, not a failed request, and the app renders it as guidance rather than a crash.
+      summary: Validate a scanned straw
+      parameters:
+      - in: path
+        name: unique_no
+        schema:
+          type: string
+        required: true
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrawValidation'
+          description: ''
 components:
   schemas:
     AdminUser:
@@ -1022,6 +1278,131 @@ components:
       description: |-
         * `admin` - admin
         * `super_admin` - super_admin
+    Animal:
+      type: object
+      description: Read shape for an animal.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        owner_type:
+          allOf:
+          - $ref: '#/components/schemas/OwnerTypeEnum'
+          readOnly: true
+        member:
+          type: integer
+          readOnly: true
+          nullable: true
+        non_member:
+          type: integer
+          readOnly: true
+          nullable: true
+        owner_name:
+          type: string
+          readOnly: true
+        animal_type:
+          allOf:
+          - $ref: '#/components/schemas/AnimalTypeEnum'
+          readOnly: true
+        animal_type_display:
+          type: string
+          readOnly: true
+        breed:
+          type: string
+          readOnly: true
+          description: BreedConfig.code at time of capture.
+        ear_tag_no:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Optional, but unique across the platform when present (SRS
+            §6.3 step 3).
+        ai_event_count:
+          type: integer
+          readOnly: true
+          default: 0
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ai_event_count
+      - animal_type
+      - animal_type_display
+      - breed
+      - created_at
+      - ear_tag_no
+      - id
+      - member
+      - non_member
+      - owner_name
+      - owner_type
+    AnimalCreateRequest:
+      type: object
+      description: |-
+        Register an animal against a member or a non-member (SRS §6.3 step 3).
+
+        Ownership is a nullable pair rather than a generic relation, so exactly one of the two
+        must be supplied — enforced here for a readable error and again by a database constraint
+        so no code path can create an orphan.
+      properties:
+        member_code:
+          type: string
+        non_member_id:
+          type: integer
+          nullable: true
+        animal_type:
+          $ref: '#/components/schemas/AnimalTypeEnum'
+        breed:
+          type: string
+          minLength: 1
+          maxLength: 30
+        ear_tag_no:
+          type: string
+          nullable: true
+          maxLength: 20
+      required:
+      - animal_type
+      - breed
+    AnimalTypeEnum:
+      enum:
+      - COW
+      - BUFF
+      type: string
+      description: |-
+        * `COW` - Cow
+        * `BUFF` - Buffalo
+    BreedConfig:
+      type: object
+      description: |-
+        One breed option for the picker.
+
+        Carries the Hindi label alongside the English so the app never has to hold a second
+        mapping of its own — the list a Mait sees comes entirely from here.
+      properties:
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        name_hi:
+          type: string
+          readOnly: true
+          description: Devanagari label for the Hindi toggle.
+        animal_type:
+          allOf:
+          - $ref: '#/components/schemas/AnimalTypeEnum'
+          readOnly: true
+        display_order:
+          type: integer
+          readOnly: true
+      required:
+      - animal_type
+      - code
+      - display_order
+      - name
+      - name_hi
     CurrentUser:
       type: object
       description: |-
@@ -1174,6 +1555,58 @@ components:
       - upload_type_display
       - uploaded_by
       - uploaded_by_name
+    LedgerEntry:
+      type: object
+      description: A movement in the immutable stock ledger (SRS §9.5).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        txn_type:
+          allOf:
+          - $ref: '#/components/schemas/TxnTypeEnum'
+          readOnly: true
+        txn_type_display:
+          type: string
+          readOnly: true
+        qty:
+          type: integer
+          readOnly: true
+          description: Positive for credits, negative for debits.
+        balance_after:
+          type: integer
+          readOnly: true
+          description: Balance immediately after this movement — makes the ledger
+            auditable without replaying every prior row.
+        ref_type:
+          allOf:
+          - $ref: '#/components/schemas/RefTypeEnum'
+          readOnly: true
+        ref_id:
+          type: integer
+          readOnly: true
+          nullable: true
+        product_type:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - balance_after
+      - created_at
+      - id
+      - note
+      - product_type
+      - qty
+      - ref_id
+      - ref_type
+      - txn_type
+      - txn_type_display
     LogoutRequest:
       type: object
       description: Blacklist a refresh token so a stolen one cannot outlive the session
@@ -1402,6 +1835,48 @@ components:
       required:
       - mobile_no
       - sahayak_vendor_code
+    MaitInventory:
+      type: object
+      description: One product line in a Mait's stock.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        product_type:
+          allOf:
+          - $ref: '#/components/schemas/ProductTypeEnum'
+          readOnly: true
+        product_type_display:
+          type: string
+          readOnly: true
+        product_ref_id:
+          type: integer
+          readOnly: true
+          description: SemenBatch.id for straws, Consumable.id for consumables.
+        straw_unique_no:
+          type: string
+          nullable: true
+          readOnly: true
+        breed:
+          type: string
+          nullable: true
+          readOnly: true
+        qty_available:
+          type: integer
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - breed
+      - id
+      - product_ref_id
+      - product_type
+      - product_type_display
+      - qty_available
+      - straw_unique_no
+      - updated_at
     MasterUploadRequest:
       type: object
       description: Validates the uploaded workbook before anything is queued.
@@ -1635,6 +2110,14 @@ components:
       required:
       - mobile_no
       - otp
+    OwnerTypeEnum:
+      enum:
+      - member
+      - non_member
+      type: string
+      description: |-
+        * `member` - Member
+        * `non_member` - Non-member
     PaginatedAdminUserList:
       type: object
       required:
@@ -1681,6 +2164,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DataUploadLog'
+    PaginatedLedgerEntryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
     PaginatedMPPListList:
       type: object
       required:
@@ -1704,6 +2210,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MPPList'
+    PaginatedMaitInventoryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaitInventory'
     PaginatedMemberListList:
       type: object
       required:
@@ -1797,6 +2326,18 @@ components:
           type: string
           writeOnly: true
           minLength: 10
+    PatchedAnimalUpdateRequest:
+      type: object
+      description: Correct a breed or add an ear tag later (SRS §9.4).
+      properties:
+        breed:
+          type: string
+          minLength: 1
+          maxLength: 30
+        ear_tag_no:
+          type: string
+          nullable: true
+          maxLength: 20
     PatchedMPPAssignmentRequest:
       type: object
       description: |-
@@ -1810,6 +2351,24 @@ components:
           nullable: true
           minLength: 1
           description: Null unassigns the MPP, leaving it visible to admins only.
+    ProductTypeEnum:
+      enum:
+      - straw
+      - consumable
+      type: string
+      description: |-
+        * `straw` - Semen straw
+        * `consumable` - Consumable
+    RefTypeEnum:
+      enum:
+      - indent
+      - ai_event
+      - manual
+      type: string
+      description: |-
+        * `indent` - Indent
+        * `ai_event` - AI event
+        * `manual` - Manual adjustment
     Role412Enum:
       enum:
       - super_admin
@@ -1820,6 +2379,36 @@ components:
         * `super_admin` - Super Admin
         * `admin` - Admin / Back-office
         * `mait` - Mait (Field Agent)
+    SemenBatch:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        unique_straw_no:
+          type: string
+          readOnly: true
+        breed:
+          type: string
+          readOnly: true
+        bull_id:
+          type: string
+          readOnly: true
+        semen_station:
+          type: string
+          readOnly: true
+        received_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+      required:
+      - breed
+      - bull_id
+      - id
+      - received_date
+      - semen_station
+      - unique_straw_no
     StatusEnum:
       enum:
       - queued
@@ -1834,6 +2423,31 @@ components:
         * `completed` - Completed
         * `completed_with_errors` - Completed with errors
         * `failed` - Failed
+    StrawValidation:
+      type: object
+      description: |-
+        The answer to a scan (SRS §6.3 step 4).
+
+        ``reason`` is a stable machine-readable code, not a message. The app branches on it to
+        tell the Mait what to actually do — "raise an indent" and "report this straw" are
+        different actions, and a translated sentence cannot be branched on.
+      properties:
+        valid:
+          type: boolean
+        reason:
+          type: string
+          nullable: true
+        straw:
+          allOf:
+          - $ref: '#/components/schemas/SemenBatch'
+          nullable: true
+        available_straws:
+          type: integer
+      required:
+      - available_straws
+      - reason
+      - straw
+      - valid
     TokenPair:
       type: object
       description: The JWT pair every successful login returns.
@@ -1866,6 +2480,18 @@ components:
           minLength: 1
       required:
       - refresh
+    TxnTypeEnum:
+      enum:
+      - issue
+      - consume
+      - return
+      - adjustment
+      type: string
+      description: |-
+        * `issue` - Issued to Mait
+        * `consume` - Consumed by AI event
+        * `return` - Returned to store
+        * `adjustment` - Manual adjustment
     UploadErrorRow:
       type: object
       description: One rejected row in the downloadable error report (SRS §6.1.4).

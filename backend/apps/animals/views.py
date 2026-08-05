@@ -1,0 +1,146 @@
+"""Animal registry and breed configuration endpoints (SRS §9.4)."""
+
+from __future__ import annotations
+
+from django.db.models import Count
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework import mixins, status, viewsets
+from rest_framework.response import Response
+
+from apps.core.models import AuditLog
+from apps.core.permissions import IsAdminOrMaitReadOnly, IsMait
+from apps.core.services import record_audit
+
+from .models import Animal, BreedConfig
+from .serializers import (
+    AnimalCreateSerializer,
+    AnimalSerializer,
+    AnimalUpdateSerializer,
+    BreedConfigSerializer,
+)
+
+
+@extend_schema(tags=["animals"])
+class BreedConfigViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """
+    The breed list, driven by configuration rather than code (SRS §6.3 step 3).
+
+    A table rather than an enum because the authoritative list is still an open item
+    (SRS §18.2 item 1) and must be changeable without a deploy.
+    """
+
+    serializer_class = BreedConfigSerializer
+    permission_classes = [IsAdminOrMaitReadOnly]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["animal_type"]
+    pagination_class = None  # a couple of dozen rows the app caches whole for offline use
+
+    def get_queryset(self):
+        return BreedConfig.objects.filter(is_active=True)
+
+    @extend_schema(
+        summary="Breed options by animal type",
+        description=(
+            "Filter with `?animal_type=COW` or `BUFF`. The app pulls the whole list at login "
+            "and caches it, so the picker keeps working with no signal (SRS §6.3.2)."
+        ),
+        parameters=[
+            OpenApiParameter("animal_type", description="COW or BUFF", required=False, type=str)
+        ],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+
+@extend_schema(tags=["animals"])
+class AnimalViewSet(
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Animals belonging to members and non-members at this Mait's MPPs (SRS §9.4)."""
+
+    permission_classes = [IsMait]
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):
+        """
+        Scoped to the requesting Mait's own MPPs.
+
+        An animal is reachable through either owner, so both sides of the nullable pair are
+        filtered — omitting one would leak every non-member's animals to every Mait.
+        """
+        mait = getattr(self.request.user, "mait_profile", None)
+        if mait is None:
+            return Animal.objects.none()
+        return (
+            (
+                Animal.objects.filter(member__mpp__mait=mait)
+                | Animal.objects.filter(non_member__mpp__mait=mait)
+            )
+            .select_related("member", "non_member")
+            .annotate(ai_event_count=Count("ai_events"))
+        )
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return AnimalCreateSerializer
+        if self.action in ("update", "partial_update"):
+            return AnimalUpdateSerializer
+        return AnimalSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["mait"] = getattr(self.request.user, "mait_profile", None)
+        return context
+
+    @extend_schema(
+        summary="Register an animal",
+        description=(
+            "Belongs to exactly one of a member or a non-member. The ear tag is optional but "
+            "unique across the platform when given, so a tag that already exists is rejected "
+            "with the clash named rather than silently accepted."
+        ),
+        request=AnimalCreateSerializer,
+        responses={201: AnimalSerializer},
+    )
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        animal = serializer.save()
+
+        record_audit(
+            action=AuditLog.Action.CREATE,
+            entity_type="animal",
+            entity_id=animal.id,
+            request=request,
+            meta={"animal_type": animal.animal_type, "breed": animal.breed},
+        )
+        return Response(AnimalSerializer(animal).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        summary="Correct a breed or add an ear tag",
+        request=AnimalUpdateSerializer,
+        responses={200: AnimalSerializer},
+    )
+    def partial_update(self, request, *args, **kwargs):
+        animal = self.get_object()
+        before = {"breed": animal.breed, "ear_tag_no": animal.ear_tag_no}
+
+        serializer = AnimalUpdateSerializer(animal, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        animal = serializer.save()
+
+        record_audit(
+            action=AuditLog.Action.UPDATE,
+            entity_type="animal",
+            entity_id=animal.id,
+            request=request,
+            meta={
+                "before": before,
+                "after": {"breed": animal.breed, "ear_tag_no": animal.ear_tag_no},
+            },
+        )
+        return Response(AnimalSerializer(animal).data)
