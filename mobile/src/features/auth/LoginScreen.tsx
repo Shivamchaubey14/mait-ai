@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   flex: { flexGrow: 1 },
   centered: { justifyContent: 'center' },
   header: { alignItems: 'center', marginBottom: spacing[6] },
-  title: { ...typography.display, color: colors.primaryDark },
+  title: { ...typography.display, color: colors.ink },
   sentTo: {
     ...typography.body,
     color: colors.textMuted,

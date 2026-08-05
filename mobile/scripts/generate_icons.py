@@ -17,11 +17,11 @@ import pathlib
 
 from PIL import Image, ImageDraw
 
-# docs/DESIGN_SYSTEM.md
-PRIMARY_DARK = (0x32, 0x5E, 0x6A)
-PRIMARY = (0x43, 0x63, 0x7E)
-ACCENT = (0xE9, 0x8B, 0x50)
-SUCCESS_ALT = (0x24, 0x9D, 0x8F)
+# docs/SCREEN_INVENTORY.md — Nest Green, Cream Yolk, Ink.
+INK = (0x25, 0x3D, 0x4E)
+GREEN = (0x3B, 0xB7, 0x7E)
+GREEN_DARK = (0x28, 0x7D, 0x56)
+YOLK = (0xFD, 0xC0, 0x40)
 SURFACE = (0xFF, 0xFF, 0xFF)
 
 ASSETS = pathlib.Path(__file__).resolve().parent.parent / "assets"
@@ -52,10 +52,10 @@ def draw_mark(size: int, *, with_ground: bool, ground_radius_ratio: float = 0.22
         # The ground and its band are composed on their own layer and masked to the rounded
         # shape. Drawing the band straight onto the canvas lets it spill past the corner
         # radius, which reads as a rendering bug rather than a design.
-        ground = Image.new("RGBA", (canvas, canvas), PRIMARY_DARK)
+        ground = Image.new("RGBA", (canvas, canvas), GREEN)
         ImageDraw.Draw(ground).polygon(
             [(0, canvas), (canvas, canvas * 0.45), (canvas, canvas), (0, canvas)],
-            fill=PRIMARY,
+            fill=GREEN_DARK,
         )
 
         mask = Image.new("L", (canvas, canvas), 0)
@@ -86,28 +86,28 @@ def draw_mark(size: int, *, with_ground: bool, ground_radius_ratio: float = 0.22
         draw,
         (left, top, left + straw_w, top + cap_h),
         radius=int(straw_w / 2),
-        fill=ACCENT,
+        fill=YOLK,
     )
     # Square off the cap's lower edge so it reads as a cap rather than a floating pill.
-    draw.rectangle((left, top + cap_h - straw_w / 2, left + straw_w, top + cap_h), fill=ACCENT)
+    draw.rectangle((left, top + cap_h - straw_w / 2, left + straw_w, top + cap_h), fill=YOLK)
 
     # A droplet below, teal — the same colour the app uses for "inventory OK".
     drop_r = canvas * 0.052
     drop_cy = top + straw_h + drop_r * 1.9
     draw.ellipse(
         (cx - drop_r, drop_cy - drop_r, cx + drop_r, drop_cy + drop_r),
-        fill=SUCCESS_ALT,
+        fill=SURFACE,
     )
     draw.polygon(
         [(cx, drop_cy - drop_r * 2.0), (cx - drop_r * 0.92, drop_cy), (cx + drop_r * 0.92, drop_cy)],
-        fill=SUCCESS_ALT,
+        fill=SURFACE,
     )
 
     return image.resize((size, size), Image.LANCZOS)
 
 
 def make_splash(width: int, height: int) -> Image.Image:
-    image = Image.new("RGBA", (width, height), PRIMARY_DARK)
+    image = Image.new("RGBA", (width, height), GREEN)
     mark = draw_mark(int(min(width, height) * 0.34), with_ground=False)
     image.alpha_composite(
         mark, ((width - mark.width) // 2, (height - mark.height) // 2 - int(height * 0.04))

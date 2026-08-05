@@ -119,7 +119,7 @@ export default function RootNavigator(): React.JSX.Element {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   header: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.ink,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
   },
@@ -140,10 +140,10 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral,
+    backgroundColor: colors.border,
     opacity: 0.25,
   },
   progressDone: { backgroundColor: colors.success, opacity: 1 },
-  progressCurrent: { backgroundColor: colors.accent, opacity: 1 },
+  progressCurrent: { backgroundColor: colors.primary, opacity: 1 },
   selected: { ...typography.h3, color: colors.text, textAlign: 'center' },
 });

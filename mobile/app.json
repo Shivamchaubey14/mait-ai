@@ -6,12 +6,12 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "primaryColor": "#325E6A",
+    "primaryColor": "#3BB77E",
     "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#325E6A"
+      "backgroundColor": "#3BB77E"
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
@@ -22,7 +22,7 @@
       "package": "in.shwetdhara.maitai",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#325E6A"
+        "backgroundColor": "#3BB77E"
       },
       "permissions": ["CAMERA", "ACCESS_FINE_LOCATION"]
     },

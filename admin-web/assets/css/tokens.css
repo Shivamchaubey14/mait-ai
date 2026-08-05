@@ -1,15 +1,17 @@
 /**
- * Design tokens for the admin portal (SRS §10, docs/DESIGN_SYSTEM.md).
+ * Design tokens for the admin portal.
  *
- * The single source of colour, type and spacing for the web portal, mirrored for the mobile
- * app in `mobile/src/theme/tokens.ts`. CI rejects a hardcoded hex anywhere else in this
- * workstream — use `var(--color-*)`.
+ * Source of truth: docs/SCREEN_INVENTORY.md. Mirrored for the mobile app in
+ * `mobile/src/theme/tokens.ts`. This palette supersedes SRS §10.2.
+ *
+ * CI rejects a hardcoded hex anywhere else in this workstream — use `var(--color-*)`.
  */
 
 :root {
   /* --- Typography ------------------------------------------------------------------- */
-  --font-heading: "Lexend", -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-body: "Quicksand", -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Two families only. Quicksand for headings, Nunito Sans for body. No third face. */
+  --font-heading: "Quicksand", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: "Nunito Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
 
   --text-display: 2rem;      /* 32px — dashboard KPI numbers */
   --text-h1: 1.5rem;         /* 24px */
@@ -22,32 +24,70 @@
   --leading-tight: 1.25;
   --leading-normal: 1.5;
 
-  /* --- Brand ------------------------------------------------------------------------ */
-  --color-primary: #43637e;
-  --color-primary-dark: #325e6a;
-  --color-secondary: #8fa28a;
+  /* --- Nest Green ------------------------------------------------------------------- */
+  --green-50: #eaf7f1;
+  --green-100: #cdecde;
+  --green-200: #9fdcc0;
+  --green-300: #71cca1;
+  --green-400: #52c08d;
+  --green-500: #3bb77e;
+  --green-600: #329c6b;
+  --green-700: #287d56;
+  --green-800: #1e5e41;
+  --green-900: #143e2b;
 
-  /* --- Status ----------------------------------------------------------------------- */
-  --color-success: #66bb6a;
-  --color-success-alt: #249d8f;
-  --color-error: #bd4444;
-  --color-error-dark: #b34a44;
-  --color-warning: #fff449;
-  --color-info: #78a4cb;
+  /* --- Cream Yolk ------------------------------------------------------------------- */
+  --yolk-50: #fff8e9;
+  --yolk-100: #feedc4;
+  --yolk-200: #fee19e;
+  --yolk-300: #fed578;
+  --yolk-400: #fdcb5c;
+  --yolk-500: #fdc040;
+  --yolk-600: #e0a52f;
+  --yolk-700: #b98421;
+  --yolk-800: #8c6315;
+  --yolk-900: #5e420c;
 
-  /* --- Accents ---------------------------------------------------------------------- */
-  --color-accent: #e98b50;
-  --color-accent-alt: #ec5b38;
-  --color-highlight: #c8a96b;
-  --color-highlight-alt: #ba6a4c;
+  /* --- Ink -------------------------------------------------------------------------- */
+  --ink-50: #eef1f3;
+  --ink-100: #d4dbe0;
+  --ink-200: #aeb9c1;
+  --ink-300: #8897a3;
+  --ink-400: #5e7180;
+  --ink-500: #3d566a;
+  --ink-600: #253d4e;
+  --ink-700: #1d303d;
+  --ink-800: #15232d;
+  --ink-900: #0c151b;
 
-  /* --- Text & surfaces -------------------------------------------------------------- */
-  --color-text: #2c3639;
-  --color-text-muted: #524646;
-  --color-neutral: #464858;
+  /* --- Roles ------------------------------------------------------------------------ */
+  /* One green screen-owning action per view — green never competes with a second green. */
+  --color-primary: var(--green-500);
+  --color-primary-pressed: var(--green-600);
+  --color-primary-dark: var(--green-700);
+  --color-primary-wash: var(--green-50);
+
+  /* Accent only: notices, badges, pending state. Never a full-width primary button. */
+  --color-secondary: var(--yolk-500);
+  --color-secondary-pressed: var(--yolk-600);
+  --color-secondary-wash: var(--yolk-50);
+
+  /* Ink carries all text and every dark surface. */
+  --color-ink: var(--ink-600);
+
+  --color-success: var(--green-500);
+  --color-warning: var(--yolk-500);
+  --color-error: #e54d42;
+  --color-info: #3e92e5;
+
+  --color-text: var(--ink-600);
+  --color-text-muted: #7a8893;
+  --color-text-disabled: var(--ink-300);
+
+  --color-border: #e3e7e9;
   --color-surface: #ffffff;
-  --color-background: #f7f8f9;
-  --color-border: #e3e6e8;
+  --color-background: #f4f5f3;
+  --color-disabled-fill: var(--ink-100);
 
   /* --- Spacing (4px scale) ----------------------------------------------------------- */
   --space-1: 4px;
@@ -60,23 +100,24 @@
   --space-8: 48px;
 
   /* --- Radius & elevation ------------------------------------------------------------ */
-  --radius-sm: 8px;
+  --radius-sm: 10px;
   --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-lg: 18px;
+  --radius-xl: 30px;
   --radius-pill: 999px;
 
-  --shadow-card: 0 1px 3px rgb(44 54 57 / 12%);
-  --shadow-raised: 0 4px 12px rgb(44 54 57 / 16%);
+  --shadow-card: 0 1px 3px rgb(37 61 78 / 10%);
+  --shadow-raised: 0 18px 40px rgb(37 61 78 / 12%);
 
   /* --- Chart series ------------------------------------------------------------------ */
-  /* Slate and teal lead; orange and coral are reserved for alerts and highlighted series,
-     so an orange line on a dashboard always means "look here". */
-  --chart-1: var(--color-primary-dark);
-  --chart-2: var(--color-success-alt);
+  /* Green and ink lead; yellow is reserved for alerts, so a yellow series always means
+     "look here". */
+  --chart-1: var(--green-500);
+  --chart-2: var(--ink-500);
   --chart-3: var(--color-info);
-  --chart-4: var(--color-highlight);
-  --chart-5: var(--color-secondary);
-  --chart-alert: var(--color-accent-alt);
+  --chart-4: var(--green-300);
+  --chart-5: var(--ink-300);
+  --chart-alert: var(--yolk-500);
 
   /* --- Layout ------------------------------------------------------------------------ */
   --sidebar-width: 248px;
@@ -86,8 +127,8 @@
 
 /**
  * Status colour coding, identical to the mobile app.
- * `--color-warning` is a bright yellow that fails contrast against white — it is a fill or
- * a border here, never a text colour on a light surface.
+ * Cream Yolk fails contrast against white — it is a fill or a border here, never a text
+ * colour on a light surface.
  */
 .status-completed { color: var(--color-success); }
 .status-pending   { border-color: var(--color-warning); }

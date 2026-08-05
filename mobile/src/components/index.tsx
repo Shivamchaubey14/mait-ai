@@ -55,7 +55,7 @@ export function Button({
         variant === 'primary' && { backgroundColor: colors.primary },
         // The step-advancing action in the AI flow is accent, so "what do I tap next" is
         // unmistakable at a glance.
-        variant === 'accent' && { backgroundColor: colors.accent },
+        variant === 'accent' && { backgroundColor: colors.primary },
         variant === 'ghost' && styles.buttonGhost,
         isInert && styles.buttonInert,
         pressed && !isInert && styles.buttonPressed,
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   buttonGhost: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: colors.neutral,
+    borderColor: colors.border,
   },
   buttonInert: { opacity: 0.5 },
   buttonPressed: { opacity: 0.85 },
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   fieldInput: {
     minHeight: MIN_TOUCH_TARGET,
     borderWidth: 1,
-    borderColor: colors.neutral,
+    borderColor: colors.border,
     borderRadius: radius.sm,
     paddingHorizontal: spacing[3],
     ...typography.body,
