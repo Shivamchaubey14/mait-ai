@@ -15,12 +15,17 @@
       "@api/*": [
         "src/api/*"
       ]
-    }
+    },
+    "types": [
+      "jest",
+      "node"
+    ]
   },
   "include": [
     "src/**/*",
     "*.tsx",
-    "*.ts"
+    "*.ts",
+    "types.d.ts"
   ],
   "exclude": [
     "node_modules",

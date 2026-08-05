@@ -13,7 +13,9 @@
     "sendOtp": "Send OTP",
     "enterOtp": "Enter the OTP",
     "otpSent": "OTP sent to {{mobile}}",
-    "attemptsRemaining": "{{count}} attempt(s) remaining"
+    "attemptsRemaining": "{{count}} attempt(s) remaining",
+    "tooManyAttempts": "Too many incorrect attempts. Request a new OTP.",
+    "resendIn": "Resend in {{seconds}}s"
   },
   "aiFlow": {
     "selectMpp": "Select MPP",
@@ -29,7 +31,18 @@
     "strawNumber": "Straw number",
     "capturePhoto": "Take the AI photo",
     "collectPayment": "Collect payment",
-    "stepOf": "Step {{current}} of {{total}}"
+    "stepOf": "Step {{current}} of {{total}}",
+    "noMppsAssigned": "You are not assigned to any MPP yet. Contact your administrator.",
+    "noMembers": "No members found at this MPP.",
+    "noMembersMatch": "No members match that search.",
+    "searchMemberHint": "Search by name, member code or mobile number",
+    "memberNoMobile": "No mobile number on record — payment cannot be authorised",
+    "addNonMember": "Add a non-member",
+    "farmerName": "Farmer name",
+    "address": "Address",
+    "mobileUsedForOtp": "The payment OTP will be sent to this number",
+    "consentToStoreDetails": "The farmer agrees to their details being stored",
+    "comingNext": "Animal selection and the rest of the flow arrive in the next phase."
   },
   "payment": {
     "mode": "Payment mode",

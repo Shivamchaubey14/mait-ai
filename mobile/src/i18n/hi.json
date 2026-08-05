@@ -13,7 +13,9 @@
     "sendOtp": "OTP भेजें",
     "enterOtp": "OTP डालें",
     "otpSent": "{{mobile}} पर OTP भेजा गया",
-    "attemptsRemaining": "{{count}} प्रयास बाकी"
+    "attemptsRemaining": "{{count}} प्रयास बाकी",
+    "tooManyAttempts": "बहुत बार गलत OTP डाला गया। नया OTP मांगें।",
+    "resendIn": "{{seconds}} सेकंड में दोबारा भेजें"
   },
   "aiFlow": {
     "selectMpp": "MPP चुनें",
@@ -29,7 +31,18 @@
     "strawNumber": "स्ट्रॉ नंबर",
     "capturePhoto": "AI फोटो लें",
     "collectPayment": "भुगतान लें",
-    "stepOf": "चरण {{current}} / {{total}}"
+    "stepOf": "चरण {{current}} / {{total}}",
+    "noMppsAssigned": "अभी आपको कोई MPP नहीं दिया गया है। एडमिन से संपर्क करें।",
+    "noMembers": "इस MPP पर कोई सदस्य नहीं मिला।",
+    "noMembersMatch": "इस खोज से कोई सदस्य नहीं मिला।",
+    "searchMemberHint": "नाम, सदस्य कोड या मोबाइल नंबर से खोजें",
+    "memberNoMobile": "मोबाइल नंबर दर्ज नहीं है — भुगतान की पुष्टि नहीं हो सकती",
+    "addNonMember": "गैर-सदस्य जोड़ें",
+    "farmerName": "किसान का नाम",
+    "address": "पता",
+    "mobileUsedForOtp": "भुगतान का OTP इसी नंबर पर जाएगा",
+    "consentToStoreDetails": "किसान अपनी जानकारी सेव करने की सहमति देता है",
+    "comingNext": "पशु चुनना और बाकी प्रक्रिया अगले चरण में आएगी।"
   },
   "payment": {
     "mode": "भुगतान का तरीका",
