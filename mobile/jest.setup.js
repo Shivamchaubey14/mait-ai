@@ -4,6 +4,15 @@
 // Testing Library from v12.4 onward; the separate extend-expect entry was removed in v13
 // and requiring it now fails module resolution.
 
+// The icon set loads its font asynchronously and calls setState when it lands, after the
+// assertion has run — an "update not wrapped in act(...)" warning per icon on screen.
+// Rendering the glyph name as text keeps the tree searchable without the async work.
+jest.mock('@expo/vector-icons/Ionicons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return ({ name, ...props }) => React.createElement(Text, props, name);
+});
+
 jest.mock('@react-native-community/netinfo', () => ({
   addEventListener: jest.fn(),
   // Tests default to "online". Offline behaviour is opt-in per test so a suite never

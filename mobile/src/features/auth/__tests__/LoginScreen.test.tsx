@@ -68,8 +68,11 @@ describe('LoginScreen', () => {
     fireEvent.changeText(screen.getByTestId('login-otp'), '000000');
     fireEvent.press(screen.getByTestId('login-verify'));
 
-    await waitFor(() => expect(screen.getByTestId('login-error')).toBeTruthy());
-    expect(screen.getByText(/Incorrect OTP/i)).toBeTruthy();
+    // Surfaced as the design's notice card rather than a generic banner, and it says how
+    // many attempts remain — the number is what decides whether to try again or resend.
+    await waitFor(() => expect(screen.getByTestId('otp-notice-wrong')).toBeTruthy());
+    expect(screen.getByText(/That code is not right/i)).toBeTruthy();
+    expect(screen.getByText(/attempts left/i)).toBeTruthy();
   });
 
   it('distinguishes an expired code from a wrong one', async () => {

@@ -74,9 +74,15 @@ export const colors = {
 
   // Status — identical meanings everywhere in the product.
   success: green[500],
+  successWash: green[50],
   warning: yolk[500],
+  warningWash: yolk[50],
   error: '#E54D42',
+  // Washes for notice blocks. Pale enough to carry Ink text at full contrast — the status
+  // colour itself is the dot and the border, never the text.
+  errorWash: '#FDECEA',
   info: '#3E92E5',
+  infoWash: '#D8E7FA',
 
   text: ink[600],
   textMuted: '#7A8893',

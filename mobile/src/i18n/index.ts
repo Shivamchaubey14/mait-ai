@@ -29,6 +29,11 @@ i18n.use(initReactI18next).init({
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
   returnNull: false,
+  // Initialise synchronously. Left async, i18next resolves after the first render and
+  // useTranslation re-renders every consumer — which in tests lands outside act() and
+  // reports as a warning on components that did nothing wrong.
+  initImmediate: false,
+  react: { useSuspense: false },
 });
 
 export default i18n;

@@ -33,11 +33,12 @@ import {
 } from '@api/endpoints';
 import { Banner } from '@/components';
 import { BrandMark, CapabilityChips, HeroDecoration, LanguageToggle } from '@/components/brand';
-import { OTP_EXPIRY_SECONDS, OTP_LENGTH } from '@/config/env';
+import { OTP_EXPIRY_SECONDS, OTP_MAX_ATTEMPTS } from '@/config/env';
 import { useAppDispatch } from '@/store';
-import { colors, green, ink, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, ink, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
 import { loggedIn } from './authSlice';
+import OtpVerifyScreen, { OtpFailure } from './OtpVerifyScreen';
 
 type Step = 'mobile' | 'otp';
 
@@ -76,24 +77,36 @@ function Hero(): React.JSX.Element {
 // --------------------------------------------------------------------------------------
 // Notice rows
 // --------------------------------------------------------------------------------------
+/**
+ * A card carrying one thing the Mait needs to know before signing in.
+ *
+ * Each is a card rather than a run of text because they answer three separate questions,
+ * and a paragraph of small print gets skipped by exactly the users who most need it.
+ */
 function Notice({
   tone,
+  icon,
   title,
   body,
+  emphasis = false,
 }: {
   tone: 'warning' | 'success' | 'info';
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
   body: string;
+  emphasis?: boolean;
 }): React.JSX.Element {
-  const swatch = {
-    warning: colors.secondary,
-    success: green[100],
-    info: '#D8E7FA',
+  const { wash, tint } = {
+    warning: { wash: colors.secondaryWash, tint: colors.secondaryPressed },
+    success: { wash: colors.successWash, tint: colors.primaryDark },
+    info: { wash: colors.infoWash, tint: colors.info },
   }[tone];
 
   return (
-    <View style={[styles.notice, tone === 'warning' && styles.noticeWarning]}>
-      <View style={[styles.noticeSwatch, { backgroundColor: swatch }]} />
+    <View style={[styles.notice, emphasis && { borderColor: colors.secondary }]}>
+      <View style={[styles.noticeIcon, { backgroundColor: wash }]}>
+        <Ionicons name={icon} size={18} color={tint} />
+      </View>
       <View style={styles.noticeBody}>
         <Text style={styles.noticeTitle}>{title}</Text>
         <Text style={styles.noticeText}>{body}</Text>
@@ -114,6 +127,11 @@ export default function LoginScreen(): React.JSX.Element {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [failure, setFailure] = useState<OtpFailure>(null);
+  // Counted here rather than parsed out of the server's message. The message is translated,
+  // and reading a number out of prose breaks the moment the wording changes.
+  const [attemptsUsed, setAttemptsUsed] = useState(0);
+  const [lockedFor, setLockedFor] = useState(0);
 
   const [sendOtp, sendState] = useSendLoginOtpMutation();
   const [verifyOtp, verifyState] = useVerifyLoginOtpMutation();
@@ -129,6 +147,24 @@ export default function LoginScreen(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [secondsLeft]);
 
+  // The lock countdown is advisory: the authority is server-side, where the code is dead
+  // after three attempts and the endpoint is rate limited. This just stops the Mait
+  // hammering a button that cannot work.
+  useEffect(() => {
+    if (lockedFor <= 0) {
+      return;
+    }
+    const timer = setTimeout(() => setLockedFor(s => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [lockedFor]);
+
+  useEffect(() => {
+    if (failure === 'locked' && lockedFor === 0) {
+      setFailure(null);
+      setAttemptsUsed(0);
+    }
+  }, [failure, lockedFor]);
+
   const isValidMobile = /^[6-9]\d{9}$/.test(mobileNo);
 
   const handleSend = useCallback(async () => {
@@ -138,6 +174,10 @@ export default function LoginScreen(): React.JSX.Element {
       setStep('otp');
       setOtp('');
       setSecondsLeft(OTP_EXPIRY_SECONDS);
+      // A fresh code is a fresh start — the old failure and its attempt count no longer
+      // describe anything true.
+      setFailure(null);
+      setAttemptsUsed(0);
     } catch {
       setError(t('errors.generic'));
     }
@@ -171,25 +211,67 @@ export default function LoginScreen(): React.JSX.Element {
       // and would stop matching the moment the app runs in Hindi.
       switch (errorCodeOf(err)) {
         case ErrorCode.OTP_EXPIRED:
-          setError(t('errors.otpExpired'));
+          setFailure('expired');
           setSecondsLeft(0);
           break;
         case ErrorCode.OTP_ATTEMPTS_EXCEEDED:
-          setError(t('auth.tooManyAttempts'));
+          setFailure('locked');
+          setLockedFor(15 * 60);
           setSecondsLeft(0);
           break;
-        case ErrorCode.OTP_INVALID:
-          setError(t('errors.otpIncorrect'));
+        case ErrorCode.OTP_INVALID: {
+          const used = attemptsUsed + 1;
+          setAttemptsUsed(used);
+          // The server is the authority on being locked out; this only anticipates it so
+          // the screen does not offer a retry that is already spent.
+          if (used >= OTP_MAX_ATTEMPTS) {
+            setFailure('locked');
+            setLockedFor(15 * 60);
+          } else {
+            setFailure('wrong');
+          }
           break;
+        }
         default:
           setError(t('errors.generic'));
       }
     }
-  }, [dispatch, fetchCurrentUser, mobileNo, otp, t, verifyOtp]);
+  }, [attemptsUsed, dispatch, fetchCurrentUser, mobileNo, otp, t, verifyOtp]);
 
   const onMobile = step === 'mobile';
-  const canSubmit = onMobile ? isValidMobile : otp.length === OTP_LENGTH;
-  const busy = onMobile ? sendState.isLoading : verifyState.isLoading;
+
+  if (!onMobile) {
+    return (
+      <OtpVerifyScreen
+        mobileNo={mobileNo}
+        otp={otp}
+        onChangeOtp={value => {
+          setOtp(value);
+          // Typing is the user answering the notice, so clear it — leaving a red banner up
+          // while they correct the code reads as though the correction already failed.
+          if (failure === 'wrong') {
+            setFailure(null);
+          }
+        }}
+        onSubmit={handleVerify}
+        onResend={handleSend}
+        onEditNumber={() => {
+          setStep('mobile');
+          setError(null);
+          setFailure(null);
+          setAttemptsUsed(0);
+        }}
+        resendIn={secondsLeft}
+        lockedFor={lockedFor}
+        attemptsUsed={attemptsUsed}
+        failure={failure}
+        busy={verifyState.isLoading || sendState.isLoading}
+      />
+    );
+  }
+
+  const canSubmit = isValidMobile;
+  const busy = sendState.isLoading;
 
   return (
     <View style={styles.root}>
@@ -204,73 +286,49 @@ export default function LoginScreen(): React.JSX.Element {
         >
           <Hero />
 
-          <View style={styles.sheet}>
+          {/* Safe area on the sides and bottom: on a notched handset in landscape the
+              sheet would otherwise run under the cutout, and the CTA under the home
+              indicator. The hero handles the top edge itself. */}
+          <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.sheet}>
             <Text style={styles.title}>{t('auth.signIn')}</Text>
-            <Text style={styles.subtitle}>
-              {onMobile ? t('auth.enterMobileToContinue') : t('auth.otpSent', { mobile: mobileNo })}
-            </Text>
+            <Text style={styles.subtitle}>{t('auth.enterMobileToContinue')}</Text>
 
             {!!error && <Banner message={error} testID="login-error" />}
 
-            {onMobile ? (
-              <>
-                <Text style={styles.label}>{t('auth.mobileNumber')}</Text>
-                <View style={styles.phoneField}>
-                  <Text style={styles.prefix}>+91</Text>
-                  <View style={styles.prefixDivider} />
-                  <TextInput
-                    style={styles.phoneInput}
-                    value={formatMobile(mobileNo)}
-                    onChangeText={text => setMobileNo(text.replace(/\D/g, '').slice(0, 10))}
-                    placeholder={t('auth.mobilePlaceholder')}
-                    placeholderTextColor={colors.textDisabled}
-                    keyboardType="number-pad"
-                    textContentType="telephoneNumber"
-                    maxLength={11} // ten digits plus the grouping space
-                    autoFocus
-                    accessibilityLabel={t('auth.mobileNumber')}
-                    testID="login-mobile"
-                  />
-                </View>
-                <Text style={styles.helper}>{t('auth.otpHelper')}</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.label}>{t('auth.enterOtp')}</Text>
-                <View style={styles.phoneField}>
-                  <TextInput
-                    style={[styles.phoneInput, styles.otpInput]}
-                    value={otp}
-                    onChangeText={text => setOtp(text.replace(/\D/g, '').slice(0, OTP_LENGTH))}
-                    keyboardType="number-pad"
-                    maxLength={OTP_LENGTH}
-                    autoFocus
-                    accessibilityLabel={t('auth.enterOtp')}
-                    testID="login-otp"
-                  />
-                </View>
-                <Text style={styles.helper}>
-                  {secondsLeft > 0
-                    ? t('auth.resendIn', { seconds: secondsLeft })
-                    : t('auth.otpHelper')}
-                </Text>
-              </>
-            )}
+            <Text style={styles.label}>{t('auth.mobileNumber')}</Text>
+            <View style={styles.phoneField}>
+              <Text style={styles.prefix}>+91</Text>
+              <View style={styles.prefixDivider} />
+              <TextInput
+                style={styles.phoneInput}
+                value={formatMobile(mobileNo)}
+                onChangeText={text => setMobileNo(text.replace(/\D/g, '').slice(0, 10))}
+                placeholder={t('auth.mobilePlaceholder')}
+                placeholderTextColor={colors.textDisabled}
+                keyboardType="number-pad"
+                textContentType="telephoneNumber"
+                maxLength={11} // ten digits plus the grouping space
+                autoFocus
+                accessibilityLabel={t('auth.mobileNumber')}
+                testID="login-mobile"
+              />
+            </View>
+            <Text style={styles.helper}>{t('auth.otpHelper')}</Text>
 
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ disabled: !canSubmit || busy, busy }}
-              onPress={onMobile ? handleSend : handleVerify}
+              onPress={handleSend}
               disabled={!canSubmit || busy}
               style={({ pressed }) => [
                 styles.cta,
                 !canSubmit || busy ? styles.ctaDisabled : styles.ctaEnabled,
                 pressed && canSubmit && !busy && styles.ctaPressed,
               ]}
-              testID={onMobile ? 'login-send-otp' : 'login-verify'}
+              testID="login-send-otp"
             >
               <Text style={[styles.ctaLabel, (!canSubmit || busy) && styles.ctaLabelDisabled]}>
-                {onMobile ? t('auth.sendOtp') : t('common.next')}
+                {t('auth.sendOtp')}
               </Text>
               <Ionicons
                 name="arrow-forward"
@@ -279,45 +337,24 @@ export default function LoginScreen(): React.JSX.Element {
               />
             </Pressable>
 
-            {!onMobile && (
-              <View style={styles.secondaryRow}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={handleSend}
-                  disabled={secondsLeft > 0 || sendState.isLoading}
-                  style={styles.linkButton}
-                  testID="login-resend"
-                >
-                  <Text style={[styles.link, secondsLeft > 0 && styles.linkDisabled]}>
-                    {t('auth.sendOtp')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setStep('mobile');
-                    setError(null);
-                  }}
-                  style={styles.linkButton}
-                  testID="login-back"
-                >
-                  <Text style={styles.link}>{t('common.back')}</Text>
-                </Pressable>
-              </View>
-            )}
-
+            {/* The first carries a border because it changes how signing in works at all;
+                the other two are answers to questions, not surprises. */}
             <Notice
               tone="warning"
+              icon="shield-checkmark-outline"
+              emphasis
               title={t('auth.noPasswordTitle')}
               body={t('auth.noPasswordBody')}
             />
             <Notice
               tone="success"
+              icon="checkmark-circle-outline"
               title={t('auth.registeredOnlyTitle')}
               body={t('auth.registeredOnlyBody')}
             />
             <Notice
               tone="info"
+              icon="help-circle-outline"
               title={t('auth.numberNotWorkingTitle')}
               body={t('auth.numberNotWorkingBody')}
             />
@@ -330,7 +367,7 @@ export default function LoginScreen(): React.JSX.Element {
                 <Text style={styles.legalLink}>{t('auth.privacyPolicy')}</Text>
               </Text>
             </View>
-          </View>
+          </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -403,7 +440,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     paddingVertical: spacing[2],
   },
-  otpInput: { letterSpacing: 6, textAlign: 'center' },
 
   helper: { ...typography.caption, color: colors.textMuted, marginTop: spacing[2] },
 
@@ -422,31 +458,24 @@ const styles = StyleSheet.create({
   ctaLabel: { ...typography.bodyStrong, color: colors.surface },
   ctaLabelDisabled: { color: colors.textDisabled },
 
-  secondaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing[3],
-  },
-  linkButton: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', paddingHorizontal: 2 },
-  link: { ...typography.bodyStrong, color: colors.primaryDark },
-  linkDisabled: { color: colors.textDisabled },
-
   notice: {
     flexDirection: 'row',
     gap: spacing[3],
-    alignItems: 'flex-start',
-    marginTop: spacing[4],
-  },
-  // Only the first notice gets the yellow wash and border; the others are plain rows, so the
-  // eye lands on the one that changes how signing in works.
-  noticeWarning: {
-    backgroundColor: colors.secondaryWash,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.secondary,
+    borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing[3],
+    marginTop: spacing[3],
   },
-  noticeSwatch: { width: 26, height: 26, borderRadius: 8 },
+  noticeIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   noticeBody: { flex: 1 },
   noticeTitle: { ...typography.bodyStrong, color: colors.ink },
   noticeText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
