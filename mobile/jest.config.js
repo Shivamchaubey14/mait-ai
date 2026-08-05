@@ -18,4 +18,8 @@ module.exports = {
     'node_modules/(?!(@react-native|react-native|@react-navigation|@reduxjs|redux|reselect|immer|i18next|react-i18next)/)',
   ],
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/**/*.d.ts', '!src/test-utils.tsx'],
+  // Rendering a React Native tree is slow, and a CI runner is slower still — these suites
+  // take ~11s each there against ~3s locally. The default 5s timeout fails on the runner
+  // for tests that pass everywhere else.
+  testTimeout: 20000,
 };

@@ -25,6 +25,12 @@ export function makeStore() {
   return configureStore({
     reducer: { auth: authReducer, [api.reducerPath]: api.reducer },
     middleware: getDefault => getDefault().concat(api.middleware),
+    // RTK Query's auto-batching defers notifications to a timer callback. In a test that
+    // lands after the assertion has already run, which shows up as an "update not wrapped
+    // in act(...)" warning and makes waitFor spin until it times out on a slow runner.
+    // Batching is a rendering optimisation, so switching it off changes no behaviour under
+    // test — the app keeps it.
+    enhancers: getDefault => getDefault({ autoBatch: false }),
   });
 }
 
