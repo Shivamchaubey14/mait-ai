@@ -43,9 +43,18 @@ export const colors = {
  */
 export const unsafeForTextOnLight = [colors.warning];
 
+/**
+ * Loaded via @expo-google-fonts in App.tsx. These are the variant names the loader
+ * registers — referring to a bare "Lexend" silently falls back to the system font, which
+ * looks almost right and is therefore easy to miss.
+ */
 export const fonts = {
-  heading: 'Lexend',
-  body: 'Quicksand',
+  heading: 'Lexend_600SemiBold',
+  headingBold: 'Lexend_700Bold',
+  headingRegular: 'Lexend_400Regular',
+  body: 'Quicksand_500Medium',
+  bodyRegular: 'Quicksand_400Regular',
+  bodySemibold: 'Quicksand_600SemiBold',
 } as const;
 
 export const fontWeights = {

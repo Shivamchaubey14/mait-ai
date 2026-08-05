@@ -1,16 +1,8 @@
 /* Test environment shims for native modules that have no JS implementation. */
 
-// Adds the element matchers (toBeDisabled, toBeVisible, toHaveTextContent...). Without this
-// they exist as autocomplete suggestions and fail at runtime with "not a function".
-require('@testing-library/react-native/extend-expect');
-
-jest.mock('react-native-mmkv', () => ({
-  MMKV: jest.fn().mockImplementation(() => ({
-    set: jest.fn(),
-    getString: jest.fn(),
-    delete: jest.fn(),
-  })),
-}));
+// The element matchers (toBeDisabled, toBeVisible, ...) are built into React Native
+// Testing Library from v12.4 onward; the separate extend-expect entry was removed in v13
+// and requiring it now fails module resolution.
 
 jest.mock('@react-native-community/netinfo', () => ({
   addEventListener: jest.fn(),

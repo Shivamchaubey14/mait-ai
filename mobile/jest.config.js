@@ -1,5 +1,5 @@
 module.exports = {
-  preset: 'react-native',
+  preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
@@ -14,12 +14,19 @@ module.exports = {
     '^@reduxjs/toolkit$': '<rootDir>/node_modules/@reduxjs/toolkit/dist/cjs/index.js',
     '^react-redux$': '<rootDir>/node_modules/react-redux/dist/cjs/index.js',
   },
+  // Extends jest-expo's pattern rather than replacing it. The preset's list covers
+  // expo-modules-core and the rest of the Expo runtime; a hand-written replacement drops
+  // those and every suite fails to parse before it starts. The additions are the ESM-only
+  // packages Redux Toolkit pulls in.
   transformIgnorePatterns: [
-    'node_modules/(?!(@react-native|react-native|@react-navigation|@reduxjs|redux|reselect|immer|i18next|react-i18next)/)',
+    '/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo' +
+      '|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base' +
+      '|@reduxjs|redux|reselect|immer|redux-thunk|i18next|react-i18next))',
+    '/node_modules/react-native-reanimated/plugin/',
   ],
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/**/*.d.ts', '!src/test-utils.tsx'],
   // Rendering a React Native tree is slow, and a CI runner is slower still — these suites
-  // take ~11s each there against ~3s locally. The default 5s timeout fails on the runner
-  // for tests that pass everywhere else.
+  // take ~11s there against ~3s locally. The default 5s timeout fails on the runner for
+  // tests that pass everywhere else.
   testTimeout: 20000,
 };

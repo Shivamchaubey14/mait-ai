@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Mait AI",
+    "slug": "mait-ai",
+    "scheme": "maitai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "primaryColor": "#325E6A",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "in.shwetdhara.maitai"
+    },
+    "android": {
+      "package": "in.shwetdhara.maitai",
+      "adaptiveIcon": {
+        "backgroundColor": "#325E6A"
+      },
+      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION"]
+    },
+    "plugins": ["expo-secure-store", "expo-font"],
+    "extra": {
+      "apiUrl": "http://127.0.0.1:8000/api/v1"
+    }
+  }
+}

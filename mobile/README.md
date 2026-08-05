@@ -1,43 +1,50 @@
 # Mait mobile app
 
-React Native + TypeScript field app for Maits (SRS §6.3). Android-first.
+React Native + TypeScript field app for Maits (SRS §6.3), managed with **Expo SDK 54**.
 
-## Native projects are not committed yet
+## Running it
 
-`android/` and `ios/` are absent. Generate them once, on a machine with the Android SDK:
+Two things need to be up: the API, and the Expo dev server.
 
 ```bash
+# 1. API — bind 0.0.0.0, not 127.0.0.1, or the phone cannot reach it
+cd backend
+python manage.py runserver 0.0.0.0:8000
+
+# 2. Expo
 cd mobile
-npx react-native@0.75.4 init MaitApp --directory . --skip-install --title "Mait AI"
 npm install
+npx expo start -c
 ```
 
-Then commit the generated folders. Until that happens the `android-build` job in
-`.github/workflows/mobile-ci.yml` skips itself: it checks for `mobile/android/gradlew` first
-and does nothing if it is absent. Lint, typecheck and Jest run regardless.
+Scan the QR code with **Expo Go**. The phone and the computer must be on the same network.
 
-## Development
+### The API URL is worked out, not configured
 
-```bash
-npm ci
-npm start                 # Metro bundler
-npm run android           # build and install on a device/emulator
-```
+`src/config/env.ts` reads the address Expo is serving the packager from and points the API at
+that host on port 8000. A phone cannot reach `127.0.0.1` — that address is the phone itself —
+and hardcoding a LAN IP means editing a file every time the laptop joins a different network.
 
-The app points at `http://10.0.2.2:8000/api/v1` in debug builds — that address is the host
-machine as seen from the Android emulator, so `make up` at the repo root is enough to have a
-backend. Release builds point at the production API and can be redirected over the air
-(SRS §15).
+A non-loopback `extra.apiUrl` in `app.json` overrides this, which is how staging and
+production builds are pointed somewhere real.
+
+If requests fail from the device, check in this order:
+
+1. The API is bound to `0.0.0.0`, not `127.0.0.1`.
+2. `DJANGO_ALLOWED_HOSTS` in `backend/.env` includes the computer's LAN IP.
+3. Windows Firewall is not blocking inbound port 8000 — this is the usual culprit.
+4. `npx expo start --tunnel` if the two devices are on networks that cannot see each other.
 
 ## Structure
 
 ```
 src/
-├── api/          RTK Query client + injected endpoint slices
+├── api/          RTK Query client, endpoints, contract types
+├── components/   shared primitives — Button, TextField, ListRow, Banner
 ├── config/       runtime configuration and flow constants
-├── features/     one folder per flow (auth, aiFlow, inventory, indents, payments)
+├── features/     one folder per flow (auth, aiFlow)
 ├── i18n/         en/hi translations — no user-facing string lives outside here
-├── offline/      SQLite draft queue and the sync engine
+├── navigation/   the six-step flow shell
 ├── store/        Redux Toolkit store
 └── theme/        design tokens (SRS §10)
 ```
@@ -54,16 +61,27 @@ server is the authority. The scan step calls `/semen-batches/{no}/validate/`, an
 can still fail with `insufficient-stock` — handle it, do not assume the local count was right.
 
 **No hardcoded strings, no hardcoded colours.** Text goes through `src/i18n/`, colour and
-spacing through `src/theme/tokens.ts`. Both are lint-enforced. Devanagari runs taller and
-longer than English — never fix a button's height to exactly its English label.
+spacing through `src/theme/tokens.ts`. Both are lint-enforced. The app defaults to Hindi, and
+Devanagari runs taller and longer than English — never fix a button's height to exactly its
+English label.
 
 ## Testing
 
 ```bash
-npm test              # Jest + React Native Testing Library
+npm test          # Jest + React Native Testing Library
 npm run lint
 npm run typecheck
 ```
 
-Detox covers the end-to-end capture flow on a device (SRS §13); it runs outside CI for now
-because it needs an emulator with a camera.
+Tests pin English so assertions read naturally; that the app defaults to Hindi is asserted
+directly in the i18n suite instead.
+
+## Builds
+
+There is no committed `android/` or `ios/` folder — this is a managed Expo project, and
+release builds go through **EAS Build** rather than Gradle. CI proves the app bundles with
+`expo export`; wiring `eas build` needs an Expo account and an `EXPO_TOKEN` secret.
+
+Phase 3 adds the camera and the offline queue. Use `expo-camera` (camera-first capture, no
+gallery picker — SRS §6.3 step 5) and `expo-sqlite` for the draft queue. Both run in Expo Go,
+so the workflow above keeps working.
