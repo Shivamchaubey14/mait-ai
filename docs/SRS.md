@@ -11,9 +11,9 @@ Admin Web Portal · Mait Mobile App (React Native) · DRF API Backend · Indent 
 
 ### Document control
 
-| Version | Date | Author | Description | Status |
-| --- | --- | --- | --- | --- |
-| 1.0 | 04-Aug-2026 | Product & Engineering | Initial production-grade SRS covering backend, mobile, web admin, integration and 30-day build plan. | Draft for Review |
+| Version | Date        | Author                | Description                                                                                          | Status           |
+| ------- | ----------- | --------------------- | ---------------------------------------------------------------------------------------------------- | ---------------- |
+| 1.0     | 04-Aug-2026 | Product & Engineering | Initial production-grade SRS covering backend, mobile, web admin, integration and 30-day build plan. | Draft for Review |
 
 ---
 
@@ -47,30 +47,30 @@ milk procurement/payment modules (handled by existing SAP/ERP systems).
 
 ### 1.3 Definitions, acronyms & abbreviations
 
-| Term | Meaning |
-| --- | --- |
-| AI | Artificial Insemination — the field procedure a Mait performs on a cow/buffalo |
-| Mait | Field technician/agent (the "Sahayak" in SAP MPP data) who performs AI and collects payment |
-| MPP | Milk Producer Pool/Parlour — the village-level collection point a Member/Mait is mapped to |
-| Sahayak | SAP term for the vendor-coded field agent linked to an MPP; maps to "Mait" in this app |
-| Member | A registered dairy producer in the SAP Member Master (has Member Code, Folio No.) |
-| Non-Member | A farmer without SAP membership who still avails AI service; captured directly in-app |
-| Straw | Single-use frozen semen unit identified by a unique number, consumed per AI |
-| GRN | Goods Receipt Note — inventory receipt entry recorded in Indent Easy |
-| Indent | A stock request raised by a Mait for straws/consumables, fulfilled via Indent Easy |
-| UTR | Unique Transaction Reference — bank reference number for a successful online payment |
-| COD | Cash on Delivery — cash payment collected in person, confirmed by OTP |
-| JWT | JSON Web Token — used for stateless API authentication |
-| DRF | Django REST Framework — backend API framework |
+| Term       | Meaning                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------- |
+| AI         | Artificial Insemination — the field procedure a Mait performs on a cow/buffalo              |
+| Mait       | Field technician/agent (the "Sahayak" in SAP MPP data) who performs AI and collects payment |
+| MPP        | Milk Producer Pool/Parlour — the village-level collection point a Member/Mait is mapped to  |
+| Sahayak    | SAP term for the vendor-coded field agent linked to an MPP; maps to "Mait" in this app      |
+| Member     | A registered dairy producer in the SAP Member Master (has Member Code, Folio No.)           |
+| Non-Member | A farmer without SAP membership who still avails AI service; captured directly in-app       |
+| Straw      | Single-use frozen semen unit identified by a unique number, consumed per AI                 |
+| GRN        | Goods Receipt Note — inventory receipt entry recorded in Indent Easy                        |
+| Indent     | A stock request raised by a Mait for straws/consumables, fulfilled via Indent Easy          |
+| UTR        | Unique Transaction Reference — bank reference number for a successful online payment        |
+| COD        | Cash on Delivery — cash payment collected in person, confirmed by OTP                       |
+| JWT        | JSON Web Token — used for stateless API authentication                                      |
+| DRF        | Django REST Framework — backend API framework                                               |
 
 ### 1.4 Stakeholders
 
-| Role | Interest in the system |
-| --- | --- |
-| Mait (Field Agent) | Primary mobile app user — records AI, requests stock, collects payment |
-| Admin / Back-office | Uploads SAP master data, manages users, monitors dashboards, resolves exceptions |
-| Company Management | Consumes dashboards/reports for AI volume, coverage and revenue trends |
-| Indent Easy (Store User) | Issues goods against Mait indents; existing system, integrated not replaced |
+| Role                     | Interest in the system                                                           |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| Mait (Field Agent)       | Primary mobile app user — records AI, requests stock, collects payment           |
+| Admin / Back-office      | Uploads SAP master data, manages users, monitors dashboards, resolves exceptions |
+| Company Management       | Consumes dashboards/reports for AI volume, coverage and revenue trends           |
+| Indent Easy (Store User) | Issues goods against Mait indents; existing system, integrated not replaced      |
 
 ---
 
@@ -105,25 +105,25 @@ to real inventory so a Mait physically cannot record more AIs than they have str
 
 ### 3.1 System components
 
-| Component | Platform | Primary users | Core job |
-| --- | --- | --- | --- |
-| Backend API | Django REST Framework + MySQL, JWT, OpenAPI | All clients | Single source of truth: master data, AI events, inventory, payments |
-| Mait Mobile App | React Native (Android/iOS) | Maits | Guided AI capture flow, stock indent, payment collection, offline-tolerant queue |
-| Admin Web Portal | HTML/CSS/JS + jQuery/AJAX | Admin / back-office / management | SAP data upload, user & MPP management, dashboards, reports |
-| Indent Easy (existing) | Existing web app | Store users | GRN entry and goods issue against Mait indents — integrated via API/webhook |
+| Component              | Platform                                    | Primary users                    | Core job                                                                         |
+| ---------------------- | ------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------- |
+| Backend API            | Django REST Framework + MySQL, JWT, OpenAPI | All clients                      | Single source of truth: master data, AI events, inventory, payments              |
+| Mait Mobile App        | React Native (Android/iOS)                  | Maits                            | Guided AI capture flow, stock indent, payment collection, offline-tolerant queue |
+| Admin Web Portal       | HTML/CSS/JS + jQuery/AJAX                   | Admin / back-office / management | SAP data upload, user & MPP management, dashboards, reports                      |
+| Indent Easy (existing) | Existing web app                            | Store users                      | GRN entry and goods issue against Mait indents — integrated via API/webhook      |
 
 ### 3.2 High-level architecture
 
 Layered architecture; all client apps talk only to the DRF API layer over HTTPS/JWT.
 
-| Layer | Contents |
-| --- | --- |
-| Client | Mait Mobile App (React Native) · Admin Web Portal (HTML/CSS/JS/jQuery) · Indent Easy (external) |
-| API gateway / edge | Nginx reverse proxy · TLS termination · rate limiting · gzip |
-| Application | Django + DRF services: Auth, Master Data, AI Event, Inventory, Payment, Indent, Dashboard, Notification |
-| Async / jobs | Celery + Redis — SAP bulk import, SMS/OTP dispatch, report generation, Indent Easy sync |
-| Data | MySQL 8 (primary OLTP) · Redis (cache, OTP, Celery broker) · S3-compatible object storage (photos, screenshots) |
-| Integration | Indent Easy REST/webhook connector · SMS/OTP gateway (MSG91/Twilio) · Payment gateway webhook (optional) |
+| Layer              | Contents                                                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Client             | Mait Mobile App (React Native) · Admin Web Portal (HTML/CSS/JS/jQuery) · Indent Easy (external)                 |
+| API gateway / edge | Nginx reverse proxy · TLS termination · rate limiting · gzip                                                    |
+| Application        | Django + DRF services: Auth, Master Data, AI Event, Inventory, Payment, Indent, Dashboard, Notification         |
+| Async / jobs       | Celery + Redis — SAP bulk import, SMS/OTP dispatch, report generation, Indent Easy sync                         |
+| Data               | MySQL 8 (primary OLTP) · Redis (cache, OTP, Celery broker) · S3-compatible object storage (photos, screenshots) |
+| Integration        | Indent Easy REST/webhook connector · SMS/OTP gateway (MSG91/Twilio) · Payment gateway webhook (optional)        |
 
 ### 3.3 Guiding principles
 
@@ -140,30 +140,30 @@ Layered architecture; all client apps talk only to the DRF API layer over HTTPS/
 
 ## 4. Technology stack
 
-| Layer | Technology |
-| --- | --- |
-| Backend / API | Python 3.12, Django 5.x, Django REST Framework, drf-spectacular (OpenAPI 3.0 + Swagger/Redoc), SimpleJWT |
-| Database | MySQL 8.0 (utf8mb4), Redis 7 (cache, OTP store, Celery broker) |
-| Async jobs | Celery, Celery Beat (scheduled reports), Flower (monitoring) |
-| Mobile app | React Native (TypeScript), React Navigation, Redux Toolkit + RTK Query, React Native Camera/ML Kit (barcode/QR straw scan), AsyncStorage/SQLite (offline queue) |
-| Admin web portal | HTML5, CSS3, vanilla JS + jQuery, AJAX to DRF APIs, Chart.js dashboards, Bootstrap 5 grid utilities (customised to design system) |
-| Auth & security | JWT (access + refresh), OTP (mobile) for payment steps, RBAC, HTTPS everywhere |
-| File / media storage | S3-compatible object storage (AWS S3 or MinIO), served via signed URLs |
-| API docs | OpenAPI 3.0 auto-generated by drf-spectacular; Swagger UI (`/api/docs/`), Redoc (`/api/redoc/`) |
-| CI/CD | GitHub Actions, Docker, Docker Compose (dev), Kubernetes or Docker Swarm (prod), Nginx + Gunicorn |
-| Testing | PyTest + pytest-django, DRF APITestCase, Jest + React Native Testing Library, Cypress (admin web E2E) |
-| Monitoring | Sentry (errors), Prometheus + Grafana (metrics), ELK / CloudWatch (logs) |
+| Layer                | Technology                                                                                                                                                      |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend / API        | Python 3.12, Django 5.x, Django REST Framework, drf-spectacular (OpenAPI 3.0 + Swagger/Redoc), SimpleJWT                                                        |
+| Database             | MySQL 8.0 (utf8mb4), Redis 7 (cache, OTP store, Celery broker)                                                                                                  |
+| Async jobs           | Celery, Celery Beat (scheduled reports), Flower (monitoring)                                                                                                    |
+| Mobile app           | React Native (TypeScript), React Navigation, Redux Toolkit + RTK Query, React Native Camera/ML Kit (barcode/QR straw scan), AsyncStorage/SQLite (offline queue) |
+| Admin web portal     | HTML5, CSS3, vanilla JS + jQuery, AJAX to DRF APIs, Chart.js dashboards, Bootstrap 5 grid utilities (customised to design system)                               |
+| Auth & security      | JWT (access + refresh), OTP (mobile) for payment steps, RBAC, HTTPS everywhere                                                                                  |
+| File / media storage | S3-compatible object storage (AWS S3 or MinIO), served via signed URLs                                                                                          |
+| API docs             | OpenAPI 3.0 auto-generated by drf-spectacular; Swagger UI (`/api/docs/`), Redoc (`/api/redoc/`)                                                                 |
+| CI/CD                | GitHub Actions, Docker, Docker Compose (dev), Kubernetes or Docker Swarm (prod), Nginx + Gunicorn                                                               |
+| Testing              | PyTest + pytest-django, DRF APITestCase, Jest + React Native Testing Library, Cypress (admin web E2E)                                                           |
+| Monitoring           | Sentry (errors), Prometheus + Grafana (metrics), ELK / CloudWatch (logs)                                                                                        |
 
 ---
 
 ## 5. User roles & permissions
 
-| Role | Access |
-| --- | --- |
-| Super Admin | Full system access: user management, SAP uploads, all dashboards, system configuration |
-| Admin / Back-office | SAP uploads, MPP/Mait management, dashboards, exception handling; cannot change system config |
-| Mait | Mobile app only: record AI events at their assigned MPP(s), raise indents, view own inventory and history |
-| Indent Easy Store User | Existing role, unchanged — sees Mait indents inside Indent Easy and performs GRN/issue |
+| Role                   | Access                                                                                                    |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| Super Admin            | Full system access: user management, SAP uploads, all dashboards, system configuration                    |
+| Admin / Back-office    | SAP uploads, MPP/Mait management, dashboards, exception handling; cannot change system config             |
+| Mait                   | Mobile app only: record AI events at their assigned MPP(s), raise indents, view own inventory and history |
+| Indent Easy Store User | Existing role, unchanged — sees Mait indents inside Indent Easy and performs GRN/issue                    |
 
 ---
 
@@ -280,6 +280,7 @@ Mirrors the manual flow, made mandatory and validated at each step:
 > **Superseded 5 Aug 2026.** The MPP Operator role described in the original §5 does not
 > exist in the organisation and has been removed from the platform. Everything an operator
 > would have done is an Admin action.
+
 - **FR-6.8.2** — Mait accounts are provisioned from the uploaded Mait/Vendor master
   (auto-suggested) and activated by Admin with a mobile number for OTP-based first login.
 - **FR-6.8.3** — Full role-based access control enforced at the API layer, not just hidden in the UI.
@@ -288,18 +289,18 @@ Mirrors the manual flow, made mandatory and validated at each step:
 
 ## 7. Non-functional requirements
 
-| Category | Requirement |
-| --- | --- |
-| Performance | API P95 < 400 ms for reads, < 800 ms for writes under 200 concurrent Maits; dashboard queries pre-aggregated, not computed live over raw events |
-| Scalability | Stateless backend, horizontally scalable behind a load balancer; MySQL read replicas for reporting; supports 105k+ members without redesign |
-| Availability | Target 99.5% uptime for the API during business hours; graceful offline mode on mobile |
-| Security | JWT with short-lived access tokens + rotating refresh tokens; OTP for payment-critical actions; encrypted at rest (DB, S3) and in transit (TLS 1.2+); role-based authorization on every endpoint; PII field-level encrypted and masked by default |
-| Auditability | Every AI event, payment, indent and master-data change has an immutable audit trail (actor, timestamp, before/after) |
-| Usability | Mobile flow completable by a semi-literate field user in under 5 taps per major step; large touch targets; Hindi support |
-| Offline tolerance | Mobile functions through the AI-capture steps without connectivity; syncs on reconnect with conflict-safe idempotency |
-| Data integrity | Straw uniqueness, ear-tag uniqueness (when present) and inventory counts enforced via DB constraints + transactional logic, not application code alone |
-| Maintainability | OpenAPI-documented, versioned API (`/api/v1/...`); modular Django apps per domain; ≥80% backend test coverage on core transactional logic |
-| Compliance | Aadhaar/PAN handling aligned with data-minimisation practice; consent capture for non-member data collection |
+| Category          | Requirement                                                                                                                                                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Performance       | API P95 < 400 ms for reads, < 800 ms for writes under 200 concurrent Maits; dashboard queries pre-aggregated, not computed live over raw events                                                                                                   |
+| Scalability       | Stateless backend, horizontally scalable behind a load balancer; MySQL read replicas for reporting; supports 105k+ members without redesign                                                                                                       |
+| Availability      | Target 99.5% uptime for the API during business hours; graceful offline mode on mobile                                                                                                                                                            |
+| Security          | JWT with short-lived access tokens + rotating refresh tokens; OTP for payment-critical actions; encrypted at rest (DB, S3) and in transit (TLS 1.2+); role-based authorization on every endpoint; PII field-level encrypted and masked by default |
+| Auditability      | Every AI event, payment, indent and master-data change has an immutable audit trail (actor, timestamp, before/after)                                                                                                                              |
+| Usability         | Mobile flow completable by a semi-literate field user in under 5 taps per major step; large touch targets; Hindi support                                                                                                                          |
+| Offline tolerance | Mobile functions through the AI-capture steps without connectivity; syncs on reconnect with conflict-safe idempotency                                                                                                                             |
+| Data integrity    | Straw uniqueness, ear-tag uniqueness (when present) and inventory counts enforced via DB constraints + transactional logic, not application code alone                                                                                            |
+| Maintainability   | OpenAPI-documented, versioned API (`/api/v1/...`); modular Django apps per domain; ≥80% backend test coverage on core transactional logic                                                                                                         |
+| Compliance        | Aadhaar/PAN handling aligned with data-minimisation practice; consent capture for non-member data collection                                                                                                                                      |
 
 ---
 
@@ -312,88 +313,88 @@ introduces. See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the ERD.
 
 **`mpp`**
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| id | BIGINT PK | internal surrogate key |
-| plant_code | VARCHAR(10) | SAP Plant / BMC-MCC code |
-| plant_name | VARCHAR(100) | |
-| mpp_code | VARCHAR(15) UNIQUE | SAP MPP Code |
-| mpp_name | VARCHAR(150) | |
-| mpp_category | VARCHAR(20) | |
-| mpp_sub_category | VARCHAR(20) | |
-| state_code, district_code, tehsil_code, panchayat_code, village_code, hamlet_code | VARCHAR(10) each | geo hierarchy from SAP |
-| mobile_no | VARCHAR(15) | MPP contact number |
-| address_line | VARCHAR(255) | |
-| is_active | BOOLEAN | from 'Active' flag |
-| start_date, end_date, revival_date | DATE | |
-| mait_id | BIGINT FK → mait.id | linked Sahayak/Mait |
+| Column                                                                            | Type                | Notes                    |
+| --------------------------------------------------------------------------------- | ------------------- | ------------------------ |
+| id                                                                                | BIGINT PK           | internal surrogate key   |
+| plant_code                                                                        | VARCHAR(10)         | SAP Plant / BMC-MCC code |
+| plant_name                                                                        | VARCHAR(100)        |                          |
+| mpp_code                                                                          | VARCHAR(15) UNIQUE  | SAP MPP Code             |
+| mpp_name                                                                          | VARCHAR(150)        |                          |
+| mpp_category                                                                      | VARCHAR(20)         |                          |
+| mpp_sub_category                                                                  | VARCHAR(20)         |                          |
+| state_code, district_code, tehsil_code, panchayat_code, village_code, hamlet_code | VARCHAR(10) each    | geo hierarchy from SAP   |
+| mobile_no                                                                         | VARCHAR(15)         | MPP contact number       |
+| address_line                                                                      | VARCHAR(255)        |                          |
+| is_active                                                                         | BOOLEAN             | from 'Active' flag       |
+| start_date, end_date, revival_date                                                | DATE                |                          |
+| mait_id                                                                           | BIGINT FK → mait.id | linked Sahayak/Mait      |
 
 **`mait`**
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| id | BIGINT PK | |
-| user_id | BIGINT FK → users.id | login identity, nullable until activated |
-| sahayak_vendor_code | VARCHAR(15) UNIQUE | SAP Sahayak Vendor / Customer ID |
-| name | VARCHAR(150) | |
-| mobile_no, mobile_no_alt | VARCHAR(15) | |
-| pan_no | VARCHAR(12) | encrypted at rest |
-| aadhar_no | VARCHAR(20) | encrypted at rest, masked in API |
-| bank_account_no, ifsc_code | VARCHAR(30) / VARCHAR(15) | encrypted at rest |
-| is_active | BOOLEAN | |
+| Column                     | Type                      | Notes                                    |
+| -------------------------- | ------------------------- | ---------------------------------------- |
+| id                         | BIGINT PK                 |                                          |
+| user_id                    | BIGINT FK → users.id      | login identity, nullable until activated |
+| sahayak_vendor_code        | VARCHAR(15) UNIQUE        | SAP Sahayak Vendor / Customer ID         |
+| name                       | VARCHAR(150)              |                                          |
+| mobile_no, mobile_no_alt   | VARCHAR(15)               |                                          |
+| pan_no                     | VARCHAR(12)               | encrypted at rest                        |
+| aadhar_no                  | VARCHAR(20)               | encrypted at rest, masked in API         |
+| bank_account_no, ifsc_code | VARCHAR(30) / VARCHAR(15) | encrypted at rest                        |
+| is_active                  | BOOLEAN                   |                                          |
 
 **`member`**
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| id | BIGINT PK | |
-| mpp_id | BIGINT FK → mpp.id | |
-| member_code | VARCHAR(20) UNIQUE | SAP Member code |
-| member_name, father_husband_name | VARCHAR(150) | |
-| gender, age, category, education, class | VARCHAR / TINYINT | SAP demographic fields |
-| sap_vendor_code, form_no, folio_no | VARCHAR(20) | |
-| mobile_no | VARCHAR(15) | used for OTP |
-| aadhar_no | VARCHAR(20) | encrypted at rest, masked in API |
-| cattle_holding | SMALLINT | |
-| bank_ac_no, bank_name, bank_branch, ifsc_code | VARCHAR | |
-| activation_status, activation_date, deactivation_date, remarks | VARCHAR / DATE / TEXT | |
+| Column                                                         | Type                  | Notes                            |
+| -------------------------------------------------------------- | --------------------- | -------------------------------- |
+| id                                                             | BIGINT PK             |                                  |
+| mpp_id                                                         | BIGINT FK → mpp.id    |                                  |
+| member_code                                                    | VARCHAR(20) UNIQUE    | SAP Member code                  |
+| member_name, father_husband_name                               | VARCHAR(150)          |                                  |
+| gender, age, category, education, class                        | VARCHAR / TINYINT     | SAP demographic fields           |
+| sap_vendor_code, form_no, folio_no                             | VARCHAR(20)           |                                  |
+| mobile_no                                                      | VARCHAR(15)           | used for OTP                     |
+| aadhar_no                                                      | VARCHAR(20)           | encrypted at rest, masked in API |
+| cattle_holding                                                 | SMALLINT              |                                  |
+| bank_ac_no, bank_name, bank_branch, ifsc_code                  | VARCHAR               |                                  |
+| activation_status, activation_date, deactivation_date, remarks | VARCHAR / DATE / TEXT |                                  |
 
 **`non_member`**
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| id | BIGINT PK | |
-| name | VARCHAR(150) | |
-| mobile_no | VARCHAR(15) | used for OTP |
-| address | VARCHAR(255) | |
-| mpp_id | BIGINT FK → mpp.id | nearest/served MPP |
-| created_by_mait_id | BIGINT FK → mait.id | |
-| created_at | DATETIME | |
+| Column             | Type                | Notes              |
+| ------------------ | ------------------- | ------------------ |
+| id                 | BIGINT PK           |                    |
+| name               | VARCHAR(150)        |                    |
+| mobile_no          | VARCHAR(15)         | used for OTP       |
+| address            | VARCHAR(255)        |                    |
+| mpp_id             | BIGINT FK → mpp.id  | nearest/served MPP |
+| created_by_mait_id | BIGINT FK → mait.id |                    |
+| created_at         | DATETIME            |                    |
 
 ### 8.2 Operational tables (new)
 
 **`animal`**
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| id | BIGINT PK | |
-| owner_type | ENUM('member','non_member') | |
-| member_id / non_member_id | BIGINT FK, nullable | exactly one populated |
-| animal_type | ENUM('COW','BUFF') | |
-| breed | VARCHAR(30) | config-driven list |
-| ear_tag_no | VARCHAR(20) UNIQUE NULL | optional, unique when present |
-| created_at | DATETIME | |
+| Column                    | Type                        | Notes                         |
+| ------------------------- | --------------------------- | ----------------------------- |
+| id                        | BIGINT PK                   |                               |
+| owner_type                | ENUM('member','non_member') |                               |
+| member_id / non_member_id | BIGINT FK, nullable         | exactly one populated         |
+| animal_type               | ENUM('COW','BUFF')          |                               |
+| breed                     | VARCHAR(30)                 | config-driven list            |
+| ear_tag_no                | VARCHAR(20) UNIQUE NULL     | optional, unique when present |
+| created_at                | DATETIME                    |                               |
 
 **`semen_batch`**
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| id | BIGINT PK | |
+| Column          | Type               | Notes                           |
+| --------------- | ------------------ | ------------------------------- |
+| id              | BIGINT PK          |                                 |
 | unique_straw_no | VARCHAR(30) UNIQUE | printed unique number per straw |
-| breed | VARCHAR(30) | |
-| bull_id | VARCHAR(30) | |
-| semen_station | VARCHAR(100) | |
-| received_date | DATE | |
+| breed           | VARCHAR(30)        |                                 |
+| bull_id         | VARCHAR(30)        |                                 |
+| semen_station   | VARCHAR(100)       |                                 |
+| received_date   | DATE               |                                 |
 
 **`mait_inventory`** — current balance per Mait per product:
 `id, mait_id, product_type, product_ref_id, qty_available, updated_at`
@@ -403,40 +404,40 @@ introduces. See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the ERD.
 
 **`ai_event`**
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| id | BIGINT PK | |
-| mait_id, mpp_id | BIGINT FK | |
-| member_id / non_member_id | BIGINT FK, nullable | exactly one populated |
-| animal_id | BIGINT FK → animal.id | |
-| semen_batch_id, straw_unique_no | BIGINT FK / VARCHAR | |
-| ai_photo_url | VARCHAR(255) | S3 object path |
-| status | ENUM('draft','straw_verified','photo_captured','payment_pending','completed','cancelled') | |
-| gps_lat, gps_lng | DECIMAL | captured at photo step |
-| performed_at, created_at, updated_at | DATETIME | |
+| Column                               | Type                                                                                      | Notes                  |
+| ------------------------------------ | ----------------------------------------------------------------------------------------- | ---------------------- |
+| id                                   | BIGINT PK                                                                                 |                        |
+| mait_id, mpp_id                      | BIGINT FK                                                                                 |                        |
+| member_id / non_member_id            | BIGINT FK, nullable                                                                       | exactly one populated  |
+| animal_id                            | BIGINT FK → animal.id                                                                     |                        |
+| semen_batch_id, straw_unique_no      | BIGINT FK / VARCHAR                                                                       |                        |
+| ai_photo_url                         | VARCHAR(255)                                                                              | S3 object path         |
+| status                               | ENUM('draft','straw_verified','photo_captured','payment_pending','completed','cancelled') |                        |
+| gps_lat, gps_lng                     | DECIMAL                                                                                   | captured at photo step |
+| performed_at, created_at, updated_at | DATETIME                                                                                  |                        |
 
 **`payment`**
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| id | BIGINT PK | |
-| ai_event_id | BIGINT FK UNIQUE | 1:1 with ai_event |
-| amount | DECIMAL(10,2) | |
-| mode | ENUM('ONLINE','COD') | |
-| member_otp_verified, member_otp_verified_at | BOOLEAN / DATETIME | step-1 authorisation OTP |
-| utr_number, payment_screenshot_url | VARCHAR | ONLINE mode only |
-| cod_otp_verified, cod_otp_verified_at | BOOLEAN / DATETIME | COD mode only, second OTP |
-| status | ENUM('pending','verified','failed') | |
-| created_at | DATETIME | |
+| Column                                      | Type                                | Notes                     |
+| ------------------------------------------- | ----------------------------------- | ------------------------- |
+| id                                          | BIGINT PK                           |                           |
+| ai_event_id                                 | BIGINT FK UNIQUE                    | 1:1 with ai_event         |
+| amount                                      | DECIMAL(10,2)                       |                           |
+| mode                                        | ENUM('ONLINE','COD')                |                           |
+| member_otp_verified, member_otp_verified_at | BOOLEAN / DATETIME                  | step-1 authorisation OTP  |
+| utr_number, payment_screenshot_url          | VARCHAR                             | ONLINE mode only          |
+| cod_otp_verified, cod_otp_verified_at       | BOOLEAN / DATETIME                  | COD mode only, second OTP |
+| status                                      | ENUM('pending','verified','failed') |                           |
+| created_at                                  | DATETIME                            |                           |
 
 **Supporting tables**
 
-| Table | Key columns |
-| --- | --- |
-| indent_request | id, mait_id, product_type, qty_requested, qty_issued, status ENUM('requested','approved','issued','rejected'), indent_easy_ref_no, requested_at, updated_at |
-| otp_log | id, purpose ENUM('login','payment_online','payment_cod'), mobile_no, otp_code_hash, is_verified, attempt_count, expires_at, created_at |
-| data_upload_log | id, upload_type ENUM('member','mait','mpp'), file_name, uploaded_by, total_rows, success_rows, failed_rows, status, uploaded_at |
-| audit_log | id, actor_id, action, entity_type, entity_id, meta_json, created_at |
+| Table           | Key columns                                                                                                                                                 |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| indent_request  | id, mait_id, product_type, qty_requested, qty_issued, status ENUM('requested','approved','issued','rejected'), indent_easy_ref_no, requested_at, updated_at |
+| otp_log         | id, purpose ENUM('login','payment_online','payment_cod'), mobile_no, otp_code_hash, is_verified, attempt_count, expires_at, created_at                      |
+| data_upload_log | id, upload_type ENUM('member','mait','mpp'), file_name, uploaded_by, total_rows, success_rows, failed_rows, status, uploaded_at                             |
+| audit_log       | id, actor_id, action, entity_type, entity_id, meta_json, created_at                                                                                         |
 
 ---
 
@@ -471,32 +472,32 @@ Full spec: [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
 
 ### 10.1 Typography
 
-| Use | Font | Notes |
-| --- | --- | --- |
-| Headings / display | Lexend | Bold, modern, highly legible — app bar titles, section headers, dashboard KPIs |
-| Body / UI text | Quicksand | Rounded, friendly — body copy, form labels, buttons |
-| Fallback stack | Lexend/Quicksand, -apple-system, Roboto, sans-serif | For web portal CSS |
+| Use                | Font                                                | Notes                                                                          |
+| ------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Headings / display | Lexend                                              | Bold, modern, highly legible — app bar titles, section headers, dashboard KPIs |
+| Body / UI text     | Quicksand                                           | Rounded, friendly — body copy, form labels, buttons                            |
+| Fallback stack     | Lexend/Quicksand, -apple-system, Roboto, sans-serif | For web portal CSS                                                             |
 
 ### 10.2 Colour palette
 
-| Hex | Usage in UI |
-| --- | --- |
-| `#43637E` | Primary — headers, nav bar, primary buttons |
+| Hex       | Usage in UI                                     |
+| --------- | ----------------------------------------------- |
+| `#43637E` | Primary — headers, nav bar, primary buttons     |
 | `#325E6A` | Primary Dark — app bar, headings, active states |
-| `#8FA28A` | Secondary — backgrounds, success surfaces |
-| `#66BB6A` | Success — completed AI, payment success |
-| `#249D8F` | Success Alt — inventory OK, positive KPI |
-| `#BD4444` | Error — validation errors, low stock |
-| `#B34A44` | Error Dark — critical alerts |
-| `#FFF449` | Warning — pending OTP, low straw count |
-| `#E98B50` | Accent — CTA buttons, highlights |
-| `#EC5B38` | Accent Alt — badges, tags |
-| `#C8A96B` | Highlight — premium / featured MPP cards |
-| `#BA6A4C` | Highlight Alt — chart series |
-| `#78A4CB` | Info — informational banners, links |
-| `#2C3639` | Text Dark — primary text on light bg |
-| `#524646` | Text Muted — secondary text, captions |
-| `#464858` | Neutral — borders, dividers, icons |
+| `#8FA28A` | Secondary — backgrounds, success surfaces       |
+| `#66BB6A` | Success — completed AI, payment success         |
+| `#249D8F` | Success Alt — inventory OK, positive KPI        |
+| `#BD4444` | Error — validation errors, low stock            |
+| `#B34A44` | Error Dark — critical alerts                    |
+| `#FFF449` | Warning — pending OTP, low straw count          |
+| `#E98B50` | Accent — CTA buttons, highlights                |
+| `#EC5B38` | Accent Alt — badges, tags                       |
+| `#C8A96B` | Highlight — premium / featured MPP cards        |
+| `#BA6A4C` | Highlight Alt — chart series                    |
+| `#78A4CB` | Info — informational banners, links             |
+| `#2C3639` | Text Dark — primary text on light bg            |
+| `#524646` | Text Muted — secondary text, captions           |
+| `#464858` | Neutral — borders, dividers, icons              |
 
 ### 10.3 Design principles
 
@@ -515,14 +516,14 @@ Full spec: [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
 
 `ai_event.status` drives the mobile UI and gates every subsequent action.
 
-| State | Entered when | Allowed next action |
-| --- | --- | --- |
-| `draft` | Mait picks MPP + Member/Non-Member + Animal | Scan straw |
-| `straw_verified` | Straw number validated against Mait's stock & uniqueness | Capture AI photo |
-| `photo_captured` | In-app camera photo uploaded with GPS/time stamp | Initiate payment |
-| `payment_pending` | Payment initiated, OTP(s) not yet fully verified | Verify OTP(s) / upload UTR + screenshot |
-| `completed` | Payment verified (Online: OTP+UTR+screenshot; COD: both OTPs) | Straw deducted; event closed and reportable |
-| `cancelled` | Mait or Admin aborts the draft before completion | None — terminal, straw not deducted |
+| State             | Entered when                                                  | Allowed next action                         |
+| ----------------- | ------------------------------------------------------------- | ------------------------------------------- |
+| `draft`           | Mait picks MPP + Member/Non-Member + Animal                   | Scan straw                                  |
+| `straw_verified`  | Straw number validated against Mait's stock & uniqueness      | Capture AI photo                            |
+| `photo_captured`  | In-app camera photo uploaded with GPS/time stamp              | Initiate payment                            |
+| `payment_pending` | Payment initiated, OTP(s) not yet fully verified              | Verify OTP(s) / upload UTR + screenshot     |
+| `completed`       | Payment verified (Online: OTP+UTR+screenshot; COD: both OTPs) | Straw deducted; event closed and reportable |
+| `cancelled`       | Mait or Admin aborts the draft before completion              | None — terminal, straw not deducted         |
 
 This mirrors the manual flow end to end: MPP → Member/Non-Member → Animal type & breed →
 ear tag → straw number → AI photo → payment (OTP → online proof / COD double-OTP) → done —
@@ -535,31 +536,31 @@ but every transition is validated server-side and cannot be skipped or backdated
 Three parallel workstreams (Backend, Mobile, Admin Web) run against one shared API contract,
 frozen at the end of Phase 1. Tracked in [`docs/ROADMAP.md`](ROADMAP.md).
 
-| Phase | Days | Focus |
-| --- | --- | --- |
-| 1 | 1–3 | Foundation — ERD & API contract, repo, branching, Docker Compose, CI skeleton, app shells |
-| 2 | 4–8 | Master data & auth — SAP upload pipelines, OTP/password login, RBAC, user management |
-| 3 | 9–14 | Core AI event & inventory — animal config, straw validation, state transitions, photo, atomic completion, offline queue |
-| 4 | 15–18 | Payments — OTP service, online UTR path, COD double-OTP path, completion linkage |
-| 5 | 19–22 | Indent & Indent Easy integration — outbound push, inbound GRN webhook, reconciliation |
-| 6 | 23–25 | Mobile polish — design system, Hindi toggle, offline/error states, QA pass |
-| 7 | 26–28 | Admin dashboard & reports — pre-aggregation, charts, leaderboards, exports |
-| 8 | 29–30 | Hardening, UAT & go-live — security pass, load test, deploy, hypercare |
+| Phase | Days  | Focus                                                                                                                   |
+| ----- | ----- | ----------------------------------------------------------------------------------------------------------------------- |
+| 1     | 1–3   | Foundation — ERD & API contract, repo, branching, Docker Compose, CI skeleton, app shells                               |
+| 2     | 4–8   | Master data & auth — SAP upload pipelines, OTP/password login, RBAC, user management                                    |
+| 3     | 9–14  | Core AI event & inventory — animal config, straw validation, state transitions, photo, atomic completion, offline queue |
+| 4     | 15–18 | Payments — OTP service, online UTR path, COD double-OTP path, completion linkage                                        |
+| 5     | 19–22 | Indent & Indent Easy integration — outbound push, inbound GRN webhook, reconciliation                                   |
+| 6     | 23–25 | Mobile polish — design system, Hindi toggle, offline/error states, QA pass                                              |
+| 7     | 26–28 | Admin dashboard & reports — pre-aggregation, charts, leaderboards, exports                                              |
+| 8     | 29–30 | Hardening, UAT & go-live — security pass, load test, deploy, hypercare                                                  |
 
 ---
 
 ## 13. Testing strategy
 
-| Level | Approach & tools |
-| --- | --- |
-| Unit | PyTest + pytest-django for models, serializers, business logic (straw deduction, OTP expiry, state transitions). ≥80% coverage on transactional/payment/inventory code. |
-| API / integration | DRF APITestCase per endpoint incl. auth, permission and error-path cases; contract tests against the OpenAPI schema. |
-| Mobile | Jest + React Native Testing Library for components/screens; Detox (or Appium) for the end-to-end AI-capture flow on device/emulator. |
-| Admin web | Cypress E2E for upload flows, dashboard rendering and export actions. |
-| Concurrency / data integrity | Dedicated suite simulating parallel AI-completion requests against a low-stock Mait, proving atomic deduction never over-issues. |
-| Performance / load | k6 or Locust on ai-events, payments and dashboard endpoints at 200 concurrent Maits. |
-| Security | OWASP ZAP baseline scan, dependency vulnerability scanning (pip-audit / npm audit) in CI, manual RBAC/PII-masking review before go-live. |
-| UAT | Business stakeholders run real MPP/Member scenarios on staging with production-like SAP data before go-live sign-off. |
+| Level                        | Approach & tools                                                                                                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit                         | PyTest + pytest-django for models, serializers, business logic (straw deduction, OTP expiry, state transitions). ≥80% coverage on transactional/payment/inventory code. |
+| API / integration            | DRF APITestCase per endpoint incl. auth, permission and error-path cases; contract tests against the OpenAPI schema.                                                    |
+| Mobile                       | Jest + React Native Testing Library for components/screens; Detox (or Appium) for the end-to-end AI-capture flow on device/emulator.                                    |
+| Admin web                    | Cypress E2E for upload flows, dashboard rendering and export actions.                                                                                                   |
+| Concurrency / data integrity | Dedicated suite simulating parallel AI-completion requests against a low-stock Mait, proving atomic deduction never over-issues.                                        |
+| Performance / load           | k6 or Locust on ai-events, payments and dashboard endpoints at 200 concurrent Maits.                                                                                    |
+| Security                     | OWASP ZAP baseline scan, dependency vulnerability scanning (pip-audit / npm audit) in CI, manual RBAC/PII-masking review before go-live.                                |
+| UAT                          | Business stakeholders run real MPP/Member scenarios on staging with production-like SAP data before go-live sign-off.                                                   |
 
 ---
 
@@ -586,16 +587,16 @@ separate JWT signing keys.
 
 ## 15. Deployment architecture
 
-| Component | Deployment |
-| --- | --- |
-| API (Django + Gunicorn) | Dockerised, behind Nginx, horizontally scaled (2+ replicas) on Kubernetes/Docker Swarm |
-| Celery workers & Beat | Separate Dockerised worker pool for SAP imports, notifications, Indent Easy sync, report pre-aggregation |
-| MySQL | Managed MySQL 8 (RDS/Cloud SQL) with daily automated backups and a read replica for dashboards |
-| Redis | Managed Redis for cache, OTP store and Celery broker |
-| Object storage | S3-compatible bucket for AI photos & payment screenshots, lifecycle-archived after N months |
-| Admin web portal | Static HTML/CSS/JS served via Nginx/CDN, calling the same API |
-| Mobile app | Play Store (internal track for pilot, production track for rollout); OTA config for API base URL |
-| Monitoring | Sentry (errors), Prometheus/Grafana (metrics), centralized logs; uptime alerting on API and Celery queue depth |
+| Component               | Deployment                                                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| API (Django + Gunicorn) | Dockerised, behind Nginx, horizontally scaled (2+ replicas) on Kubernetes/Docker Swarm                         |
+| Celery workers & Beat   | Separate Dockerised worker pool for SAP imports, notifications, Indent Easy sync, report pre-aggregation       |
+| MySQL                   | Managed MySQL 8 (RDS/Cloud SQL) with daily automated backups and a read replica for dashboards                 |
+| Redis                   | Managed Redis for cache, OTP store and Celery broker                                                           |
+| Object storage          | S3-compatible bucket for AI photos & payment screenshots, lifecycle-archived after N months                    |
+| Admin web portal        | Static HTML/CSS/JS served via Nginx/CDN, calling the same API                                                  |
+| Mobile app              | Play Store (internal track for pilot, production track for rollout); OTA config for API base URL               |
+| Monitoring              | Sentry (errors), Prometheus/Grafana (metrics), centralized logs; uptime alerting on API and Celery queue depth |
 
 ---
 
@@ -628,13 +629,13 @@ separate JWT signing keys.
 
 ### 17.2 Risks & mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| Indent Easy has no exposed API in time for Phase 5 | Fall back to a scheduled export/import file bridge; revisit real-time webhook post-launch |
-| Large SAP files (100k+ rows) slow down uploads | Async Celery processing with chunked bulk-upsert and progress polling, never a synchronous request |
-| Field users struggle with a fully digital flow | Camera-first, large-button UI, Hindi toggle, phased pilot with one district before full scale-up |
-| Duplicate/near-duplicate ear tags or straw numbers across regions | DB-level uniqueness constraints plus a fuzzy-duplicate warning (not a hard block) at data entry |
-| 30-day timeline is aggressive for a 3-platform build | Parallel workstreams against a Day-3 frozen API contract; MVP prioritises the core AI + payment + inventory loop over nice-to-have reporting |
+| Risk                                                              | Mitigation                                                                                                                                   |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Indent Easy has no exposed API in time for Phase 5                | Fall back to a scheduled export/import file bridge; revisit real-time webhook post-launch                                                    |
+| Large SAP files (100k+ rows) slow down uploads                    | Async Celery processing with chunked bulk-upsert and progress polling, never a synchronous request                                           |
+| Field users struggle with a fully digital flow                    | Camera-first, large-button UI, Hindi toggle, phased pilot with one district before full scale-up                                             |
+| Duplicate/near-duplicate ear tags or straw numbers across regions | DB-level uniqueness constraints plus a fuzzy-duplicate warning (not a hard block) at data entry                                              |
+| 30-day timeline is aggressive for a 3-platform build              | Parallel workstreams against a Day-3 frozen API contract; MVP prioritises the core AI + payment + inventory loop over nice-to-have reporting |
 
 ---
 
@@ -642,11 +643,11 @@ separate JWT signing keys.
 
 ### 18.1 Source data reference (as supplied)
 
-| File | Rows × Cols (observed) | Key fields used |
-| --- | --- | --- |
-| Member.xlsx | 105,484 × 54 | MPP, Member code, Member name, Mobile No, Aadhar No, Cattle Holding, Bank details, Activation status |
-| Maits_Vendor_C.xlsx | 61 × 23 | Customer ID, Name, Contact Number, PAN/Aadhar/GST, Bank Key, Account Number |
-| Sahyak.xlsx | 3,134 × 25 | MPP Code, MPP Name, geo hierarchy, Sahayak Vendor, Sahayak Name, Mobile, Bank details |
+| File                | Rows × Cols (observed) | Key fields used                                                                                      |
+| ------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| Member.xlsx         | 105,484 × 54           | MPP, Member code, Member name, Mobile No, Aadhar No, Cattle Holding, Bank details, Activation status |
+| Maits_Vendor_C.xlsx | 61 × 23                | Customer ID, Name, Contact Number, PAN/Aadhar/GST, Bank Key, Account Number                          |
+| Sahyak.xlsx         | 3,134 × 25             | MPP Code, MPP Name, geo hierarchy, Sahayak Vendor, Sahayak Name, Mobile, Bank details                |
 
 Field names above are drawn directly from the uploaded SAP exports and used as the basis for
 the schema in Section 8. Final production mapping should be reconfirmed against the live SAP

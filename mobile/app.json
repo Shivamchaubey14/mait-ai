@@ -16,10 +16,10 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "in.shwetdhara.maitai"
+      "bundleIdentifier": "in.Shwetdhara.maitai"
     },
     "android": {
-      "package": "in.shwetdhara.maitai",
+      "package": "in.Shwetdhara.maitai",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#3BB77E"
