@@ -6,7 +6,7 @@
  * here disagrees with the schema, the schema is right.
  */
 
-export type UserRole = 'super_admin' | 'admin' | 'mpp_operator' | 'mait';
+export type UserRole = 'super_admin' | 'admin' | 'mait';
 
 export interface TokenPair {
   access: string;

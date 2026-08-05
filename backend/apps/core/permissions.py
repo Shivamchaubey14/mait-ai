@@ -33,12 +33,14 @@ class IsMait(_RolePermission):
     allowed_roles = (Role.MAIT,)
 
 
-class IsMPPOperator(_RolePermission):
-    allowed_roles = (Role.MPP_OPERATOR,)
+class IsAdminOrMaitReadOnly(BasePermission):
+    """
+    Admins do anything; a Mait may only read.
 
-
-class IsAdminOrReadOnlyOperator(BasePermission):
-    """Admins write; MPP Operators read (SRS §5 — operator access is read-only)."""
+    Used on the master-data lookups a Mait needs to run the capture flow. Their queryset is
+    separately scoped to their own MPPs — this only settles whether they may call the
+    endpoint at all, not what comes back.
+    """
 
     SAFE = ("GET", "HEAD", "OPTIONS")
 
@@ -48,7 +50,7 @@ class IsAdminOrReadOnlyOperator(BasePermission):
             return False
         if user.role in (Role.SUPER_ADMIN, Role.ADMIN):
             return True
-        return user.role == Role.MPP_OPERATOR and request.method in self.SAFE
+        return user.role == Role.MAIT and request.method in self.SAFE
 
 
 class IsOwnMaitRecord(BasePermission):

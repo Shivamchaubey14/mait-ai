@@ -16,11 +16,16 @@ mobile_validator = RegexValidator(
 
 
 class Role(models.TextChoices):
-    """SRS §5. Permission classes in apps/core/permissions.py map onto these."""
+    """
+    Platform roles. Permission classes in apps/core/permissions.py map onto these.
+
+    There is deliberately no MPP Operator: the business confirmed the role does not exist
+    in the organisation, so the SRS §5 entry for it is superseded. Anything an operator
+    would have done is an Admin action.
+    """
 
     SUPER_ADMIN = "super_admin", "Super Admin"
     ADMIN = "admin", "Admin / Back-office"
-    MPP_OPERATOR = "mpp_operator", "MPP Operator"
     MAIT = "mait", "Mait (Field Agent)"
 
 
@@ -51,8 +56,8 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     """
     Platform user.
 
-    Admins and MPP Operators log in with a password; Maits log in with a mobile OTP
-    (SRS §6.8.2). Both are the same model so RBAC has a single subject.
+    Admins log in with a password; Maits log in with a mobile OTP (SRS §6.8.2). Both are the
+    same model so RBAC has a single subject.
     """
 
     username = models.CharField(max_length=64, unique=True, db_index=True)
@@ -89,26 +94,3 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     def touch_login(self) -> None:
         self.last_login_at = timezone.now()
         self.save(update_fields=["last_login_at", "updated_at"])
-
-
-class MPPOperatorAssignment(TimeStampedModel):
-    """Which MPPs an operator may read (SRS §5 — operator access is read-only and scoped)."""
-
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="mpp_assignments",
-        limit_choices_to={"role": Role.MPP_OPERATOR},
-    )
-    mpp = models.ForeignKey(
-        "masterdata.MPP", on_delete=models.CASCADE, related_name="operator_assignments"
-    )
-
-    class Meta:
-        db_table = "mpp_operator_assignment"
-        constraints = [
-            models.UniqueConstraint(fields=["user", "mpp"], name="uniq_operator_mpp"),
-        ]
-
-    def __str__(self) -> str:
-        return f"{self.user.full_name} → {self.mpp.mpp_code}"

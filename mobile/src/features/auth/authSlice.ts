@@ -1,14 +1,13 @@
 /**
  * Authentication state (SRS §6.8.2 — Maits log in with a mobile OTP).
  *
- * Tokens are persisted in MMKV rather than plain AsyncStorage so they sit in the platform
- * keystore. A field phone is shared, lost and handed around; tokens sitting in readable
- * storage would be a real exposure, not a theoretical one.
+ * Tokens live in memory only for now. A field phone is shared, lost and handed around, so
+ * when persistence arrives it belongs in expo-secure-store rather than plain storage.
  */
 
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-export type UserRole = 'super_admin' | 'admin' | 'mpp_operator' | 'mait';
+export type UserRole = 'super_admin' | 'admin' | 'mait';
 
 export interface AuthUser {
   id: number;

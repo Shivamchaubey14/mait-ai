@@ -28,7 +28,7 @@ class TokenPairSerializer(serializers.Serializer):
 
 class PasswordLoginSerializer(serializers.Serializer):
     """
-    Username/password login for Admin and MPP Operator (SRS §9.1).
+    Username/password login for Admin accounts (SRS §9.1).
 
     Maits are excluded by design: they authenticate by mobile OTP and their accounts carry
     an unusable password. Allowing a password here would create a second, weaker way into a
@@ -91,6 +91,7 @@ class CurrentUserSerializer(serializers.ModelSerializer):
 
     For a Mait this also carries their assigned MPP codes, because it is the first call the
     app makes after login and the answer scopes everything the app will show (SRS §6.2.3).
+    An Admin has no MPP scope, so the list is empty for them.
     """
 
     role_display = serializers.CharField(source="get_role_display", read_only=True)
@@ -131,6 +132,4 @@ class CurrentUserSerializer(serializers.ModelSerializer):
         mait = self._mait(obj)
         if mait is not None:
             return list(mait.mpps.values_list("mpp_code", flat=True))
-        if obj.role == Role.MPP_OPERATOR:
-            return list(obj.mpp_assignments.values_list("mpp__mpp_code", flat=True))
         return []

@@ -178,7 +178,7 @@ not occasionally.
 
 | # | Screen | Status | Contents |
 | --- | --- | --- | --- |
-| W1 | **Login** | ⬜ | Username + password. Admin and MPP Operator only. |
+| W1 | **Login** | ⬜ | Username + password. Admin accounts only. |
 | W2 | **Dashboard** | 🟡 | KPI tiles (today/week/month/lifetime), all-time highs, trend chart, exceptions panel. Structure exists, needs design. |
 | W3 | **SAP upload** | ⬜ | Three upload cards (Member / Mait / MPP), drag-drop, **progress bar for a 15-minute import**, history table. |
 | W4 | **Upload error report** | ⬜ | Row-level failures with spreadsheet row numbers, downloadable. |

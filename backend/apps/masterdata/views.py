@@ -18,7 +18,7 @@ from rest_framework.response import Response
 
 from apps.accounts.admin_serializers import MPPAssignmentSerializer
 from apps.core.models import AuditLog
-from apps.core.permissions import IsAdmin, IsAdminOrReadOnlyOperator, IsMait
+from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait
 from apps.core.services import record_audit
 
 from .models import MPP, DataUploadLog, Member, NonMember
@@ -143,7 +143,7 @@ class MasterUploadViewSet(
 class MPPViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """MPP directory (SRS §9.3)."""
 
-    permission_classes = [IsAdminOrReadOnlyOperator | IsMait]
+    permission_classes = [IsAdminOrMaitReadOnly]
     lookup_field = "mpp_code"
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["district_code", "tehsil_code", "mait", "is_active"]
@@ -214,7 +214,7 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
     unindexed search here would be the slowest thing a Mait does all day.
     """
 
-    permission_classes = [IsAdminOrReadOnlyOperator | IsMait]
+    permission_classes = [IsAdminOrMaitReadOnly]
     lookup_field = "member_code"
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["mpp__mpp_code", "activation_status", "mobile_no"]

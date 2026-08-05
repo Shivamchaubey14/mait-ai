@@ -9,7 +9,7 @@
  *
  * Three failures are kept distinct because each needs a different action from a Mait
  * standing in a village: the code is wrong (type it again), the code is stale (fetch a new
- * one), or the attempts are gone (wait, or find the MPP operator).
+ * one), or the attempts are gone (wait, or call the IT department).
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';

@@ -17,7 +17,7 @@
     "tooManyAttempts": "Too many incorrect attempts. Request a new OTP.",
     "resendIn": "Resend in {{seconds}}s",
     "welcomeBack": "Welcome back,",
-    "welcomeRole": "Mait",
+    "welcomeRole": "M.A.I.T",
     "heroSubtitle": "Record an AI event in six steps, with or without signal.",
     "signIn": "Sign in",
     "enterMobileToContinue": "Enter your mobile number to continue.",
@@ -26,9 +26,9 @@
     "noPasswordTitle": "No password, ever",
     "noPasswordBody": "You sign in with a one-time code each time.",
     "registeredOnlyTitle": "Registered numbers only",
-    "registeredOnlyBody": "Use the number recorded against you at your MPP.",
+    "registeredOnlyBody": "Use the number recorded in SAP.",
     "numberNotWorkingTitle": "Number not working?",
-    "numberNotWorkingBody": "Your MPP operator can add or change it for you.",
+    "numberNotWorkingBody": "Please contact the Shwetdhara IT department.",
     "legalPrefix": "By continuing you agree to our",
     "termsOfService": "Terms of Service",
     "and": "&",
@@ -52,7 +52,7 @@
     "expiredBody": "Codes last five minutes. Send a fresh one.",
     "sendNewCode": "Send a new code",
     "lockedTitle": "Too many wrong attempts",
-    "lockedBody": "Locked for 15 minutes. Your MPP operator can help if it is urgent.",
+    "lockedBody": "Locked for 15 minutes. Contact the Shwetdhara IT department if it is urgent.",
     "lockedCta": "Locked · {{time}}",
     "stateWrongCode": "WRONG CODE",
     "stateExpired": "EXPIRED",
@@ -117,7 +117,7 @@
   },
   "capability": {
     "worksOffline": "Works offline",
-    "cameraCapture": "Camera capture",
-    "strawStock": "Straw stock"
+    "cameraCapture": "Camera click",
+    "strawStock": "Inventory"
   }
 }

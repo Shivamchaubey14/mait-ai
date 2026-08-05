@@ -27,10 +27,13 @@ describe('SplashScreen', () => {
   it('states the three capabilities before sign-in', () => {
     // They answer the question a Mait actually has standing in a field with one bar of
     // signal: will this work out here.
+    //
+    // Resolved through i18n rather than hardcoded, so rewording the copy is a copy change
+    // and not a broken test.
     renderWithStore(<SplashScreen />);
-    expect(screen.getByText(/Works offline/i)).toBeTruthy();
-    expect(screen.getByText(/Camera capture/i)).toBeTruthy();
-    expect(screen.getByText(/Straw stock/i)).toBeTruthy();
+    expect(screen.getByText(i18n.t('capability.worksOffline'))).toBeTruthy();
+    expect(screen.getByText(i18n.t('capability.cameraCapture'))).toBeTruthy();
+    expect(screen.getByText(i18n.t('capability.strawStock'))).toBeTruthy();
   });
 
   it('keeps the product name in English in Hindi', async () => {
@@ -40,7 +43,8 @@ describe('SplashScreen', () => {
     expect(screen.getByText('MAIT AI')).toBeTruthy();
     expect(screen.getByText('FIELD CAPTURE')).toBeTruthy();
     // The surrounding copy does translate.
-    expect(screen.getByText(/बिना नेट चले/)).toBeTruthy();
+    expect(screen.getByText(i18n.t('capability.worksOffline'))).toBeTruthy();
+    expect(i18n.t('capability.worksOffline')).not.toBe('Works offline');
   });
 
   it('shows a version line', () => {

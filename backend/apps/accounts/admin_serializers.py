@@ -11,9 +11,9 @@ from __future__ import annotations
 from django.db import transaction
 from rest_framework import serializers
 
-from apps.masterdata.models import MPP, Mait
+from apps.masterdata.models import Mait
 
-from .models import MPPOperatorAssignment, Role, User, mobile_validator
+from .models import Role, User, mobile_validator
 
 
 class AdminUserSerializer(serializers.ModelSerializer):
@@ -47,16 +47,12 @@ class AdminUserSerializer(serializers.ModelSerializer):
 
     def get_assigned_mpp_count(self, obj) -> int:
         mait = getattr(obj, "mait_profile", None)
-        if mait is not None:
-            return mait.mpps.count()
-        if obj.role == Role.MPP_OPERATOR:
-            return obj.mpp_assignments.count()
-        return 0
+        return mait.mpps.count() if mait is not None else 0
 
 
 class AdminUserCreateSerializer(serializers.Serializer):
     """
-    Create an Admin or MPP Operator account.
+    Create an office account.
 
     Maits are not created here — they are activated from an existing SAP record through
     ``MaitActivationSerializer``, so a field login always traces back to a real Sahayak.
@@ -68,54 +64,23 @@ class AdminUserCreateSerializer(serializers.Serializer):
     mobile_no = serializers.CharField(
         required=False, allow_blank=True, validators=[mobile_validator]
     )
-    role = serializers.ChoiceField(choices=[Role.ADMIN, Role.MPP_OPERATOR, Role.SUPER_ADMIN])
+    role = serializers.ChoiceField(choices=[Role.ADMIN, Role.SUPER_ADMIN])
     password = serializers.CharField(write_only=True, min_length=10)
-    mpp_codes = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-        allow_empty=True,
-        help_text="MPP Operators only — the MPPs this operator may read.",
-    )
 
     def validate_username(self, value: str) -> str:
         if User.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError("That username is already taken.")
         return value
 
-    def validate(self, attrs):
-        if attrs["role"] == Role.MPP_OPERATOR and not attrs.get("mpp_codes"):
-            raise serializers.ValidationError(
-                {"mpp_codes": "An MPP Operator must be assigned at least one MPP."}
-            )
-        if attrs["role"] != Role.MPP_OPERATOR and attrs.get("mpp_codes"):
-            raise serializers.ValidationError(
-                {"mpp_codes": "Only MPP Operators take MPP assignments."}
-            )
-        return attrs
-
     @transaction.atomic
     def create(self, validated_data):
-        mpp_codes = validated_data.pop("mpp_codes", [])
         password = validated_data.pop("password")
-
-        user = User.objects.create_user(
+        return User.objects.create_user(
             **validated_data,
             password=password,
             is_staff=validated_data["role"] == Role.SUPER_ADMIN,
             is_superuser=validated_data["role"] == Role.SUPER_ADMIN,
         )
-
-        if mpp_codes:
-            found = MPP.objects.filter(mpp_code__in=mpp_codes)
-            missing = set(mpp_codes) - {m.mpp_code for m in found}
-            if missing:
-                raise serializers.ValidationError(
-                    {"mpp_codes": f"Unknown MPP code(s): {', '.join(sorted(missing))}"}
-                )
-            MPPOperatorAssignment.objects.bulk_create(
-                [MPPOperatorAssignment(user=user, mpp=mpp) for mpp in found]
-            )
-        return user
 
 
 class AdminUserUpdateSerializer(serializers.Serializer):

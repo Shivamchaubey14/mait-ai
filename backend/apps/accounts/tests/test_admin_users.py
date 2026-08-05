@@ -142,35 +142,26 @@ class TestOfficeAccounts:
         assert response.status_code == 201
         assert User.objects.get(username="newadmin").role == Role.ADMIN
 
-    def test_operator_requires_at_least_one_mpp(self, admin_client):
-        """An operator with no MPPs could see nothing, so it is a configuration mistake."""
+    def test_rejects_a_role_that_does_not_exist(self, admin_client):
+        """
+        There is no MPP Operator in the organisation, so there is none in the platform.
+
+        Asserted rather than assumed: a stale role left in the choices would let an account
+        be created that no permission class recognises, which fails as a confusing 403 much
+        later.
+        """
         response = admin_client.post(
             f"{BASE}/admin/users/",
             {
                 "username": "operator1",
                 "full_name": "Operator",
-                "role": Role.MPP_OPERATOR,
+                "role": "mpp_operator",
                 "password": "another-long-password",
             },
             format="json",
         )
         assert response.status_code == 400
-        assert "mpp_codes" in response.json()["errors"]
-
-    def test_operator_is_assigned_its_mpps(self, admin_client, mpp):
-        response = admin_client.post(
-            f"{BASE}/admin/users/",
-            {
-                "username": "operator2",
-                "full_name": "Operator",
-                "role": Role.MPP_OPERATOR,
-                "password": "another-long-password",
-                "mpp_codes": [mpp.mpp_code],
-            },
-            format="json",
-        )
-        assert response.status_code == 201
-        assert User.objects.get(username="operator2").mpp_assignments.count() == 1
+        assert "role" in response.json()["errors"]
 
     def test_rejects_a_duplicate_username(self, admin_client):
         response = admin_client.post(

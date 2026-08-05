@@ -3,7 +3,7 @@ Authentication endpoints (SRS §9.1).
 
 Two ways in, deliberately separate:
 
-* **Admin and MPP Operator** — username and password.
+* **Admin** — username and password.
 * **Mait** — mobile OTP only. A field phone is shared, lost and handed around, so there is
   no password on a Mait account to steal or reuse.
 
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 @extend_schema(tags=["auth"])
 class PasswordLoginView(APIView):
-    """Username/password login for Admin and MPP Operator."""
+    """Username/password login for Admin accounts."""
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
@@ -56,7 +56,7 @@ class PasswordLoginView(APIView):
     @extend_schema(
         summary="Log in with a username and password",
         description=(
-            "For Admin and MPP Operator accounts. Maits authenticate through "
+            "For Admin accounts. Maits authenticate through "
             "`/auth/otp/send/` and `/auth/otp/verify/` instead."
         ),
         request=PasswordLoginSerializer,

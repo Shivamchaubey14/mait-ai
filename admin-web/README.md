@@ -34,7 +34,7 @@ would be a data breach, not an outage.
 ```
 admin-web/
 ├── index.html            dashboard
-├── login.html            password login (Admin / MPP Operator)
+├── login.html            password login (Admin)
 ├── uploads.html          SAP master upload + history
 ├── ai-events.html        event list, filters, export
 ├── assets/

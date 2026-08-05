@@ -152,15 +152,17 @@ describe('LoginScreen', () => {
     // Otherwise a user hunts for a password field that does not exist and concludes the
     // app is broken.
     renderWithStore(<LoginScreen />);
-    expect(screen.getByText(/No password, ever/i)).toBeTruthy();
+    expect(screen.getByText(i18n.t('auth.noPasswordTitle'))).toBeTruthy();
   });
 
   it('explains what to do when a number does not work', () => {
     // 93% of Maits arrive from SAP with no mobile number at all, so this is the most
     // likely first experience, not an edge case.
     renderWithStore(<LoginScreen />);
-    expect(screen.getByText(/Number not working/i)).toBeTruthy();
-    expect(screen.getByText(/MPP operator can add or change it/i)).toBeTruthy();
+    expect(screen.getByText(i18n.t('auth.numberNotWorkingTitle'))).toBeTruthy();
+    expect(screen.getByText(i18n.t('auth.numberNotWorkingBody'))).toBeTruthy();
+    // The IT department is who to call — there is no MPP Operator role.
+    expect(i18n.t('auth.numberNotWorkingBody')).toMatch(/IT department/i);
   });
 
   it('offers a language toggle on the screen itself', async () => {

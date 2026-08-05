@@ -21,7 +21,7 @@ Each phase maps to a GitHub milestone. Each day's deliverables become issues und
 | --- | --- |
 | 4 | SAP Member Master upload pipeline (async Celery parser, header detect, validation) + admin upload UI |
 | 5 | Mait/Vendor and MPP/Sahayak upload pipelines + upload-history and error-report screens |
-| 6 | Auth: OTP login for Mait, password login for Admin/MPP Operator; RBAC middleware |
+| 6 | Auth: OTP login for Mait, password login for Admin; RBAC middleware |
 | 7 | Admin: user management (create/activate Mait & Admin accounts), MPP–Mait assignment screen |
 | 8 | Mobile: login, MPP/Member/Non-Member selection wired to real APIs; Phase 2 integration test pass |
 

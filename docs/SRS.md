@@ -68,7 +68,6 @@ milk procurement/payment modules (handled by existing SAP/ERP systems).
 | Role | Interest in the system |
 | --- | --- |
 | Mait (Field Agent) | Primary mobile app user — records AI, requests stock, collects payment |
-| MPP Operator | Local visibility into AI activity and members at their MPP |
 | Admin / Back-office | Uploads SAP master data, manages users, monitors dashboards, resolves exceptions |
 | Company Management | Consumes dashboards/reports for AI volume, coverage and revenue trends |
 | Indent Easy (Store User) | Issues goods against Mait indents; existing system, integrated not replaced |
@@ -163,7 +162,6 @@ Layered architecture; all client apps talk only to the DRF API layer over HTTPS/
 | --- | --- |
 | Super Admin | Full system access: user management, SAP uploads, all dashboards, system configuration |
 | Admin / Back-office | SAP uploads, MPP/Mait management, dashboards, exception handling; cannot change system config |
-| MPP Operator (optional) | Read-only view of Members, Maits and AI events for their assigned MPP(s) |
 | Mait | Mobile app only: record AI events at their assigned MPP(s), raise indents, view own inventory and history |
 | Indent Easy Store User | Existing role, unchanged — sees Mait indents inside Indent Easy and performs GRN/issue |
 
@@ -277,8 +275,11 @@ Mirrors the manual flow, made mandatory and validated at each step:
 
 ### 6.8 User & access management
 
-- **FR-6.8.1** — Admin can create/deactivate Mait, MPP Operator and Admin accounts, and reset
-  credentials.
+- **FR-6.8.1** — Admin can create/deactivate Mait and Admin accounts, and reset credentials.
+
+> **Superseded 5 Aug 2026.** The MPP Operator role described in the original §5 does not
+> exist in the organisation and has been removed from the platform. Everything an operator
+> would have done is an Admin action.
 - **FR-6.8.2** — Mait accounts are provisioned from the uploaded Mait/Vendor master
   (auto-suggested) and activated by Admin with a mobile number for OTP-based first login.
 - **FR-6.8.3** — Full role-based access control enforced at the API layer, not just hidden in the UI.

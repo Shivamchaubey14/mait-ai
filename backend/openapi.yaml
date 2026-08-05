@@ -275,12 +275,10 @@ paths:
           enum:
           - admin
           - mait
-          - mpp_operator
           - super_admin
         description: |-
           * `super_admin` - Super Admin
           * `admin` - Admin / Back-office
-          * `mpp_operator` - MPP Operator
           * `mait` - Mait (Field Agent)
       - name: search
         required: false
@@ -304,7 +302,7 @@ paths:
       description: Maits are not created here. They are activated from an existing
         SAP Sahayak record via `/admin/users/activate-mait/`, so every field login
         traces back to a real Sahayak.
-      summary: Create an Admin or MPP Operator
+      summary: Create an office account
       tags:
       - auth
       requestBody:
@@ -436,8 +434,8 @@ paths:
   /api/v1/auth/login/:
     post:
       operationId: auth_login_create
-      description: For Admin and MPP Operator accounts. Maits authenticate through
-        `/auth/otp/send/` and `/auth/otp/verify/` instead.
+      description: For Admin accounts. Maits authenticate through `/auth/otp/send/`
+        and `/auth/otp/verify/` instead.
       summary: Log in with a username and password
       tags:
       - auth
@@ -937,7 +935,7 @@ components:
           description: Required for Maits — this is where the login OTP is sent.
         role:
           allOf:
-          - $ref: '#/components/schemas/Role530Enum'
+          - $ref: '#/components/schemas/Role412Enum'
           readOnly: true
         role_display:
           type: string
@@ -980,7 +978,7 @@ components:
     AdminUserCreateRequest:
       type: object
       description: |-
-        Create an Admin or MPP Operator account.
+        Create an office account.
 
         Maits are not created here — they are activated from an existing SAP record through
         ``MaitActivationSerializer``, so a field login always traces back to a real Sahayak.
@@ -1011,12 +1009,6 @@ components:
           type: string
           writeOnly: true
           minLength: 10
-        mpp_codes:
-          type: array
-          items:
-            type: string
-            minLength: 1
-          description: MPP Operators only — the MPPs this operator may read.
       required:
       - full_name
       - password
@@ -1025,12 +1017,10 @@ components:
     AdminUserCreateRoleEnum:
       enum:
       - admin
-      - mpp_operator
       - super_admin
       type: string
       description: |-
         * `admin` - admin
-        * `mpp_operator` - mpp_operator
         * `super_admin` - super_admin
     CurrentUser:
       type: object
@@ -1039,6 +1029,7 @@ components:
 
         For a Mait this also carries their assigned MPP codes, because it is the first call the
         app makes after login and the answer scopes everything the app will show (SRS §6.2.3).
+        An Admin has no MPP scope, so the list is empty for them.
       properties:
         id:
           type: integer
@@ -1059,7 +1050,7 @@ components:
           description: Required for Maits — this is where the login OTP is sent.
         role:
           allOf:
-          - $ref: '#/components/schemas/Role530Enum'
+          - $ref: '#/components/schemas/Role412Enum'
           readOnly: true
         role_display:
           type: string
@@ -1762,7 +1753,7 @@ components:
     PasswordLoginRequest:
       type: object
       description: |-
-        Username/password login for Admin and MPP Operator (SRS §9.1).
+        Username/password login for Admin accounts (SRS §9.1).
 
         Maits are excluded by design: they authenticate by mobile OTP and their accounts carry
         an unusable password. Allowing a password here would create a second, weaker way into a
@@ -1801,7 +1792,7 @@ components:
         is_active:
           type: boolean
         role:
-          $ref: '#/components/schemas/Role530Enum'
+          $ref: '#/components/schemas/Role412Enum'
         password:
           type: string
           writeOnly: true
@@ -1819,17 +1810,15 @@ components:
           nullable: true
           minLength: 1
           description: Null unassigns the MPP, leaving it visible to admins only.
-    Role530Enum:
+    Role412Enum:
       enum:
       - super_admin
       - admin
-      - mpp_operator
       - mait
       type: string
       description: |-
         * `super_admin` - Super Admin
         * `admin` - Admin / Back-office
-        * `mpp_operator` - MPP Operator
         * `mait` - Mait (Field Agent)
     StatusEnum:
       enum:

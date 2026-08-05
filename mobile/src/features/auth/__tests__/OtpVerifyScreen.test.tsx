@@ -3,7 +3,7 @@
  *
  * The three failures have to stay distinguishable. A Mait standing in a village does
  * something different for each one: type it again, fetch a new code, or stop and find the
- * MPP operator. Collapsing them into "something went wrong" is what makes an app useless in
+ * IT department. Collapsing them into "something went wrong" is what makes an app useless in
  * the field.
  */
 
@@ -11,6 +11,7 @@ import React from 'react';
 import { fireEvent, screen } from '@testing-library/react-native';
 
 import OtpVerifyScreen from '../OtpVerifyScreen';
+import i18n from '@/i18n';
 import { renderWithStore } from '@/test-utils';
 
 const baseProps = {
@@ -122,11 +123,12 @@ describe('OtpVerifyScreen', () => {
   });
 
   describe('locked out', () => {
-    it('says how long, and who can help', () => {
+    it('says how long, and who to call', () => {
       render({ failure: 'locked', attemptsUsed: 3, lockedFor: 15 * 60 });
 
       expect(screen.getByTestId('otp-notice-locked')).toBeTruthy();
-      expect(screen.getByText(/MPP operator can help/i)).toBeTruthy();
+      expect(screen.getByText(i18n.t('auth.lockedBody'))).toBeTruthy();
+      expect(i18n.t('auth.lockedBody')).toMatch(/IT department/i);
     });
 
     it('counts the lock down on the button', () => {

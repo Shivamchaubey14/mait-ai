@@ -54,7 +54,7 @@ returns `429` with `Retry-After`.
 
 | Method | Endpoint | Description | Auth |
 | --- | --- | --- | --- |
-| POST | `/auth/login/` | Username/password login for Admin & MPP Operator | Public |
+| POST | `/auth/login/` | Username/password login for Admin accounts | Public |
 | POST | `/auth/otp/send/` | Send login OTP to a Mait's registered mobile | Public |
 | POST | `/auth/otp/verify/` | Verify OTP, issue JWT access + refresh | Public |
 | POST | `/auth/refresh/` | Exchange refresh token for a new access token | Public |
@@ -146,7 +146,7 @@ returns `429` with `Retry-After`.
 | Method | Endpoint | Description | Auth |
 | --- | --- | --- | --- |
 | GET | `/admin/users/` | List platform users | Admin |
-| POST | `/admin/users/` | Create Admin/MPP Operator/Mait user | Admin |
+| POST | `/admin/users/` | Create an Admin account | Admin |
 | PATCH | `/admin/users/{id}/` | Activate/deactivate, change role/MPP assignment | Admin |
 
 ## Operational

@@ -59,7 +59,7 @@ class AdminUserViewSet(
         return AdminUserSerializer
 
     @extend_schema(
-        summary="Create an Admin or MPP Operator",
+        summary="Create an office account",
         description=(
             "Maits are not created here. They are activated from an existing SAP Sahayak "
             "record via `/admin/users/activate-mait/`, so every field login traces back to "
