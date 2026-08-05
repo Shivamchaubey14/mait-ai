@@ -15,7 +15,24 @@
     "otpSent": "{{mobile}} पर OTP भेजा गया",
     "attemptsRemaining": "{{count}} प्रयास बाकी",
     "tooManyAttempts": "बहुत बार गलत OTP डाला गया। नया OTP मांगें।",
-    "resendIn": "{{seconds}} सेकंड में दोबारा भेजें"
+    "resendIn": "{{seconds}} सेकंड में दोबारा भेजें",
+    "welcomeBack": "वापसी पर स्वागत है,",
+    "welcomeRole": "मैत",
+    "heroSubtitle": "छह चरणों में AI दर्ज करें, नेटवर्क हो या न हो।",
+    "signIn": "साइन इन",
+    "enterMobileToContinue": "जारी रखने के लिए अपना मोबाइल नंबर डालें।",
+    "mobilePlaceholder": "98765 43210",
+    "otpHelper": "पहचान के लिए 6 अंकों का कोड भेजा जाएगा। सामान्य SMS दर लागू।",
+    "noPasswordTitle": "पासवर्ड कभी नहीं",
+    "noPasswordBody": "हर बार एक-बार वाले कोड से साइन इन करें।",
+    "registeredOnlyTitle": "सिर्फ़ दर्ज नंबर",
+    "registeredOnlyBody": "वही नंबर डालें जो आपके MPP पर दर्ज है।",
+    "numberNotWorkingTitle": "नंबर काम नहीं कर रहा?",
+    "numberNotWorkingBody": "आपका MPP ऑपरेटर इसे जोड़ या बदल सकता है।",
+    "legalPrefix": "जारी रखने पर आप सहमत हैं",
+    "termsOfService": "सेवा की शर्तें",
+    "and": "और",
+    "privacyPolicy": "गोपनीयता नीति"
   },
   "aiFlow": {
     "selectMpp": "MPP चुनें",
@@ -65,5 +82,18 @@
     "otpExpired": "यह OTP समाप्त हो गया है। नया मांगें।",
     "offline": "कनेक्शन नहीं है। यह सेव होकर अपने आप भेज दिया जाएगा।",
     "generic": "कुछ गलत हुआ। फिर से कोशिश करें।"
+  },
+  "brand": {
+    "name": "MAIT AI",
+    "tagline": "FIELD CAPTURE"
+  },
+  "splash": {
+    "tagline": "कृत्रिम गर्भाधान का रिकॉर्ड, खेत पर ही — ऑनलाइन हो या न हो",
+    "version": "वर्ज़न {{version}} · NDDB"
+  },
+  "capability": {
+    "worksOffline": "बिना नेट चले",
+    "cameraCapture": "कैमरा फोटो",
+    "strawStock": "स्ट्रॉ स्टॉक"
   }
 }

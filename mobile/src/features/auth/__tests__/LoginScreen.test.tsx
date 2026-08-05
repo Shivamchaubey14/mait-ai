@@ -10,6 +10,7 @@ import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import LoginScreen from '../LoginScreen';
+import i18n from '@/i18n';
 import { jsonResponse, problemResponse, renderWithStore } from '@/test-utils';
 
 const MOBILE = '9795402473';
@@ -40,9 +41,9 @@ describe('LoginScreen', () => {
     renderWithStore(<LoginScreen />);
     fireEvent.changeText(screen.getByTestId('login-mobile'), '+91 97954-02473');
 
-    // Leading +91 is dropped by the digit filter along with the punctuation, leaving the
-    // ten significant digits.
-    expect(screen.getByTestId('login-mobile').props.value).toBe('9197954024');
+    // Punctuation is stripped and the first ten digits kept, then displayed grouped 5+5 —
+    // the way the number is read aloud and printed on a SIM.
+    expect(screen.getByTestId('login-mobile').props.value).toBe('91979 54024');
   });
 
   it('moves to the OTP step after sending', async () => {
@@ -136,6 +137,40 @@ describe('LoginScreen', () => {
     // Fetched before the session is marked live, so the first screen never has to render an
     // empty state while it waits for scope.
     expect(auth.assignedMppCodes).toEqual(['001303', '001305']);
+  });
+
+  it('groups the number 5+5 as it is typed', () => {
+    renderWithStore(<LoginScreen />);
+    fireEvent.changeText(screen.getByTestId('login-mobile'), '9876543210');
+    expect(screen.getByTestId('login-mobile').props.value).toBe('98765 43210');
+  });
+
+  it('says plainly that there is no password', () => {
+    // Otherwise a user hunts for a password field that does not exist and concludes the
+    // app is broken.
+    renderWithStore(<LoginScreen />);
+    expect(screen.getByText(/No password, ever/i)).toBeTruthy();
+  });
+
+  it('explains what to do when a number does not work', () => {
+    // 93% of Maits arrive from SAP with no mobile number at all, so this is the most
+    // likely first experience, not an edge case.
+    renderWithStore(<LoginScreen />);
+    expect(screen.getByText(/Number not working/i)).toBeTruthy();
+    expect(screen.getByText(/MPP operator can add or change it/i)).toBeTruthy();
+  });
+
+  it('offers a language toggle on the screen itself', async () => {
+    // Behind a settings screen it would be useless: a Mait who cannot read the app cannot
+    // navigate to the setting that fixes it.
+    renderWithStore(<LoginScreen />);
+    expect(screen.getByTestId('language-en')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('language-hi'));
+    // The hero subtitle is unique on the screen; the heading text also appears as an
+    // accessibility label and would match twice.
+    await waitFor(() => expect(screen.getByText(/छह चरणों में/)).toBeTruthy());
+    await i18n.changeLanguage('en');
   });
 
   it('does not reveal whether a number is registered', async () => {

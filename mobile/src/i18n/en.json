@@ -15,7 +15,24 @@
     "otpSent": "OTP sent to {{mobile}}",
     "attemptsRemaining": "{{count}} attempt(s) remaining",
     "tooManyAttempts": "Too many incorrect attempts. Request a new OTP.",
-    "resendIn": "Resend in {{seconds}}s"
+    "resendIn": "Resend in {{seconds}}s",
+    "welcomeBack": "Welcome back,",
+    "welcomeRole": "Mait",
+    "heroSubtitle": "Record an AI event in six steps, with or without signal.",
+    "signIn": "Sign in",
+    "enterMobileToContinue": "Enter your mobile number to continue.",
+    "mobilePlaceholder": "98765 43210",
+    "otpHelper": "We'll send a 6-digit code to verify it's you. Standard SMS rates apply.",
+    "noPasswordTitle": "No password, ever",
+    "noPasswordBody": "You sign in with a one-time code each time.",
+    "registeredOnlyTitle": "Registered numbers only",
+    "registeredOnlyBody": "Use the number recorded against you at your MPP.",
+    "numberNotWorkingTitle": "Number not working?",
+    "numberNotWorkingBody": "Your MPP operator can add or change it for you.",
+    "legalPrefix": "By continuing you agree to our",
+    "termsOfService": "Terms of Service",
+    "and": "&",
+    "privacyPolicy": "Privacy Policy"
   },
   "aiFlow": {
     "selectMpp": "Select MPP",
@@ -65,5 +82,18 @@
     "otpExpired": "This OTP has expired. Request a new one.",
     "offline": "No connection. This will be saved and sent automatically.",
     "generic": "Something went wrong. Please try again."
+  },
+  "brand": {
+    "name": "MAIT AI",
+    "tagline": "FIELD CAPTURE"
+  },
+  "splash": {
+    "tagline": "Artificial insemination records, captured in the field — online or off",
+    "version": "Version {{version}} · NDDB"
+  },
+  "capability": {
+    "worksOffline": "Works offline",
+    "cameraCapture": "Camera capture",
+    "strawStock": "Straw stock"
   }
 }
