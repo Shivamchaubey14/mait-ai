@@ -13,8 +13,8 @@ npm install
 ```
 
 Then commit the generated folders. Until that happens the `android-build` job in
-`.github/workflows/mobile-ci.yml` will skip rather than pass — lint, typecheck and Jest all
-run regardless.
+`.github/workflows/mobile-ci.yml` skips itself: it checks for `mobile/android/gradlew` first
+and does nothing if it is absent. Lint, typecheck and Jest run regardless.
 
 ## Development
 
