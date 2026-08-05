@@ -735,6 +735,112 @@ paths:
                 items:
                   $ref: '#/components/schemas/BreedConfig'
           description: ''
+  /api/v1/dashboard/activation-readiness/:
+    get:
+      operationId: dashboard_activation_readiness_retrieve
+      description: 2,886 of 3,110 Sahayak records arrive from SAP with no mobile number,
+        and OTP is a Mait's only way in (docs/DATA_FINDINGS.md §1). Surfaced on the
+        dashboard because it blocks rollout, not because it is a curiosity.
+      summary: Maits awaiting a mobile number
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/dashboard/mait-performance/:
+    get:
+      operationId: dashboard_mait_performance_retrieve
+      description: AI count and collections per Mait for a period (SRS §6.7.4).
+      summary: Per-Mait performance
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/dashboard/mpp-coverage/:
+    get:
+      operationId: dashboard_mpp_coverage_retrieve
+      description: Members served versus total members per MPP (SRS §6.7.5). Coverage
+        is what tells the business where the service is reaching people and where
+        it is not.
+      summary: MPP coverage
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/dashboard/summary/:
+    get:
+      operationId: dashboard_summary_retrieve
+      description: |-
+        AI events today, this week, this month and lifetime, the all-time highs, and the four exception queues (SRS §6.7.1, §6.7.2, §6.7.6).
+
+        The month comparison is against the *same day* last month, not the whole of it — a month-to-date total against a completed month always looks like a collapse.
+      summary: Headline counts and exceptions
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/dashboard/trends/:
+    get:
+      operationId: dashboard_trends_retrieve
+      description: |-
+        Completed and pending-payment counts per day, for the trend chart (SRS §6.7.3).
+
+        Every day in the window is returned, including the empty ones. A chart that skips quiet days silently compresses time and makes a bad week look normal.
+      summary: AI events per day
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: Window size, up to 120. Default 30.
+      - in: query
+        name: district_code
+        schema:
+          type: string
+        description: Restrict to one district.
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/health/:
     get:
       operationId: health_retrieve

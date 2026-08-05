@@ -1,0 +1,44 @@
+/**
+ * Self-hosted webfonts.
+ *
+ * Served from this origin rather than a CDN. This portal renders member PII, and every
+ * third-party request from it leaks a referrer and an IP whether or not the response is
+ * a script — see README.md.
+ *
+ * Latin subset only; the portal is English. `font-display: swap` so text is readable in a
+ * fallback face immediately rather than invisible while the font arrives.
+ *
+ * Regenerate with scripts/fetch-fonts.py.
+ */
+
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/NunitoSans-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/NunitoSans-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Quicksand';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/Quicksand-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Quicksand';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/Quicksand-700.woff2') format('woff2');
+}

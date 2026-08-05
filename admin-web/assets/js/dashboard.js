@@ -1,17 +1,46 @@
 /**
- * Dashboard page (SRS §6.7.1–6.7.3, §6.7.6).
+ * Admin dashboard (W2, SRS §6.7).
  *
  * Reads pre-aggregated endpoints only. Never ask the API to compute over raw events from
- * here — the §7 target is a P95 under 400 ms, and the aggregation tables exist for exactly
- * this page.
+ * here — the §7 target is a P95 under 400ms, and the aggregation tables exist for this page.
+ *
+ * Every number renders through the same path whether it is 418,772 or zero. A dashboard that
+ * only looks right once there is data is a dashboard nobody trusts on day one.
  */
 
-/* global jQuery, Chart, MaitAI */
 (function ($, MaitAI) {
   'use strict';
 
   const api = MaitAI.api;
-  let trendChart = null;
+
+  // ------------------------------------------------------------------------------------
+  // Formatting
+  // ------------------------------------------------------------------------------------
+  function count(value) {
+    return typeof value === 'number' ? value.toLocaleString('en-IN') : '—';
+  }
+
+  function delta(percent, comparedTo) {
+    if (typeof percent !== 'number') {
+      return '';
+    }
+    const up = percent >= 0;
+    return {
+      text: (up ? '+' : '−') + Math.abs(percent).toFixed(0) + '% ' + comparedTo,
+      className: up ? 'kpi__foot--up' : 'kpi__foot--down',
+    };
+  }
+
+  function setFoot(selector, value) {
+    const $el = $('[data-kpi="' + selector + '"]').removeClass('kpi__foot--up kpi__foot--down');
+    if (!value) {
+      $el.text('');
+    } else if (typeof value === 'string') {
+      $el.text(value);
+    } else {
+      $el.text(value.text).addClass(value.className);
+    }
+  }
 
   function showError(problem) {
     $('#alert-region').html(
@@ -19,134 +48,163 @@
     );
   }
 
-  function formatCount(value) {
-    return typeof value === 'number' ? value.toLocaleString('en-IN') : '—';
-  }
-
+  // ------------------------------------------------------------------------------------
+  // Rendering
+  // ------------------------------------------------------------------------------------
   function renderSummary(data) {
-    $('[data-kpi="today"]').text(formatCount(data.today));
-    $('[data-kpi="week"]').text(formatCount(data.this_week));
-    $('[data-kpi="month"]').text(formatCount(data.this_month));
-    $('[data-kpi="lifetime"]').text(formatCount(data.lifetime));
+    $('[data-kpi="today"]').text(count(data.today));
+    setFoot('today-foot', delta(data.today_delta_percent, 'on yesterday'));
 
-    // Current month vs the same day last month (SRS §6.7.1) — a raw month-to-date total
-    // compared against a full previous month would always look like a collapse.
-    if (typeof data.month_delta_percent === 'number') {
-      const up = data.month_delta_percent >= 0;
-      $('[data-kpi="month-delta"]')
-        .removeClass('kpi-delta--up kpi-delta--down')
-        .addClass(up ? 'kpi-delta--up' : 'kpi-delta--down')
-        .text(
-          (up ? '▲ ' : '▼ ') +
-            Math.abs(data.month_delta_percent).toFixed(1) +
-            '% vs same day last month'
-        );
-    }
+    $('[data-kpi="week"]').text(count(data.this_week));
+    setFoot('week-foot', data.week_target ? 'Target ' + count(data.week_target) : '');
 
-    $('[data-kpi="highest-day"]').text(formatCount(data.highest_day && data.highest_day.value));
-    $('[data-kpi="highest-day-on"]').text((data.highest_day && data.highest_day.label) || '');
-    $('[data-kpi="highest-month"]').text(
-      formatCount(data.highest_month && data.highest_month.value)
+    $('[data-kpi="month"]').text(count(data.this_month));
+    setFoot(
+      'month-foot',
+      data.highest_month ? 'All-time high ' + count(data.highest_month.value) : ''
     );
-    $('[data-kpi="highest-month-on"]').text(
-      (data.highest_month && data.highest_month.label) || ''
-    );
+
+    $('[data-kpi="lifetime"]').text(count(data.lifetime));
+    setFoot('lifetime-foot', data.since ? 'Since ' + data.since : '');
   }
 
-  function renderTrend(series) {
-    const canvas = document.getElementById('trend-chart');
-    if (!canvas || typeof Chart === 'undefined') {
+  /**
+   * Grouped bars, drawn in CSS.
+   *
+   * Heights are a percentage of the tallest day rather than an absolute scale, so a quiet
+   * week still reads as a shape instead of a flat line at the bottom of the panel.
+   */
+  function renderChart(series) {
+    const $chart = $('#chart').empty();
+
+    if (!series.length) {
+      $chart.append(
+        $('<p class="empty-state"></p>').text('No AI events recorded in this period yet.')
+      );
       return;
     }
 
-    // Read the palette from the tokens rather than repeating hex values here — the CI
-    // colour check would reject them, and rightly so.
-    const styles = getComputedStyle(document.documentElement);
-    const primary = styles.getPropertyValue('--chart-1').trim();
+    const peak = Math.max(
+      1,
+      ...series.map(function (d) {
+        return (d.completed || 0) + (d.pending || 0);
+      })
+    );
 
-    if (trendChart) {
-      trendChart.destroy();
+    series.forEach(function (day) {
+      const completed = ((day.completed || 0) / peak) * 100;
+      const pending = ((day.pending || 0) / peak) * 100;
+
+      $('<div class="chart__col"></div>')
+        .append(
+          $('<div class="chart__bars"></div>')
+            .append(
+              $('<div class="chart__bar chart__bar--completed"></div>')
+                .css('height', completed + '%')
+                .attr('title', day.label + ': ' + count(day.completed) + ' completed')
+            )
+            .append(
+              $('<div class="chart__bar chart__bar--pending"></div>')
+                .css('height', pending + '%')
+                .attr('title', day.label + ': ' + count(day.pending) + ' pending payment')
+            )
+        )
+        .append($('<span class="chart__label"></span>').text(day.short_label || day.label))
+        .appendTo($chart);
+    });
+  }
+
+  function renderException(key, payload) {
+    $('[data-count="' + key + '"]').text(count(payload.count));
+
+    const $rows = $('[data-rows="' + key + '"]').empty();
+    if (!payload.rows || !payload.rows.length) {
+      $rows.append($('<p class="exception__meta"></p>').text('Nothing needs attention.'));
+      return;
     }
 
-    trendChart = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: series.map(function (point) {
-          return point.date;
-        }),
-        datasets: [
-          {
-            label: 'AI events',
-            data: series.map(function (point) {
-              return point.count;
-            }),
-            borderColor: primary,
-            backgroundColor: primary,
-            tension: 0.3,
-            fill: false,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-      },
+    payload.rows.forEach(function (row) {
+      $('<div class="exception__row"></div>')
+        .append($('<p class="exception__label"></p>').text(row.label))
+        .append(
+          $('<p class="exception__meta"></p>')
+            .addClass(row.severity === 'error' ? 'exception__meta--error' : '')
+            .text(row.meta)
+        )
+        .appendTo($rows);
     });
   }
 
   function renderExceptions(data) {
-    const rows = [
-      { label: 'Pending payments', count: data.pending_payments, href: 'ai-events.html?status=payment_pending' },
-      { label: 'Failed OTP verifications', count: data.failed_otps, href: 'ai-events.html?otp=failed' },
-      { label: 'Maits low on stock', count: data.low_stock_maits, href: 'inventory.html?low=1' },
-      { label: 'Stale indents', count: data.stale_indents, href: 'indents.html?stale=1' },
-    ];
+    const total =
+      (data.pending_payments || {}).count +
+      (data.failed_otps || {}).count +
+      (data.low_stock || {}).count +
+      (data.stale_indents || {}).count;
 
-    const $body = $('#exceptions-body').empty();
-    const actionable = rows.filter(function (row) {
-      return row.count > 0;
-    });
+    $('#exception-badge').text(count(total)).prop('hidden', !total);
 
-    if (!actionable.length) {
-      $body.append('<tr><td colspan="3" class="empty-state">Nothing needs attention.</td></tr>');
-      return;
-    }
+    renderException('pending-payments', data.pending_payments || {});
+    renderException('failed-otps', data.failed_otps || {});
+    renderException('low-stock', data.low_stock || {});
+    renderException('stale-indents', data.stale_indents || {});
+  }
 
-    actionable.forEach(function (row) {
-      $('<tr></tr>')
-        .append($('<td></td>').text(row.label))
-        .append($('<td></td>').append($('<span class="badge badge--pending"></span>').text(row.count)))
-        .append($('<td></td>').append($('<a class="btn btn--ghost">View</a>').attr('href', row.href)))
-        .appendTo($body);
-    });
+  // ------------------------------------------------------------------------------------
+  // Load
+  // ------------------------------------------------------------------------------------
+  function load(days) {
+    api
+      .dashboardSummary()
+      .done(function (data) {
+        renderSummary(data);
+        renderExceptions(data.exceptions || {});
+      })
+      .fail(showError);
+
+    api
+      .dashboardTrends({ granularity: 'daily', days: days })
+      .done(function (data) {
+        renderChart(data.results || []);
+      })
+      .fail(showError);
   }
 
   $(function () {
-    api
-      .me()
-      .done(function (user) {
-        $('#current-user').text(user.full_name + ' · ' + user.role);
+    // No session, no dashboard. Done before any request so the page does not flash a
+    // half-rendered shell on the way to the login screen.
+    if (!api.tokens.get().access) {
+      window.location.replace('login.html');
+      return;
+    }
+
+    $('#today-date').text(
+      new Date().toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
       })
-      .fail(showError);
+    );
 
-    api.dashboardSummary().done(function (data) {
-      renderSummary(data);
-      renderExceptions(data.exceptions || {});
-    }).fail(showError);
+    api.me().fail(function () {
+      // A stale token that the refresh could not rescue. api.js has already cleared it.
+      window.location.replace('login.html');
+    });
 
-    api
-      .dashboardTrends({ granularity: 'daily', days: 30 })
-      .done(function (data) {
-        renderTrend(data.results || []);
-      })
-      .fail(showError);
+    load(Number($('#range').val()));
 
-    $('#logout').on('click', function () {
+    $('#range').on('change', function () {
+      load(Number($(this).val()));
+    });
+
+    $('#account').on('click', function () {
       api.logout().always(function () {
-        window.location.href = 'login.html';
+        window.location.replace('login.html');
       });
+    });
+
+    $('#export').on('click', function () {
+      window.location.href = '/api/v1/reports/export/?format=csv';
     });
   });
 })(jQuery, window.MaitAI);

@@ -4,106 +4,168 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dashboard · Mait AI Admin</title>
-    <meta
-      name="description"
-      content="Mait AI admin portal — AI activity, inventory oversight and SAP master data."
-    />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
     <link rel="stylesheet" href="assets/css/main.css" />
+    <link rel="stylesheet" href="assets/css/dashboard.css" />
   </head>
 
   <body>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <h1 class="visually-hidden">Mait AI Admin</h1>
+    <div class="shell">
+      <aside class="side">
+        <div class="side__mark">
+          <span class="side__mark-name">MAIT AI</span>
+          <span class="side__mark-sub">ADMIN</span>
+        </div>
+
         <nav aria-label="Main">
-          <a class="nav-link is-active" href="index.html">Dashboard</a>
-          <a class="nav-link" href="ai-events.html">AI events</a>
-          <a class="nav-link" href="maits.html">Maits &amp; MPPs</a>
-          <a class="nav-link" href="inventory.html">Inventory</a>
-          <a class="nav-link" href="indents.html">Indents</a>
-          <a class="nav-link" href="uploads.html">SAP uploads</a>
-          <a class="nav-link" href="users.html">Users</a>
+          <a class="side__link is-active" href="index.html" aria-current="page">
+            <span class="side__dot" aria-hidden="true"></span> Dashboard
+          </a>
+          <a class="side__link" href="uploads.html">
+            <span class="side__dot" aria-hidden="true"></span> SAP upload
+          </a>
+          <a class="side__link" href="ai-events.html">
+            <span class="side__dot" aria-hidden="true"></span> AI events
+          </a>
+          <a class="side__link" href="maits.html">
+            <span class="side__dot" aria-hidden="true"></span> Maits
+          </a>
+          <a class="side__link" href="mpps.html">
+            <span class="side__dot" aria-hidden="true"></span> MPPs
+          </a>
+          <a class="side__link" href="members.html">
+            <span class="side__dot" aria-hidden="true"></span> Members
+          </a>
+          <a class="side__link" href="inventory.html">
+            <span class="side__dot" aria-hidden="true"></span> Inventory
+          </a>
+          <a class="side__link" href="indents.html">
+            <span class="side__dot" aria-hidden="true"></span> Indents
+          </a>
+          <a class="side__link" href="leaderboard.html">
+            <span class="side__dot" aria-hidden="true"></span> Leaderboard
+          </a>
+          <a class="side__link" href="exceptions.html">
+            <span class="side__dot" aria-hidden="true"></span> Exceptions
+            <span class="side__badge" id="exception-badge" hidden>0</span>
+          </a>
+          <a class="side__link" href="reports.html">
+            <span class="side__dot" aria-hidden="true"></span> Reports
+          </a>
+          <a class="side__link" href="users.html">
+            <span class="side__dot" aria-hidden="true"></span> Users &amp; roles
+          </a>
         </nav>
       </aside>
 
-      <header class="topbar">
-        <h2>Dashboard</h2>
-        <div>
-          <span id="current-user" class="kpi-label">—</span>
-          <button type="button" class="btn btn--ghost" id="logout">Sign out</button>
-        </div>
-      </header>
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Dashboard</h1>
+            <p class="topbar__meta">
+              <span id="today-date">—</span> · <span id="scope">all districts</span>
+            </p>
+          </div>
+          <div class="topbar__actions">
+            <select class="select" id="range" aria-label="Date range">
+              <option value="30">Last 30 days</option>
+              <option value="7">Last 7 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+            <button class="btn btn--primary" id="export" type="button">Export →</button>
+            <button class="avatar" id="account" type="button" aria-label="Account"></button>
+          </div>
+        </header>
 
-      <main class="main">
         <div id="alert-region" role="alert" aria-live="polite"></div>
 
         <!-- SRS §6.7.1–6.7.2 -->
-        <section class="kpi-grid" aria-label="AI event summary">
-          <article class="card card--success">
-            <p class="kpi-label">Today</p>
-            <p class="kpi-value" data-kpi="today">—</p>
+        <section class="kpis" aria-label="Summary">
+          <article class="kpi">
+            <p class="kpi__label">AI events today</p>
+            <p class="kpi__value" data-kpi="today">—</p>
+            <p class="kpi__foot" data-kpi="today-foot"></p>
           </article>
-          <article class="card card--info">
-            <p class="kpi-label">This week</p>
-            <p class="kpi-value" data-kpi="week">—</p>
+          <article class="kpi">
+            <p class="kpi__label">This week</p>
+            <p class="kpi__value" data-kpi="week">—</p>
+            <p class="kpi__foot" data-kpi="week-foot"></p>
           </article>
-          <article class="card card--info">
-            <p class="kpi-label">This month</p>
-            <p class="kpi-value" data-kpi="month">—</p>
-            <p class="kpi-label" data-kpi="month-delta"></p>
+          <article class="kpi">
+            <p class="kpi__label">This month</p>
+            <p class="kpi__value" data-kpi="month">—</p>
+            <p class="kpi__foot" data-kpi="month-foot"></p>
           </article>
-          <article class="card">
-            <p class="kpi-label">Lifetime</p>
-            <p class="kpi-value" data-kpi="lifetime">—</p>
-          </article>
-          <article class="card card--warning">
-            <p class="kpi-label">Highest single day</p>
-            <p class="kpi-value" data-kpi="highest-day">—</p>
-            <p class="kpi-label" data-kpi="highest-day-on"></p>
-          </article>
-          <article class="card card--warning">
-            <p class="kpi-label">Highest single month</p>
-            <p class="kpi-value" data-kpi="highest-month">—</p>
-            <p class="kpi-label" data-kpi="highest-month-on"></p>
+          <article class="kpi">
+            <p class="kpi__label">Lifetime</p>
+            <p class="kpi__value" data-kpi="lifetime">—</p>
+            <p class="kpi__foot" data-kpi="lifetime-foot"></p>
           </article>
         </section>
 
         <!-- SRS §6.7.3 -->
-        <section class="card" aria-labelledby="trend-title">
-          <h3 class="card__title" id="trend-title">AI events over time</h3>
-          <canvas id="trend-chart" height="90" aria-label="AI event trend" role="img"></canvas>
+        <section class="panel" aria-labelledby="trend-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="trend-title">AI events per day</h2>
+            <p class="legend">
+              <span class="is-completed">Completed</span>
+              <span class="is-pending">Pending payment</span>
+            </p>
+          </div>
+          <div class="chart" id="chart"></div>
         </section>
 
         <!-- SRS §6.7.6 -->
-        <section class="card card--error" aria-labelledby="exceptions-title">
-          <h3 class="card__title" id="exceptions-title">Needs attention</h3>
-          <div class="table-wrap">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th scope="col">Exception</th>
-                  <th scope="col">Count</th>
-                  <th scope="col"></th>
-                </tr>
-              </thead>
-              <tbody id="exceptions-body">
-                <tr>
-                  <td colspan="3" class="empty-state">Loading…</td>
-                </tr>
-              </tbody>
-            </table>
+        <section class="exceptions" aria-label="Needs attention">
+          <article class="panel panel--warning">
+            <div class="panel__head">
+              <h2 class="panel__title">
+                <span class="dot dot--warning" aria-hidden="true"></span> Pending payments
+              </h2>
+              <span class="panel__count" data-count="pending-payments">—</span>
+            </div>
+            <div data-rows="pending-payments"></div>
+          </article>
+
+          <article class="panel panel--error">
+            <div class="panel__head">
+              <h2 class="panel__title">
+                <span class="dot dot--error" aria-hidden="true"></span> Failed OTPs
+              </h2>
+              <span class="panel__count" data-count="failed-otps">—</span>
+            </div>
+            <div data-rows="failed-otps"></div>
+          </article>
+
+          <article class="panel panel--error">
+            <div class="panel__head">
+              <h2 class="panel__title">
+                <span class="dot dot--error" aria-hidden="true"></span> Low stock
+              </h2>
+              <span class="panel__count" data-count="low-stock">—</span>
+            </div>
+            <div data-rows="low-stock"></div>
+          </article>
+        </section>
+
+        <section class="panel panel--warning" aria-labelledby="stale-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="stale-title">
+              <span class="dot dot--warning" aria-hidden="true"></span> Stale indents
+            </h2>
+            <span class="panel__count" data-count="stale-indents">—</span>
           </div>
+          <div data-rows="stale-indents"></div>
         </section>
       </main>
     </div>
 
     <!--
-      Vendor scripts are pinned and served locally rather than from a CDN. This portal
-      handles member PII, and a third-party script on the page can read anything the page
-      can. Place jQuery and Chart.js in assets/vendor/ — see README.md.
+      Vendor scripts are served locally, never from a CDN. This portal renders member PII,
+      and a third-party script on the page can read everything the page can — see README.md.
     -->
     <script src="assets/vendor/jquery-3.7.1.min.js"></script>
-    <script src="assets/vendor/chart-4.4.4.min.js"></script>
     <script src="assets/js/api.js"></script>
     <script src="assets/js/dashboard.js"></script>
   </body>

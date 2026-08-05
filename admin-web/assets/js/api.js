@@ -6,7 +6,6 @@
  * page would miss all three.
  */
 
-/* global jQuery */
 window.MaitAI = window.MaitAI || {};
 
 (function (MaitAI, $) {

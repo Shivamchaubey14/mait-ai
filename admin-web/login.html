@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/main.css" />
+    <link rel="stylesheet" href="assets/css/auth.css" />
+  </head>
+
+  <body>
+    <main class="auth">
+      <section class="auth__brand">
+        <div class="auth__disc" aria-hidden="true"></div>
+
+        <div class="auth__mark">
+          <span class="auth__mark-name">MAIT AI</span>
+          <span class="auth__mark-sub">ADMIN PORTAL</span>
+        </div>
+
+        <div>
+          <h1 class="auth__headline">
+            Oversight for <span data-stat="members">105k</span> members and
+            <span data-stat="maits">3,110</span> Maits
+          </h1>
+          <p class="auth__note">Admin access only. Field staff sign in on the app with an OTP.</p>
+        </div>
+
+        <p class="auth__version">Version 0.1.0 · SHWETDHARA</p>
+      </section>
+
+      <section class="auth__panel">
+        <form class="auth__form" id="login-form" novalidate>
+          <h2 class="auth__title">Sign in</h2>
+          <p class="auth__subtitle">Use the credentials issued by SHWETDHARA IT.</p>
+
+          <div id="alert-region" role="alert" aria-live="polite"></div>
+
+          <div class="field">
+            <label class="field__label" for="username">Username</label>
+            <input
+              class="field__input"
+              id="username"
+              name="username"
+              type="text"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
+              required
+            />
+          </div>
+
+          <div class="field">
+            <div class="auth__label-row">
+              <label class="field__label" for="password">Password</label>
+              <button class="auth__reveal" type="button" id="reveal" aria-pressed="false">
+                Show
+              </button>
+            </div>
+            <input
+              class="field__input"
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+
+          <button class="auth__submit" type="submit" id="submit">
+            <span id="submit-label">Sign in</span>
+            <span aria-hidden="true">→</span>
+          </button>
+
+          <p class="auth__footnote">
+            Repeated failures are rate limited. Contact Shwetdhara IT if you are locked out.
+          </p>
+        </form>
+      </section>
+    </main>
+
+    <!--
+      Vendor scripts are served locally, never from a CDN. This portal renders member PII,
+      and a third-party script on the page can read everything the page can — see README.md.
+    -->
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/login.js"></script>
+  </body>
+</html>

@@ -7,19 +7,24 @@
  * CI rejects a hardcoded hex anywhere else in this workstream — use `var(--color-*)`.
  */
 
+/* Self-hosted webfonts. Imported here so every page that uses the tokens also gets the
+   faces those tokens name — declaring a font-family without loading it silently falls
+   back to a system face that looks almost right. */
+@import url('fonts.css');
+
 :root {
   /* --- Typography ------------------------------------------------------------------- */
   /* Two families only. Quicksand for headings, Nunito Sans for body. No third face. */
-  --font-heading: "Quicksand", -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-body: "Nunito Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading: 'Quicksand', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Nunito Sans', -apple-system, 'Segoe UI', Roboto, sans-serif;
 
-  --text-display: 2rem;      /* 32px — dashboard KPI numbers */
-  --text-h1: 1.5rem;         /* 24px */
-  --text-h2: 1.25rem;        /* 20px */
-  --text-h3: 1.0625rem;      /* 17px */
-  --text-body: 0.9375rem;    /* 15px */
-  --text-label: 0.8125rem;   /* 13px */
-  --text-caption: 0.75rem;   /* 12px */
+  --text-display: 2rem; /* 32px — dashboard KPI numbers */
+  --text-h1: 1.5rem; /* 24px */
+  --text-h2: 1.25rem; /* 20px */
+  --text-h3: 1.0625rem; /* 17px */
+  --text-body: 0.9375rem; /* 15px */
+  --text-label: 0.8125rem; /* 13px */
+  --text-caption: 0.75rem; /* 12px */
 
   --leading-tight: 1.25;
   --leading-normal: 1.5;
@@ -130,7 +135,15 @@
  * Cream Yolk fails contrast against white — it is a fill or a border here, never a text
  * colour on a light surface.
  */
-.status-completed { color: var(--color-success); }
-.status-pending   { border-color: var(--color-warning); }
-.status-blocked   { color: var(--color-error); }
-.status-info      { color: var(--color-info); }
+.status-completed {
+  color: var(--color-success);
+}
+.status-pending {
+  border-color: var(--color-warning);
+}
+.status-blocked {
+  color: var(--color-error);
+}
+.status-info {
+  color: var(--color-info);
+}

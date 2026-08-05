@@ -12,7 +12,9 @@
   },
   "globals": {
     "Chart": "readonly",
-    "MaitAI": "writable"
+    "MaitAI": "writable",
+    "jQuery": "readonly",
+    "$": "readonly"
   },
   "rules": {
     "no-console": [
