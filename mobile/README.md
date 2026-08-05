@@ -61,9 +61,9 @@ server is the authority. The scan step calls `/semen-batches/{no}/validate/`, an
 can still fail with `insufficient-stock` — handle it, do not assume the local count was right.
 
 **No hardcoded strings, no hardcoded colours.** Text goes through `src/i18n/`, colour and
-spacing through `src/theme/tokens.ts`. Both are lint-enforced. The app defaults to Hindi, and
-Devanagari runs taller and longer than English — never fix a button's height to exactly its
-English label.
+spacing through `src/theme/tokens.ts`. Both are lint-enforced. Hindi is a tap away on the
+login hero, and Devanagari runs taller and longer than English — never fix a button's height
+to exactly its English label.
 
 ## Testing
 
@@ -73,8 +73,8 @@ npm run lint
 npm run typecheck
 ```
 
-Tests pin English so assertions read naturally; that the app defaults to Hindi is asserted
-directly in the i18n suite instead.
+Copy assertions resolve strings through i18n rather than hardcoding English, so rewording a
+string is a copy change and not a broken test.
 
 ## Builds
 

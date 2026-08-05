@@ -14,16 +14,9 @@ import { Provider } from 'react-redux';
 import { api } from '@api/client';
 import authReducer from '@/features/auth/authSlice';
 
-import i18n from '@/i18n';
-
-// The app ships defaulting to Hindi, so assertions written against English text would fail
-// against the real default. Tests pin English for readable assertions; that the default is
-// Hindi is asserted directly in the i18n suite instead.
-//
-// This leaves a handful of "update not wrapped in act(...)" warnings: changeLanguage is a
-// promise, and it re-renders every translation consumer when it settles. Every test passes;
-// awaiting it in a beforeAll was tried and traded the warnings for a real failure.
-i18n.changeLanguage('en');
+// English is the app's default, so nothing needs forcing here. Tests that exercise Hindi
+// switch to it themselves and switch back.
+import '@/i18n';
 
 export function makeStore() {
   return configureStore({

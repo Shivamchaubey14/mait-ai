@@ -32,7 +32,12 @@ i18n.use(initReactI18next).init({
     en: { translation: en },
     hi: { translation: hi },
   },
-  lng: 'hi', // Hindi first — it is the majority language of the field user base.
+  // English by default for now, switchable to Hindi from the toggle in the hero.
+  //
+  // Worth revisiting before field rollout: SRS §7 asks for Hindi support precisely because
+  // the user base is semi-literate and Hindi-speaking, and a Mait who cannot read the
+  // default has to find the toggle before they can find anything else.
+  lng: 'en',
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
   returnNull: false,

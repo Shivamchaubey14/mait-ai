@@ -1,9 +1,8 @@
 /**
  * Translation parity (SRS §7 Usability).
  *
- * The app defaults to Hindi for a semi-literate field user base. A key present in English
- * but missing in Hindi renders as the raw key path on screen — which is worse than English
- * would have been, and only shows up in front of the user.
+ * Both languages must stay complete. A key present in one and missing in the other renders
+ * as the raw key path on screen, and only ever shows up in front of the user.
  */
 
 import i18n from '../index';
@@ -21,10 +20,10 @@ function flatten(obj: Record<string, unknown>, prefix = ''): string[] {
 describe('translations', () => {
   const enKeys = flatten(en).sort();
 
-  it('defaults to Hindi', () => {
-    // The field user base is semi-literate and Hindi-speaking. Defaulting to English would
-    // put every Mait one settings screen away from being able to use the app at all.
-    expect(i18n.language).toBe('hi');
+  it('defaults to English', () => {
+    // A product decision, not a technical one. Hindi is a tap away on the login hero, and
+    // both languages are kept complete by the parity tests below.
+    expect(i18n.language).toBe('en');
   });
 
   const hiKeys = flatten(hi).sort();

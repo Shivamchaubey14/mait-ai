@@ -97,9 +97,15 @@ behind icons. Ink 300 `#8897A3` is the disabled foreground; Ink 100 `#D4DBE0` a 
 
 ## 4. Language
 
-The app **defaults to Hindi**, with an English toggle. Devanagari runs taller and often
-longer than the English equivalent — never size a button to exactly its English label. Please
-show both languages for any screen with tight text.
+The app **defaults to English** for now, with a Hindi toggle on the login hero. Both
+languages are kept complete and parity is enforced by tests.
+
+Devanagari runs taller and often longer than the English equivalent — never size a button to
+exactly its English label. Please show both languages for any screen with tight text.
+
+> Worth revisiting before field rollout: SRS §7 asks for Hindi *because* the user base is
+> semi-literate and Hindi-speaking, and a Mait who cannot read the default has to find the
+> toggle before they can find anything else.
 
 ---
 
