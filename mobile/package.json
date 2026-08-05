@@ -2,7 +2,7 @@
   "name": "mait-app",
   "version": "0.1.0",
   "private": true,
-  "description": "Mait AI field agent app \u2014 React Native, Android-first",
+  "description": "Mait AI field agent app — React Native, Android-first",
   "scripts": {
     "start": "expo start",
     "start:clear": "expo start -c",
@@ -29,6 +29,7 @@
     "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
     "i18next": "^23.15.1",
+    "intl-pluralrules": "^2.0.1",
     "react": "19.1.0",
     "react-i18next": "^15.0.2",
     "react-native": "0.81.5",

@@ -43,6 +43,25 @@ describe('translations', () => {
     expect(empty).toEqual([]);
   });
 
+  it('resolves plural forms rather than returning the key', () => {
+    // Hermes has no Intl.PluralRules, so i18next falls back to its v3 plural format and
+    // these v4 `_one` / `_other` keys stop resolving — on a device only, never in Node.
+    // The polyfill imported by src/i18n fixes that; this asserts it is actually in place.
+    for (const count of [1, 2, 5]) {
+      const text = i18n.t('auth.wrongCodeBody', { count });
+      expect(text).not.toContain('wrongCodeBody');
+      expect(text.length).toBeGreaterThan(0);
+    }
+    // Singular and plural must actually differ, or the plural machinery is not running.
+    expect(i18n.t('auth.wrongCodeBody', { count: 1 })).not.toBe(
+      i18n.t('auth.wrongCodeBody', { count: 2 }),
+    );
+  });
+
+  it('interpolates the count into the plural string', () => {
+    expect(i18n.t('auth.wrongCodeBody', { count: 2 })).toContain('2');
+  });
+
   it('keeps interpolation placeholders identical across languages', () => {
     // A placeholder dropped in translation silently renders nothing where a number should
     // be — "Step of 6" instead of "Step 3 of 6".

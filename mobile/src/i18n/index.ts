@@ -7,6 +7,13 @@
  * fix a button's height to exactly its English label — it will clip in Hindi.
  */
 
+// Must come before i18next. Hermes ships without a complete Intl implementation, so
+// i18next finds no Intl.PluralRules, warns, and silently falls back to its v3 plural
+// format — under which the `_one` / `_other` keys in these files do not resolve at all.
+// Node has Intl, so this fails only on a device and never in the test suite: the "N
+// attempts left" line would simply come out wrong in front of a Mait.
+import 'intl-pluralrules';
+
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
