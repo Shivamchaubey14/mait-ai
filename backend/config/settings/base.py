@@ -262,6 +262,17 @@ CACHES = {
 OTP_LENGTH = env.int("OTP_LENGTH", default=6)
 OTP_EXPIRY_SECONDS = env.int("OTP_EXPIRY_SECONDS", default=300)  # SRS §6.5.1 — 5 minutes
 OTP_MAX_ATTEMPTS = env.int("OTP_MAX_ATTEMPTS", default=3)  # SRS §6.5.1
+
+# Numbers that receive a known OTP instead of a random one, so the app can be demonstrated
+# without a live SMS gateway.
+#
+# This deliberately changes only which code is *generated*. Expiry, the attempt limit,
+# hashing, logging and the entire verification path are untouched — there is no bypass
+# branch in the security-critical code to be left switched on by accident.
+#
+# Empty here and populated only in dev. `production.py` refuses to boot if it is non-empty.
+DEV_FIXED_OTP_NUMBERS = env.list("DEV_FIXED_OTP_NUMBERS", default=[])
+DEV_FIXED_OTP_CODE = env("DEV_FIXED_OTP_CODE", default="123456")
 IDEMPOTENCY_TTL_HOURS = env.int("IDEMPOTENCY_TTL_HOURS", default=24)
 LOW_STOCK_THRESHOLD = env.int("LOW_STOCK_THRESHOLD", default=5)
 

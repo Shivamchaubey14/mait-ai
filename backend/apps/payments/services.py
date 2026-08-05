@@ -30,8 +30,27 @@ from .models import OTPLog, Payment
 logger = logging.getLogger(__name__)
 
 
-def generate_code() -> str:
-    """Cryptographically random numeric OTP. ``secrets``, never ``random``."""
+def generate_code(mobile_no: str = "") -> str:
+    """
+    Cryptographically random numeric OTP. ``secrets``, never ``random``.
+
+    Numbers listed in ``DEV_FIXED_OTP_NUMBERS`` get a known code instead, so the app can be
+    demonstrated without a live SMS gateway. That list is empty everywhere but development,
+    and ``config/settings/production.py`` refuses to start if it is not.
+
+    The substitution happens *here*, at generation, on purpose. Verification, expiry, the
+    attempt limit and the audit log all behave exactly as they do for a real code — there is
+    no bypass branch anywhere in the path that checks a submitted OTP, so there is nothing
+    that could be left enabled by accident.
+    """
+    fixed_numbers = getattr(settings, "DEV_FIXED_OTP_NUMBERS", [])
+    if mobile_no and mobile_no in fixed_numbers:
+        logger.warning(
+            "Issuing the fixed development OTP — this number is not secured",
+            extra={"mobile_no": mobile_no},
+        )
+        return settings.DEV_FIXED_OTP_CODE
+
     length = settings.OTP_LENGTH
     return "".join(secrets.choice("0123456789") for _ in range(length))
 
@@ -48,7 +67,7 @@ def issue_otp(*, mobile_no: str, purpose: str, payment: Payment | None = None) -
         mobile_no=mobile_no, purpose=purpose, is_verified=False, expires_at__gt=timezone.now()
     ).update(expires_at=timezone.now())
 
-    code = generate_code()
+    code = generate_code(mobile_no)
     otp = OTPLog.objects.create(
         purpose=purpose,
         mobile_no=mobile_no,
@@ -209,7 +228,10 @@ def send_sms(*, mobile_no: str, code: str, purpose: str) -> str | None:
         return None
 
     if provider == "console":
-        print(f"[SMS→{mobile_no}] Mait AI OTP for {purpose}: {code}")
+        # ASCII only. A Windows console runs on a legacy codepage that cannot encode
+        # characters like "→", and the UnicodeEncodeError surfaces as a 500 on the OTP
+        # endpoint — a long way from anything that looks like a printing problem.
+        print(f"[SMS to {mobile_no}] Mait AI OTP for {purpose}: {code}")
         return "console"
 
     raise NotImplementedError(

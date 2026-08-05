@@ -17,6 +17,12 @@ CORS_ALLOW_ALL_ORIGINS = True
 # OTPs print to the console instead of costing SMS credits.
 SMS_GATEWAY = {"PROVIDER": "console", "API_KEY": "", "SENDER_ID": "MAITAI"}
 
+# Numbers that always receive DEV_FIXED_OTP_CODE, for demonstrating the app without a live
+# SMS gateway. Set DEV_FIXED_OTP_NUMBERS in backend/.env. Production refuses to boot if this
+# is populated there.
+DEV_FIXED_OTP_NUMBERS = env.list("DEV_FIXED_OTP_NUMBERS", default=[])
+DEV_FIXED_OTP_CODE = env("DEV_FIXED_OTP_CODE", default="123456")
+
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # Tasks execute inline so a developer sees failures immediately rather than in a worker log.

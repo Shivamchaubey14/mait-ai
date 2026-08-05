@@ -76,3 +76,14 @@ if not env("FIELD_ENCRYPTION_KEY", default=""):
         "FIELD_ENCRYPTION_KEY is required in production — PII columns cannot be "
         "read or written without it."
     )
+
+# A known OTP is a demo convenience and a complete authentication bypass for anyone who
+# learns the number. Refusing to start is the only reliable guard: a warning in a log gets
+# missed, and by the time anyone reads it the door has been open for a week.
+DEV_FIXED_OTP_NUMBERS: list[str] = []
+if env.list("DEV_FIXED_OTP_NUMBERS", default=[]):
+    raise RuntimeError(
+        "DEV_FIXED_OTP_NUMBERS is set in a production environment. Any OTP-gated "
+        "action for those numbers — login and payment authorisation alike — would be "
+        "trivially forgeable. Remove it from the environment before deploying."
+    )
