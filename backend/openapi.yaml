@@ -6,6 +6,433 @@ info:
     Producer Company. Serves the Mait mobile app, the admin web portal and the Indent
     Easy integration.
 paths:
+  /api/v1/admin/uploads/:
+    get:
+      operationId: admin_uploads_list
+      description: SAP master-data upload and its history (SRS §6.1).
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - completed
+          - completed_with_errors
+          - failed
+          - processing
+          - queued
+        description: |-
+          * `queued` - Queued
+          * `processing` - Processing
+          * `completed` - Completed
+          * `completed_with_errors` - Completed with errors
+          * `failed` - Failed
+      - in: query
+        name: upload_type
+        schema:
+          type: string
+          enum:
+          - mait
+          - member
+          - mpp
+        description: |-
+          * `member` - Member Master
+          * `mait` - Mait / Vendor Master
+          * `mpp` - MPP / Sahayak Master
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDataUploadLogList'
+          description: ''
+  /api/v1/admin/uploads/{id}/:
+    get:
+      operationId: admin_uploads_retrieve
+      description: SAP master-data upload and its history (SRS §6.1).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Data upload.
+        required: true
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataUploadLog'
+          description: ''
+  /api/v1/admin/uploads/{id}/errors/:
+    get:
+      operationId: admin_uploads_errors_list
+      description: Rows rejected during import, with the spreadsheet row number so
+        they can be corrected at source (SRS §6.1.4). Valid rows from the same file
+        are already committed.
+      summary: Row-level error report
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Data upload.
+        required: true
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - completed
+          - completed_with_errors
+          - failed
+          - processing
+          - queued
+        description: |-
+          * `queued` - Queued
+          * `processing` - Processing
+          * `completed` - Completed
+          * `completed_with_errors` - Completed with errors
+          * `failed` - Failed
+      - in: query
+        name: upload_type
+        schema:
+          type: string
+          enum:
+          - mait
+          - member
+          - mpp
+        description: |-
+          * `member` - Member Master
+          * `mait` - Mait / Vendor Master
+          * `mpp` - MPP / Sahayak Master
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUploadErrorRowList'
+          description: ''
+  /api/v1/admin/uploads/maits/:
+    post:
+      operationId: admin_uploads_maits_create
+      description: SAP master-data upload and its history (SRS §6.1).
+      summary: Upload the SAP Mait/Vendor Master
+      tags:
+      - master-data
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataUploadLog'
+          description: ''
+  /api/v1/admin/uploads/members/:
+    post:
+      operationId: admin_uploads_members_create
+      description: Accepts Member.xlsx and queues it for asynchronous import. The
+        real export is ~105,000 rows with the header on row 6; both are handled. Upload
+        the MPP master first — member rows referencing an unknown MPP are rejected
+        individually.
+      summary: Upload the SAP Member Master
+      tags:
+      - master-data
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataUploadLog'
+          description: ''
+  /api/v1/admin/uploads/mpp/:
+    post:
+      operationId: admin_uploads_mpp_create
+      description: Accepts Sahyak.xlsx. This file carries both the MPP and its assigned
+        Sahayak (Mait), so it creates or refreshes both, and it is what establishes
+        the MPP-to-Mait link. Upload it before the Member master.
+      summary: Upload the SAP MPP/Sahayak Master
+      tags:
+      - master-data
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataUploadLog'
+          description: ''
+  /api/v1/admin/users/:
+    get:
+      operationId: admin_users_list
+      description: Platform user administration (SRS §9.10).
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: role
+        schema:
+          type: string
+          enum:
+          - admin
+          - mait
+          - mpp_operator
+          - super_admin
+        description: |-
+          * `super_admin` - Super Admin
+          * `admin` - Admin / Back-office
+          * `mpp_operator` - MPP Operator
+          * `mait` - Mait (Field Agent)
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAdminUserList'
+          description: ''
+    post:
+      operationId: admin_users_create
+      description: Maits are not created here. They are activated from an existing
+        SAP Sahayak record via `/admin/users/activate-mait/`, so every field login
+        traces back to a real Sahayak.
+      summary: Create an Admin or MPP Operator
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminUserCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminUserCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+          description: ''
+  /api/v1/admin/users/{id}/:
+    get:
+      operationId: admin_users_retrieve
+      description: Platform user administration (SRS §9.10).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+          description: ''
+    patch:
+      operationId: admin_users_partial_update
+      description: Platform user administration (SRS §9.10).
+      summary: Update, activate or deactivate an account
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+          description: ''
+  /api/v1/admin/users/activate-mait/:
+    post:
+      operationId: admin_users_activate_mait_create
+      description: |-
+        Gives an existing SAP Sahayak record a login and sets the mobile number their OTP will be sent to.
+
+        The number is set here because 2,886 of 3,110 Sahayak records arrive from SAP without one, and OTP is a Mait's only way in. No password is created — that is what keeps OTP the sole route into a field account.
+      summary: Activate a Mait
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaitActivationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MaitActivationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MaitActivationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+          description: ''
+  /api/v1/admin/users/pending-maits/:
+    get:
+      operationId: admin_users_pending_maits_retrieve
+      description: Sahayak records with no login yet, so an admin can work through
+        them. `needs_mobile` flags the ones whose SAP record has no number — those
+        cannot receive an OTP until one is supplied at activation.
+      summary: Maits awaiting activation
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/auth/login/:
     post:
       operationId: auth_login_create
@@ -34,6 +461,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TokenPair'
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      description: Blacklists the refresh token so it cannot be exchanged again. The
+        access token remains valid until it expires — it is short-lived by design
+        (~15 min), and revoking it would mean a database lookup on every request,
+        which is exactly what stateless JWT avoids.
+      summary: Log out
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '205':
+          description: No response body
+  /api/v1/auth/me/:
+    get:
+      operationId: auth_me_retrieve
+      description: The first call the mobile app makes after login. For a Mait it
+        returns their assigned MPP codes, which scope everything the app will show.
+      summary: Current user
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
           description: ''
   /api/v1/auth/otp/send/:
     post:
@@ -131,50 +602,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenRefresh'
           description: ''
-  /api/v1/auth/logout/:
-    post:
-      operationId: auth_logout_create
-      description: Blacklists the refresh token so it cannot be exchanged again. The
-        access token remains valid until it expires — it is short-lived by design
-        (~15 min), and revoking it would mean a database lookup on every request,
-        which is exactly what stateless JWT avoids.
-      summary: Log out
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LogoutRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/LogoutRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/LogoutRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '205':
-          description: No response body
-  /api/v1/auth/me/:
-    get:
-      operationId: auth_me_retrieve
-      description: The first call the mobile app makes after login. For a Mait it
-        returns their assigned MPP codes, which scope everything the app will show.
-      summary: Current user
-      tags:
-      - auth
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CurrentUser'
-          description: ''
   /api/v1/auth/time/:
     get:
       operationId: auth_time_retrieve
@@ -197,135 +624,15 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
-  /api/v1/admin/users/:
-    post:
-      operationId: admin_users_create
-      description: Maits are not created here. They are activated from an existing
-        SAP Sahayak record via `/admin/users/activate-mait/`, so every field login
-        traces back to a real Sahayak.
-      summary: Create an Admin or MPP Operator
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminUserCreateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AdminUserCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AdminUserCreateRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminUser'
-          description: ''
+  /api/v1/health/:
     get:
-      operationId: admin_users_list
-      description: Platform user administration (SRS §9.10).
-      parameters:
-      - in: query
-        name: is_active
-        schema:
-          type: boolean
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - in: query
-        name: role
-        schema:
-          type: string
-          enum:
-          - admin
-          - mait
-          - mpp_operator
-          - super_admin
-        description: |-
-          * `super_admin` - Super Admin
-          * `admin` - Admin / Back-office
-          * `mpp_operator` - MPP Operator
-          * `mait` - Mait (Field Agent)
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+      operationId: health_retrieve
+      description: Liveness — the process is up. Used by the Kubernetes liveness probe.
+      summary: Liveness check
       tags:
-      - auth
+      - ops
       security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedAdminUserList'
-          description: ''
-  /api/v1/admin/users/activate-mait/:
-    post:
-      operationId: admin_users_activate_mait_create
-      description: |-
-        Gives an existing SAP Sahayak record a login and sets the mobile number their OTP will be sent to.
-
-        The number is set here because 2,886 of 3,110 Sahayak records arrive from SAP without one, and OTP is a Mait's only way in. No password is created — that is what keeps OTP the sole route into a field account.
-      summary: Activate a Mait
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MaitActivationRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MaitActivationRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MaitActivationRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminUser'
-          description: ''
-  /api/v1/admin/users/pending-maits/:
-    get:
-      operationId: admin_users_pending_maits_retrieve
-      description: Sahayak records with no login yet, so an admin can work through
-        them. `needs_mobile` flags the ones whose SAP record has no number — those
-        cannot receive an OTP until one is supplied at activation.
-      summary: Maits awaiting activation
-      tags:
-      - auth
-      security:
-      - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -334,72 +641,63 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
-  /api/v1/admin/users/{id}/:
-    patch:
-      operationId: admin_users_partial_update
-      description: Platform user administration (SRS §9.10).
-      summary: Update, activate or deactivate an account
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this user.
-        required: true
+  /api/v1/health/ready/:
+    get:
+      operationId: health_ready_retrieve
+      description: |-
+        Readiness — dependencies are reachable.
+
+        Failing readiness pulls the pod out of rotation without killing it, so a brief Redis
+        blip degrades capacity instead of causing a crash loop (docs/DEPLOYMENT.md).
+      summary: Readiness check
       tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedAdminUserUpdateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedAdminUserUpdateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedAdminUserUpdateRequest'
+      - ops
       security:
-      - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminUser'
+                type: object
+                additionalProperties: {}
           description: ''
-    get:
-      operationId: admin_users_retrieve
-      description: Platform user administration (SRS §9.10).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this user.
-        required: true
-      tags:
-      - auth
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
+        '503':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminUser'
+                type: object
+                additionalProperties: {}
           description: ''
-  /api/v1/admin/uploads/:
+  /api/v1/members/:
     get:
-      operationId: admin_uploads_list
-      description: SAP master-data upload and its history (SRS §6.1).
+      operationId: members_list
+      description: |-
+        Member search (SRS §9.3).
+
+        Backed by the ``member_mpp_name_idx`` composite index — the table holds 105k+ rows, so an
+        unindexed search here would be the slowest thing a Mait does all day.
+      summary: Search members
       parameters:
+      - in: query
+        name: activation_status
+        schema:
+          type: string
       - name: limit
         required: false
         in: query
         description: Number of results to return per page.
         schema:
           type: integer
+      - in: query
+        name: mobile_no
+        schema:
+          type: string
+      - in: query
+        name: mpp__mpp_code
+        schema:
+          type: string
+        description: Restrict to one MPP. The mobile app always sends this.
       - name: offset
         required: false
         in: query
@@ -413,33 +711,10 @@ paths:
         schema:
           type: string
       - in: query
-        name: status
+        name: search
         schema:
           type: string
-          enum:
-          - completed
-          - completed_with_errors
-          - failed
-          - processing
-          - queued
-        description: |-
-          * `queued` - Queued
-          * `processing` - Processing
-          * `completed` - Completed
-          * `completed_with_errors` - Completed with errors
-          * `failed` - Failed
-      - in: query
-        name: upload_type
-        schema:
-          type: string
-          enum:
-          - mait
-          - member
-          - mpp
-        description: |-
-          * `member` - Member Master
-          * `mait` - Mait / Vendor Master
-          * `mpp` - MPP / Sahayak Master
+        description: Matches member name, member code or mobile number.
       tags:
       - master-data
       security:
@@ -449,98 +724,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedDataUploadLogList'
+                $ref: '#/components/schemas/PaginatedMemberListList'
           description: ''
-  /api/v1/admin/uploads/maits/:
-    post:
-      operationId: admin_uploads_maits_create
-      description: SAP master-data upload and its history (SRS §6.1).
-      summary: Upload the SAP Mait/Vendor Master
-      tags:
-      - master-data
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MasterUploadRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MasterUploadRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '202':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DataUploadLog'
-          description: ''
-  /api/v1/admin/uploads/members/:
-    post:
-      operationId: admin_uploads_members_create
-      description: Accepts Member.xlsx and queues it for asynchronous import. The
-        real export is ~105,000 rows with the header on row 6; both are handled. Upload
-        the MPP master first — member rows referencing an unknown MPP are rejected
-        individually.
-      summary: Upload the SAP Member Master
-      tags:
-      - master-data
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MasterUploadRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MasterUploadRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '202':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DataUploadLog'
-          description: ''
-  /api/v1/admin/uploads/mpp/:
-    post:
-      operationId: admin_uploads_mpp_create
-      description: Accepts Sahyak.xlsx. This file carries both the MPP and its assigned
-        Sahayak (Mait), so it creates or refreshes both, and it is what establishes
-        the MPP-to-Mait link. Upload it before the Member master.
-      summary: Upload the SAP MPP/Sahayak Master
-      tags:
-      - master-data
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MasterUploadRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MasterUploadRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '202':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DataUploadLog'
-          description: ''
-  /api/v1/admin/uploads/{id}/:
+  /api/v1/members/{member_code}/:
     get:
-      operationId: admin_uploads_retrieve
-      description: SAP master-data upload and its history (SRS §6.1).
+      operationId: members_retrieve
+      description: |-
+        Member search (SRS §9.3).
+
+        Backed by the ``member_mpp_name_idx`` composite index — the table holds 105k+ rows, so an
+        unindexed search here would be the slowest thing a Mait does all day.
       parameters:
       - in: path
-        name: id
+        name: member_code
         schema:
-          type: integer
-        description: A unique integer value identifying this Data upload.
+          type: string
         required: true
       tags:
       - master-data
@@ -551,78 +749,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DataUploadLog'
-          description: ''
-  /api/v1/admin/uploads/{id}/errors/:
-    get:
-      operationId: admin_uploads_errors_list
-      description: Rows rejected during import, with the spreadsheet row number so
-        they can be corrected at source (SRS §6.1.4). Valid rows from the same file
-        are already committed.
-      summary: Row-level error report
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this Data upload.
-        required: true
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - in: query
-        name: status
-        schema:
-          type: string
-          enum:
-          - completed
-          - completed_with_errors
-          - failed
-          - processing
-          - queued
-        description: |-
-          * `queued` - Queued
-          * `processing` - Processing
-          * `completed` - Completed
-          * `completed_with_errors` - Completed with errors
-          * `failed` - Failed
-      - in: query
-        name: upload_type
-        schema:
-          type: string
-          enum:
-          - mait
-          - member
-          - mpp
-        description: |-
-          * `member` - Member Master
-          * `mait` - Mait / Vendor Master
-          * `mpp` - MPP / Sahayak Master
-      tags:
-      - master-data
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedUploadErrorRowList'
+                $ref: '#/components/schemas/MemberDetail'
           description: ''
   /api/v1/mpp/:
     get:
@@ -736,88 +863,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/MPPDetail'
           description: ''
-  /api/v1/members/:
-    get:
-      operationId: members_list
-      description: |-
-        Member search (SRS §9.3).
-
-        Backed by the ``member_mpp_name_idx`` composite index — the table holds 105k+ rows, so an
-        unindexed search here would be the slowest thing a Mait does all day.
-      summary: Search members
-      parameters:
-      - in: query
-        name: activation_status
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - in: query
-        name: mobile_no
-        schema:
-          type: string
-      - in: query
-        name: mpp__mpp_code
-        schema:
-          type: string
-        description: Restrict to one MPP. The mobile app always sends this.
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - in: query
-        name: search
-        schema:
-          type: string
-        description: Matches member name, member code or mobile number.
-      tags:
-      - master-data
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedMemberListList'
-          description: ''
-  /api/v1/members/{member_code}/:
-    get:
-      operationId: members_retrieve
-      description: |-
-        Member search (SRS §9.3).
-
-        Backed by the ``member_mpp_name_idx`` composite index — the table holds 105k+ rows, so an
-        unindexed search here would be the slowest thing a Mait does all day.
-      parameters:
-      - in: path
-        name: member_code
-        schema:
-          type: string
-        required: true
-      tags:
-      - master-data
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MemberDetail'
-          description: ''
   /api/v1/non-members/:
     post:
       operationId: non_members_create
@@ -866,51 +911,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NonMember'
-          description: ''
-  /api/v1/health/:
-    get:
-      operationId: health_retrieve
-      description: Liveness — the process is up. Used by the Kubernetes liveness probe.
-      summary: Liveness check
-      tags:
-      - ops
-      security:
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-          description: ''
-  /api/v1/health/ready/:
-    get:
-      operationId: health_ready_retrieve
-      description: |-
-        Readiness — dependencies are reachable.
-
-        Failing readiness pulls the pod out of rotation without killing it, so a brief Redis
-        blip degrades capacity instead of causing a crash loop (docs/DEPLOYMENT.md).
-      summary: Readiness check
-      tags:
-      - ops
-      security:
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
-          description: ''
-        '503':
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: {}
           description: ''
 components:
   schemas:

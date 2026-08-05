@@ -214,7 +214,12 @@ SPECTACULAR_SETTINGS = {
     "REDOC_DIST": "SIDECAR",
     "SCHEMA_PATH_PREFIX": "/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
-    "SORT_OPERATIONS": False,
+    # Must stay True. The generated schema is committed and CI diffs it to catch contract
+    # drift, so the output has to be byte-identical between machines. Left unsorted, the
+    # operation order follows introspection order and differs between environments — the
+    # drift check then fails on a file whose content is identical, which trains everyone to
+    # ignore it.
+    "SORT_OPERATIONS": True,
     "TAGS": [
         {"name": "auth", "description": "Authentication and session management"},
         {"name": "master-data", "description": "SAP-sourced MPP, Mait and Member data"},
