@@ -26,6 +26,25 @@ import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '
 /** Fewer than this of one breed is worth flagging on the row itself. */
 const LOW_PER_BREED = 3;
 
+/**
+ * An icon per product, so a row is recognisable before it is read.
+ *
+ * Keyed on the catalogue code rather than the name: names are editable from the admin and
+ * translated, codes are not. Anything unmapped falls back to a box, which is honest — it is
+ * something issued to the Mait whose shape we do not know.
+ */
+const PRODUCT_ICON: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
+  SHEATH: 'medkit-outline',
+  GLOVES: 'hand-left-outline',
+  LN2: 'snow-outline',
+  AI_GUN: 'construct-outline',
+  EAR_TAG_APPLICATOR: 'pricetag-outline',
+  THAWING_TRAY: 'grid-outline',
+  THERMO_MONITOR: 'thermometer-outline',
+};
+
+const FALLBACK_ICON: React.ComponentProps<typeof Ionicons>['name'] = 'cube-outline';
+
 export default function StockScreen({
   onOpenIndents,
 }: {
@@ -67,6 +86,8 @@ export default function StockScreen({
     const found = config(code);
     return found ? t(`aiFlow.animalType.${found.animal_type}`) : t('stock.unknownAnimal');
   };
+
+  const buffalo = (code: string) => config(code)?.animal_type === 'BUFF';
 
   return (
     <View style={styles.root}>
@@ -147,7 +168,15 @@ export default function StockScreen({
                     style={[styles.row, low && styles.rowLow]}
                     testID={`stock-${code}`}
                   >
-                    <View style={styles.swatch} />
+                    <View style={[styles.swatch, buffalo(code) && styles.swatchBuffalo]}>
+                      {/* Cow and buffalo share a glyph and differ by colour: the two are the
+                          same kind of thing, and the breed name below already names it. */}
+                      <Ionicons
+                        name="paw"
+                        size={16}
+                        color={buffalo(code) ? colors.ink : colors.primaryDark}
+                      />
+                    </View>
                     <View style={styles.rowBody}>
                       <Text style={styles.rowTitle} numberOfLines={1}>
                         {label(code)}
@@ -172,7 +201,13 @@ export default function StockScreen({
                 <Text style={styles.section}>{t('stock.consumables')}</Text>
                 {(stock.data?.consumables ?? []).map(item => (
                   <View key={item.code || item.name} style={styles.row}>
-                    <View style={[styles.swatch, styles.swatchAlt]} />
+                    <View style={[styles.swatch, styles.swatchAlt]}>
+                      <Ionicons
+                        name={PRODUCT_ICON[item.code] ?? FALLBACK_ICON}
+                        size={16}
+                        color={colors.info}
+                      />
+                    </View>
                     <View style={styles.rowBody}>
                       <Text style={styles.rowTitle} numberOfLines={1}>
                         {item.name}
@@ -194,7 +229,13 @@ export default function StockScreen({
                 <Text style={styles.section}>{t('stock.assets')}</Text>
                 {(stock.data?.assets ?? []).map(item => (
                   <View key={item.code || item.name} style={styles.row}>
-                    <View style={[styles.swatch, styles.swatchAsset]} />
+                    <View style={[styles.swatch, styles.swatchAsset]}>
+                      <Ionicons
+                        name={PRODUCT_ICON[item.code] ?? FALLBACK_ICON}
+                        size={16}
+                        color={colors.secondaryPressed}
+                      />
+                    </View>
                     <View style={styles.rowBody}>
                       <Text style={styles.rowTitle} numberOfLines={1}>
                         {item.name}
@@ -296,14 +337,21 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.primaryWash,
   },
+  swatchBuffalo: { backgroundColor: colors.background },
   swatchAlt: {
     backgroundColor: colors.infoWash,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  swatchAsset: { backgroundColor: colors.secondaryWash },
+  swatchAsset: {
+    backgroundColor: colors.secondaryWash,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   indentsLink: {
     flexDirection: 'row',
