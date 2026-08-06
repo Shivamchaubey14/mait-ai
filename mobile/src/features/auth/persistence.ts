@@ -1,0 +1,51 @@
+/**
+ * Mirrors the auth slice into secure storage.
+ *
+ * Middleware rather than a call at each site: tokens change in three places — signing in, the
+ * silent refresh on a 401, and signing out — and the one that gets forgotten is the refresh,
+ * which is also the one that matters most. It fires every fifteen minutes, and a stored token
+ * that stops being updated is a Mait signed out overnight for no reason they can see.
+ */
+
+import type { Middleware } from '@reduxjs/toolkit';
+
+import { loggedIn, loggedOut, tokensRefreshed } from './authSlice';
+import { clearSession, saveSession } from './session';
+
+/** Actions that change what should be on disk. */
+const WRITES: string[] = [loggedIn.type, tokensRefreshed.type];
+
+export const sessionPersistence: Middleware = store => next => action => {
+  const result = next(action);
+  const type = (action as { type?: string })?.type;
+
+  if (type && WRITES.includes(type)) {
+    const { auth } = store.getState() as {
+      auth: {
+        accessToken: string | null;
+        refreshToken: string | null;
+        user: Parameters<typeof loggedIn>[0]['user'] | null;
+        assignedMppCodes: string[];
+      };
+    };
+
+    // Written after the reducer, so what lands on disk is the state the app is actually in
+    // rather than the payload the action carried.
+    if (auth.accessToken && auth.refreshToken && auth.user) {
+      saveSession({
+        accessToken: auth.accessToken,
+        refreshToken: auth.refreshToken,
+        user: auth.user,
+        assignedMppCodes: auth.assignedMppCodes,
+      });
+    }
+  }
+
+  if (type === loggedOut.type) {
+    // Signing out is the only thing that clears it. Every other failure leaves the session
+    // in place, so a dropped connection never costs a Mait their login.
+    clearSession();
+  }
+
+  return result;
+};

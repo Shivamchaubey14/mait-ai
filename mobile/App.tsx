@@ -6,7 +6,7 @@
  * capture flow based on whether there is a session.
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
@@ -14,10 +14,23 @@ import { Quicksand_600SemiBold, Quicksand_700Bold, useFonts } from '@expo-google
 import { NunitoSans_400Regular, NunitoSans_600SemiBold } from '@expo-google-fonts/nunito-sans';
 
 import '@/i18n';
+import { sessionRestored } from '@/features/auth/authSlice';
+import { loadSession } from '@/features/auth/session';
 import SplashScreen from '@/features/auth/SplashScreen';
 import RootNavigator from '@/navigation';
-import { store } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { colors } from '@theme/tokens';
+
+/**
+ * Holds the splash until both the fonts and the stored session are ready.
+ *
+ * Rendering the navigator first would show the login screen for a frame on every cold start,
+ * which a Mait reads as having been signed out — the exact thing persistence exists to stop.
+ */
+function Shell({ fontsLoaded }: { fontsLoaded: boolean }): React.JSX.Element {
+  const restored = useAppSelector(state => state.auth.restored);
+  return fontsLoaded && restored ? <RootNavigator /> : <SplashScreen />;
+}
 
 export default function App(): React.JSX.Element {
   // Quicksand for headings, Nunito Sans for body (docs/SCREEN_INVENTORY.md). Rendering
@@ -30,6 +43,26 @@ export default function App(): React.JSX.Element {
     NunitoSans_600SemiBold,
   });
 
+  // Read once at launch. A Mait stays signed in until they sign out — the access token
+  // expires in fifteen minutes and refreshes itself, so the session lasts as long as the
+  // refresh token does rather than as long as the app happens to stay in memory.
+  useEffect(() => {
+    loadSession().then(session => {
+      store.dispatch(
+        sessionRestored(
+          session
+            ? {
+                access: session.accessToken,
+                refresh: session.refreshToken,
+                user: session.user,
+                assignedMppCodes: session.assignedMppCodes,
+              }
+            : null,
+        ),
+      );
+    });
+  }, []);
+
   return (
     <Provider store={store}>
       <SafeAreaProvider>
@@ -37,7 +70,7 @@ export default function App(): React.JSX.Element {
         {/* The splash renders in the system font for the moment before the real ones
             arrive. That is deliberate — a blank green field would look like a hang, and the
             brand mark is a card of type either way. */}
-        {fontsLoaded ? <RootNavigator /> : <SplashScreen />}
+        <Shell fontsLoaded={fontsLoaded} />
       </SafeAreaProvider>
     </Provider>
   );

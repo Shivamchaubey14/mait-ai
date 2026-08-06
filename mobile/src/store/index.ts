@@ -6,13 +6,14 @@ import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
 
 import { api } from '@/api/client';
 import authReducer from '@/features/auth/authSlice';
+import { sessionPersistence } from '@/features/auth/persistence';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     [api.reducerPath]: api.reducer,
   },
-  middleware: getDefault => getDefault().concat(api.middleware),
+  middleware: getDefault => getDefault().concat(api.middleware, sessionPersistence),
 });
 
 // Enables refetchOnReconnect, which is what makes the app recover on its own when a Mait

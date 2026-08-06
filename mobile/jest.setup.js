@@ -38,6 +38,23 @@ jest.mock('@react-native-async-storage/async-storage', () => {
   };
 });
 
+// The Keystore has no JS implementation under Jest. An in-memory stand-in keeps the one
+// behaviour the session code depends on: a missing key resolves to null rather than throwing.
+jest.mock('expo-secure-store', () => {
+  const store = new Map();
+  return {
+    setItemAsync: jest.fn((key, value) => {
+      store.set(key, String(value));
+      return Promise.resolve();
+    }),
+    getItemAsync: jest.fn(key => Promise.resolve(store.has(key) ? store.get(key) : null)),
+    deleteItemAsync: jest.fn(key => {
+      store.delete(key);
+      return Promise.resolve();
+    }),
+  };
+});
+
 jest.mock('@react-native-community/netinfo', () => ({
   addEventListener: jest.fn(),
   // Tests default to "online". Offline behaviour is opt-in per test so a suite never
