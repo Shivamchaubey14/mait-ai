@@ -9,6 +9,9 @@ compromised app.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -17,6 +20,11 @@ from apps.masterdata.models import MPP, Member, NonMember
 from apps.payments.models import Payment
 
 from .models import AIEvent, AIEventTimeline
+
+# A phone camera at a sensible quality lands well under this. The ceiling exists because the
+# upload happens on a village connection: a 20 MB photo is a Mait standing in a field
+# watching a progress bar that will not finish.
+MAX_PHOTO_BYTES = 8 * 1024 * 1024
 
 
 class PaymentSummarySerializer(serializers.ModelSerializer):
@@ -113,6 +121,42 @@ class AIEventSerializer(serializers.ModelSerializer):
         if payment is None:
             return None
         return PaymentSummarySerializer(payment).data
+
+
+class AIEventPhotoSerializer(serializers.Serializer):
+    """
+    The proof photo and where and when it was taken (SRS §6.3 step 5).
+
+    ``performed_at`` comes from the device, not the server clock. An event captured offline
+    may not reach us for hours, and the report has to show when the insemination actually
+    happened — a server timestamp would quietly move every offline event to whenever the
+    Mait next found signal.
+
+    GPS is required. The photo alone proves an animal was photographed; the pin is what ties
+    it to the village it was billed to.
+    """
+
+    photo = serializers.ImageField()
+    gps_lat = serializers.DecimalField(max_digits=10, decimal_places=7)
+    gps_lng = serializers.DecimalField(max_digits=10, decimal_places=7)
+    performed_at = serializers.DateTimeField(required=False)
+
+    def validate_photo(self, value):
+        if value.size > MAX_PHOTO_BYTES:
+            raise serializers.ValidationError(
+                f"The photo is {value.size // 1024 // 1024} MB. "
+                f"Keep it under {MAX_PHOTO_BYTES // 1024 // 1024} MB."
+            )
+        return value
+
+    def validate_performed_at(self, value):
+        # A device clock can be wrong, and an event stamped in the future would sort ahead of
+        # everything real. Trusting it forward is the only direction that corrupts a report.
+        if value > timezone.now() + timedelta(minutes=5):
+            raise serializers.ValidationError(
+                "This is stamped in the future. Check the phone's date and time."
+            )
+        return value
 
 
 class AIEventCreateSerializer(serializers.Serializer):

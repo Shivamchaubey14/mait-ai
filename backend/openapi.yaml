@@ -611,6 +611,70 @@ paths:
               schema:
                 $ref: '#/components/schemas/AIEvent'
           description: ''
+  /api/v1/ai-events/{id}/complete/:
+    post:
+      operationId: ai_events_complete_create
+      description: |-
+        The only endpoint that moves inventory. Deduction and completion happen in one transaction with the inventory row locked, so two concurrent calls cannot both consume one straw (ADR 0002).
+
+        Fails closed: `409` if the payment is not verified, and the straw is untouched. Completing an event that is already complete is a no-op rather than an error — a retry whose first response was lost lands here, and the honest answer is that it is done.
+
+        Send `Idempotency-Key` from the offline queue.
+      summary: Complete the event and deduct the straw
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this ai event.
+        required: true
+      tags:
+      - ai-events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIEvent'
+          description: ''
+  /api/v1/ai-events/{id}/photo/:
+    patch:
+      operationId: ai_events_photo_partial_update
+      description: |-
+        Multipart: `photo`, `gps_lat`, `gps_lng`, and optionally `performed_at`.
+
+        `performed_at` is the device's clock, not the server's. An event captured offline may not arrive for hours, and the report must show when the insemination happened rather than when the phone found signal.
+
+        Only valid from `straw_verified`: a photo without a checked straw is a photograph of an animal, not evidence of an insemination.
+      summary: Attach the proof photo
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this ai event.
+        required: true
+      tags:
+      - ai-events
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAIEventPhotoRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAIEventPhotoRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIEvent'
+          description: ''
   /api/v1/ai-events/{id}/timeline/:
     get:
       operationId: ai_events_timeline_list
@@ -3371,6 +3435,33 @@ components:
       required:
       - password
       - username
+    PatchedAIEventPhotoRequest:
+      type: object
+      description: |-
+        The proof photo and where and when it was taken (SRS §6.3 step 5).
+
+        ``performed_at`` comes from the device, not the server clock. An event captured offline
+        may not reach us for hours, and the report has to show when the insemination actually
+        happened — a server timestamp would quietly move every offline event to whenever the
+        Mait next found signal.
+
+        GPS is required. The photo alone proves an animal was photographed; the pin is what ties
+        it to the village it was billed to.
+      properties:
+        photo:
+          type: string
+          format: binary
+        gps_lat:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+        gps_lng:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+        performed_at:
+          type: string
+          format: date-time
     PatchedAdminUserUpdateRequest:
       type: object
       description: Activate, deactivate or amend an account (SRS §6.8.1).

@@ -29,7 +29,23 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-secure-store", "expo-font"],
+    "plugins": [
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Mait AI uses the camera to photograph the animal as proof of the insemination.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Mait AI stamps the AI photo with where it was taken, so the event can be tied to the right village."
+        }
+      ]
+    ],
     "extra": {
       "apiUrl": "http://127.0.0.1:8000/api/v1"
     }

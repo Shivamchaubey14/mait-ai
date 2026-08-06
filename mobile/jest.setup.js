@@ -13,6 +13,31 @@ jest.mock('@expo/vector-icons/Ionicons', () => {
   return ({ name, ...props }) => React.createElement(Text, props, name);
 });
 
+// AsyncStorage is a native module with no JS implementation under Jest. This in-memory stand
+// -in keeps the semantics the offline queue actually depends on: values come back as the
+// strings they went in as, and a missing key resolves to null rather than throwing.
+jest.mock('@react-native-async-storage/async-storage', () => {
+  const store = new Map();
+  return {
+    __esModule: true,
+    default: {
+      getItem: key => Promise.resolve(store.has(key) ? store.get(key) : null),
+      setItem: (key, value) => {
+        store.set(key, String(value));
+        return Promise.resolve();
+      },
+      removeItem: key => {
+        store.delete(key);
+        return Promise.resolve();
+      },
+      clear: () => {
+        store.clear();
+        return Promise.resolve();
+      },
+    },
+  };
+});
+
 jest.mock('@react-native-community/netinfo', () => ({
   addEventListener: jest.fn(),
   // Tests default to "online". Offline behaviour is opt-in per test so a suite never

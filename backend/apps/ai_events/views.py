@@ -14,6 +14,8 @@ from django.db.models import Q
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -24,8 +26,14 @@ from apps.core.permissions import IsMait
 from apps.core.services import record_audit
 
 from .models import AIEvent
-from .serializers import AIEventCreateSerializer, AIEventSerializer, AIEventTimelineSerializer
-from .services import start_ai_event
+from .serializers import (
+    AIEventCreateSerializer,
+    AIEventPhotoSerializer,
+    AIEventSerializer,
+    AIEventTimelineSerializer,
+)
+from .services import attach_photo, complete_ai_event, start_ai_event
+from .storage import store_photo
 
 
 class AIEventFilter(django_filters.FilterSet):
@@ -74,12 +82,13 @@ class AIEventViewSet(
     # the `id` path parameter as a string.
     queryset = AIEvent.objects.none()
     filterset_class = AIEventFilter
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "patch", "head", "options"]
 
     def get_permissions(self):
-        # Capture happens in the field, by the Mait standing with the animal. Reading is
+        # Capture happens in the field, by the Mait standing with the animal — including the
+        # photo and the completion, which are the two writes that matter most. Reading is
         # wider: an admin resolving a dispute needs the same record.
-        if self.action == "create":
+        if self.action in ("create", "photo", "complete"):
             return [IsMait()]
         return [IsAuthenticated()]
 
@@ -188,6 +197,78 @@ class AIEventViewSet(
             },
         )
         return Response(AIEventSerializer(event).data, status=status.HTTP_201_CREATED)
+
+    # -- capture -------------------------------------------------------------------------
+    @extend_schema(
+        summary="Attach the proof photo",
+        description=(
+            "Multipart: `photo`, `gps_lat`, `gps_lng`, and optionally `performed_at`.\n\n"
+            "`performed_at` is the device's clock, not the server's. An event captured "
+            "offline may not arrive for hours, and the report must show when the "
+            "insemination happened rather than when the phone found signal.\n\n"
+            "Only valid from `straw_verified`: a photo without a checked straw is a "
+            "photograph of an animal, not evidence of an insemination."
+        ),
+        request=AIEventPhotoSerializer,
+        responses={200: AIEventSerializer},
+    )
+    @action(detail=True, methods=["patch"], parser_classes=[MultiPartParser, FormParser])
+    def photo(self, request, pk=None):
+        event = self.get_object()
+        self._assert_own(event, request)
+
+        serializer = AIEventPhotoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # Written before the transition, and outside any transaction: the upload takes as
+        # long as the village connection takes, and nothing else should wait on it.
+        photo_url = store_photo(event, data["photo"])
+
+        event = attach_photo(
+            event,
+            photo_url=photo_url,
+            gps_lat=data["gps_lat"],
+            gps_lng=data["gps_lng"],
+            performed_at=data.get("performed_at"),
+            actor=request.user,
+        )
+        return Response(AIEventSerializer(event).data)
+
+    @extend_schema(
+        summary="Complete the event and deduct the straw",
+        description=(
+            "The only endpoint that moves inventory. Deduction and completion happen in one "
+            "transaction with the inventory row locked, so two concurrent calls cannot both "
+            "consume one straw (ADR 0002).\n\n"
+            "Fails closed: `409` if the payment is not verified, and the straw is untouched. "
+            "Completing an event that is already complete is a no-op rather than an error — "
+            "a retry whose first response was lost lands here, and the honest answer is that "
+            "it is done.\n\n"
+            "Send `Idempotency-Key` from the offline queue."
+        ),
+        request=None,
+        responses={200: AIEventSerializer},
+    )
+    @idempotent(endpoint="ai-events.complete")
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        event = self.get_object()
+        self._assert_own(event, request)
+
+        event = complete_ai_event(event, actor=request.user)
+        return Response(AIEventSerializer(event).data)
+
+    def _assert_own(self, event, request):
+        """
+        A write only ever touches the caller's own event.
+
+        The queryset already scopes reads, but an admin can read every event — and an admin
+        must not be able to attach a photo or complete an insemination they were not at.
+        """
+        mait = getattr(request.user, "mait_profile", None)
+        if mait is None or event.mait_id != mait.id:
+            raise PermissionDenied("This is not your event.")
 
     # -- read ----------------------------------------------------------------------------
     @extend_schema(
