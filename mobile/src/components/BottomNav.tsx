@@ -111,17 +111,19 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
 
-  // A circle above the bar. Unlabelled, because the empty state points an arrow at it and
-  // says what it does — teaching it once beats captioning it forever.
+  // Sits on the bar's top edge rather than floating over it. The white ring is what keeps it
+  // legible there: without it the green disc and the white card merge at the join, and on a
+  // sunlit cheap screen the button loses its edge entirely.
   fab: {
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
     width: FAB,
     height: FAB,
-    marginBottom: spacing[3],
     borderRadius: FAB / 2,
     backgroundColor: colors.primary,
+    borderWidth: 4,
+    borderColor: colors.surface,
     ...shadows.raised,
   },
   fabPressed: { backgroundColor: colors.primaryPressed },
@@ -129,7 +131,8 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing[2],
+    paddingTop: spacing[3],
+    paddingBottom: spacing[2],
     paddingHorizontal: spacing[2],
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

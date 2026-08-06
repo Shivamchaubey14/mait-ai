@@ -71,7 +71,9 @@ function CentredState({
         <Ionicons name={icon} size={26} color={tint} />
       </View>
       <Text style={styles.centredTitle}>{title}</Text>
-      <Text style={styles.centredBody}>{body}</Text>
+      <Text style={styles.centredBody} adjustsFontSizeToFit numberOfLines={2}>
+        {body}
+      </Text>
 
       {!!action && (
         <Pressable
@@ -253,7 +255,7 @@ const styles = StyleSheet.create({
   centred: {
     alignItems: 'center',
     paddingVertical: spacing[7],
-    paddingHorizontal: spacing[4],
+    paddingHorizontal: spacing[2],
   },
   centredIcon: {
     width: 64,
@@ -269,6 +271,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing[2],
+    // Wide enough for one line of the copy these states carry; Devanagari runs longer than
+    // English, so two lines stays available rather than clipping.
+    paddingHorizontal: 0,
   },
   centredCta: {
     alignItems: 'center',
