@@ -165,22 +165,6 @@ a:hover {
   gap: var(--space-3);
 }
 
-/* Signing out is a labelled action, not a glyph to guess at. A back-office machine is shared
-   and the portal renders member PII, so leaving a session open is the one mistake worth
-   making obvious to undo. */
-.btn--logout,
-.btn--logout:hover {
-  border-radius: var(--radius-pill);
-  color: var(--color-surface);
-  background: var(--color-error);
-  border-color: var(--color-error);
-}
-
-.btn--logout:hover {
-  /* Darkened rather than tinted, so the hover reads on a button that is already saturated. */
-  filter: brightness(0.92);
-}
-
 /* --- controls ---------------------------------------------------------------------------- */
 .btn {
   display: inline-flex;
@@ -220,6 +204,25 @@ a:hover {
   color: var(--color-surface);
   background: var(--color-ink);
   border-color: var(--color-ink);
+}
+
+/* Signing out is a labelled action, not a glyph to guess at: a back-office machine is shared
+   and this portal renders member PII, so leaving a session open is the one mistake worth
+   making obvious to undo. Same shape as Export beside it — only the colour differs, because
+   only the meaning does.
+
+   Defined after `.btn` on purpose. Both are single-class selectors, so the one written last
+   wins; above it, the base button simply painted over this. */
+.btn--logout,
+.btn--logout:hover {
+  color: var(--color-surface);
+  background: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.btn--logout:hover {
+  background: var(--color-error-pressed);
+  border-color: var(--color-error-pressed);
 }
 
 .btn[disabled] {

@@ -83,6 +83,7 @@
   --color-success: var(--green-500);
   --color-warning: var(--yolk-500);
   --color-error: #e54d42;
+  --color-error-pressed: #c43a30;
   --color-info: #3e92e5;
 
   /* Washes for notices, pills and tinted table rows. Pale enough to carry Ink text at full
