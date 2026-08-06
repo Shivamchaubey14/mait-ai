@@ -35,7 +35,6 @@
     "privacyPolicy": "Privacy Policy",
     "verifyTitle": "Verify your number",
     "verifySubtitle": "Enter the 6-digit code we sent to {{mobile}}",
-    "codeSentTo": "Code sent to",
     "edit": "Edit",
     "enterSixDigitCode": "Enter the 6-digit code",
     "resendCodeIn": "Resend code in {{time}}",

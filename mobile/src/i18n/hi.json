@@ -35,7 +35,6 @@
     "privacyPolicy": "गोपनीयता नीति",
     "verifyTitle": "अपना नंबर सत्यापित करें",
     "verifySubtitle": "{{mobile}} पर भेजा गया 6 अंकों का कोड डालें",
-    "codeSentTo": "कोड भेजा गया",
     "edit": "बदलें",
     "enterSixDigitCode": "6 अंकों का कोड डालें",
     "resendCodeIn": "{{time}} में दोबारा भेजें",

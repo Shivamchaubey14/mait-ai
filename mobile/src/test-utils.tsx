@@ -9,6 +9,7 @@
 import React from 'react';
 import { configureStore } from '@reduxjs/toolkit';
 import { render, RenderOptions } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
 
 import { api } from '@api/client';
@@ -17,6 +18,12 @@ import authReducer from '@/features/auth/authSlice';
 // English is the app's default, so nothing needs forcing here. Tests that exercise Hindi
 // switch to it themselves and switch back.
 import '@/i18n';
+
+/** A mid-range Android handset: a status bar at the top, gesture bar at the bottom. */
+const TEST_SAFE_AREA_METRICS = {
+  frame: { x: 0, y: 0, width: 360, height: 780 },
+  insets: { top: 24, left: 0, right: 0, bottom: 16 },
+};
 
 export function makeStore() {
   return configureStore({
@@ -51,7 +58,15 @@ export function renderWithStore(
   activeStore = store;
 
   function Wrapper({ children }: { children: React.ReactNode }): React.JSX.Element {
-    return <Provider store={store}>{children}</Provider>;
+    return (
+      <Provider store={store}>
+        {/* Screens read the status-bar and home-indicator insets directly. There is no
+            native window to measure under Jest, so the metrics are supplied here — without
+            them the hook throws and every screen test fails on render rather than on
+            behaviour. */}
+        <SafeAreaProvider initialMetrics={TEST_SAFE_AREA_METRICS}>{children}</SafeAreaProvider>
+      </Provider>
+    );
   }
   return { store, ...render(ui, { wrapper: Wrapper, ...options }) };
 }

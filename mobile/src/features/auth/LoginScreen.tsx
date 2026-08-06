@@ -22,7 +22,7 @@ import {
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { ErrorCode, errorCodeOf } from '@api/client';
@@ -52,24 +52,28 @@ function formatMobile(digits: string): string {
 // --------------------------------------------------------------------------------------
 function Hero(): React.JSX.Element {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.hero}>
+    // The status bar inset is applied as padding rather than with SafeAreaView. That
+    // component derives its padding from its own measured frame, and inside a ScrollView the
+    // measurement is unreliable — which is how this header ended up drawn under the clock,
+    // the signal bars and the battery.
+    <View style={[styles.hero, { paddingTop: insets.top + spacing[3] }]}>
       <HeroDecoration size={240} top={-100} right={-80} />
-      <SafeAreaView edges={['top']}>
-        <View style={styles.heroTop}>
-          <BrandMark size="small" />
-          <LanguageToggle />
-        </View>
+      <View style={styles.heroTop}>
+        <BrandMark size="small" />
+        <LanguageToggle />
+      </View>
 
-        <Text style={styles.heroTitle}>
-          {t('auth.welcomeBack')}
-          {'\n'}
-          {t('auth.welcomeRole')}
-        </Text>
-        <Text style={styles.heroSubtitle}>{t('auth.heroSubtitle')}</Text>
+      <Text style={styles.heroTitle}>
+        {t('auth.welcomeBack')}
+        {'\n'}
+        {t('auth.welcomeRole')}
+      </Text>
+      <Text style={styles.heroSubtitle}>{t('auth.heroSubtitle')}</Text>
 
-        <CapabilityChips style={styles.heroChips} />
-      </SafeAreaView>
+      <CapabilityChips style={styles.heroChips} />
     </View>
   );
 }
@@ -121,6 +125,7 @@ function Notice({
 export default function LoginScreen(): React.JSX.Element {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState<Step>('mobile');
   const [mobileNo, setMobileNo] = useState('');
@@ -287,9 +292,18 @@ export default function LoginScreen(): React.JSX.Element {
           <Hero />
 
           {/* Safe area on the sides and bottom: on a notched handset in landscape the
-              sheet would otherwise run under the cutout, and the CTA under the home
+              sheet would otherwise run under the cutout, and the legal text under the home
               indicator. The hero handles the top edge itself. */}
-          <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.sheet}>
+          <View
+            style={[
+              styles.sheet,
+              {
+                paddingLeft: spacing[5] + insets.left,
+                paddingRight: spacing[5] + insets.right,
+                paddingBottom: spacing[6] + insets.bottom,
+              },
+            ]}
+          >
             <Text style={styles.title}>{t('auth.signIn')}</Text>
             <Text style={styles.subtitle}>{t('auth.enterMobileToContinue')}</Text>
 
@@ -367,7 +381,7 @@ export default function LoginScreen(): React.JSX.Element {
                 <Text style={styles.legalLink}>{t('auth.privacyPolicy')}</Text>
               </Text>
             </View>
-          </SafeAreaView>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -377,7 +391,7 @@ export default function LoginScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, paddingBottom: spacing[6] },
+  scroll: { flexGrow: 1 },
 
   hero: {
     backgroundColor: colors.primary,
@@ -391,7 +405,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: spacing[3],
     marginBottom: spacing[5],
   },
   heroTitle: { ...typography.h1, color: colors.surface },
@@ -403,7 +416,7 @@ const styles = StyleSheet.create({
   },
   heroChips: { marginTop: spacing[5] },
 
-  sheet: { paddingHorizontal: spacing[5], paddingTop: spacing[5] },
+  sheet: { paddingTop: spacing[5] },
   title: { ...typography.h1, color: colors.ink },
   subtitle: { ...typography.body, color: colors.textMuted, marginTop: spacing[1] },
   label: {

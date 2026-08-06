@@ -9,6 +9,7 @@
 
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import type { Member, MPP, NonMember } from '@api/types';
@@ -54,6 +55,7 @@ function ProgressBar({ current }: { current: number }): React.JSX.Element {
 
 export default function RootNavigator(): React.JSX.Element {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const accessToken = useAppSelector(state => state.auth.accessToken);
 
   const [screen, setScreen] = useState<FlowScreen>('selectMpp');
@@ -73,7 +75,9 @@ export default function RootNavigator(): React.JSX.Element {
 
   return (
     <View style={styles.flex}>
-      <View style={styles.header}>
+      {/* The app draws edge to edge, so the header owns the status bar strip and has to pad
+          itself out of it — otherwise the step title sits under the clock and the battery. */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing[3] }]}>
         <Text style={styles.headerTitle}>{t(`aiFlow.${AI_FLOW_STEPS[stepIndex]}`)}</Text>
         {!!mpp && <Text style={styles.headerSubtitle}>{mpp.mpp_name}</Text>}
       </View>
@@ -121,7 +125,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: colors.ink,
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
+    paddingBottom: spacing[3],
   },
   headerTitle: { ...typography.h2, color: colors.surface },
   headerSubtitle: { ...typography.caption, color: colors.surface, opacity: 0.8 },
