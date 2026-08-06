@@ -27,7 +27,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BrandMark, HeroDecoration } from '@/components/brand';
 import { AI_FLOW_STEPS } from '@/config/env';
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
 // --------------------------------------------------------------------------------------
 // Progress
@@ -609,13 +609,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   linkLabel: { ...typography.bodyStrong, color: colors.primaryDark },
+  // The same pill the bar's action wears. A primary action should be one shape everywhere,
+  // or a Mait learns two.
   cta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
-    minHeight: MIN_TOUCH_TARGET + 6,
-    borderRadius: radius.md,
+    minHeight: MIN_TOUCH_TARGET + 4,
+    paddingHorizontal: spacing[5],
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    ...shadows.raised,
   },
   ctaEnabled: { backgroundColor: colors.primary },
   ctaDisabled: { backgroundColor: colors.disabledFill },
