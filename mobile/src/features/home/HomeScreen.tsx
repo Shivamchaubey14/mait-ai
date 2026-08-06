@@ -19,7 +19,6 @@ import { useTranslation } from 'react-i18next';
 import { useGetInventorySummaryQuery, useListAiEventsQuery } from '@api/endpoints';
 import { pendingCount, readQueue } from '@api/queue';
 import type { AIEvent } from '@api/types';
-import { BrandMark } from '@/components/brand';
 import PageHero from '@/components/hero';
 import { EmptyState, ErrorState, SkeletonList, SyncBanner } from '@/components/states';
 import { useAppSelector } from '@/store';
@@ -75,7 +74,6 @@ export default function HomeScreen({
   return (
     <View style={styles.root}>
       <PageHero
-        top={<BrandMark size="small" />}
         title={t('home.greeting', { name: user?.fullName ?? '' })}
         subtitle={t('home.subtitle')}
       />
@@ -132,7 +130,7 @@ export default function HomeScreen({
         <View style={styles.tiles}>
           <View style={styles.tile}>
             <View style={[styles.tileIcon, styles.tileIconStock]}>
-              <Ionicons name="flask" size={18} color={colors.primaryDark} />
+              <Ionicons name="flask" size={18} color={colors.info} />
             </View>
             <Text style={styles.tileLabel} numberOfLines={1}>
               {t('home.strawsHeld')}
@@ -157,7 +155,7 @@ export default function HomeScreen({
 
           <View style={styles.tile}>
             <View style={[styles.tileIcon, styles.tileIconDone]}>
-              <Ionicons name="checkmark-done" size={18} color={colors.info} />
+              <Ionicons name="checkmark-done" size={18} color={colors.primaryDark} />
             </View>
             <Text style={styles.tileLabel} numberOfLines={1}>
               {t('home.doneToday')}
@@ -165,7 +163,7 @@ export default function HomeScreen({
             {events.isLoading ? (
               <View style={styles.tileSkeleton} />
             ) : (
-              <Text style={styles.tileValue}>{today.length}</Text>
+              <Text style={[styles.tileValue, styles.tileValueDone]}>{today.length}</Text>
             )}
             <Text style={styles.tileFoot} numberOfLines={1}>
               {t('home.sinceMorning')}
@@ -265,17 +263,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing[2],
   },
-  tileIconStock: { backgroundColor: colors.primaryWash },
-  tileIconDone: { backgroundColor: colors.infoWash },
+  tileIconStock: { backgroundColor: colors.infoWash },
+  tileIconDone: { backgroundColor: colors.primaryWash },
   tileLabel: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
-  // The figure carries its own meaning: green while there is stock, yellow when it is
-  // running out, red at zero — the same vocabulary the rest of the app uses.
+  // Two figures, two colours. Stock is blue — a holding, not an achievement — and only
+  // changes colour when it needs acting on: yellow running out, red at zero. Work done is
+  // green, because green already means "completed" everywhere else in this product.
   tileValue: {
     ...typography.display,
-    color: colors.primaryDark,
+    color: colors.info,
     textAlign: 'center',
     marginVertical: 2,
   },
+  tileValueDone: { color: colors.primaryDark },
   tileValueWarn: { color: colors.secondaryPressed },
   tileValueBad: { color: colors.error },
   tileFoot: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },

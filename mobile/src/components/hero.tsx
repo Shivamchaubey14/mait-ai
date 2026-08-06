@@ -11,15 +11,14 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HeroDecoration } from '@/components/brand';
+import { BrandMark, HeroDecoration } from '@/components/brand';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
 export default function PageHero({
   title,
   subtitle,
-  /** Sits above the title — the brand mark on Home, nothing elsewhere. */
+  /** Sits beside the mark — an avatar, a filter, whatever the screen needs there. */
   top,
-  /** Overlaps the bottom edge, so a tile row can sit half on the green and half off it. */
   children,
 }: {
   title: string;
@@ -32,7 +31,14 @@ export default function PageHero({
   return (
     <View style={[styles.hero, { paddingTop: insets.top + spacing[3] }]}>
       <HeroDecoration size={200} top={-90} right={-70} />
-      {!!top && <View style={styles.top}>{top}</View>}
+
+      {/* The mark rides on every screen, not just Home. A Mait hands this phone to a farmer
+          to read an OTP off, and the app should say whose app it is wherever they are. */}
+      <View style={styles.top}>
+        <BrandMark size="small" />
+        {!!top && <View style={styles.topRight}>{top}</View>}
+      </View>
+
       <Text style={styles.title}>{title}</Text>
       {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
       {children}
@@ -49,7 +55,13 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[5],
     overflow: 'hidden',
   },
-  top: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[4] },
+  top: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing[4],
+  },
+  topRight: { marginLeft: 'auto' },
   title: { ...typography.h1, color: colors.surface },
   subtitle: {
     ...typography.body,

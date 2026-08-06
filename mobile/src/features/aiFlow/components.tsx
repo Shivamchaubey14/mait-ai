@@ -25,7 +25,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { HeroDecoration } from '@/components/brand';
+import { BrandMark, HeroDecoration } from '@/components/brand';
 import { AI_FLOW_STEPS } from '@/config/env';
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
@@ -127,6 +127,11 @@ export function FlowScreen({
                 </Pressable>
               )}
               {!!label && <Text style={styles.stepLabel}>{label}</Text>}
+              {/* The mark rides here too, so the flow is visibly the same app as the tabs
+                  it is layered over. */}
+              <View style={styles.heroMark}>
+                <BrandMark size="small" />
+              </View>
             </View>
 
             <ProgressSegments step={done ? AI_FLOW_STEPS.length : (step ?? -1)} />
@@ -433,6 +438,7 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     marginBottom: spacing[4],
   },
+  heroMark: { marginLeft: 'auto' },
   backButton: {
     width: 36,
     height: 36,
