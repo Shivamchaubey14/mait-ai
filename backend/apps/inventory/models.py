@@ -50,16 +50,31 @@ class SemenBatch(TimeStampedModel):
 
 
 class Consumable(TimeStampedModel):
-    """Gloves, sheaths, liquid nitrogen and similar (SRS §6.6.1)."""
+    """
+    Everything a Mait carries that is not a straw (SRS §6.6.1).
+
+    Two kinds, and the difference matters when restocking. A consumable is used up — sheaths,
+    gloves, liquid nitrogen — and is asked for by the dozen. An asset is equipment that is
+    issued once and kept: an AI gun, a thawing tray. A Mait requesting five AI guns is a
+    mistake; requesting five boxes of gloves is a Tuesday.
+    """
+
+    class Category(models.TextChoices):
+        CONSUMABLE = "consumable", "Consumable"
+        ASSET = "asset", "Equipment"
 
     code = models.CharField(max_length=30, unique=True)
     name = models.CharField(max_length=100)
+    category = models.CharField(
+        max_length=12, choices=Category.choices, default=Category.CONSUMABLE, db_index=True
+    )
     unit = models.CharField(max_length=20, default="piece")
+    display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         db_table = "consumable"
-        ordering = ["name"]
+        ordering = ["category", "display_order", "name"]
 
     def __str__(self) -> str:
         return self.name

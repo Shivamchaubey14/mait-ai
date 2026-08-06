@@ -4,7 +4,18 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from .models import MaitInventory, MaitInventoryLedger, ProductType, SemenBatch
+from .models import Consumable, MaitInventory, MaitInventoryLedger, ProductType, SemenBatch
+
+
+class ConsumableSerializer(serializers.ModelSerializer):
+    """One item a Mait can be issued, straws aside."""
+
+    category_display = serializers.CharField(source="get_category_display", read_only=True)
+
+    class Meta:
+        model = Consumable
+        fields = ["id", "code", "name", "category", "category_display", "unit", "display_order"]
+        read_only_fields = fields
 
 
 class SemenBatchSerializer(serializers.ModelSerializer):
@@ -77,7 +88,9 @@ class InventorySummarySerializer(serializers.Serializer):
     total_straws = serializers.IntegerField()
     is_low_stock = serializers.BooleanField()
     by_breed = serializers.DictField(child=serializers.IntegerField())
+    # Split apart: what runs out and gets reordered, and what is issued once and kept.
     consumables = serializers.ListField(child=serializers.DictField())
+    assets = serializers.ListField(child=serializers.DictField())
 
 
 class LedgerEntrySerializer(serializers.ModelSerializer):

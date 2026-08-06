@@ -10,7 +10,8 @@
  */
 
 import React from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -25,7 +26,11 @@ import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '
 /** Fewer than this of one breed is worth flagging on the row itself. */
 const LOW_PER_BREED = 3;
 
-export default function StockScreen(): React.JSX.Element {
+export default function StockScreen({
+  onOpenIndents,
+}: {
+  onOpenIndents: () => void;
+}): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const stock = useGetInventorySummaryQuery();
   const breeds = useListBreedsQuery();
@@ -35,14 +40,9 @@ export default function StockScreen(): React.JSX.Element {
   const total = stock.data?.total_straws ?? 0;
   const byBreed = Object.entries(stock.data?.by_breed ?? {});
 
-  /** What is held, plus any configured breed they have run out of. */
-  const held = new Map<string, number>(byBreed);
-  (breeds.data ?? []).forEach(breed => {
-    if (!held.has(breed.code)) {
-      held.set(breed.code, 0);
-    }
-  });
-  const rows = [...held.entries()].sort((a, b) => b[1] - a[1]);
+  // Only breeds the Mait actually holds. Listing every configured breed at zero made them
+  // scroll past a dozen rows that say nothing to reach the two that do.
+  const rows = byBreed.filter(([, qty]) => qty > 0).sort((a, b) => b[1] - a[1]);
   const lowBreeds = rows.filter(([, qty]) => qty > 0 && qty <= LOW_PER_BREED).length;
 
   // Counted from the events already fetched for Home and History rather than guessed at.
@@ -140,24 +140,23 @@ export default function StockScreen(): React.JSX.Element {
               />
             ) : (
               rows.map(([code, qty]) => {
-                const low = qty > 0 && qty <= LOW_PER_BREED;
-                const out = qty === 0;
+                const low = qty <= LOW_PER_BREED;
                 return (
                   <View
                     key={code}
-                    style={[styles.row, low && styles.rowLow, out && styles.rowOut]}
+                    style={[styles.row, low && styles.rowLow]}
                     testID={`stock-${code}`}
                   >
-                    <View style={[styles.swatch, out && styles.swatchOut]} />
+                    <View style={styles.swatch} />
                     <View style={styles.rowBody}>
-                      <Text style={[styles.rowTitle, out && styles.rowTitleOut]} numberOfLines={1}>
+                      <Text style={styles.rowTitle} numberOfLines={1}>
                         {label(code)}
                       </Text>
                       <Text style={styles.rowMeta} numberOfLines={1}>
-                        {animal(code)} · {out ? t('stock.noneInHand') : t('stock.inYourFlask')}
+                        {animal(code)} · {t('stock.inYourFlask')}
                       </Text>
                     </View>
-                    <Text style={[styles.rowQty, out && styles.rowQtyOut]}>{qty}</Text>
+                    <Text style={styles.rowQty}>{qty}</Text>
                     {low && (
                       <View style={styles.lowPill}>
                         <Text style={styles.lowPillLabel}>{t('stock.low')}</Text>
@@ -172,11 +171,14 @@ export default function StockScreen(): React.JSX.Element {
               <View>
                 <Text style={styles.section}>{t('stock.consumables')}</Text>
                 {(stock.data?.consumables ?? []).map(item => (
-                  <View key={item.name} style={styles.row}>
+                  <View key={item.code || item.name} style={styles.row}>
                     <View style={[styles.swatch, styles.swatchAlt]} />
                     <View style={styles.rowBody}>
                       <Text style={styles.rowTitle} numberOfLines={1}>
                         {item.name}
+                      </Text>
+                      <Text style={styles.rowMeta} numberOfLines={1}>
+                        {item.unit}
                       </Text>
                     </View>
                     <Text style={[styles.rowQty, styles.rowQtyInfo]}>{item.qty}</Text>
@@ -184,6 +186,46 @@ export default function StockScreen(): React.JSX.Element {
                 ))}
               </View>
             )}
+
+            {/* Equipment, kept apart from what runs out: a Mait replaces an AI gun when it
+                breaks, not when the number gets low. */}
+            {(stock.data?.assets ?? []).length > 0 && (
+              <View>
+                <Text style={styles.section}>{t('stock.assets')}</Text>
+                {(stock.data?.assets ?? []).map(item => (
+                  <View key={item.code || item.name} style={styles.row}>
+                    <View style={[styles.swatch, styles.swatchAsset]} />
+                    <View style={styles.rowBody}>
+                      <Text style={styles.rowTitle} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.rowMeta} numberOfLines={1}>
+                        {item.unit}
+                      </Text>
+                    </View>
+                    <Text style={styles.rowQty}>{item.qty}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Where a request goes after it is sent. Reachable from the screen that made
+                them wonder about it. */}
+            <Pressable
+              accessibilityRole="button"
+              onPress={onOpenIndents}
+              style={({ pressed }) => [styles.indentsLink, pressed && styles.indentsLinkPressed]}
+              testID="stock-open-indents"
+            >
+              <View style={[styles.swatch, styles.swatchAlt]}>
+                <Ionicons name="cube-outline" size={17} color={colors.info} />
+              </View>
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>{t('stock.yourIndents')}</Text>
+                <Text style={styles.rowMeta}>{t('stock.yourIndentsHint')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textDisabled} />
+            </Pressable>
 
             {/* Named rather than left to be inferred from the rows above. */}
             {lowBreeds > 0 && (
@@ -249,7 +291,6 @@ const styles = StyleSheet.create({
   },
   // A breed running out is tinted, so the list can be triaged without reading every number.
   rowLow: { borderColor: colors.error, backgroundColor: colors.errorWash },
-  rowOut: { backgroundColor: colors.background },
 
   swatch: {
     width: 32,
@@ -257,16 +298,31 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: colors.primaryWash,
   },
-  swatchAlt: { backgroundColor: colors.infoWash },
-  swatchOut: { backgroundColor: colors.disabledFill },
+  swatchAlt: {
+    backgroundColor: colors.infoWash,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchAsset: { backgroundColor: colors.secondaryWash },
+
+  indentsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    minHeight: MIN_TOUCH_TARGET + spacing[2],
+    padding: spacing[3],
+    marginTop: spacing[3],
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    ...shadows.card,
+  },
+  indentsLinkPressed: { backgroundColor: colors.background },
 
   rowBody: { flex: 1 },
   rowTitle: { ...typography.bodyStrong, color: colors.ink },
-  rowTitleOut: { color: colors.textMuted },
   rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   rowQty: { ...typography.h2, color: colors.ink },
   rowQtyInfo: { color: colors.info },
-  rowQtyOut: { color: colors.textDisabled },
 
   lowPill: {
     paddingHorizontal: spacing[2],

@@ -35,6 +35,8 @@ import LoginScreen from '@/features/auth/LoginScreen';
 import HistoryScreen from '@/features/history/HistoryScreen';
 import HomeScreen from '@/features/home/HomeScreen';
 import SettingsScreen from '@/features/settings/SettingsScreen';
+import IndentDetailScreen from '@/features/stock/IndentDetailScreen';
+import IndentsScreen from '@/features/stock/IndentsScreen';
 import RequestStockScreen, { RequestFormState } from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
 import { useAppSelector } from '@/store';
@@ -71,6 +73,8 @@ export default function RootNavigator(): React.JSX.Element {
   // Lets the bar's action button submit the indent form, so this screen's one action sits
   // where every other screen's action sits.
   const [requestForm, setRequestForm] = useState<RequestFormState | null>(null);
+  /** null = not looking at indents, 0 = the list, n = that indent. */
+  const [indentView, setIndentView] = useState<number | null>(null);
 
   const [clientUuid, setClientUuid] = useState(newClientUuid);
   const [mpp, setMpp] = useState<MPP | null>(null);
@@ -289,7 +293,18 @@ export default function RootNavigator(): React.JSX.Element {
             lastSyncAt={lastSyncAt}
           />
         )}
-        {!requestingStock && tab === 'stock' && <StockScreen />}
+        {!requestingStock && tab === 'stock' && indentView === null && (
+          <StockScreen onOpenIndents={() => setIndentView(0)} />
+        )}
+        {!requestingStock && tab === 'stock' && indentView === 0 && (
+          <IndentsScreen
+            onOpen={indent => setIndentView(indent.id)}
+            onBack={() => setIndentView(null)}
+          />
+        )}
+        {!requestingStock && tab === 'stock' && !!indentView && (
+          <IndentDetailScreen indentId={indentView} onBack={() => setIndentView(0)} />
+        )}
         {!requestingStock && tab === 'history' && <HistoryScreen />}
         {!requestingStock && tab === 'settings' && (
           <SettingsScreen pending={pending} onSync={sync} online={online} />
@@ -305,6 +320,7 @@ export default function RootNavigator(): React.JSX.Element {
           // Switching tabs leaves the form. Nothing is lost that was worth keeping — an
           // unsent indent is a decision not yet made.
           setRequestingStock(false);
+          setIndentView(null);
           setTab(next);
         }}
         action={
@@ -317,7 +333,10 @@ export default function RootNavigator(): React.JSX.Element {
             : tab === 'stock'
               ? {
                   label: t('requestStock.action'),
-                  onPress: () => setRequestingStock(true),
+                  onPress: () => {
+                    setIndentView(null);
+                    setRequestingStock(true);
+                  },
                   testID: 'bar-request-stock',
                 }
               : { label: t('home.startNewAi'), onPress: startCapture, testID: 'bar-start-ai' }

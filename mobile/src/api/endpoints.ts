@@ -21,6 +21,7 @@ import type {
   NonMember,
   NonMemberDetail,
   NonMemberDraft,
+  Product,
   Indent,
   IndentDraft,
   Paginated,
@@ -123,6 +124,12 @@ export const maitaiApi = api.injectEndpoints({
     }),
 
     // ---- inventory -----------------------------------------------------------------
+    /** The catalogue behind the stock request form. Cached — it changes rarely. */
+    listProducts: builder.query<Product[], void>({
+      query: () => '/config/products/',
+      providesTags: ['Inventory'],
+    }),
+
     getInventorySummary: builder.query<InventorySummary, void>({
       query: () => '/mait/inventory/',
       providesTags: ['Inventory'],
@@ -179,6 +186,11 @@ export const maitaiApi = api.injectEndpoints({
       providesTags: ['Indent'],
     }),
 
+    getIndent: builder.query<Indent, number>({
+      query: id => `/indents/${id}/`,
+      providesTags: ['Indent'],
+    }),
+
     listAiEvents: builder.query<Paginated<AIEvent>, { status?: string } | void>({
       query: args => ({
         url: '/ai-events/',
@@ -203,9 +215,11 @@ export const {
   useListBreedsQuery,
   useCreateAnimalMutation,
   useGetInventorySummaryQuery,
+  useListProductsQuery,
   useLazyValidateStrawQuery,
   useCreateAiEventMutation,
   useListAiEventsQuery,
   useCreateIndentMutation,
   useListIndentsQuery,
+  useGetIndentQuery,
 } = maitaiApi;

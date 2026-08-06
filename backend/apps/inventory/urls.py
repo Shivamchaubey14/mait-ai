@@ -18,6 +18,7 @@ from .views import (
     inventory_oversight,
     inventory_summary,
     ledger_balance_check,
+    product_catalogue,
 )
 
 app_name = "inventory"
@@ -32,6 +33,7 @@ urlpatterns = [
         StrawValidateView.as_view(),
         name="straw-validate",
     ),
+    path("config/products/", product_catalogue, name="product-catalogue"),
     path("mait/inventory/", inventory_summary, name="inventory-summary"),
     path("mait/inventory/check/", ledger_balance_check, name="inventory-check"),
     # Admin oversight across every Mait. Deliberately not under `mait/`, which is the

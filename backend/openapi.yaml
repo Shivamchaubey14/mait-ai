@@ -1064,6 +1064,29 @@ paths:
                 items:
                   $ref: '#/components/schemas/BreedConfig'
           description: ''
+  /api/v1/config/products/:
+    get:
+      operationId: config_products_list
+      description: |-
+        The product catalogue behind the stock request form, split by category.
+
+        Straws are absent on purpose: they are requested by breed, and the breed list is its own config endpoint (`/config/breeds/`).
+
+        Consumables are used up and asked for by the dozen; equipment is issued once and kept. A Mait requesting five AI guns is a mistake, five boxes of gloves is a Tuesday — so the form treats them differently.
+      summary: What a Mait can ask for
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Consumable'
+          description: ''
   /api/v1/dashboard/activation-readiness/:
     get:
       operationId: dashboard_activation_readiness_retrieve
@@ -2235,6 +2258,48 @@ components:
       - display_order
       - name
       - name_hi
+    CategoryEnum:
+      enum:
+      - consumable
+      - asset
+      type: string
+      description: |-
+        * `consumable` - Consumable
+        * `asset` - Equipment
+    Consumable:
+      type: object
+      description: One item a Mait can be issued, straws aside.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        category:
+          allOf:
+          - $ref: '#/components/schemas/CategoryEnum'
+          readOnly: true
+        category_display:
+          type: string
+          readOnly: true
+        unit:
+          type: string
+          readOnly: true
+        display_order:
+          type: integer
+          readOnly: true
+      required:
+      - category
+      - category_display
+      - code
+      - display_order
+      - id
+      - name
+      - unit
     CurrentUser:
       type: object
       description: |-

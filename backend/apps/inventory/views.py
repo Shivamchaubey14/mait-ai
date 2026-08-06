@@ -14,6 +14,7 @@ from django.db.models import Sum
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -23,6 +24,7 @@ from apps.masterdata.models import Mait
 
 from .models import Consumable, MaitInventory, MaitInventoryLedger, ProductType, SemenBatch
 from .serializers import (
+    ConsumableSerializer,
     InventorySummarySerializer,
     LedgerEntrySerializer,
     MaitInventorySerializer,
@@ -90,6 +92,26 @@ class StrawValidateView(APIView):
         )
 
 
+@extend_schema(
+    tags=["inventory"],
+    summary="What a Mait can ask for",
+    description=(
+        "The product catalogue behind the stock request form, split by category.\n\n"
+        "Straws are absent on purpose: they are requested by breed, and the breed list is "
+        "its own config endpoint (`/config/breeds/`).\n\n"
+        "Consumables are used up and asked for by the dozen; equipment is issued once and "
+        "kept. A Mait requesting five AI guns is a mistake, five boxes of gloves is a Tuesday "
+        "— so the form treats them differently."
+    ),
+    responses={200: ConsumableSerializer(many=True)},
+)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def product_catalogue(request):
+    products = Consumable.objects.filter(is_active=True)
+    return Response(ConsumableSerializer(products, many=True).data)
+
+
 @extend_schema(tags=["inventory"])
 @api_view(["GET"])
 @permission_classes([IsMait])
@@ -118,15 +140,26 @@ def inventory_summary(request):
     consumable_ids = [
         line.product_ref_id for line in lines if line.product_type == ProductType.CONSUMABLE
     ]
-    consumable_names = Consumable.objects.in_bulk(consumable_ids)
-    consumables = [
-        {
-            "name": getattr(consumable_names.get(line.product_ref_id), "name", "Unknown"),
+    products = Consumable.objects.in_bulk(consumable_ids)
+
+    # Split by category, because a Mait restocks them differently: consumables run out and
+    # get reordered, equipment is issued once and only replaced when it breaks.
+    consumables: list[dict] = []
+    assets: list[dict] = []
+    for line in lines:
+        if line.product_type != ProductType.CONSUMABLE:
+            continue
+        product = products.get(line.product_ref_id)
+        row = {
+            "code": getattr(product, "code", ""),
+            "name": getattr(product, "name", "Unknown"),
+            "unit": getattr(product, "unit", ""),
             "qty": line.qty_available,
         }
-        for line in lines
-        if line.product_type == ProductType.CONSUMABLE
-    ]
+        if getattr(product, "category", "consumable") == Consumable.Category.ASSET:
+            assets.append(row)
+        else:
+            consumables.append(row)
 
     total = sum(by_breed.values())
     payload = {
@@ -134,6 +167,7 @@ def inventory_summary(request):
         "is_low_stock": total <= settings.LOW_STOCK_THRESHOLD,
         "by_breed": by_breed,
         "consumables": consumables,
+        "assets": assets,
     }
     return Response(InventorySummarySerializer(payload).data)
 

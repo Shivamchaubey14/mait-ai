@@ -165,11 +165,32 @@ export interface StrawValidation {
   available_straws: number;
 }
 
+export interface StockLine {
+  code: string;
+  name: string;
+  unit: string;
+  qty: number;
+}
+
 export interface InventorySummary {
   total_straws: number;
   is_low_stock: boolean;
   by_breed: Record<string, number>;
-  consumables: { name: string; qty: number }[];
+  /** Used up and reordered — sheaths, gloves, liquid nitrogen. */
+  consumables: StockLine[];
+  /** Issued once and kept — AI gun, thawing tray. */
+  assets: StockLine[];
+}
+
+/** A product a Mait can ask for. Straws are absent: those are requested by breed. */
+export interface Product {
+  id: number;
+  code: string;
+  name: string;
+  category: 'consumable' | 'asset';
+  category_display: string;
+  unit: string;
+  display_order: number;
 }
 
 // ---- AI event ------------------------------------------------------------------------
