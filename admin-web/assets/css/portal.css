@@ -168,15 +168,17 @@ a:hover {
 /* Signing out is a labelled action, not a glyph to guess at. A back-office machine is shared
    and the portal renders member PII, so leaving a session open is the one mistake worth
    making obvious to undo. */
-.btn--logout {
+.btn--logout,
+.btn--logout:hover {
   border-radius: var(--radius-pill);
-  color: var(--color-text-muted);
+  color: var(--color-surface);
+  background: var(--color-error);
+  border-color: var(--color-error);
 }
 
 .btn--logout:hover {
-  color: var(--color-error);
-  border-color: var(--color-error);
-  background: var(--color-error-wash);
+  /* Darkened rather than tinted, so the hover reads on a button that is already saturated. */
+  filter: brightness(0.92);
 }
 
 /* --- controls ---------------------------------------------------------------------------- */
