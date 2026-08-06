@@ -37,7 +37,7 @@ import HomeScreen from '@/features/home/HomeScreen';
 import SettingsScreen from '@/features/settings/SettingsScreen';
 import IndentDetailScreen from '@/features/stock/IndentDetailScreen';
 import IndentsScreen from '@/features/stock/IndentsScreen';
-import RequestStockScreen, { RequestFormState } from '@/features/stock/RequestStockScreen';
+import RequestStockScreen from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
 import { useAppSelector } from '@/store';
 import { colors, spacing, typography } from '@theme/tokens';
@@ -70,9 +70,6 @@ export default function RootNavigator(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('home');
   const [step, setStep] = useState<CaptureStep | null>(null);
   const [requestingStock, setRequestingStock] = useState(false);
-  // Lets the bar's action button submit the indent form, so this screen's one action sits
-  // where every other screen's action sits.
-  const [requestForm, setRequestForm] = useState<RequestFormState | null>(null);
   /** null = not looking at indents, 0 = the list, n = that indent. */
   const [indentView, setIndentView] = useState<number | null>(null);
 
@@ -280,7 +277,6 @@ export default function RootNavigator(): React.JSX.Element {
           <RequestStockScreen
             onDone={() => setRequestingStock(false)}
             onBack={() => setRequestingStock(false)}
-            onFormState={setRequestForm}
           />
         )}
 
@@ -325,11 +321,7 @@ export default function RootNavigator(): React.JSX.Element {
         }}
         action={
           requestingStock
-            ? {
-                label: t('requestStock.submit'),
-                onPress: () => requestForm?.submit(),
-                testID: 'bar-submit-indent',
-              }
+            ? undefined
             : tab === 'stock'
               ? {
                   label: t('requestStock.action'),
