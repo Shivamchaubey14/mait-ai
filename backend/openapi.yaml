@@ -1465,7 +1465,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NonMember'
+                $ref: '#/components/schemas/NonMemberDetail'
           description: ''
   /api/v1/semen-batches/{unique_no}/validate/:
     get:
@@ -2506,11 +2506,17 @@ components:
             flow, rather than stranding the Mait at the payment step with a completed
             insemination and no way to close the event (docs/DATA_FINDINGS.md §2).
           readOnly: true
+        animals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Animal'
+          readOnly: true
       required:
       - aadhar_no
       - activation_date
       - activation_status
       - age
+      - animals
       - bank_name
       - can_receive_otp
       - category
@@ -2598,6 +2604,56 @@ components:
           format: date-time
           readOnly: true
       required:
+      - created_at
+      - created_by_mait
+      - id
+      - mobile_no
+      - mpp
+      - name
+    NonMemberDetail:
+      type: object
+      description: |-
+        A non-member with the animals already registered to them (SRS §6.3 step 3).
+
+        Non-members are captured on the spot, so the first visit finds nothing here. The second
+        one does, and a Mait who has to re-register the same buffalo every visit will stop
+        trusting the list.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        mobile_no:
+          type: string
+          pattern: ^[6-9]\d{9}$
+          maxLength: 15
+        address:
+          type: string
+          maxLength: 255
+        mpp:
+          type: integer
+          description: Nearest/served MPP.
+        created_by_mait:
+          type: integer
+          readOnly: true
+        consent_captured_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the farmer consented to their details being stored.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        animals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Animal'
+          readOnly: true
+      required:
+      - animals
       - created_at
       - created_by_mait
       - id

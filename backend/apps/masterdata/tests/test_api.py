@@ -126,6 +126,26 @@ class TestPIIMasking:
         assert "650719330383" not in str(body)
 
 
+class TestMemberAnimals:
+    """
+    Step 3 of the capture flow picks from the farmer's existing animals (SRS §6.3).
+
+    They ride along on the member detail rather than a second call: the Mait is standing in
+    a yard with one bar of signal, and two round trips to render one screen is one too many.
+    """
+
+    def test_detail_carries_the_members_animals(self, api_client, admin_user, member, animal):
+        body = auth(api_client, admin_user).get(f"{BASE}/members/{member.member_code}/").json()
+
+        assert [row["id"] for row in body["animals"]] == [animal.id]
+        assert body["animals"][0]["breed"] == animal.breed
+
+    def test_the_search_list_does_not_carry_them(self, api_client, admin_user, member, animal):
+        """105k rows: prefetching animals for a page of search results buys nothing."""
+        body = auth(api_client, admin_user).get(f"{BASE}/members/").json()
+        assert "animals" not in body["results"][0]
+
+
 class TestOTPReachability:
     """
     Surfaces whether a record can actually complete a payment (docs/DATA_FINDINGS.md).

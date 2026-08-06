@@ -29,6 +29,7 @@ from .serializers import (
     MemberListSerializer,
     MPPDetailSerializer,
     MPPListSerializer,
+    NonMemberDetailSerializer,
     NonMemberSerializer,
     UploadErrorRowSerializer,
 )
@@ -222,6 +223,10 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
 
     def get_queryset(self):
         queryset = Member.objects.select_related("mpp")
+        if self.action == "retrieve":
+            # Only on detail: the list serializer has no animals, and prefetching for a
+            # 105k-row search would cost a second query per page for nothing.
+            queryset = queryset.prefetch_related("animals")
         user = self.request.user
         mait = getattr(user, "mait_profile", None)
         if mait is not None and not user.is_admin:
@@ -263,7 +268,15 @@ class NonMemberViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, views
         mait = getattr(self.request.user, "mait_profile", None)
         if mait is None:
             return NonMember.objects.none()
-        return NonMember.objects.filter(created_by_mait=mait)
+        queryset = NonMember.objects.filter(created_by_mait=mait)
+        if self.action == "retrieve":
+            queryset = queryset.prefetch_related("animals")
+        return queryset
+
+    def get_serializer_class(self):
+        # The detail shape carries the animals already registered to this farmer, which is
+        # what step 3 of the capture flow picks from.
+        return NonMemberDetailSerializer if self.action == "retrieve" else NonMemberSerializer
 
     def perform_create(self, serializer):
         """

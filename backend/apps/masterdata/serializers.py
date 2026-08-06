@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from apps.animals.serializers import AnimalSerializer
+
 from .models import MPP, DataUploadLog, Mait, Member, NonMember
 
 # openpyxl only reads the OOXML format. Rejecting other types up front gives a clear error
@@ -196,6 +198,10 @@ class MemberDetailSerializer(serializers.ModelSerializer):
     mpp_code = serializers.CharField(source="mpp.mpp_code", read_only=True)
     mpp_name = serializers.CharField(source="mpp.mpp_name", read_only=True)
     can_receive_otp = serializers.SerializerMethodField()
+    # Step 3 of the capture flow picks from these (SRS §6.3). Nested rather than a second
+    # request because the Mait is standing in a yard with one bar of signal — two round trips
+    # to show one screen is one too many.
+    animals = AnimalSerializer(many=True, read_only=True)
 
     class Meta:
         model = Member
@@ -219,6 +225,7 @@ class MemberDetailSerializer(serializers.ModelSerializer):
             "mpp_code",
             "mpp_name",
             "can_receive_otp",
+            "animals",
         ]
         read_only_fields = fields
 
@@ -262,3 +269,18 @@ class NonMemberSerializer(serializers.ModelSerializer):
         if len(digits) != 10 or digits[0] not in "6789":
             raise serializers.ValidationError("Enter a valid 10-digit Indian mobile number.")
         return digits
+
+
+class NonMemberDetailSerializer(NonMemberSerializer):
+    """
+    A non-member with the animals already registered to them (SRS §6.3 step 3).
+
+    Non-members are captured on the spot, so the first visit finds nothing here. The second
+    one does, and a Mait who has to re-register the same buffalo every visit will stop
+    trusting the list.
+    """
+
+    animals = AnimalSerializer(many=True, read_only=True)
+
+    class Meta(NonMemberSerializer.Meta):
+        fields = [*NonMemberSerializer.Meta.fields, "animals"]
