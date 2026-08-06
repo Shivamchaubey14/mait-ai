@@ -249,9 +249,7 @@
     "emptyTitle": "Nothing in your flask",
     "emptyBody": "Stock appears here once the depot issues it to you.",
     "consumables": "Other items",
-    "errorTitle": "Could not load your stock",
-    "readyTitle": "{{count}} straws ready",
-    "readyBody": "That is how many AI events you can record."
+    "errorTitle": "Could not load your stock"
   },
   "profile": {
     "maitId": "Mait #{{id}}",

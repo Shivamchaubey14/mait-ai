@@ -15,11 +15,7 @@ import PageHero from '@/components/hero';
 import { EmptyState, ErrorState, SkeletonList, SyncBanner } from '@/components/states';
 import { colors, radius, shadows, spacing, typography } from '@theme/tokens';
 
-export default function StockScreen({
-  onStartCapture,
-}: {
-  onStartCapture: () => void;
-}): React.JSX.Element {
+export default function StockScreen(): React.JSX.Element {
   const { t } = useTranslation();
   const stock = useGetInventorySummaryQuery();
 
@@ -100,16 +96,6 @@ export default function StockScreen({
                   </View>
                 ))}
               </View>
-            )}
-
-            {total > 0 && (
-              <SyncBanner
-                tone="synced"
-                title={t('stock.readyTitle', { count: total })}
-                body={t('stock.readyBody')}
-                action={{ label: t('home.startNewAi'), onPress: onStartCapture }}
-                testID="stock-ready"
-              />
             )}
           </View>
         )}

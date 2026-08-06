@@ -273,7 +273,7 @@ export default function RootNavigator(): React.JSX.Element {
             lastSyncAt={lastSyncAt}
           />
         )}
-        {tab === 'stock' && <StockScreen onStartCapture={startCapture} />}
+        {tab === 'stock' && <StockScreen />}
         {tab === 'profile' && <ProfileScreen pending={pending} onSync={sync} online={online} />}
       </View>
 

@@ -249,9 +249,7 @@
     "emptyTitle": "फ्लास्क खाली है",
     "emptyBody": "डिपो से जारी होते ही स्टॉक यहाँ दिखेगा।",
     "consumables": "अन्य सामान",
-    "errorTitle": "आपका स्टॉक नहीं आ सका",
-    "readyTitle": "{{count}} स्ट्रॉ तैयार",
-    "readyBody": "आप इतनी AI घटनाएँ दर्ज कर सकते हैं।"
+    "errorTitle": "आपका स्टॉक नहीं आ सका"
   },
   "profile": {
     "maitId": "मैत #{{id}}",
