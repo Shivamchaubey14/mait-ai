@@ -60,8 +60,7 @@ export default function BottomNav({
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
         testID="tab-newAi"
       >
-        <Ionicons name="add" size={26} color={colors.surface} />
-        <Text style={styles.fabLabel}>{t('nav.newAi')}</Text>
+        <Ionicons name="add" size={28} color={colors.surface} />
       </Pressable>
 
       <View style={styles.bar}>
@@ -86,6 +85,7 @@ export default function BottomNav({
                 <Text style={[styles.label, isActive && styles.labelActive]} numberOfLines={1}>
                   {t(`nav.${key}`)}
                 </Text>
+
                 {key === 'home' && pending > 0 && (
                   <View style={styles.badge} testID="nav-pending">
                     <Text style={styles.badgeLabel}>{pending > 9 ? '9+' : pending}</Text>
@@ -100,7 +100,7 @@ export default function BottomNav({
   );
 }
 
-const FAB = 52;
+const FAB = 56;
 
 const styles = StyleSheet.create({
   // The bar floats: lifted off the bottom edge so an old Android handset's hardware buttons
@@ -111,23 +111,20 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
 
-  // A pill above the bar, labelled. The label is why it is a pill and not a circle: "+" alone
-  // is a guess, and this is the one control a Mait uses on every visit.
+  // A circle above the bar. Unlabelled, because the empty state points an arrow at it and
+  // says what it does — teaching it once beats captioning it forever.
   fab: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[2],
     alignSelf: 'center',
+    width: FAB,
     height: FAB,
-    paddingHorizontal: spacing[5],
     marginBottom: spacing[3],
     borderRadius: FAB / 2,
     backgroundColor: colors.primary,
     ...shadows.raised,
   },
   fabPressed: { backgroundColor: colors.primaryPressed },
-  fabLabel: { ...typography.bodyStrong, color: colors.surface },
 
   bar: {
     flexDirection: 'row',
@@ -142,14 +139,15 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center', minHeight: MIN_TOUCH_TARGET },
 
-  // Icon and label share one pill, so the selected tab is a shape rather than a shade.
+  // Icon over label on a rounded-rect wash, so the selected tab is a shape rather than a
+  // shade. Side by side the wash stretched into a wide bar that read as a rectangle.
   pill: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
+    gap: spacing[1],
+    minWidth: 72,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    borderRadius: radius.pill,
+    borderRadius: radius.md,
   },
   pillActive: { backgroundColor: colors.primaryWash },
 
@@ -161,8 +159,8 @@ const styles = StyleSheet.create({
 
   badge: {
     position: 'absolute',
-    top: -2,
-    right: 0,
+    top: 2,
+    right: spacing[3],
     minWidth: 18,
     paddingHorizontal: 4,
     borderRadius: radius.pill,
