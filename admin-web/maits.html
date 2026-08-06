@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maits · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="maits">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Maits</h1>
+            <p class="topbar__meta"><span id="mait-count">—</span> on the roster</p>
+          </div>
+          <div class="topbar__actions">
+            <a class="btn btn--primary" href="mait-activate.html">Activate pending →</a>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- The single fact that decides the rollout schedule: most of the roster cannot sign
+             in yet, and no amount of app work changes that. -->
+        <div class="notice notice--warn" id="backlog" hidden>
+          <span class="notice__swatch" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title" id="backlog-title">—</p>
+            <p class="notice__body">
+              They cannot sign in until a number is set. Work through them MPP by MPP.
+            </p>
+          </div>
+          <a class="btn btn--dark notice__action" href="mait-activate.html">Open the queue</a>
+        </div>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search name or Mait code"
+            aria-label="Search name or Mait code"
+          />
+          <button class="chip" id="filter-needs-mobile" type="button" aria-pressed="false">
+            Needs mobile
+          </button>
+          <button class="chip" id="filter-pending" type="button" aria-pressed="false">
+            Not activated
+          </button>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Maits">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Mait</th>
+                  <th scope="col">Code</th>
+                  <th scope="col">MPPs</th>
+                  <th scope="col">Mobile</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="5">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/maits.js"></script>
+  </body>
+</html>

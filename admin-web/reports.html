@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reports &amp; export · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+    <link rel="stylesheet" href="assets/css/forms.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="reports">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Reports &amp; export</h1>
+            <p class="topbar__meta">Build a query, preview it, export it</p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--primary" id="export" type="button">Export CSV →</button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <section class="panel" aria-label="Query">
+          <form id="query-form" class="form-grid" novalidate>
+            <div class="field">
+              <label class="field__label" for="report">Report</label>
+              <select class="select field__control" id="report">
+                <option value="ai-events">AI events</option>
+              </select>
+              <p class="field__hint">Payment and indent reports follow their phases</p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="date-from">From</label>
+              <input class="input field__control" id="date-from" type="date" />
+              <p class="field__hint">Leave both blank for everything</p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="date-to">To</label>
+              <input class="input field__control" id="date-to" type="date" />
+              <p class="field__hint">By capture date</p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="filter-mpp">MPP</label>
+              <select class="select field__control" id="filter-mpp">
+                <option value="">All MPPs</option>
+              </select>
+              <p class="field__hint">One MPP, or all of them</p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="filter-status">Status</label>
+              <select class="select field__control" id="filter-status">
+                <option value="">All statuses</option>
+                <option value="completed">Completed</option>
+                <option value="payment_pending">Payment pending</option>
+                <option value="straw_verified">Straw verified</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <p class="field__hint">Completed is what the business counts</p>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn--primary" type="submit">Run query</button>
+              <button class="btn" type="reset" id="clear">Clear</button>
+              <p class="field__hint">Personal data is excluded from every export</p>
+            </div>
+          </form>
+        </section>
+
+        <!-- Said plainly rather than discovered when the file is opened. -->
+        <div class="notice">
+          <span class="notice__swatch" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">Exports carry no personal data</p>
+            <p class="notice__body">
+              No Aadhaar, no bank details, no full mobile numbers — the file leaves this system, so
+              it carries only what is safe outside it. Every export is logged against your account
+              with the filters you used.
+            </p>
+          </div>
+        </div>
+
+        <section class="panel panel--flush" aria-label="Preview">
+          <div class="panel__head form-panel__head">
+            <h2 class="panel__title">Preview</h2>
+            <span class="panel__count" id="preview-count">—</span>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Event</th>
+                  <th scope="col">Captured</th>
+                  <th scope="col">MPP</th>
+                  <th scope="col">Mait</th>
+                  <th scope="col">Payment</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="6">Run a query to preview it.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/reports.js"></script>
+  </body>
+</html>

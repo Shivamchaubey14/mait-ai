@@ -198,7 +198,9 @@
     });
 
     $('#export').on('click', function () {
-      window.location.href = '/api/v1/reports/export/?format=csv';
+      // The reports screen builds the query and streams the file with the bearer token
+      // attached; a bare link here would arrive unauthenticated.
+      window.location.href = 'reports.html';
     });
   });
 })(jQuery, window.MaitAI);

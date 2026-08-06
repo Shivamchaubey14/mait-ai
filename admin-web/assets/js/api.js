@@ -176,6 +176,11 @@ window.MaitAI = window.MaitAI || {};
     tokens: tokens,
     problemToLines: problemToLines,
 
+    /** Exposed for the one caller that streams a file and cannot go through request(). */
+    baseUrl: function () {
+      return BASE_URL;
+    },
+
     login: function (username, password) {
       return request({
         path: '/auth/login/',
@@ -285,6 +290,20 @@ window.MaitAI = window.MaitAI || {};
 
     activateMait: function (body) {
       return request({ path: '/admin/users/activate-mait/', method: 'POST', body: body });
+    },
+
+    /** The whole Sahayak roster, activated or not — see the endpoint's own docstring. */
+    maitRoster: function (query) {
+      return request({ path: '/admin/users/maits/', query: query });
+    },
+
+    /** Stock across every Mait. The mait/ endpoints only ever report the caller's own. */
+    inventoryOversight: function () {
+      return request({ path: '/admin/inventory/' });
+    },
+
+    indents: function (query) {
+      return request({ path: '/indents/', query: query });
     },
 
     activationReadiness: function () {

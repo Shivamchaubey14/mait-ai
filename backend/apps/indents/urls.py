@@ -10,10 +10,18 @@ genuinely needs to change, update the contract and the OpenAPI schema in the sam
 request — CI fails on schema drift.
 """
 
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import SimpleRouter
+
+from .views import IndentViewSet
 
 app_name = "indents"
 
-urlpatterns: list[path] = [
-    # Populated in Phase 5, Day 19.
+# Empty prefix: config/urls.py already mounts this module at `indents/`. SimpleRouter rather
+# than DefaultRouter because the latter's API-root view would sit on the list route's path.
+router = SimpleRouter()
+router.register("", IndentViewSet, basename="indent")
+
+urlpatterns = [
+    path("", include(router.urls)),
 ]

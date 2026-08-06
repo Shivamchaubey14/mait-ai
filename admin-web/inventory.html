@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inventory oversight · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="inventory">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Inventory oversight</h1>
+            <p class="topbar__meta">Stock in the hands of <span id="mait-count">—</span> Maits</p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <section class="tiles" aria-label="Stock summary">
+          <article class="tile">
+            <p class="tile__label">Straws with Maits</p>
+            <p class="tile__value" id="total">—</p>
+            <p class="tile__foot">Held in the field right now</p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">Running low</p>
+            <p class="tile__value tile__value--warn" id="low">—</p>
+            <p class="tile__foot" id="low-foot">Need an indent soon</p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">At zero</p>
+            <p class="tile__value tile__value--bad" id="zero">—</p>
+            <!-- Not a warning. A Mait at zero records nothing at all. -->
+            <p class="tile__foot tile__foot--bad">Cannot record any event</p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">Breeds held</p>
+            <p class="tile__value" id="breeds">—</p>
+            <p class="tile__foot">Across the whole field</p>
+          </article>
+        </section>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search Mait or MPP"
+            aria-label="Search Mait or MPP"
+          />
+          <button class="chip is-active" id="filter-low" type="button" aria-pressed="true">
+            Low stock first
+          </button>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Stock by Mait">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr id="head">
+                  <th scope="col">Mait</th>
+                  <th scope="col">MPPs</th>
+                  <th scope="col">Total</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="4">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/inventory.js"></script>
+  </body>
+</html>

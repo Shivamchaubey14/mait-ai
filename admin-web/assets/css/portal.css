@@ -83,6 +83,14 @@ a:hover {
   letter-spacing: 0.18em;
 }
 
+/* The gap lives here rather than on `.side`, which only separates the mark from the nav as a
+   whole. Without it the hover backgrounds of adjacent links touch and read as one block. */
+.side nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
 .side__link {
   display: flex;
   align-items: center;
@@ -105,16 +113,22 @@ a:hover {
   font-weight: 600;
 }
 
-.side__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--ink-400);
+/* Drawn in currentColor, so it follows the link into its hover and active states without a
+   second rule per state. */
+.side__icon {
+  width: 18px;
+  height: 18px;
   flex: none;
+  opacity: 0.75;
 }
 
-.side__link.is-active .side__dot {
-  background: var(--color-surface);
+.side__link:hover .side__icon,
+.side__link.is-active .side__icon {
+  opacity: 1;
+}
+
+.side__label {
+  flex: 1;
 }
 
 /* Rides on the nav item so the backlog is visible from every screen, not only once someone

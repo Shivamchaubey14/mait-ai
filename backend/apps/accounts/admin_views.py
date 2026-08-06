@@ -8,7 +8,7 @@ of who created it is exactly what an audit is meant to catch.
 
 from __future__ import annotations
 
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters, mixins, status, viewsets
@@ -174,5 +174,72 @@ class AdminUserViewSet(
         response.data["summary"] = {
             "pending_total": pending.count(),
             "without_mobile": without_mobile,
+        }
+        return response
+
+    @extend_schema(
+        summary="The Mait roster",
+        description=(
+            "Every Sahayak from the SAP master, activated or not — the list the admin "
+            "portal's Maits screen works from.\n\n"
+            "Separate from `/admin/users/` because most of the roster has no login: 93% "
+            "arrive from SAP with no mobile number, and a user-only list would show a "
+            "handful of activated Maits and silently omit everyone still waiting.\n\n"
+            "Filter with `?needs_mobile=true`, `?activated=false`, `?mpp=<code>` or "
+            "`?search=<name or code>`."
+        ),
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"], url_path="maits")
+    def maits(self, request):
+        roster = Mait.objects.select_related("user").prefetch_related("mpps")
+
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            roster = roster.filter(
+                Q(name__icontains=search)
+                | Q(sahayak_vendor_code__icontains=search)
+                | Q(mobile_no__icontains=search)
+            )
+
+        needs_mobile = request.query_params.get("needs_mobile")
+        if needs_mobile in ("true", "1"):
+            roster = roster.filter(mobile_no="")
+
+        activated = request.query_params.get("activated")
+        if activated in ("true", "1"):
+            roster = roster.filter(user__isnull=False)
+        elif activated in ("false", "0"):
+            roster = roster.filter(user__isnull=True)
+
+        mpp_code = request.query_params.get("mpp")
+        if mpp_code:
+            roster = roster.filter(mpps__mpp_code=mpp_code)
+
+        roster = roster.order_by("name")
+        page = self.paginate_queryset(roster)
+
+        # Counted over the unfiltered roster: the banner on the Maits screen reports the size
+        # of the whole activation backlog, which a filtered count would understate.
+        everyone = Mait.objects.all()
+        rows = [
+            {
+                "id": mait.id,
+                "sahayak_vendor_code": mait.sahayak_vendor_code,
+                "name": mait.name,
+                "mobile_no": mait.mobile_no,
+                "needs_mobile": not mait.mobile_no,
+                "is_active": mait.is_active,
+                "activated": mait.user_id is not None,
+                "mpp_codes": [mpp.mpp_code for mpp in mait.mpps.all()],
+                "mpp_count": len(mait.mpps.all()),
+            }
+            for mait in page
+        ]
+        response = self.get_paginated_response(rows)
+        response.data["summary"] = {
+            "total": everyone.count(),
+            "activated": everyone.filter(user__isnull=False).count(),
+            "without_mobile": everyone.filter(mobile_no="").count(),
         }
         return response

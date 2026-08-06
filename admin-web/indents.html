@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Indents · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="indents">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Indents</h1>
+            <p class="topbar__meta"><span id="indent-count">—</span></p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search Mait, breed or Indent Easy reference"
+            aria-label="Search Mait, breed or Indent Easy reference"
+          />
+          <button class="chip" id="filter-stale" type="button" aria-pressed="false">
+            Stale first
+          </button>
+          <select class="select" id="filter-status" aria-label="Status">
+            <option value="">Status: all</option>
+            <option value="requested">Requested</option>
+            <option value="approved">Approved</option>
+            <option value="issued">Issued</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <select class="select" id="filter-sync" aria-label="Indent Easy sync">
+            <option value="">Sync: all</option>
+            <option value="pending">Not yet pushed</option>
+            <option value="synced">Pushed</option>
+            <option value="failed">Push failed</option>
+          </select>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Indents">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Indent</th>
+                  <th scope="col">Mait</th>
+                  <th scope="col">Item</th>
+                  <th scope="col">Raised</th>
+                  <th scope="col">Indent Easy</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="6">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </section>
+
+        <!-- Two statuses that routinely disagree, and the disagreement is the bug worth
+             catching. -->
+        <div class="notice">
+          <span class="notice__swatch" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">Approved is not the same as delivered</p>
+            <p class="notice__body">
+              Status is where the request reached in Indent Easy; sync is whether Indent Easy heard
+              about it at all. An indent approved days ago that never synced is a Mait waiting on
+              stock nobody is bringing.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/indents.js"></script>
+  </body>
+</html>

@@ -6,6 +6,26 @@ info:
     Producer Company. Serves the Mait mobile app, the admin web portal and the Indent
     Easy integration.
 paths:
+  /api/v1/admin/inventory/:
+    get:
+      operationId: admin_inventory_retrieve
+      description: |-
+        Admin oversight of where the straws are (SRS §6.7.6). The Mait-facing endpoints only ever report the caller's own stock, so this is the only view that can answer who is about to run out.
+
+        A Mait at zero is reported separately from one merely low: at zero they cannot record an AI event at all, which is a stopped Mait rather than a warning.
+      summary: Stock across every Mait
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/admin/uploads/:
     get:
       operationId: admin_uploads_list
@@ -411,6 +431,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminUser'
+          description: ''
+  /api/v1/admin/users/maits/:
+    get:
+      operationId: admin_users_maits_retrieve
+      description: |-
+        Every Sahayak from the SAP master, activated or not — the list the admin portal's Maits screen works from.
+
+        Separate from `/admin/users/` because most of the roster has no login: 93% arrive from SAP with no mobile number, and a user-only list would show a handful of activated Maits and silently omit everyone still waiting.
+
+        Filter with `?needs_mobile=true`, `?activated=false`, `?mpp=<code>` or `?search=<name or code>`.
+      summary: The Mait roster
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/v1/admin/users/pending-maits/:
     get:
@@ -1109,6 +1151,134 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/indents/:
+    get:
+      operationId: indents_list
+      description: A Mait sees their own; an admin sees all. Filter with `status`,
+        `sync_status`, `mait`, `search`, and `stale=true` for the ones nobody is moving.
+      summary: List indents
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: mait
+        schema:
+          type: number
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: stale
+        schema:
+          type: boolean
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - approved
+          - issued
+          - rejected
+          - requested
+        description: |-
+          * `requested` - Requested
+          * `approved` - Approved
+          * `issued` - Issued
+          * `rejected` - Rejected
+      - in: query
+        name: sync_status
+        schema:
+          type: string
+          enum:
+          - failed
+          - pending
+          - synced
+        description: |-
+          * `pending` - Not yet pushed
+          * `synced` - Pushed to Indent Easy
+          * `failed` - Push failed
+      tags:
+      - indents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedIndentList'
+          description: ''
+    post:
+      operationId: indents_create
+      description: |-
+        Straws are requested by breed, not by straw number — which physical straws are issued is decided at the depot.
+
+        Accepts an `Idempotency-Key`: the app queues indents offline alongside AI events, and a blind retry must not raise the request twice.
+      summary: Raise a stock indent
+      tags:
+      - indents
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IndentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IndentCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Indent'
+          description: ''
+  /api/v1/indents/{id}/:
+    get:
+      operationId: indents_retrieve
+      description: Stock requests, raised by a Mait and watched by an admin (SRS §9.8).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this indent request.
+        required: true
+      tags:
+      - indents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Indent'
+          description: ''
   /api/v1/mait/inventory/:
     get:
       operationId: mait_inventory_retrieve
@@ -1466,6 +1636,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NonMemberDetail'
+          description: ''
+  /api/v1/reports/export/:
+    get:
+      operationId: reports_export_retrieve
+      description: |-
+        Filter with `date_from`, `date_to`, `mpp`, `mait` and `status`.
+
+        Personal data is excluded: the file leaves this system, so it carries no Aadhaar, no bank details and no full mobile number. Every export is audit-logged against the admin who ran it, including the filters used.
+      summary: Export AI events as CSV
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: YYYY-MM-DD
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: YYYY-MM-DD
+      - in: query
+        name: mait
+        schema:
+          type: integer
+        description: Mait id
+      - in: query
+        name: mpp
+        schema:
+          type: string
+        description: MPP code
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: AI event status
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
           description: ''
   /api/v1/semen-batches/{unique_no}/validate/:
     get:
@@ -2121,6 +2337,143 @@ components:
         * `completed` - Completed
         * `completed_with_errors` - Completed with errors
         * `failed` - Failed
+    Indent:
+      type: object
+      description: |-
+        Read shape for an indent.
+
+        Carries both statuses because they answer different questions and routinely disagree:
+        ``status`` is where the request has got to in Indent Easy, ``sync_status`` is whether
+        Indent Easy has even heard about it. An indent approved a week ago that never synced is
+        the failure mode the admin screen exists to catch — it looks fine on one field and is
+        stuck on the other.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        mait:
+          type: integer
+          readOnly: true
+        mait_name:
+          type: string
+          readOnly: true
+        mait_code:
+          type: string
+          readOnly: true
+        product_type:
+          allOf:
+          - $ref: '#/components/schemas/ProductTypeEnum'
+          readOnly: true
+        breed:
+          type: string
+          readOnly: true
+          description: For straw requests (SRS §6.6.1).
+        item:
+          type: string
+          description: What was asked for, in the words the admin screen shows.
+          readOnly: true
+        qty_requested:
+          type: integer
+          readOnly: true
+        qty_issued:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/IndentStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        sync_status:
+          allOf:
+          - $ref: '#/components/schemas/SyncStatusEnum'
+          readOnly: true
+        sync_status_display:
+          type: string
+          readOnly: true
+        sync_attempts:
+          type: integer
+          readOnly: true
+        last_sync_error:
+          type: string
+          readOnly: true
+        indent_easy_ref_no:
+          type: string
+          readOnly: true
+          description: Reference returned by Indent Easy; dedupes GRN callbacks (SRS
+            §6.6.5).
+        requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        note:
+          type: string
+          readOnly: true
+      required:
+      - breed
+      - id
+      - indent_easy_ref_no
+      - issued_at
+      - item
+      - last_sync_error
+      - mait
+      - mait_code
+      - mait_name
+      - note
+      - product_type
+      - qty_issued
+      - qty_requested
+      - requested_at
+      - status
+      - status_display
+      - sync_attempts
+      - sync_status
+      - sync_status_display
+    IndentCreateRequest:
+      type: object
+      description: |-
+        A Mait raising a request from the app (SRS §6.6.1).
+
+        Straws are requested by breed rather than by straw number: which physical straws get
+        issued is decided at the depot, not by the Mait asking.
+      properties:
+        product_type:
+          type: string
+          minLength: 1
+          maxLength: 12
+        breed:
+          type: string
+          maxLength: 30
+        product_ref_id:
+          type: integer
+          nullable: true
+        qty_requested:
+          type: integer
+          minimum: 1
+        note:
+          type: string
+          maxLength: 255
+      required:
+      - product_type
+      - qty_requested
+    IndentStatusEnum:
+      enum:
+      - requested
+      - approved
+      - issued
+      - rejected
+      type: string
+      description: |-
+        * `requested` - Requested
+        * `approved` - Approved
+        * `issued` - Issued
+        * `rejected` - Rejected
     LedgerEntry:
       type: object
       description: A movement in the immutable stock ledger (SRS §9.5).
@@ -2861,6 +3214,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DataUploadLog'
+    PaginatedIndentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Indent'
     PaginatedLedgerEntryList:
       type: object
       required:
@@ -3174,6 +3550,16 @@ components:
       - reason
       - straw
       - valid
+    SyncStatusEnum:
+      enum:
+      - pending
+      - synced
+      - failed
+      type: string
+      description: |-
+        * `pending` - Not yet pushed
+        * `synced` - Pushed to Indent Easy
+        * `failed` - Push failed
     TokenPair:
       type: object
       description: The JWT pair every successful login returns.

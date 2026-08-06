@@ -15,6 +15,7 @@ from .views import (
     InventoryLineViewSet,
     LedgerViewSet,
     StrawValidateView,
+    inventory_oversight,
     inventory_summary,
     ledger_balance_check,
 )
@@ -33,5 +34,8 @@ urlpatterns = [
     ),
     path("mait/inventory/", inventory_summary, name="inventory-summary"),
     path("mait/inventory/check/", ledger_balance_check, name="inventory-check"),
+    # Admin oversight across every Mait. Deliberately not under `mait/`, which is the
+    # namespace for "the caller's own".
+    path("admin/inventory/", inventory_oversight, name="inventory-oversight"),
     path("", include(router.urls)),
 ]

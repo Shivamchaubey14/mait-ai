@@ -99,6 +99,7 @@ returns `429` with `Retry-After`.
 | GET | `/semen-batches/{unique_no}/validate/` | Validate a scanned straw belongs to the Mait's stock & is unused | Mait |
 | GET | `/mait/inventory/` | Logged-in Mait's current stock balance by product | Mait |
 | GET | `/mait/inventory/ledger/` | Stock movement history (issues, consumption, returns) | Mait |
+| GET | `/admin/inventory/` | Stock across every Mait, with low/at-zero counts | Admin |
 
 ## 9.6 AI event
 
@@ -148,6 +149,9 @@ returns `429` with `Retry-After`.
 | GET | `/admin/users/` | List platform users | Admin |
 | POST | `/admin/users/` | Create an Admin account | Admin |
 | PATCH | `/admin/users/{id}/` | Activate/deactivate, change role/MPP assignment | Admin |
+| GET | `/admin/users/maits/` | The Sahayak roster, activated or not (filters: search, needs_mobile, activated, mpp) | Admin |
+| GET | `/admin/users/pending-maits/` | Sahayaks with no login yet | Admin |
+| POST | `/admin/users/activate-mait/` | Give a Sahayak a mobile number and a login | Admin |
 
 ## Operational
 

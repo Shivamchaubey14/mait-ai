@@ -18,7 +18,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.exceptions import InsufficientStock, StrawAlreadyConsumed
-from apps.core.permissions import IsMait
+from apps.core.permissions import IsAdmin, IsMait
+from apps.masterdata.models import Mait
 
 from .models import Consumable, MaitInventory, MaitInventoryLedger, ProductType, SemenBatch
 from .serializers import (
@@ -195,6 +196,82 @@ class LedgerViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+
+@extend_schema(
+    tags=["inventory"],
+    summary="Stock across every Mait",
+    description=(
+        "Admin oversight of where the straws are (SRS §6.7.6). The Mait-facing endpoints "
+        "only ever report the caller's own stock, so this is the only view that can answer "
+        "who is about to run out.\n\n"
+        "A Mait at zero is reported separately from one merely low: at zero they cannot "
+        "record an AI event at all, which is a stopped Mait rather than a warning."
+    ),
+    responses={200: dict},
+)
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def inventory_oversight(request):
+    lines = (
+        MaitInventory.objects.filter(product_type=ProductType.STRAW, qty_available__gt=0)
+        .select_related("mait")
+        .prefetch_related("mait__mpps")
+    )
+
+    batches = SemenBatch.objects.in_bulk([line.product_ref_id for line in lines])
+
+    # Rolled up per Mait and per breed in one pass. Doing it in SQL would need a join through
+    # product_ref_id, which is a plain integer rather than a foreign key precisely so stock
+    # can hold straws and consumables in one table.
+    holders: dict[int, dict] = {}
+    for line in lines:
+        holder = holders.setdefault(
+            line.mait_id,
+            {
+                "mait_id": line.mait_id,
+                "name": line.mait.name,
+                "sahayak_vendor_code": line.mait.sahayak_vendor_code,
+                "mpp_codes": [mpp.mpp_code for mpp in line.mait.mpps.all()],
+                "by_breed": {},
+                "total": 0,
+            },
+        )
+        batch = batches.get(line.product_ref_id)
+        breed = batch.breed if batch else "unknown"
+        holder["by_breed"][breed] = holder["by_breed"].get(breed, 0) + line.qty_available
+        holder["total"] += line.qty_available
+
+    # Every active Mait appears, including the ones holding nothing — they are the whole
+    # point of the screen, and a list built only from stock rows would omit them.
+    for mait in Mait.objects.filter(is_active=True).prefetch_related("mpps"):
+        holders.setdefault(
+            mait.id,
+            {
+                "mait_id": mait.id,
+                "name": mait.name,
+                "sahayak_vendor_code": mait.sahayak_vendor_code,
+                "mpp_codes": [mpp.mpp_code for mpp in mait.mpps.all()],
+                "by_breed": {},
+                "total": 0,
+            },
+        )
+
+    rows = sorted(holders.values(), key=lambda row: (row["total"], row["name"]))
+
+    threshold = settings.LOW_STOCK_THRESHOLD
+    return Response(
+        {
+            "summary": {
+                "total_straws": sum(row["total"] for row in rows),
+                "maits": len(rows),
+                "low": sum(1 for row in rows if 0 < row["total"] <= threshold),
+                "at_zero": sum(1 for row in rows if row["total"] == 0),
+                "low_stock_threshold": threshold,
+            },
+            "results": rows,
+        }
+    )
 
 
 @extend_schema(tags=["inventory"])

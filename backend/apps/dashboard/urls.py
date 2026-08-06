@@ -10,6 +10,7 @@ request — CI fails on schema drift.
 
 from django.urls import path
 
+from .reports import export_csv
 from .views import activation_readiness, mait_performance, mpp_coverage, summary, trends
 
 app_name = "dashboard"
@@ -20,4 +21,5 @@ urlpatterns = [
     path("dashboard/mait-performance/", mait_performance, name="mait-performance"),
     path("dashboard/mpp-coverage/", mpp_coverage, name="mpp-coverage"),
     path("dashboard/activation-readiness/", activation_readiness, name="activation-readiness"),
+    path("reports/export/", export_csv, name="reports-export"),
 ]
