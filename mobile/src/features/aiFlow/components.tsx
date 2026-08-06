@@ -75,6 +75,8 @@ interface FlowScreenProps {
   link?: { label: string; onPress: () => void; testID?: string };
   /** Pins the hero and scrolls only the body. For forms longer than a screen. */
   stickyHero?: boolean;
+  /** A line above the CTA — a running total, a readiness note. */
+  footerNote?: React.ReactNode;
 }
 
 export function FlowScreen({
@@ -88,6 +90,7 @@ export function FlowScreen({
   cta,
   link,
   stickyHero = false,
+  footerNote,
 }: FlowScreenProps): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -163,7 +166,7 @@ export function FlowScreen({
             {children}
           </View>
 
-          {(cta || link) && (
+          {(cta || link || footerNote) && (
             <View
               style={[
                 styles.footer,
@@ -174,6 +177,8 @@ export function FlowScreen({
                 },
               ]}
             >
+              {footerNote}
+
               {!!link && (
                 <Pressable
                   accessibilityRole="button"

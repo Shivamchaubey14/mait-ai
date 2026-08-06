@@ -309,12 +309,20 @@
     "confirmSend": "Confirm and send",
     "reviewNoteTitle": "The depot packs from this",
     "reviewNoteBody": "Nobody there can ask what you meant, so read it back before sending.",
-    "qty": "Qty",
-    "chooseCategory": "Choose a category",
     "categoryShort_straw": "Straw",
     "categoryShort_consumable": "Consumable",
     "categoryShort_asset": "Equipment",
-    "removeLine": "Remove line {{n}}"
+    "removeLine": "Remove line {{n}}",
+    "item": "Item",
+    "straws": "straws",
+    "units": "units",
+    "less": "Fewer",
+    "more": "More",
+    "inStepsOf": "In steps of {{count}}",
+    "oneAtATime": "One at a time",
+    "footerCount": "{{lines}} lines · {{straws}} straws",
+    "readyToSend": "Ready to send",
+    "finishTheLines": "Finish each line"
   },
   "settings": {
     "title": "Settings",

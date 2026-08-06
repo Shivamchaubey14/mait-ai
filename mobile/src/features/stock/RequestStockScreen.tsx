@@ -1,12 +1,9 @@
 /**
  * Request stock — M18 (SRS §6.6.1).
  *
- * One line is one row: category, product, quantity, side by side. A Mait restocking is
- * writing a list, and a list reads across — three stacked sections per item turned a
- * four-item request into four screens of scrolling.
- *
- * Category and product open a sheet rather than expanding inline, so adding a fourth line
- * never pushes the first three off the screen.
+ * One card per line: category, product, quantity. A Mait restocking is writing a list, and
+ * each item is a small decision made in one place rather than three fields scattered down a
+ * form.
  *
  * The API takes one product per indent, so each line is posted as its own request, each with
  * its own idempotency key — a double tap on a bad connection cannot make the depot pack
@@ -28,13 +25,16 @@ import {
 import type { ProblemDetails } from '@api/types';
 import BottomSheet, { Sheet, SheetSection } from '@/components/BottomSheet';
 import { FlowNotice, FlowScreen, FlowSpacer } from '@/features/aiFlow/components';
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 type Category = 'straw' | 'consumable' | 'asset';
 
 /** What a full round usually needs. A Mait can change it; most will not have to. */
 const USUAL_STRAWS = 25;
+
+/** Straws are issued by the box, so nudging by one produces a number nobody can fill. */
+const STRAW_STEP = 5;
 
 const CATEGORY_ICON: Record<Category, IoniconName> = {
   straw: 'thermometer-outline',
@@ -54,6 +54,10 @@ function blankLine(): Line {
   return { id: newClientUuid(), category: 'straw', product: null, qty: String(USUAL_STRAWS) };
 }
 
+function stepOf(line: Line): number {
+  return line.category === 'straw' ? STRAW_STEP : 1;
+}
+
 export default function RequestStockScreen({
   onDone,
   onBack,
@@ -70,10 +74,7 @@ export default function RequestStockScreen({
   const [createIndent, { isLoading }] = useCreateIndentMutation();
 
   const [lines, setLines] = useState<Line[]>([blankLine()]);
-  /** Which cell is open: the line, and which of its two dropdowns. */
-  const [picking, setPicking] = useState<{ id: string; field: 'category' | 'product' } | null>(
-    null,
-  );
+  const [picking, setPicking] = useState<{ id: string; field: 'product' } | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [sent, setSent] = useState(0);
@@ -97,6 +98,14 @@ export default function RequestStockScreen({
     }
     const product = (products.data ?? []).find(row => row.code === line.product);
     return product ? product.name : line.product;
+  }
+
+  function unitFor(line: Line): string {
+    if (line.category === 'straw') {
+      return t('requestStock.straws');
+    }
+    const product = (products.data ?? []).find(row => row.code === line.product);
+    return product?.unit ?? t('requestStock.units');
   }
 
   function productOptions(category: Category): SheetSection[] {
@@ -129,17 +138,6 @@ export default function RequestStockScreen({
       },
     ];
   }
-
-  const categoryOptions: SheetSection[] = [
-    {
-      title: t('requestStock.category'),
-      options: (['straw', 'consumable', 'asset'] as Category[]).map(category => ({
-        value: category,
-        label: t(`requestStock.category_${category}`),
-        meta: t(`requestStock.categoryHint_${category}`),
-      })),
-    },
-  ];
 
   const submit = async () => {
     setFailed(null);
@@ -189,6 +187,9 @@ export default function RequestStockScreen({
   }
 
   const openLine = lines.find(line => line.id === picking?.id) ?? null;
+  const totalStraws = lines
+    .filter(line => line.category === 'straw')
+    .reduce((sum, line) => sum + (Number(line.qty) || 0), 0);
 
   return (
     <FlowScreen
@@ -198,121 +199,156 @@ export default function RequestStockScreen({
       subtitle={t('requestStock.subtitle')}
       onBack={onBack}
       stickyHero
+      footerNote={
+        <View style={styles.footerNote}>
+          <Text style={styles.footerCount}>
+            {t('requestStock.footerCount', { lines: lines.length, straws: totalStraws })}
+          </Text>
+          <Text style={[styles.footerState, !canSubmit && styles.footerStateWaiting]}>
+            {canSubmit ? t('requestStock.readyToSend') : t('requestStock.finishTheLines')}
+          </Text>
+        </View>
+      }
+      cta={{
+        label: t('requestStock.submit'),
+        onPress: () => setReviewing(true),
+        disabled: !canSubmit,
+        busy: isLoading,
+        testID: 'indent-submit',
+      }}
     >
-      {/* Column headings once, not per row: three labels repeated down the screen is three
-          times the reading for the same information. */}
-      <View style={styles.headings}>
-        <Text style={[styles.heading, styles.colCategory]}>{t('requestStock.category')}</Text>
-        <Text style={[styles.heading, styles.colProduct]}>{t('requestStock.product')}</Text>
-        <Text style={[styles.heading, styles.colQty]}>{t('requestStock.qty')}</Text>
-      </View>
-
       {lines.map((line, index) => (
-        <View key={line.id} style={styles.lineWrap}>
-          <View style={styles.line}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('requestStock.category')}
-              onPress={() => setPicking({ id: line.id, field: 'category' })}
-              style={({ pressed }) => [
-                styles.cell,
-                styles.colCategory,
-                pressed && styles.cellPressed,
-              ]}
-              testID={`indent-cat-${index}`}
-            >
-              <Ionicons name={CATEGORY_ICON[line.category]} size={14} color={colors.primaryDark} />
-              <Text style={styles.cellValue} numberOfLines={1}>
-                {t(`requestStock.categoryShort_${line.category}`)}
-              </Text>
-              <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('requestStock.product')}
-              onPress={() => setPicking({ id: line.id, field: 'product' })}
-              style={({ pressed }) => [
-                styles.cell,
-                styles.colProduct,
-                pressed && styles.cellPressed,
-              ]}
-              testID={`indent-prod-${index}`}
-            >
-              <Text
-                style={[styles.cellValue, !line.product && styles.cellPlaceholder]}
-                numberOfLines={1}
-              >
-                {productLabel(line) ?? t('requestStock.choose')}
-              </Text>
-              <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-            </Pressable>
-
-            <View style={[styles.cell, styles.colQty]}>
-              <TextInput
-                style={styles.qtyInput}
-                value={line.qty}
-                onChangeText={text => update(line.id, { qty: text.replace(/\D/g, '').slice(0, 4) })}
-                placeholder={line.category === 'straw' ? String(USUAL_STRAWS) : '1'}
-                placeholderTextColor={colors.textDisabled}
-                keyboardType="number-pad"
-                accessibilityLabel={t('requestStock.qty')}
-                testID={`indent-qty-${index}`}
-              />
+        <View key={line.id} style={styles.card}>
+          <View style={styles.cardHead}>
+            <View style={styles.number}>
+              <Text style={styles.numberLabel}>{index + 1}</Text>
             </View>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {t(`requestStock.categoryShort_${line.category}`)}
+              {productLabel(line) ? ` · ${productLabel(line)}` : ''}
+            </Text>
+            {lines.length > 1 && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('requestStock.removeLine', { n: index + 1 })}
+                onPress={() => setLines(current => current.filter(l => l.id !== line.id))}
+                style={styles.remove}
+                testID={`indent-remove-${index}`}
+              >
+                <Ionicons name="close" size={18} color={colors.error} />
+              </Pressable>
+            )}
           </View>
 
-          {lines.length > 1 && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setLines(current => current.filter(l => l.id !== line.id))}
-              style={styles.remove}
-              testID={`indent-remove-${index}`}
+          {/* All three visible at once: it is a choice of three, and a dropdown would hide
+              two of them behind a tap for nothing. */}
+          <View style={styles.segments}>
+            {(['straw', 'consumable', 'asset'] as Category[]).map(category => {
+              const active = line.category === category;
+              return (
+                <Pressable
+                  key={category}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  onPress={() =>
+                    update(line.id, {
+                      category,
+                      // The product list changes with the category, so the old choice is void.
+                      product: null,
+                      qty: category === 'straw' ? String(USUAL_STRAWS) : '1',
+                    })
+                  }
+                  style={[styles.segment, active && styles.segmentActive]}
+                  testID={`indent-cat-${category}-${index}`}
+                >
+                  <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
+                    {t(`requestStock.categoryShort_${category}`)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.fieldLabel}>
+            {line.category === 'straw' ? t('requestStock.breed') : t('requestStock.item')}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setPicking({ id: line.id, field: 'product' })}
+            style={({ pressed }) => [styles.dropdown, pressed && styles.dropdownPressed]}
+            testID={`indent-prod-${index}`}
+          >
+            <Text
+              style={[styles.dropdownValue, !line.product && styles.dropdownPlaceholder]}
+              numberOfLines={1}
             >
-              <Ionicons name="close-circle" size={16} color={colors.error} />
-              <Text style={styles.removeLabel}>
-                {t('requestStock.removeLine', { n: index + 1 })}
-              </Text>
-            </Pressable>
-          )}
+              {productLabel(line) ?? t('requestStock.choose')}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+          </Pressable>
+
+          <Text style={styles.fieldLabel}>{t('requestStock.quantity')}</Text>
+          <View style={styles.quantityRow}>
+            <View style={styles.stepper}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('requestStock.less')}
+                onPress={() =>
+                  update(line.id, {
+                    qty: String(Math.max(stepOf(line), (Number(line.qty) || 0) - stepOf(line))),
+                  })
+                }
+                style={({ pressed }) => [styles.step, pressed && styles.stepPressed]}
+                testID={`indent-minus-${index}`}
+              >
+                <Ionicons name="remove" size={18} color={colors.ink} />
+              </Pressable>
+
+              <View style={styles.quantityBody}>
+                <TextInput
+                  style={styles.quantityInput}
+                  value={line.qty}
+                  onChangeText={text =>
+                    update(line.id, { qty: text.replace(/\D/g, '').slice(0, 4) })
+                  }
+                  keyboardType="number-pad"
+                  accessibilityLabel={t('requestStock.quantity')}
+                  testID={`indent-qty-${index}`}
+                />
+                <Text style={styles.quantityUnit}>{unitFor(line)}</Text>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('requestStock.more')}
+                onPress={() =>
+                  update(line.id, { qty: String((Number(line.qty) || 0) + stepOf(line)) })
+                }
+                style={({ pressed }) => [styles.step, pressed && styles.stepPressed]}
+                testID={`indent-plus-${index}`}
+              >
+                <Ionicons name="add" size={18} color={colors.primaryDark} />
+              </Pressable>
+            </View>
+
+            <Text style={styles.stepHint}>
+              {line.category === 'straw'
+                ? t('requestStock.inStepsOf', { count: STRAW_STEP })
+                : t('requestStock.oneAtATime')}
+            </Text>
+          </View>
         </View>
       ))}
 
-      {/* Side by side: adding a line and finishing the list are the only two things left to
-          do here, and neither is worth a full-width button of its own. */}
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setLines(current => [...current, blankLine()])}
-          style={({ pressed }) => [styles.addButton, pressed && styles.addPressed]}
-          testID="indent-add-line"
-        >
-          <Ionicons name="add" size={18} color={colors.primaryDark} />
-          <Text style={styles.addLabel}>{t('requestStock.addAnother')}</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canSubmit, busy: isLoading }}
-          onPress={() => setReviewing(true)}
-          disabled={!canSubmit || isLoading}
-          style={({ pressed }) => [
-            styles.submitButton,
-            (!canSubmit || isLoading) && styles.submitDisabled,
-            pressed && canSubmit && styles.submitPressed,
-          ]}
-          testID="indent-submit"
-        >
-          <Text style={[styles.submitLabel, !canSubmit && styles.submitLabelDisabled]}>
-            {t('requestStock.submit')}
-          </Text>
-          <Ionicons
-            name="arrow-forward"
-            size={16}
-            color={canSubmit ? colors.surface : colors.textDisabled}
-          />
-        </Pressable>
-      </View>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setLines(current => [...current, blankLine()])}
+        style={({ pressed }) => [styles.addButton, pressed && styles.addPressed]}
+        testID="indent-add-line"
+      >
+        <Ionicons name="add" size={18} color={colors.primaryDark} />
+        <Text style={styles.addLabel}>{t('requestStock.addAnother')}</Text>
+      </Pressable>
 
       {!!failed && <FlowNotice tone="error" title={failed} testID="indent-error" />}
 
@@ -369,25 +405,7 @@ export default function RequestStockScreen({
       </Sheet>
 
       <BottomSheet
-        visible={!!openLine && picking?.field === 'category'}
-        title={t('requestStock.chooseCategory')}
-        sections={categoryOptions}
-        selected={openLine?.category ?? null}
-        onSelect={value =>
-          openLine &&
-          update(openLine.id, {
-            category: value as Category,
-            // The product list changes with the category, so the old choice is void.
-            product: null,
-            qty: value === 'straw' ? String(USUAL_STRAWS) : '1',
-          })
-        }
-        onClose={() => setPicking(null)}
-        testID="indent-category-sheet"
-      />
-
-      <BottomSheet
-        visible={!!openLine && picking?.field === 'product'}
+        visible={!!openLine}
         title={t('requestStock.chooseProduct')}
         subtitle={openLine ? t(`requestStock.categoryHint_${openLine.category}`) : undefined}
         sections={openLine ? productOptions(openLine.category) : []}
@@ -401,80 +419,131 @@ export default function RequestStockScreen({
 }
 
 const styles = StyleSheet.create({
-  headings: { flexDirection: 'row', gap: spacing[2], marginBottom: spacing[2] },
-  heading: { ...typography.caption, color: colors.textMuted },
-
-  // The three columns, sized by how much each has to say.
-  colCategory: { flex: 1.05 },
-  colProduct: { flex: 1.35 },
-  colQty: { width: 62 },
-
-  lineWrap: { marginBottom: spacing[3] },
-  line: { flexDirection: 'row', gap: spacing[2] },
-
-  cell: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: spacing[2],
+  card: {
+    padding: spacing[4],
+    marginBottom: spacing[3],
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.card,
   },
-  cellPressed: { backgroundColor: colors.background },
-  cellValue: { ...typography.label, color: colors.ink, flex: 1 },
-  cellPlaceholder: { color: colors.textMuted },
-
-  qtyInput: {
-    ...typography.bodyStrong,
-    color: colors.ink,
-    flex: 1,
-    textAlign: 'center',
-    paddingVertical: 0,
-  },
-
-  remove: {
+  cardHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
-    alignSelf: 'flex-start',
-    minHeight: MIN_TOUCH_TARGET - 16,
-    marginTop: spacing[1],
+    gap: spacing[3],
+    marginBottom: spacing[3],
   },
-  removeLabel: { ...typography.caption, color: colors.error },
+  number: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+  numberLabel: { ...typography.caption, color: colors.textMuted },
+  cardTitle: { ...typography.bodyStrong, color: colors.ink, flex: 1 },
+  remove: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.errorWash,
+  },
 
-  actions: { flexDirection: 'row', gap: spacing[3], marginTop: spacing[3] },
-  addButton: {
+  segments: { flexDirection: 'row', gap: spacing[2], marginBottom: spacing[3] },
+  segment: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: MIN_TOUCH_TARGET - 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  segmentActive: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
+  segmentLabel: { ...typography.label, color: colors.textMuted },
+  segmentLabelActive: { color: colors.primaryDark },
+
+  fieldLabel: { ...typography.caption, color: colors.textMuted, marginBottom: spacing[1] },
+
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: spacing[3],
+    marginBottom: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  dropdownPressed: { backgroundColor: colors.background },
+  dropdownValue: { ...typography.bodyStrong, color: colors.ink, flex: 1 },
+  dropdownPlaceholder: { color: colors.textMuted },
+
+  quantityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  stepper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: MIN_TOUCH_TARGET + 6,
+    paddingHorizontal: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  step: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+  stepPressed: { backgroundColor: colors.primaryWash },
+  quantityBody: { flex: 1, alignItems: 'center' },
+  quantityInput: {
+    ...typography.h2,
+    color: colors.ink,
+    textAlign: 'center',
+    paddingVertical: 0,
+    minWidth: 60,
+  },
+  quantityUnit: { ...typography.caption, color: colors.textMuted },
+  stepHint: { ...typography.caption, color: colors.textMuted, maxWidth: 96 },
+
+  addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
     minHeight: MIN_TOUCH_TARGET,
+    marginTop: spacing[1],
     borderRadius: radius.md,
     borderWidth: 1,
+    borderStyle: 'dashed',
     borderColor: colors.primary,
     backgroundColor: colors.primaryWash,
   },
   addPressed: { backgroundColor: colors.surface },
   addLabel: { ...typography.label, color: colors.primaryDark },
 
-  submitButton: {
-    flex: 1.2,
+  footerNote: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    minHeight: MIN_TOUCH_TARGET,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
+    justifyContent: 'space-between',
+    gap: spacing[3],
+    marginBottom: spacing[3],
   },
-  submitPressed: { backgroundColor: colors.primaryPressed },
-  submitDisabled: { backgroundColor: colors.disabledFill },
-  submitLabel: { ...typography.label, color: colors.surface },
-  submitLabelDisabled: { color: colors.textDisabled },
+  footerCount: { ...typography.caption, color: colors.textMuted },
+  footerState: { ...typography.bodyStrong, color: colors.primaryDark },
+  footerStateWaiting: { color: colors.textMuted },
 
   reviewRow: {
     flexDirection: 'row',

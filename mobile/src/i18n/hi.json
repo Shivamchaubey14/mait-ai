@@ -309,12 +309,20 @@
     "confirmSend": "पुष्टि करके भेजें",
     "reviewNoteTitle": "डिपो इसी से पैक करेगा",
     "reviewNoteBody": "वहाँ कोई पूछ नहीं सकता कि आपका मतलब क्या था — भेजने से पहले पढ़ लें।",
-    "qty": "मात्रा",
-    "chooseCategory": "श्रेणी चुनें",
     "categoryShort_straw": "स्ट्रॉ",
     "categoryShort_consumable": "सामान",
     "categoryShort_asset": "उपकरण",
-    "removeLine": "लाइन {{n}} हटाएँ"
+    "removeLine": "लाइन {{n}} हटाएँ",
+    "item": "सामान",
+    "straws": "स्ट्रॉ",
+    "units": "नग",
+    "less": "कम",
+    "more": "ज़्यादा",
+    "inStepsOf": "{{count}} के गुणकों में",
+    "oneAtATime": "एक-एक करके",
+    "footerCount": "{{lines}} लाइनें · {{straws}} स्ट्रॉ",
+    "readyToSend": "भेजने के लिए तैयार",
+    "finishTheLines": "हर लाइन पूरी करें"
   },
   "settings": {
     "title": "सेटिंग",
