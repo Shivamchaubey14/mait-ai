@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -24,7 +24,7 @@ import {
   useListProductsQuery,
 } from '@api/endpoints';
 import type { ProblemDetails } from '@api/types';
-import BottomSheet, { SheetSection } from '@/components/BottomSheet';
+import BottomSheet, { Sheet, SheetSection } from '@/components/BottomSheet';
 import {
   FieldCard,
   FlowLabel,
@@ -35,8 +35,16 @@ import {
 } from '@/features/aiFlow/components';
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
 /** What a full round usually needs. A Mait can change it; most will not have to. */
 const USUAL_STRAWS = 25;
+
+const CATEGORY_ICON: Record<'straw' | 'consumable' | 'asset', IoniconName> = {
+  straw: 'thermometer-outline',
+  consumable: 'medkit-outline',
+  asset: 'construct-outline',
+};
 
 type Category = 'straw' | 'consumable' | 'asset';
 
@@ -83,6 +91,7 @@ export default function RequestStockScreen({
 
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [picking, setPicking] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [sent, setSent] = useState(0);
 
@@ -167,7 +176,7 @@ export default function RequestStockScreen({
   };
 
   useEffect(() => {
-    onFormState({ canSubmit, busy: isLoading, submit });
+    onFormState({ canSubmit, busy: isLoading, submit: () => setReviewing(true) });
     // `submit` closes over the current lines, so it is refreshed whenever they change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canSubmit, isLoading, lines]);
@@ -201,7 +210,25 @@ export default function RequestStockScreen({
       title={t('requestStock.title')}
       subtitle={t('requestStock.subtitle')}
       onBack={onBack}
+      stickyHero
     >
+      {/* What is on the request so far. A Mait adding a third line cannot see the first two
+          without scrolling back, and a request they cannot read is one they resend. */}
+      {lines.length > 1 && (
+        <View style={styles.summary}>
+          <Text style={styles.summaryHead}>{t('requestStock.onThisRequest')}</Text>
+          {lines.map((line, index) => (
+            <View key={`row-${line.id}`} style={styles.summaryRow}>
+              <Text style={styles.summaryIndex}>{index + 1}</Text>
+              <Text style={styles.summaryName} numberOfLines={1}>
+                {labelFor(line) ?? t('requestStock.notChosen')}
+              </Text>
+              <Text style={styles.summaryQty}>{valid(line) ? line.qty : '—'}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       {lines.map((line, index) => (
         <View key={line.id} style={index > 0 ? styles.extraLine : undefined}>
           <View style={styles.lineHead}>
@@ -223,6 +250,7 @@ export default function RequestStockScreen({
               key={category}
               title={t(`requestStock.category_${category}`)}
               subtitle={t(`requestStock.categoryHint_${category}`)}
+              icon={CATEGORY_ICON[category]}
               tone={
                 category === 'straw' ? 'primary' : category === 'consumable' ? 'info' : 'accent'
               }
@@ -246,6 +274,13 @@ export default function RequestStockScreen({
             onTouchEnd={() => setPicking(line.id)}
             testID={`indent-pick-${index}`}
           >
+            <View style={[styles.pickerSwatch, !line.product && styles.pickerSwatchEmpty]}>
+              <Ionicons
+                name={CATEGORY_ICON[line.category]}
+                size={16}
+                color={line.product ? colors.primaryDark : colors.textMuted}
+              />
+            </View>
             <View style={styles.pickerBody}>
               <Text style={styles.pickerLabel}>{labelFor(line) ?? t('requestStock.choose')}</Text>
               <Text style={styles.pickerHint}>
@@ -258,6 +293,12 @@ export default function RequestStockScreen({
           <FlowLabel>{t('requestStock.quantity')}</FlowLabel>
           <FieldCard
             label={line.category === 'straw' ? t('requestStock.straws') : t('requestStock.units')}
+            hint={
+              line.category === 'straw'
+                ? t('requestStock.qtyHintStraw', { count: USUAL_STRAWS })
+                : t('requestStock.qtyHintUnit')
+            }
+            placeholder={line.category === 'straw' ? String(USUAL_STRAWS) : '1'}
             value={line.qty}
             onChangeText={text => update(line.id, { qty: text.replace(/\D/g, '').slice(0, 4) })}
             keyboardType="number-pad"
@@ -278,6 +319,54 @@ export default function RequestStockScreen({
       {!!failed && <FlowNotice tone="error" title={failed} testID="indent-error" />}
 
       <FlowSpacer />
+
+      {/* Checked before it is sent. An indent is packed by someone in a depot who cannot ask
+          what was meant, so the last thing a Mait does is read it back. */}
+      <Sheet
+        visible={reviewing}
+        title={t('requestStock.reviewTitle')}
+        subtitle={t('requestStock.reviewSubtitle', { count: lines.length })}
+        onClose={() => setReviewing(false)}
+        testID="indent-review"
+        footer={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ busy: isLoading }}
+            onPress={() => {
+              setReviewing(false);
+              submit();
+            }}
+            disabled={isLoading}
+            style={({ pressed }) => [styles.confirm, pressed && styles.confirmPressed]}
+            testID="indent-confirm"
+          >
+            <Text style={styles.confirmLabel}>{t('requestStock.confirmSend')}</Text>
+            <Ionicons name="arrow-forward" size={18} color={colors.surface} />
+          </Pressable>
+        }
+      >
+        {lines.map((line, index) => (
+          <View key={`review-${line.id}`} style={styles.reviewRow}>
+            <View style={styles.reviewSwatch}>
+              <Ionicons name={CATEGORY_ICON[line.category]} size={16} color={colors.primaryDark} />
+            </View>
+            <View style={styles.reviewBody}>
+              <Text style={styles.reviewName}>{labelFor(line) ?? t('requestStock.notChosen')}</Text>
+              <Text style={styles.reviewMeta}>
+                {t(`requestStock.category_${line.category}`)} ·{' '}
+                {t('requestStock.lineN', { n: index + 1 })}
+              </Text>
+            </View>
+            <Text style={styles.reviewQty}>{line.qty}</Text>
+          </View>
+        ))}
+
+        <FlowNotice
+          tone="info"
+          title={t('requestStock.reviewNoteTitle')}
+          body={t('requestStock.reviewNoteBody')}
+        />
+      </Sheet>
 
       <BottomSheet
         visible={!!openLine}
@@ -323,9 +412,77 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  pickerSwatch: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryWash,
+  },
+  // Muted until something is chosen, so an unfilled line is visible at a glance.
+  pickerSwatchEmpty: { backgroundColor: colors.background },
   pickerBody: { flex: 1 },
   pickerLabel: { ...typography.bodyStrong, color: colors.ink },
   pickerHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
 
   addLabel: { marginTop: spacing[4] },
+
+  summary: {
+    padding: spacing[3],
+    marginBottom: spacing[4],
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  summaryHead: { ...typography.label, color: colors.textMuted, marginBottom: spacing[2] },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingVertical: spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  summaryIndex: { ...typography.caption, color: colors.textMuted, width: 14 },
+  summaryName: { ...typography.bodyStrong, color: colors.ink, flex: 1 },
+  summaryQty: { ...typography.bodyStrong, color: colors.primaryDark },
+
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    padding: spacing[3],
+    marginBottom: spacing[2],
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  reviewSwatch: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryWash,
+  },
+  reviewBody: { flex: 1 },
+  reviewName: { ...typography.bodyStrong, color: colors.ink },
+  reviewMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  reviewQty: { ...typography.h3, fontFamily: typography.h2.fontFamily, color: colors.ink },
+
+  confirm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    minHeight: MIN_TOUCH_TARGET + 4,
+    marginTop: spacing[3],
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+  },
+  confirmPressed: { backgroundColor: colors.primaryPressed },
+  confirmLabel: { ...typography.bodyStrong, color: colors.surface },
 });

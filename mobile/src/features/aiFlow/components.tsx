@@ -73,6 +73,8 @@ interface FlowScreenProps {
   };
   /** A secondary route out of the step. A text link, never a second button. */
   link?: { label: string; onPress: () => void; testID?: string };
+  /** Pins the hero and scrolls only the body. For forms longer than a screen. */
+  stickyHero?: boolean;
 }
 
 export function FlowScreen({
@@ -85,6 +87,7 @@ export function FlowScreen({
   children,
   cta,
   link,
+  stickyHero = false,
 }: FlowScreenProps): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -93,52 +96,63 @@ export function FlowScreen({
     stepLabel ??
     (step === null ? '' : t('aiFlow.stepOf', { current: step + 1, total: AI_FLOW_STEPS.length }));
 
+  /* The inset is padding rather than a SafeAreaView: that component measures its own frame,
+     and inside a ScrollView the measurement is unreliable. */
+  const hero = (
+    <View style={[styles.hero, { paddingTop: insets.top + spacing[3] }]}>
+      <HeroDecoration size={200} top={-80} right={-60} />
+
+      <View style={styles.heroTop}>
+        {done ? (
+          <View style={[styles.backButton, styles.doneMark]}>
+            <Ionicons name="checkmark" size={20} color={colors.surface} />
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            onPress={onBack}
+            disabled={!onBack}
+            style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+            testID="flow-back"
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.surface} />
+          </Pressable>
+        )}
+        {!!label && <Text style={styles.stepLabel}>{label}</Text>}
+        {/* The mark rides here too, so the flow is visibly the same app as the tabs
+                  it is layered over. */}
+        <View style={styles.heroMark}>
+          <BrandMark size="small" />
+        </View>
+      </View>
+
+      {(step !== null || done) && (
+        <ProgressSegments step={done ? AI_FLOW_STEPS.length : (step ?? -1)} />
+      )}
+
+      <Text style={styles.heroTitle}>{title}</Text>
+      {!!subtitle && <Text style={styles.heroSubtitle}>{subtitle}</Text>}
+    </View>
+  );
+
   return (
     <View style={styles.root}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        {/* Pinned above the scroll view when asked for: on a form longer than a screen the
+            title is the one thing worth keeping in view, because it says what the fields
+            below belong to. */}
+        {stickyHero && hero}
+
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* The inset is padding rather than a SafeAreaView: that component measures its
-              own frame, and inside a ScrollView the measurement is unreliable. */}
-          <View style={[styles.hero, { paddingTop: insets.top + spacing[3] }]}>
-            <HeroDecoration size={200} top={-80} right={-60} />
-
-            <View style={styles.heroTop}>
-              {done ? (
-                <View style={[styles.backButton, styles.doneMark]}>
-                  <Ionicons name="checkmark" size={20} color={colors.surface} />
-                </View>
-              ) : (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('common.back')}
-                  onPress={onBack}
-                  disabled={!onBack}
-                  style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
-                  testID="flow-back"
-                >
-                  <Ionicons name="arrow-back" size={20} color={colors.surface} />
-                </Pressable>
-              )}
-              {!!label && <Text style={styles.stepLabel}>{label}</Text>}
-              {/* The mark rides here too, so the flow is visibly the same app as the tabs
-                  it is layered over. */}
-              <View style={styles.heroMark}>
-                <BrandMark size="small" />
-              </View>
-            </View>
-
-            <ProgressSegments step={done ? AI_FLOW_STEPS.length : (step ?? -1)} />
-
-            <Text style={styles.heroTitle}>{title}</Text>
-            {!!subtitle && <Text style={styles.heroSubtitle}>{subtitle}</Text>}
-          </View>
+          {!stickyHero && hero}
 
           <View
             style={[
@@ -221,9 +235,18 @@ const SWATCH: Record<Tone, string> = {
   neutral: colors.background,
 };
 
+const SWATCH_TINT: Record<Tone, string> = {
+  primary: colors.primaryDark,
+  accent: colors.secondaryPressed,
+  info: colors.info,
+  neutral: colors.textMuted,
+};
+
 interface OptionCardProps {
   title: string;
   subtitle?: string;
+  /** Drawn inside the swatch. Without one the swatch is a plain colour block. */
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
   /** Right-hand qualifier, e.g. "Nearest". */
   pill?: string;
   selected?: boolean;
@@ -242,6 +265,7 @@ interface OptionCardProps {
 export function OptionCard({
   title,
   subtitle,
+  icon,
   pill,
   selected = false,
   blockedReason,
@@ -268,7 +292,15 @@ export function OptionCard({
     >
       <View
         style={[styles.swatch, { backgroundColor: blocked ? colors.disabledFill : SWATCH[tone] }]}
-      />
+      >
+        {!!icon && (
+          <Ionicons
+            name={icon}
+            size={16}
+            color={blocked ? colors.textDisabled : SWATCH_TINT[tone]}
+          />
+        )}
+      </View>
 
       <View style={styles.cardBody}>
         <Text style={[styles.cardTitle, blocked && styles.blockedText]} numberOfLines={1}>
@@ -488,7 +520,13 @@ const styles = StyleSheet.create({
   cardSelected: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
   cardPressed: { backgroundColor: colors.background },
   cardBlocked: { backgroundColor: colors.background, borderColor: colors.border },
-  swatch: { width: 32, height: 32, borderRadius: radius.sm },
+  swatch: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cardBody: { flex: 1 },
   cardTitle: { ...typography.bodyStrong, color: colors.ink },
   cardSubtitle: { ...typography.caption, color: colors.textMuted, marginTop: 2 },

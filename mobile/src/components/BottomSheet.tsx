@@ -32,6 +32,69 @@ export interface SheetSection {
   options: SheetOption[];
 }
 
+export function Sheet({
+  visible,
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+  testID,
+}: {
+  visible: boolean;
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  /** Pinned below the scrolling content — a confirm button, usually. */
+  footer?: React.ReactNode;
+  testID?: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      testID={testID}
+    >
+      {/* Barely tinted rather than dimmed. A dark scrim reads as the screen having gone
+          wrong, and the sheet is already separated by its rounded top and its shadow.
+          Tapping here closes it; on Android the hardware back button does too. */}
+      <Pressable style={styles.scrim} onPress={onClose} testID="sheet-scrim" />
+
+      <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing[4] }]}>
+        <View style={styles.grabber} />
+
+        <View style={styles.head}>
+          <View style={styles.headText}>
+            <Text style={styles.title}>{title}</Text>
+            {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.cancel')}
+            onPress={onClose}
+            style={styles.close}
+            testID="sheet-close"
+          >
+            <Ionicons name="close" size={20} color={colors.textMuted} />
+          </Pressable>
+        </View>
+
+        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+          {children}
+        </ScrollView>
+
+        {footer}
+      </View>
+    </Modal>
+  );
+}
+
 export default function BottomSheet({
   visible,
   title,

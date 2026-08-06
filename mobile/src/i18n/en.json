@@ -308,7 +308,16 @@
     "tapToChoose": "Tap to pick from the list",
     "tapToChange": "Tap to change",
     "inHandShort": "{{count}} held",
-    "breed": "Breed"
+    "breed": "Breed",
+    "qtyHintStraw": "A full round is usually {{count}}.",
+    "qtyHintUnit": "How many to send.",
+    "onThisRequest": "On this request",
+    "notChosen": "Not chosen yet",
+    "reviewTitle": "Check before sending",
+    "reviewSubtitle": "{{count}} lines on this request",
+    "confirmSend": "Confirm and send",
+    "reviewNoteTitle": "The depot packs from this",
+    "reviewNoteBody": "Nobody there can ask what you meant, so read it back before sending."
   },
   "settings": {
     "title": "Settings",

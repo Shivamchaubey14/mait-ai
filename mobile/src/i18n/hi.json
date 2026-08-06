@@ -308,7 +308,16 @@
     "tapToChoose": "सूची से चुनने के लिए दबाएँ",
     "tapToChange": "बदलने के लिए दबाएँ",
     "inHandShort": "{{count}} पास में",
-    "breed": "नस्ल"
+    "breed": "नस्ल",
+    "qtyHintStraw": "एक पूरे दौरे के लिए आमतौर पर {{count}}।",
+    "qtyHintUnit": "कितने भेजने हैं।",
+    "onThisRequest": "इस अनुरोध में",
+    "notChosen": "अभी नहीं चुना",
+    "reviewTitle": "भेजने से पहले जाँचें",
+    "reviewSubtitle": "इस अनुरोध में {{count}} लाइनें",
+    "confirmSend": "पुष्टि करके भेजें",
+    "reviewNoteTitle": "डिपो इसी से पैक करेगा",
+    "reviewNoteBody": "वहाँ कोई पूछ नहीं सकता कि आपका मतलब क्या था — भेजने से पहले पढ़ लें।"
   },
   "settings": {
     "title": "सेटिंग",
