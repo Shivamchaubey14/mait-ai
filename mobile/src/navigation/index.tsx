@@ -266,7 +266,6 @@ export default function RootNavigator(): React.JSX.Element {
       <View style={styles.flex}>
         {tab === 'home' && (
           <HomeScreen
-            onStartCapture={startCapture}
             onOpenStock={() => setTab('stock')}
             online={online}
             pending={pending}

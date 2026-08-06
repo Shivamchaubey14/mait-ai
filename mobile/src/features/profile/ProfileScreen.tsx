@@ -18,7 +18,7 @@ import PageHero from '@/components/hero';
 import { SyncBanner } from '@/components/states';
 import { loggedOut } from '@/features/auth/authSlice';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
 export default function ProfileScreen({
   pending,
@@ -154,6 +154,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[3],
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+    ...shadows.card,
   },
   cardLabel: { ...typography.caption, color: colors.textMuted },
   cardValue: { ...typography.bodyStrong, color: colors.ink, marginTop: 2 },

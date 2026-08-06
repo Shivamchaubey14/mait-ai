@@ -50,8 +50,9 @@ export default function BottomNav({
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.wrap}>
-      {/* Raised above the bar, so it reads as the thing you do rather than a place you are. */}
+    <View style={[styles.wrap, { paddingBottom: insets.bottom + spacing[3] }]}>
+      {/* Clear of the bar rather than sitting on it: overlapping the row made it read as the
+          middle tab, and on a three-tab bar it landed on top of Stock. */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('nav.newAi')}
@@ -59,10 +60,11 @@ export default function BottomNav({
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
         testID="tab-newAi"
       >
-        <Ionicons name="add" size={28} color={colors.surface} />
+        <Ionicons name="add" size={26} color={colors.surface} />
+        <Text style={styles.fabLabel}>{t('nav.newAi')}</Text>
       </Pressable>
 
-      <View style={[styles.bar, { paddingBottom: insets.bottom + spacing[2] }]}>
+      <View style={styles.bar}>
         {TABS.map(({ key, icon, activeIcon }) => {
           const isActive = key === active;
           return (
@@ -98,38 +100,45 @@ export default function BottomNav({
   );
 }
 
-const FAB = 58;
+const FAB = 52;
 
 const styles = StyleSheet.create({
-  // Padded by half the button rather than letting it overflow upward: Android clips absolutely
-  // positioned children outside their parent, which would slice the top off the FAB.
-  wrap: { paddingTop: FAB / 2 },
+  // The bar floats: lifted off the bottom edge so an old Android handset's hardware buttons
+  // do not sit against it, and inset from the sides so it reads as a card rather than a
+  // chrome strip welded to the screen.
+  wrap: {
+    paddingHorizontal: spacing[4],
+    alignItems: 'stretch',
+  },
 
+  // A pill above the bar, labelled. The label is why it is a pill and not a circle: "+" alone
+  // is a guess, and this is the one control a Mait uses on every visit.
   fab: {
-    position: 'absolute',
-    top: 0,
-    alignSelf: 'center',
-    width: FAB,
-    height: FAB,
-    borderRadius: FAB / 2,
-    backgroundColor: colors.primary,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: colors.background,
-    zIndex: 2,
+    gap: spacing[2],
+    alignSelf: 'center',
+    height: FAB,
+    paddingHorizontal: spacing[5],
+    marginBottom: spacing[3],
+    borderRadius: FAB / 2,
+    backgroundColor: colors.primary,
     ...shadows.raised,
   },
   fabPressed: { backgroundColor: colors.primaryPressed },
+  fabLabel: { ...typography.bodyStrong, color: colors.surface },
 
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: spacing[3],
-    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[2],
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   tab: { flex: 1, alignItems: 'center', minHeight: MIN_TOUCH_TARGET },
 

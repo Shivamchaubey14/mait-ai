@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { useGetInventorySummaryQuery } from '@api/endpoints';
 import PageHero from '@/components/hero';
 import { EmptyState, ErrorState, SkeletonList, SyncBanner } from '@/components/states';
-import { colors, radius, spacing, typography } from '@theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@theme/tokens';
 
 export default function StockScreen({
   onStartCapture,
@@ -128,6 +128,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     alignItems: 'center',
+    ...shadows.card,
   },
   totalLabel: { ...typography.caption, color: colors.textMuted },
   totalValue: { ...typography.display, fontSize: 44, lineHeight: 52, color: colors.ink },
@@ -142,6 +143,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[2],
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+    ...shadows.card,
   },
   swatch: {
     width: 30,

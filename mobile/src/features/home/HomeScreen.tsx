@@ -23,10 +23,9 @@ import { BrandMark } from '@/components/brand';
 import PageHero from '@/components/hero';
 import { EmptyState, ErrorState, SkeletonList, SyncBanner } from '@/components/states';
 import { useAppSelector } from '@/store';
-import { colors, radius, spacing, typography } from '@theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@theme/tokens';
 
 interface Props {
-  onStartCapture: () => void;
   onOpenStock: () => void;
   /** Live from NetInfo, so the banner reflects the radio rather than the last failed call. */
   online: boolean;
@@ -46,7 +45,6 @@ function isToday(iso: string): boolean {
 }
 
 export default function HomeScreen({
-  onStartCapture,
   onOpenStock,
   online,
   pending,
@@ -191,7 +189,7 @@ export default function HomeScreen({
           <EmptyState
             title={t('home.noEventsTitle')}
             body={t('home.noEventsBody')}
-            action={{ label: t('home.startNewAi'), onPress: onStartCapture, testID: 'empty-start' }}
+            pointsDown={t('home.startNewAi')}
           />
         ) : (
           today.map(event => <EventRow key={event.id} event={event} />)
@@ -246,6 +244,7 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+    ...shadows.card,
   },
   tileLabel: { ...typography.caption, color: colors.textMuted },
   tileValue: { ...typography.display, color: colors.ink },
@@ -276,6 +275,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[2],
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+    ...shadows.card,
   },
   rowDot: { width: 10, height: 10, borderRadius: 5 },
   rowDotDone: { backgroundColor: colors.primary },

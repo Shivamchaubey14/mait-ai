@@ -53,6 +53,7 @@ function CentredState({
   title,
   body,
   action,
+  pointsDown,
   testID,
 }: {
   tone: 'good' | 'bad';
@@ -60,6 +61,7 @@ function CentredState({
   title: string;
   body: string;
   action?: { label: string; onPress: () => void; busy?: boolean; testID?: string };
+  pointsDown?: string;
   testID?: string;
 }): React.JSX.Element {
   const wash = tone === 'good' ? colors.primaryWash : colors.errorWash;
@@ -89,6 +91,13 @@ function CentredState({
           )}
         </Pressable>
       )}
+
+      {!!pointsDown && (
+        <View style={styles.pointer} testID={testID ? `${testID}-pointer` : undefined}>
+          <Text style={styles.pointerLabel}>{pointsDown}</Text>
+          <Ionicons name="arrow-down" size={22} color={colors.primary} />
+        </View>
+      )}
     </View>
   );
 }
@@ -97,11 +106,20 @@ export function EmptyState({
   title,
   body,
   action,
+  /**
+   * Points at a control that already exists elsewhere on screen.
+   *
+   * Preferred over a second button doing the same thing: two ways to start an AI teaches a
+   * Mait nothing, while an arrow teaches them where the button lives for every day after
+   * this one.
+   */
+  pointsDown,
   testID = 'empty-state',
 }: {
   title: string;
   body: string;
   action?: { label: string; onPress: () => void; testID?: string };
+  pointsDown?: string;
   testID?: string;
 }): React.JSX.Element {
   return (
@@ -111,6 +129,7 @@ export function EmptyState({
       title={title}
       body={body}
       action={action}
+      pointsDown={pointsDown}
       testID={testID}
     />
   );
@@ -281,6 +300,10 @@ const styles = StyleSheet.create({
   },
   centredCtaPressed: { backgroundColor: colors.primaryPressed },
   centredCtaLabel: { ...typography.bodyStrong, color: colors.surface },
+
+  // Aimed at the button on the bar below rather than repeating it here.
+  pointer: { alignItems: 'center', gap: spacing[2], marginTop: spacing[5] },
+  pointerLabel: { ...typography.bodyStrong, color: colors.primaryDark },
 
   // -- sync banner ------------------------------------------------------------------------
   // White card with a coloured spine, not a tinted block. It sits at the top of a screen a
