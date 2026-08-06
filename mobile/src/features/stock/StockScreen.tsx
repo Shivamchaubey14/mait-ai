@@ -12,6 +12,7 @@
 import React from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -169,11 +170,12 @@ export default function StockScreen({
                     testID={`stock-${code}`}
                   >
                     <View style={[styles.swatch, buffalo(code) && styles.swatchBuffalo]}>
-                      {/* Cow and buffalo share a glyph and differ by colour: the two are the
-                          same kind of thing, and the breed name below already names it. */}
-                      <Ionicons
-                        name="paw"
-                        size={16}
+                      {/* A real cow silhouette. No icon set bundled with Expo has a buffalo,
+                          so the same bovine glyph carries both and the colour tells them
+                          apart — the animal type is spelled out on the line below anyway. */}
+                      <MaterialCommunityIcons
+                        name="cow"
+                        size={18}
                         color={buffalo(code) ? colors.ink : colors.primaryDark}
                       />
                     </View>
