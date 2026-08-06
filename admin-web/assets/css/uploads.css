@@ -1,0 +1,98 @@
+/**
+ * SAP upload (W3) and its error report (W4).
+ */
+
+@import url('portal.css');
+
+.drops {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.drop {
+  padding: var(--space-5);
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* A colour per master, carried through to the history table, so an operator can tell at a
+   glance which of the three they are looking at without reading the type column. */
+.drop__swatch {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+.drop__swatch--member {
+  background: var(--color-primary-wash);
+}
+
+.drop__swatch--mait {
+  background: var(--color-info-wash);
+}
+
+.drop__swatch--mpp {
+  background: var(--color-secondary-wash);
+}
+
+.drop__title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h3);
+  color: var(--color-ink);
+}
+
+.drop__meta {
+  min-height: 32px;
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.drop__button {
+  cursor: pointer;
+}
+
+/* --- running import --------------------------------------------------------------------- */
+.running__bar {
+  height: 10px;
+  margin: var(--space-3) 0;
+}
+
+/* Starts empty; the width is set from the poll response as the import advances. */
+.running__fill {
+  width: 0;
+}
+
+.stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+}
+
+.stage {
+  padding: var(--space-3);
+  background: var(--color-background);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-label);
+}
+
+.upload-history__head {
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+/* --- error report (W4) -------------------------------------------------------------------- */
+.error-row__value {
+  font-family: var(--font-heading);
+  color: var(--color-ink);
+}
+
+.error-row__problem {
+  color: var(--color-error);
+}

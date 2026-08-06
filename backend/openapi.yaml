@@ -2217,6 +2217,15 @@ components:
         mait_name:
           type: string
           readOnly: true
+        mait_code:
+          type: string
+          readOnly: true
+        mait_activated:
+          type: boolean
+          readOnly: true
+        member_count:
+          type: integer
+          readOnly: true
         plant_code:
           type: string
           readOnly: true
@@ -2248,9 +2257,6 @@ components:
           format: date
           readOnly: true
           nullable: true
-        member_count:
-          type: integer
-          readOnly: true
       required:
       - address_line
       - district_code
@@ -2259,6 +2265,8 @@ components:
       - id
       - is_active
       - mait
+      - mait_activated
+      - mait_code
       - mait_name
       - member_count
       - mobile_no
@@ -2308,12 +2316,25 @@ components:
         mait_name:
           type: string
           readOnly: true
+        mait_code:
+          type: string
+          readOnly: true
+        mait_activated:
+          type: boolean
+          readOnly: true
+        member_count:
+          type: integer
+          readOnly: true
+          default: 0
       required:
       - district_code
       - id
       - is_active
       - mait
+      - mait_activated
+      - mait_code
       - mait_name
+      - member_count
       - mobile_no
       - mpp_code
       - mpp_name

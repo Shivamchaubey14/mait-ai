@@ -8,37 +8,25 @@
  * Latin subset only; the portal is English. `font-display: swap` so text is readable in a
  * fallback face immediately rather than invisible while the font arrives.
  *
+ * Both families are variable: one file covers the whole weight range, declared here as a
+ * range. Declaring a single weight would make the browser synthesise bold instead of using
+ * the real one.
+ *
  * Regenerate with scripts/fetch-fonts.py.
  */
 
 @font-face {
   font-family: 'Nunito Sans';
   font-style: normal;
-  font-weight: 400;
+  font-weight: 400 600;
   font-display: swap;
-  src: url('../fonts/NunitoSans-400.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Nunito Sans';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('../fonts/NunitoSans-600.woff2') format('woff2');
+  src: url('../fonts/NunitoSans.woff2') format('woff2');
 }
 
 @font-face {
   font-family: 'Quicksand';
   font-style: normal;
-  font-weight: 600;
+  font-weight: 600 700;
   font-display: swap;
-  src: url('../fonts/Quicksand-600.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Quicksand';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('../fonts/Quicksand-700.woff2') format('woff2');
+  src: url('../fonts/Quicksand.woff2') format('woff2');
 }

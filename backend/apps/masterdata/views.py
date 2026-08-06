@@ -151,14 +151,16 @@ class MPPViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
     search_fields = ["mpp_code", "mpp_name"]
 
     def get_queryset(self):
-        queryset = MPP.objects.select_related("mait")
+        # `mait__user` is selected because the list reports whether the assigned Mait has ever
+        # been activated — without it that is one extra query per row.
+        queryset = MPP.objects.select_related("mait", "mait__user")
         user = self.request.user
         # SRS §6.2.3 — a Mait only ever sees their own MPPs. Enforced in the queryset rather
         # than by a filter the client supplies, so it cannot be bypassed by omitting one.
         mait = getattr(user, "mait_profile", None)
         if mait is not None and not user.is_admin:
             queryset = queryset.filter(mait=mait)
-        if self.action == "retrieve":
+        if self.action in ("retrieve", "list"):
             queryset = queryset.annotate(member_count=Count("members"))
         return queryset
 

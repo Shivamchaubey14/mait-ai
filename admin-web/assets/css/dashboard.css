@@ -1,147 +1,12 @@
 /**
- * Admin dashboard (W2).
+ * Admin dashboard (W2) — the chart and the exception cards.
  *
- * Sidebar on Ink, content on the light background. Every value comes from tokens.css.
+ * The shell, tables, tiles and controls live in portal.css, which this imports: importing
+ * only the tokens would leave the page with the design's colours and the browser's default
+ * serif face, which is exactly how it looked before.
  */
 
-@import url('tokens.css');
-
-.shell {
-  display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
-  min-height: 100vh;
-  background: var(--color-background);
-}
-
-/* --- sidebar ------------------------------------------------------------------------ */
-.side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  background: var(--color-ink);
-}
-
-.side__mark {
-  padding: var(--space-3) var(--space-4);
-  margin-bottom: var(--space-3);
-  background: var(--ink-700);
-  border-radius: var(--radius-md);
-}
-
-.side__mark-name {
-  display: block;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: var(--text-h3);
-  color: var(--color-surface);
-  letter-spacing: 0.04em;
-}
-
-.side__mark-sub {
-  font-size: 0.625rem;
-  font-weight: 600;
-  color: var(--color-primary);
-  letter-spacing: 0.18em;
-}
-
-.side__link {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 42px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-md);
-  font-size: var(--text-body);
-  color: var(--ink-100);
-}
-
-.side__link:hover {
-  background: var(--ink-700);
-  text-decoration: none;
-}
-
-.side__link.is-active {
-  background: var(--color-primary);
-  color: var(--color-surface);
-  font-weight: 600;
-}
-
-.side__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--ink-400);
-  flex: none;
-}
-
-.side__link.is-active .side__dot {
-  background: var(--color-surface);
-}
-
-/* Count of things needing attention. Sits on the nav item so it is visible from every
-   screen, not only once someone opens the exceptions page. */
-.side__badge {
-  margin-left: auto;
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-caption);
-  font-weight: 600;
-  color: var(--color-surface);
-  background: var(--color-error);
-}
-
-/* --- content ------------------------------------------------------------------------ */
-.content {
-  padding: var(--space-5);
-  max-width: var(--content-max-width);
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
-}
-
-.topbar__title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: var(--text-h1);
-  color: var(--color-ink);
-}
-
-.topbar__meta {
-  font-size: var(--text-caption);
-  color: var(--color-text-muted);
-}
-
-.topbar__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.select {
-  min-height: 38px;
-  padding: 0 var(--space-3);
-  font-family: var(--font-body);
-  font-size: var(--text-label);
-  color: var(--color-text);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--ink-100);
-  border: 0;
-  cursor: pointer;
-}
+@import url('portal.css');
 
 /* --- KPI row ------------------------------------------------------------------------- */
 .kpis {
@@ -185,38 +50,6 @@
 }
 
 /* --- panels --------------------------------------------------------------------------- */
-.panel {
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.panel__title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: var(--text-h3);
-  color: var(--color-ink);
-}
-
-.panel__count {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  color: var(--color-text-muted);
-}
-
 .legend {
   display: flex;
   gap: var(--space-4);
@@ -298,21 +131,6 @@
   margin-bottom: var(--space-4);
 }
 
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-}
-
-.dot--warning {
-  background: var(--color-warning);
-}
-
-.dot--error {
-  background: var(--color-error);
-}
-
 .panel--warning {
   background: var(--color-secondary-wash);
   border-color: var(--yolk-200);
@@ -345,20 +163,4 @@
 
 .exception__meta--error {
   color: var(--color-error);
-}
-
-@media (max-width: 900px) {
-  .shell {
-    grid-template-columns: 1fr;
-  }
-
-  .side {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .side__mark {
-    margin-bottom: 0;
-  }
 }

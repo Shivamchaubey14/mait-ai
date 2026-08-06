@@ -130,6 +130,13 @@ class MaitSerializer(serializers.ModelSerializer):
 
 class MPPListSerializer(serializers.ModelSerializer):
     mait_name = serializers.CharField(source="mait.name", read_only=True, default=None)
+    mait_code = serializers.CharField(
+        source="mait.sahayak_vendor_code", read_only=True, default=None
+    )
+    # An MPP whose Mait exists in SAP but has never been activated records nothing at all,
+    # and looks identical to a working one unless the portal is told the difference.
+    mait_activated = serializers.SerializerMethodField()
+    member_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = MPP
@@ -144,8 +151,15 @@ class MPPListSerializer(serializers.ModelSerializer):
             "is_active",
             "mait",
             "mait_name",
+            "mait_code",
+            "mait_activated",
+            "member_count",
         ]
         read_only_fields = fields
+
+    def get_mait_activated(self, obj) -> bool:
+        mait = obj.mait
+        return bool(mait and mait.user_id)
 
 
 class MPPDetailSerializer(MPPListSerializer):

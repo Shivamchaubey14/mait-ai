@@ -1,0 +1,66 @@
+/**
+ * Admin form screens (W8 activation, and the query builder on W17).
+ *
+ * Label above the control, always. A placeholder-as-label disappears exactly when a hesitant
+ * operator needs it, and these forms are used a few times a month rather than daily.
+ */
+
+@import url('portal.css');
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field__label {
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.field__control {
+  width: 100%;
+}
+
+.field__control[readonly] {
+  color: var(--color-text-muted);
+  background: var(--color-background);
+}
+
+.field__hint {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+/* Confirmation of something irreversible-ish, so it is stated in the affirmative rather than
+   left as the absence of an error. */
+.field__hint--ok {
+  color: var(--color-primary-dark);
+}
+
+.field__hint--bad {
+  color: var(--color-error);
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+}
+
+.form-actions .field__hint {
+  margin-left: auto;
+}
+
+.form-panel__head {
+  padding: var(--space-4) var(--space-4) 0;
+}

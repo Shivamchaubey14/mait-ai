@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SAP upload · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+    <link rel="stylesheet" href="assets/css/uploads.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="uploads">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">SAP upload</h1>
+            <p class="topbar__meta">Member, Mait and MPP master data</p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn" id="templates" type="button">Download templates</button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- One card per master. Three separate drops rather than one file picker with a
+             type dropdown: picking the wrong type imports 105,000 members as Maits, and the
+             only signal would have been a select the operator did not look at. -->
+        <section class="drops" aria-label="Choose a master file">
+          <article class="drop">
+            <span class="drop__swatch drop__swatch--member" aria-hidden="true"></span>
+            <h2 class="drop__title">Member master</h2>
+            <p class="drop__meta" data-last="members">—</p>
+            <label class="btn btn--primary drop__button">
+              Choose file
+              <input class="visually-hidden" type="file" accept=".xlsx" data-upload="members" />
+            </label>
+          </article>
+
+          <article class="drop">
+            <span class="drop__swatch drop__swatch--mait" aria-hidden="true"></span>
+            <h2 class="drop__title">Mait master</h2>
+            <p class="drop__meta" data-last="maits">—</p>
+            <label class="btn btn--primary drop__button">
+              Choose file
+              <input class="visually-hidden" type="file" accept=".xlsx" data-upload="maits" />
+            </label>
+          </article>
+
+          <article class="drop">
+            <span class="drop__swatch drop__swatch--mpp" aria-hidden="true"></span>
+            <h2 class="drop__title">MPP master</h2>
+            <p class="drop__meta" data-last="mpp">—</p>
+            <label class="btn btn--primary drop__button">
+              Choose file
+              <input class="visually-hidden" type="file" accept=".xlsx" data-upload="mpp" />
+            </label>
+          </article>
+        </section>
+
+        <!-- Shown only while an import is running. SRS §6.1.6: the Member master is 105k+
+             rows and is parsed asynchronously, so the page has to say what is happening or
+             the operator closes the tab and assumes it failed. -->
+        <section class="panel running" id="running" hidden aria-live="polite">
+          <div class="panel__head">
+            <h2 class="panel__title" id="running-title">Importing…</h2>
+            <span class="panel__count" id="running-percent">0%</span>
+          </div>
+          <p class="topbar__meta" id="running-meta">—</p>
+          <div class="bar running__bar">
+            <span class="bar__fill running__fill" id="running-bar"></span>
+          </div>
+          <div class="stages">
+            <div class="stage">
+              <p class="tile__label">Uploaded</p>
+              <p id="stage-uploaded">—</p>
+            </div>
+            <div class="stage">
+              <p class="tile__label">Validated</p>
+              <p id="stage-validated">—</p>
+            </div>
+            <div class="stage">
+              <p class="tile__label">Written</p>
+              <p id="stage-written">—</p>
+            </div>
+            <div class="stage">
+              <p class="tile__label">Report</p>
+              <p id="stage-report">—</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Upload history">
+          <div class="panel__head upload-history__head">
+            <h2 class="panel__title">Upload history</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">File</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Rows</th>
+                  <th scope="col">Failed</th>
+                  <th scope="col">Finished</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="6">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/uploads.js"></script>
+  </body>
+</html>

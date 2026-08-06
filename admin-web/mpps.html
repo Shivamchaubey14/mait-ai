@@ -3,66 +3,53 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Members · Mait AI Admin</title>
+    <title>MPPs &amp; assignment · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
     <link rel="stylesheet" href="assets/css/portal.css" />
   </head>
 
   <body>
-    <div class="shell" data-page="members">
+    <div class="shell" data-page="mpps">
       <main class="content">
         <header class="topbar">
           <div>
-            <h1 class="topbar__title">Members</h1>
-            <p class="topbar__meta"><span id="member-count">—</span> from the SAP master</p>
+            <h1 class="topbar__title">MPPs &amp; assignment</h1>
+            <p class="topbar__meta"><span id="mpp-count">—</span></p>
           </div>
           <div class="topbar__actions">
-            <button class="btn" id="export" type="button">Export (masked)</button>
+            <a class="btn" href="coverage.html">Coverage →</a>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
         </header>
 
         <div id="alert-region" role="alert" aria-live="polite"></div>
 
-        <!-- SRS §16. Stated on the screen rather than assumed: an operator who thinks they
-             are seeing full numbers will read a masked one out to a farmer. -->
-        <div class="notice">
-          <span class="notice__swatch" aria-hidden="true"></span>
-          <div>
-            <p class="notice__title">Personal data is masked for everyone below Admin</p>
-            <p class="notice__body">
-              Aadhaar and bank details are never returned in full from this screen. Every unmask is
-              logged against your account.
-            </p>
-          </div>
-        </div>
-
         <section class="filters" aria-label="Filters">
           <input
             class="input filters__search"
             id="search"
             type="search"
-            placeholder="Search name, member code or mobile"
-            aria-label="Search name, member code or mobile"
+            placeholder="Search MPP name or code"
+            aria-label="Search MPP name or code"
           />
-          <select class="select" id="filter-mpp" aria-label="MPP">
-            <option value="">All MPPs</option>
+          <select class="select" id="filter-district" aria-label="District">
+            <option value="">All districts</option>
           </select>
-          <button class="chip" id="filter-no-mobile" type="button" aria-pressed="false">
-            No mobile
+          <button class="chip" id="filter-unassigned" type="button" aria-pressed="false">
+            Unassigned only
           </button>
         </section>
 
-        <section class="panel panel--flush" aria-label="Members">
+        <section class="panel panel--flush" aria-label="MPPs">
           <div class="table-wrap">
             <table class="table">
               <thead>
                 <tr>
-                  <th scope="col">Member</th>
-                  <th scope="col">Code</th>
                   <th scope="col">MPP</th>
-                  <th scope="col">Mobile</th>
+                  <th scope="col">Code</th>
+                  <th scope="col">District</th>
+                  <th scope="col">Assigned Mait</th>
                   <th scope="col">Status</th>
                 </tr>
               </thead>
@@ -76,7 +63,18 @@
           <div class="pager" id="pager"></div>
         </section>
 
-        <p class="topbar__meta" id="unusable-note"></p>
+        <!-- An MPP with no Mait, or with one who never activated, records nothing at all.
+             Spelled out because "Assign" in a table cell does not convey that. -->
+        <div class="notice notice--warn">
+          <span class="notice__swatch" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">An MPP without an active Mait records nothing</p>
+            <p class="notice__body">
+              Blocked means a Mait is assigned in SAP but has never been activated, so no AI event
+              can be captured there. Activate them from the Maits screen.
+            </p>
+          </div>
+        </div>
       </main>
     </div>
 
@@ -84,6 +82,6 @@
     <script src="assets/js/api.js"></script>
     <script src="assets/js/ui.js"></script>
     <script src="assets/js/shell.js"></script>
-    <script src="assets/js/members.js"></script>
+    <script src="assets/js/mpps.js"></script>
   </body>
 </html>

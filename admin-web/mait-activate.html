@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Activate a Mait · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+    <link rel="stylesheet" href="assets/css/forms.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="maits">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Activate a Mait</h1>
+            <p class="topbar__meta">Set a mobile number so they can sign in</p>
+          </div>
+          <div class="topbar__actions">
+            <a class="btn" href="maits.html">← All Maits</a>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <section class="panel" aria-label="Activation">
+          <form id="activate-form" class="form-grid" novalidate>
+            <div class="field">
+              <label class="field__label" for="sahayak">Pending Sahayak</label>
+              <select class="select field__control" id="sahayak" required>
+                <option value="">Loading…</option>
+              </select>
+              <p class="field__hint" id="pending-hint">—</p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="mpp">MPP</label>
+              <input class="input field__control" id="mpp" type="text" readonly />
+              <!-- Read-only on purpose: the assignment comes from the SAP master, and an
+                   admin retyping it here would put the Mait somewhere SAP disagrees with. -->
+              <p class="field__hint">From the SAP master, not editable here</p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="mobile">Mobile number</label>
+              <input
+                class="input field__control"
+                id="mobile"
+                type="tel"
+                inputmode="numeric"
+                maxlength="10"
+                placeholder="90876 55412"
+                required
+              />
+              <p class="field__hint" id="mobile-hint">Checked against every other Mait</p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="mobile-confirm">Confirm mobile number</label>
+              <input
+                class="input field__control"
+                id="mobile-confirm"
+                type="tel"
+                inputmode="numeric"
+                maxlength="10"
+                placeholder="90876 55412"
+                required
+              />
+              <!-- Typed twice because this is the only channel into the app: a wrong digit
+                   sends the sign-in code to a stranger and the Mait can never get in. -->
+              <p class="field__hint" id="confirm-hint">Must match</p>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn--primary" id="submit" type="submit" disabled>
+                Activate Mait
+              </button>
+              <a class="btn" href="maits.html">Cancel</a>
+              <p class="field__hint" id="outcome-hint">
+                They receive an SMS and can sign in immediately.
+              </p>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Recently activated">
+          <div class="panel__head form-panel__head">
+            <h2 class="panel__title">Recently activated</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Mait</th>
+                  <th scope="col">Code</th>
+                  <th scope="col">Mobile</th>
+                  <th scope="col">When</th>
+                </tr>
+              </thead>
+              <tbody id="recent">
+                <tr>
+                  <td class="table__empty" colspan="4">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/mait-activate.js"></script>
+  </body>
+</html>

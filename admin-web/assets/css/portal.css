@@ -165,13 +165,18 @@ a:hover {
   gap: var(--space-3);
 }
 
-.avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--ink-100);
-  border: 0;
-  cursor: pointer;
+/* Signing out is a labelled action, not a glyph to guess at. A back-office machine is shared
+   and the portal renders member PII, so leaving a session open is the one mistake worth
+   making obvious to undo. */
+.btn--logout {
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+}
+
+.btn--logout:hover {
+  color: var(--color-error);
+  border-color: var(--color-error);
+  background: var(--color-error-wash);
 }
 
 /* --- controls ---------------------------------------------------------------------------- */

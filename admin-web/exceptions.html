@@ -3,73 +3,30 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dashboard · Mait AI Admin</title>
+    <title>Exceptions · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
     <link rel="stylesheet" href="assets/css/dashboard.css" />
   </head>
 
   <body>
-    <div class="shell" data-page="dashboard">
+    <div class="shell" data-page="exceptions">
       <main class="content">
         <header class="topbar">
           <div>
-            <h1 class="topbar__title">Dashboard</h1>
-            <p class="topbar__meta">
-              <span id="today-date">—</span> · <span id="scope">all districts</span>
-            </p>
+            <h1 class="topbar__title">Exceptions</h1>
+            <p class="topbar__meta">Everything that needs a human today</p>
           </div>
           <div class="topbar__actions">
-            <select class="select" id="range" aria-label="Date range">
-              <option value="30">Last 30 days</option>
-              <option value="7">Last 7 days</option>
-              <option value="90">Last 90 days</option>
-            </select>
-            <button class="btn btn--primary" id="export" type="button">Export →</button>
+            <button class="btn" id="refresh" type="button">Refresh</button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
         </header>
 
         <div id="alert-region" role="alert" aria-live="polite"></div>
 
-        <!-- SRS §6.7.1–6.7.2 -->
-        <section class="kpis" aria-label="Summary">
-          <article class="kpi">
-            <p class="kpi__label">AI events today</p>
-            <p class="kpi__value" data-kpi="today">—</p>
-            <p class="kpi__foot" data-kpi="today-foot"></p>
-          </article>
-          <article class="kpi">
-            <p class="kpi__label">This week</p>
-            <p class="kpi__value" data-kpi="week">—</p>
-            <p class="kpi__foot" data-kpi="week-foot"></p>
-          </article>
-          <article class="kpi">
-            <p class="kpi__label">This month</p>
-            <p class="kpi__value" data-kpi="month">—</p>
-            <p class="kpi__foot" data-kpi="month-foot"></p>
-          </article>
-          <article class="kpi">
-            <p class="kpi__label">Lifetime</p>
-            <p class="kpi__value" data-kpi="lifetime">—</p>
-            <p class="kpi__foot" data-kpi="lifetime-foot"></p>
-          </article>
-        </section>
-
-        <!-- SRS §6.7.3 -->
-        <section class="panel" aria-labelledby="trend-title">
-          <div class="panel__head">
-            <h2 class="panel__title" id="trend-title">AI events per day</h2>
-            <p class="legend">
-              <span class="is-completed">Completed</span>
-              <span class="is-pending">Pending payment</span>
-            </p>
-          </div>
-          <div class="chart" id="chart"></div>
-        </section>
-
-        <!-- SRS §6.7.6 -->
-        <section class="exceptions" aria-label="Needs attention">
+        <section class="exceptions" aria-label="Queues">
           <article class="panel panel--warning">
             <div class="panel__head">
               <h2 class="panel__title">
@@ -110,17 +67,26 @@
           </div>
           <div data-rows="stale-indents"></div>
         </section>
+
+        <!-- The same colour rule as the app, said out loud: a Mait and an admin describing
+             the same problem should reach for the same word. -->
+        <div class="notice">
+          <span class="notice__swatch" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">Red means blocked work, yellow means waiting</p>
+            <p class="notice__body">
+              A Mait at zero straws cannot record anything; a payment pending three days is still
+              moving. The same rule holds in the app.
+            </p>
+          </div>
+        </div>
       </main>
     </div>
 
-    <!--
-      Vendor scripts are served locally, never from a CDN. This portal renders member PII,
-      and a third-party script on the page can read everything the page can — see README.md.
-    -->
     <script src="assets/vendor/jquery-3.7.1.min.js"></script>
     <script src="assets/js/api.js"></script>
     <script src="assets/js/ui.js"></script>
     <script src="assets/js/shell.js"></script>
-    <script src="assets/js/dashboard.js"></script>
+    <script src="assets/js/exceptions.js"></script>
   </body>
 </html>

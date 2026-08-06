@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MPP coverage · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="mpps">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">MPP coverage</h1>
+            <p class="topbar__meta">Members served against total</p>
+          </div>
+          <div class="topbar__actions">
+            <a class="btn" href="mpps.html">← MPPs</a>
+            <select class="select" id="period" aria-label="Period">
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <section class="tiles" aria-label="Coverage summary">
+          <article class="tile">
+            <p class="tile__label">Members served</p>
+            <p class="tile__value" id="served">—</p>
+            <p class="tile__foot" id="served-foot"></p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">Coverage</p>
+            <p class="tile__value" id="coverage">—</p>
+            <p class="tile__foot">Of every member on the master</p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">MPPs above 40%</p>
+            <p class="tile__value" id="above">—</p>
+            <p class="tile__foot" id="above-foot"></p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">MPPs at zero</p>
+            <p class="tile__value tile__value--bad" id="zero">—</p>
+            <p class="tile__foot tile__foot--bad">No Mait, or no stock</p>
+          </article>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Coverage by MPP">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">MPP</th>
+                  <th scope="col">District</th>
+                  <th scope="col">Members</th>
+                  <th scope="col">Served</th>
+                  <th scope="col">Coverage</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="5">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/coverage.js"></script>
+  </body>
+</html>

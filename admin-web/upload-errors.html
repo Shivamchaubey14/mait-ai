@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Upload errors · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+    <link rel="stylesheet" href="assets/css/uploads.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="uploads">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title" id="title">Upload errors</h1>
+            <p class="topbar__meta" id="meta">—</p>
+          </div>
+          <div class="topbar__actions">
+            <a class="btn" href="uploads.html">← Uploads</a>
+            <button class="btn btn--primary" id="download" type="button">Download CSV →</button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- The single most important sentence on this screen: the numbers are the ones in
+             the operator's own spreadsheet, and the rows that passed are already live. -->
+        <div class="notice">
+          <span class="notice__swatch" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">Row numbers match the spreadsheet you uploaded</p>
+            <p class="notice__body">
+              Fix them in SAP or in the file, then upload again. Accepted rows are already live —
+              re-uploading does not duplicate them.
+            </p>
+          </div>
+        </div>
+
+        <section class="panel panel--flush" aria-label="Rejected rows">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Row</th>
+                  <th scope="col">Problem</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="2">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/upload-errors.js"></script>
+  </body>
+</html>
