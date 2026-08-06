@@ -62,8 +62,10 @@ export default function BottomSheet({
       onRequestClose={onClose}
       testID={testID}
     >
-      {/* Tapping the dimmed area closes it. On Android the hardware back button does too,
-          via onRequestClose — a sheet with no way out is a trapped Mait. */}
+      {/* Barely tinted rather than dimmed. A dark scrim reads as the screen having gone
+          wrong, and the sheet is already separated by its rounded top and its shadow.
+          Tapping here closes it; on Android the hardware back button does too, via
+          onRequestClose — a sheet with no way out is a trapped Mait. */}
       <Pressable style={styles.scrim} onPress={onClose} testID="sheet-scrim" />
 
       <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing[4] }]}>
@@ -133,7 +135,7 @@ export default function BottomSheet({
 }
 
 const styles = StyleSheet.create({
-  scrim: { flex: 1, backgroundColor: 'rgba(12,21,27,0.45)' },
+  scrim: { flex: 1, backgroundColor: 'rgba(37,61,78,0.08)' },
 
   sheet: {
     maxHeight: '78%',
@@ -142,7 +144,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    ...shadows.raised,
+    borderTopWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   grabber: {
     alignSelf: 'center',
