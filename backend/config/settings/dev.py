@@ -1,7 +1,7 @@
 """Local development settings. Never used outside a developer machine."""
 
 from .base import *
-from .base import INSTALLED_APPS, MIDDLEWARE, env
+from .base import INSTALLED_APPS, MIDDLEWARE, REST_FRAMEWORK, env
 
 DEBUG = True
 ALLOWED_HOSTS = ["*"]
@@ -22,6 +22,16 @@ SMS_GATEWAY = {"PROVIDER": "console", "API_KEY": "", "SENDER_ID": "MAITAI"}
 # is populated there.
 DEV_FIXED_OTP_NUMBERS = env.list("DEV_FIXED_OTP_NUMBERS", default=[])
 DEV_FIXED_OTP_CODE = env("DEV_FIXED_OTP_CODE", default="123456")
+
+# The production OTP limits are 5 sends an hour, which is right for a fraud surface and
+# useless for development: a morning of testing the login screen exhausts it in minutes and
+# the app can only report that something went wrong. Loosened here and here only — base.py,
+# which staging and production inherit, is untouched.
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+    **REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"],
+    "otp_send": env("DEV_OTP_SEND_RATE", default="100/hour"),
+    "otp_verify": env("DEV_OTP_VERIFY_RATE", default="200/hour"),
+}
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
