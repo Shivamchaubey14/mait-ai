@@ -186,11 +186,7 @@ export default function HomeScreen({
             testID="events-error"
           />
         ) : today.length === 0 ? (
-          <EmptyState
-            title={t('home.noEventsTitle')}
-            body={t('home.noEventsBody')}
-            pointsDown={t('home.startNewAi')}
-          />
+          <EmptyState title={t('home.noEventsTitle')} body={t('home.noEventsBody')} />
         ) : (
           today.map(event => <EventRow key={event.id} event={event} />)
         )}
