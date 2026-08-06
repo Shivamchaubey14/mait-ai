@@ -198,8 +198,8 @@
     "home": "Home",
     "newAi": "New AI",
     "stock": "Stock",
-    "profile": "Profile",
-    "history": "History"
+    "history": "History",
+    "settings": "Settings"
   },
   "states": {
     "errorBody": "The server did not answer. Your queued records are safe on this phone.",
@@ -262,17 +262,6 @@
     "breedsLow": "{{count}} breeds are low",
     "breedsLowBody": "Raise an indent before your next round."
   },
-  "profile": {
-    "maitId": "Mait #{{id}}",
-    "yourMpps": "Your MPPs",
-    "noMpps": "None assigned yet",
-    "mppsFoot": "Set by the office from the SAP master.",
-    "language": "Language",
-    "signOut": "Sign out",
-    "signOutAnyway": "Sign out anyway",
-    "signOutWarnTitle": "{{count}} records have not been sent",
-    "signOutWarnBody": "They stay on this phone and can only be sent by you, on this phone. Find signal first if you can."
-  },
   "history": {
     "title": "History",
     "subtitle": "{{count}} events recorded",
@@ -300,5 +289,25 @@
     "whatNextTitle": "What happens now",
     "whatNextBody": "The office approves it and the depot issues the straws. Your stock updates here when they do.",
     "backToStock": "Back to stock"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "profile": "Profile",
+    "mobile": "Mobile number",
+    "mobileFoot": "change it at your MPP",
+    "mpp": "Your MPP",
+    "noMpps": "None assigned yet",
+    "version": "App version",
+    "data": "Data",
+    "queued": "Queued records",
+    "queuedFoot": "{{count}} waiting to send",
+    "photoQuality": "Photo quality",
+    "photoQualityFoot": "Standard · smaller uploads on weak signal",
+    "signOut": "Sign out",
+    "signOutFoot": "You will need an OTP to return",
+    "signOutAnyway": "Sign out anyway",
+    "signOutWarnTitle": "{{count}} records have not been sent",
+    "signOutWarnBody": "They stay on this phone and can only be sent by you, on this phone. Find signal first if you can."
   }
 }

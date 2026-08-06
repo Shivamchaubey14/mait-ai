@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
 /** `newAi` is an action rather than a destination — it never becomes the active tab. */
-export type Tab = 'home' | 'stock' | 'history' | 'profile';
+export type Tab = 'home' | 'stock' | 'history' | 'settings';
 
 const TABS: {
   key: Tab;
@@ -33,7 +33,7 @@ const TABS: {
   { key: 'home', icon: 'home-outline', activeIcon: 'home' },
   { key: 'stock', icon: 'layers-outline', activeIcon: 'layers' },
   { key: 'history', icon: 'time-outline', activeIcon: 'time' },
-  { key: 'profile', icon: 'person-outline', activeIcon: 'person' },
+  { key: 'settings', icon: 'settings-outline', activeIcon: 'settings' },
 ];
 
 export default function BottomNav({
