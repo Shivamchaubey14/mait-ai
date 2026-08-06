@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Users &amp; roles · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="users">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Users &amp; roles</h1>
+            <p class="topbar__meta"><span id="user-count">—</span> portal accounts</p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--primary" id="create" type="button">Create user →</button>
+            <button class="avatar" id="account" type="button" aria-label="Account"></button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- SRS §9.10. Hidden behind a dialog until asked for: this screen is read far more
+             often than it is written to. -->
+        <section class="panel" id="create-panel" hidden aria-label="Create an office account">
+          <div class="panel__head">
+            <h2 class="panel__title">New office account</h2>
+          </div>
+          <form id="create-form" class="filters" novalidate>
+            <input
+              class="input"
+              id="new-username"
+              type="text"
+              placeholder="Username"
+              aria-label="Username"
+              required
+            />
+            <input
+              class="input"
+              id="new-full-name"
+              type="text"
+              placeholder="Full name"
+              aria-label="Full name"
+              required
+            />
+            <input
+              class="input"
+              id="new-email"
+              type="email"
+              placeholder="Email"
+              aria-label="Email"
+            />
+            <select class="select" id="new-role" aria-label="Role">
+              <option value="admin">Admin</option>
+              <option value="super_admin">Super Admin</option>
+            </select>
+            <input
+              class="input"
+              id="new-password"
+              type="password"
+              placeholder="Temporary password"
+              aria-label="Temporary password"
+              required
+            />
+            <button class="btn btn--primary" type="submit">Create</button>
+            <button class="btn" type="button" id="create-cancel">Cancel</button>
+          </form>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Portal accounts">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">User</th>
+                  <th scope="col">Username</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">Scope</th>
+                  <th scope="col">Last sign-in</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="6">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </section>
+
+        <div class="notice">
+          <span class="notice__swatch" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">Field staff never get a portal account</p>
+            <p class="notice__body">
+              Maits sign in to the app with an OTP. Portal roles are Admin and Super Admin only, and
+              a Mait is activated from their SAP record on the Maits screen.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/users.js"></script>
+  </body>
+</html>

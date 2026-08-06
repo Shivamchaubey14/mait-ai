@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI event · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+    <link rel="stylesheet" href="assets/css/event.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="ai-events">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title" id="event-title">Event</h1>
+            <p class="topbar__meta" id="event-meta">—</p>
+          </div>
+          <div class="topbar__actions">
+            <a class="btn" href="ai-events.html">← All events</a>
+            <button class="avatar" id="account" type="button" aria-label="Account"></button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <section class="tiles" aria-label="Event summary">
+          <article class="tile">
+            <p class="tile__label">Straw</p>
+            <p class="tile__value" id="straw-no">—</p>
+            <p class="tile__foot" id="straw-foot"></p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">Payment</p>
+            <p class="tile__value" id="payment-amount">—</p>
+            <p class="tile__foot" id="payment-foot"></p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">Location</p>
+            <p class="tile__value" id="gps-value">—</p>
+            <p class="tile__foot" id="gps-foot"></p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">Status</p>
+            <p class="tile__value" id="status-value">—</p>
+            <p class="tile__foot" id="status-foot"></p>
+          </article>
+        </section>
+
+        <div class="event">
+          <div>
+            <!-- The proof photo and its stamp. Dark so the photo is the brightest thing on
+                 the page, which is how it is judged. -->
+            <figure class="proof" id="proof">
+              <figcaption class="proof__caption" id="proof-caption">
+                No photo captured yet
+              </figcaption>
+            </figure>
+
+            <div class="proof proof--map" id="map">
+              <p class="proof__caption" id="map-caption">No GPS recorded yet</p>
+            </div>
+          </div>
+
+          <!-- SRS §9.6 — the trail a dispute is settled from, so it is readable rather than
+               raw before/after payloads. -->
+          <section class="panel" aria-labelledby="trail-title">
+            <div class="panel__head">
+              <h2 class="panel__title" id="trail-title">Audit trail</h2>
+            </div>
+            <ol class="trail" id="trail">
+              <li class="trail__step">Loading…</li>
+            </ol>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/ai-event.js"></script>
+  </body>
+</html>

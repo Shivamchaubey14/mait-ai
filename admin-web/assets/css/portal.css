@@ -1,0 +1,638 @@
+/**
+ * The admin portal shell and its shared components (docs/DESIGN_SYSTEM.md — "Admin portal
+ * screen pattern").
+ *
+ * Every page is this file plus, at most, a small sheet of its own. Seventeen screens sharing
+ * one table and one status pill is the difference between a portal and seventeen pages that
+ * merely resemble each other.
+ *
+ * Every value comes from tokens.css. CI rejects a hardcoded hex in this workstream.
+ */
+
+@import url('tokens.css');
+
+/* --- reset ---------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  background: var(--color-background);
+}
+
+h1,
+h2,
+h3,
+p,
+figure {
+  margin: 0;
+}
+
+a {
+  color: var(--color-primary-dark);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* --- shell ---------------------------------------------------------------------------- */
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-ink);
+}
+
+.side__mark {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  background: var(--ink-700);
+  border-radius: var(--radius-md);
+}
+
+.side__mark-name {
+  display: block;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h3);
+  color: var(--color-surface);
+  letter-spacing: 0.04em;
+}
+
+.side__mark-sub {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  letter-spacing: 0.18em;
+}
+
+.side__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 42px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-body);
+  color: var(--ink-100);
+}
+
+.side__link:hover {
+  background: var(--ink-700);
+  text-decoration: none;
+}
+
+.side__link.is-active {
+  background: var(--color-primary);
+  color: var(--color-surface);
+  font-weight: 600;
+}
+
+.side__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink-400);
+  flex: none;
+}
+
+.side__link.is-active .side__dot {
+  background: var(--color-surface);
+}
+
+/* Rides on the nav item so the backlog is visible from every screen, not only once someone
+   thinks to open the exceptions page. */
+.side__badge {
+  margin-left: auto;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-surface);
+  background: var(--color-error);
+}
+
+.side__badge--muted {
+  background: var(--ink-500);
+}
+
+/* --- content and topbar ----------------------------------------------------------------- */
+.content {
+  padding: var(--space-5);
+  max-width: var(--content-max-width);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.topbar__title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h1);
+  color: var(--color-ink);
+}
+
+.topbar__meta {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--ink-100);
+  border: 0;
+  cursor: pointer;
+}
+
+/* --- controls ---------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 0 var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--color-background);
+}
+
+/* One green screen-owning action per view. A second green button on the same screen means
+   neither is the answer to "what do I do here". */
+.btn--primary,
+.btn--primary:hover {
+  color: var(--color-surface);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn--primary:hover {
+  background: var(--color-primary-pressed);
+}
+
+.btn--dark,
+.btn--dark:hover {
+  color: var(--color-surface);
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+}
+
+.btn[disabled] {
+  color: var(--color-text-disabled);
+  background: var(--color-disabled-fill);
+  border-color: var(--color-disabled-fill);
+  cursor: not-allowed;
+}
+
+.select,
+.input {
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.input:focus,
+.select:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -1px;
+}
+
+/* --- filter bar --------------------------------------------------------------------------
+   Directly above the table it governs. In the topbar it would look like it filtered the
+   whole portal. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.filters__search {
+  flex: 1 1 260px;
+  min-width: 200px;
+}
+
+/* A chip states what it is currently doing — "Status: all", not "Status". Reading the bar
+   should be enough to know what the table below is showing. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.chip.is-active {
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+  background: var(--color-primary-wash);
+}
+
+/* --- stat tiles ------------------------------------------------------------------------- */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.tile {
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.tile__label {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.tile__value {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-display);
+  line-height: var(--leading-tight);
+  color: var(--color-ink);
+}
+
+.tile__foot {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.tile__foot--good {
+  color: var(--color-primary-dark);
+}
+
+/* A figure someone has to do something about does not get to look like the others. */
+.tile__foot--bad {
+  color: var(--color-error);
+}
+
+.tile__value--bad {
+  color: var(--color-error);
+}
+
+.tile__value--warn {
+  color: var(--color-secondary-pressed);
+}
+
+/* --- panels ------------------------------------------------------------------------------ */
+.panel {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.panel--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.panel__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h3);
+  color: var(--color-ink);
+}
+
+.panel__count {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+/* --- table -------------------------------------------------------------------------------
+   The portal's main object. Identity first, status last, numbers right. */
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body);
+}
+
+.table th {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table__num {
+  text-align: right;
+  font-family: var(--font-heading);
+  font-weight: 600;
+}
+
+/* Codes and identifiers read as data rather than prose. */
+.table__code {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+}
+
+.table__name {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.table__sub {
+  display: block;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+/* A row that is waiting or blocked says so in its own background, so a screenful of rows can
+   be triaged without reading every status cell. */
+.table tbody tr.is-waiting {
+  background: var(--color-secondary-wash);
+}
+
+.table tbody tr.is-blocked {
+  background: var(--color-error-wash);
+}
+
+.table__empty {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* --- status pill -------------------------------------------------------------------------
+   One vocabulary across the portal and the app. The word always carries the meaning; the
+   colour only reinforces it. */
+.pill {
+  display: inline-block;
+  padding: 2px var(--space-3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  background: var(--ink-50);
+}
+
+.pill--good {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+}
+
+.pill--warn {
+  color: var(--yolk-800);
+  background: var(--color-secondary-wash);
+}
+
+.pill--bad {
+  color: var(--color-error);
+  background: var(--color-error-wash);
+}
+
+.pill--info {
+  color: var(--color-info);
+  background: var(--color-info-wash);
+}
+
+/* --- notice ------------------------------------------------------------------------------- */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-info-wash);
+}
+
+.notice--warn {
+  background: var(--color-secondary-wash);
+  border: 1px solid var(--yolk-200);
+}
+
+.notice--bad {
+  background: var(--color-error-wash);
+  border: 1px solid var(--color-error);
+}
+
+.notice__swatch {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-info);
+}
+
+.notice--warn .notice__swatch {
+  background: var(--color-secondary);
+}
+
+.notice--bad .notice__swatch {
+  background: var(--color-error);
+}
+
+.notice__title {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.notice__body {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.notice__action {
+  margin-left: auto;
+}
+
+/* --- progress ----------------------------------------------------------------------------- */
+.bar {
+  height: 6px;
+  min-width: 90px;
+  border-radius: var(--radius-pill);
+  background: var(--ink-50);
+  overflow: hidden;
+}
+
+.bar__fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+}
+
+/* Behind target. Yellow is the alert colour everywhere in this product, so it means the same
+   thing here as it does on a Mait's handset. */
+.bar__fill--behind {
+  background: var(--color-secondary);
+}
+
+.bar__fill--bad {
+  background: var(--color-error);
+}
+
+/* --- pagination ---------------------------------------------------------------------------- */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+}
+
+.pager__pages {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.pager__page {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-caption);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.pager__page.is-current {
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+  background: var(--color-primary-wash);
+}
+
+.pager__page[disabled] {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+/* --- misc ---------------------------------------------------------------------------------- */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dot--warning {
+  background: var(--color-warning);
+}
+
+.dot--error {
+  background: var(--color-error);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .side {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .side__mark {
+    margin-bottom: 0;
+  }
+}

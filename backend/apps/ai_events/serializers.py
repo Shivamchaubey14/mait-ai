@@ -9,12 +9,27 @@ compromised app.
 
 from __future__ import annotations
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.animals.models import Animal
 from apps.masterdata.models import MPP, Member, NonMember
+from apps.payments.models import Payment
 
 from .models import AIEvent, AIEventTimeline
+
+
+class PaymentSummarySerializer(serializers.ModelSerializer):
+    """Just enough payment to read an AI event row without opening it."""
+
+    mode_display = serializers.CharField(source="get_mode_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    is_verified = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Payment
+        fields = ["amount", "mode", "mode_display", "status", "status_display", "is_verified"]
+        read_only_fields = fields
 
 
 class AIEventTimelineSerializer(serializers.ModelSerializer):
@@ -39,6 +54,11 @@ class AIEventSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     mpp_code = serializers.CharField(source="mpp.mpp_code", read_only=True)
     mpp_name = serializers.CharField(source="mpp.mpp_name", read_only=True)
+    # The admin list is a table of who did what: an event row without the Mait on it cannot
+    # be read without opening every one of 31,000 rows.
+    mait_name = serializers.CharField(source="mait.name", read_only=True)
+    mait_code = serializers.CharField(source="mait.sahayak_vendor_code", read_only=True)
+    payment = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
     animal_type = serializers.CharField(source="animal.animal_type", read_only=True)
     breed = serializers.CharField(source="animal.breed", read_only=True)
@@ -54,6 +74,10 @@ class AIEventSerializer(serializers.ModelSerializer):
             "mpp",
             "mpp_code",
             "mpp_name",
+            "mait",
+            "mait_name",
+            "mait_code",
+            "payment",
             "owner_type",
             "member",
             "non_member",
@@ -76,6 +100,19 @@ class AIEventSerializer(serializers.ModelSerializer):
     def get_owner_name(self, obj) -> str:
         owner = obj.owner
         return getattr(owner, "member_name", None) or getattr(owner, "name", "")
+
+    @extend_schema_field(PaymentSummarySerializer(allow_null=True))
+    def get_payment(self, obj):
+        """
+        Enough of the payment to render a row and decide whether it needs chasing.
+
+        Null until the Mait reaches step 6, which is normal rather than missing — an event in
+        `straw_verified` has no payment yet and the portal should say so, not show a blank.
+        """
+        payment = getattr(obj, "payment", None)
+        if payment is None:
+            return None
+        return PaymentSummarySerializer(payment).data
 
 
 class AIEventCreateSerializer(serializers.Serializer):

@@ -11,7 +11,28 @@ window.MaitAI = window.MaitAI || {};
 (function (MaitAI, $) {
   'use strict';
 
-  const BASE_URL = '/api/v1';
+  /**
+   * Where the API lives.
+   *
+   * Deployed, nginx serves the portal and the API from one origin, so a relative path is
+   * correct and avoids baking a hostname into the build. On the no-Docker development path
+   * the portal is static-served on 8080 while Django runs on 8000 — a relative path there
+   * asks the file server for `/api/v1` and gets a 404 that looks like a broken portal.
+   *
+   * Dev settings enable CORS for exactly this. Set `window.MAITAI_API_BASE` before this
+   * script to point somewhere else.
+   */
+  const BASE_URL = (function () {
+    if (window.MAITAI_API_BASE) {
+      return window.MAITAI_API_BASE;
+    }
+    const port = window.location.port;
+    if (port && port !== '80' && port !== '443' && port !== '8000') {
+      return window.location.protocol + '//' + window.location.hostname + ':8000/api/v1';
+    }
+    return '/api/v1';
+  })();
+
   const STORAGE_KEY = 'maitai.tokens';
 
   /* --- token storage ------------------------------------------------------------------
@@ -137,7 +158,8 @@ window.MaitAI = window.MaitAI || {};
           },
           function () {
             tokens.clear();
-            window.location.href = '/login.html';
+            // Relative, so the portal works when it is not served from the domain root.
+            window.location.href = 'login.html';
             return $.Deferred().reject(toProblem(jqXHR)).promise();
           }
         );
@@ -234,8 +256,47 @@ window.MaitAI = window.MaitAI || {};
       return request({ path: '/dashboard/mpp-coverage/', query: query });
     },
 
+    uploadErrors: function (id, query) {
+      return request({ path: '/admin/uploads/' + id + '/errors/', query: query });
+    },
+
     aiEvents: function (query) {
       return request({ path: '/ai-events/', query: query });
+    },
+
+    aiEvent: function (id) {
+      return request({ path: '/ai-events/' + id + '/' });
+    },
+
+    /** The step-by-step trail a dispute is settled from (SRS §9.6). */
+    aiEventTimeline: function (id) {
+      return request({ path: '/ai-events/' + id + '/timeline/' });
+    },
+
+    /**
+     * Maits from SAP who have no mobile number and so cannot sign in.
+     *
+     * 93% of the roster arrives in this state, which is why activation is a screen of its
+     * own rather than a field on a user form (docs/DATA_FINDINGS.md).
+     */
+    pendingMaits: function (query) {
+      return request({ path: '/admin/users/pending-maits/', query: query });
+    },
+
+    activateMait: function (body) {
+      return request({ path: '/admin/users/activate-mait/', method: 'POST', body: body });
+    },
+
+    activationReadiness: function () {
+      return request({ path: '/dashboard/activation-readiness/' });
+    },
+
+    createUser: function (body) {
+      return request({ path: '/admin/users/', method: 'POST', body: body });
+    },
+
+    updateUser: function (id, body) {
+      return request({ path: '/admin/users/' + id + '/', method: 'PATCH', body: body });
     },
 
     mpps: function (query) {

@@ -142,6 +142,45 @@ and a forward arrow (`Continue →`, `Save & continue →`, `Submit proof →`).
 until the step is genuinely satisfiable. A secondary route out of the step, when there is
 one, sits above it as a green text link (`Add a non-member`), never as a second button.
 
+## Admin portal screen pattern (W2–W17)
+
+The portal is one shell with a page poured into it. Screens are listed in
+[`SCREEN_INVENTORY.md`](SCREEN_INVENTORY.md); this is how each is assembled.
+
+**Shell.** Ink sidebar, fixed width, holding the white `MAIT AI / ADMIN` mark and one link
+per section, each with a leading dot. The current section is a filled green pill. A count of
+things needing a human rides on the Exceptions link itself, so it is visible from every
+screen rather than only once someone thinks to look.
+
+**Topbar.** Page title in H1 with a one-line meta beneath it — the row count and the scope
+(`31,540 this month`, `2,940 MPPs across 14 districts`). Actions sit right: a neutral
+secondary (`Export`) and at most one green primary. Never two greens.
+
+**Body**, from six repeating pieces:
+
+- **Stat tile** — small label, large Quicksand figure, one line of context under it
+  (`+9% on yesterday`, `All-time high 32,006`). Four across on a summary screen. The context
+  line carries the colour: green for good, red for a number someone must act on.
+- **Filter bar** — a search field, then chips that read as their current state
+  (`All districts`, `Status: all`, `Aug 2026`). An active filter is a green outline. Filters
+  sit directly above the table they govern, never in the topbar.
+- **Table** — the portal's main object. First column is the identity in Ink semibold with its
+  code beneath in muted type; the last column is a status pill. Rows tint with meaning:
+  yellow for waiting, red for blocked. Numbers right-align; codes and IDs use the heading
+  face so they read as data.
+- **Status pill** — the same vocabulary everywhere, matching the app: `Complete`, `Queued`,
+  `Payment failed`, `Needs mobile`, `Blocked`, `Stale`. Colour never carries the meaning
+  alone; the word is always there.
+- **Notice** — blue explains a rule that is not obvious (`Personal data is masked for
+  everyone below Admin`), yellow flags a backlog worth acting on, red states something
+  blocked. Full width, above the content it qualifies.
+- **Progress bar** — for a proportion that has a target: coverage, leaderboard standing.
+  Green when on track, yellow when behind.
+
+**Empty and partial states** are written out, not left blank: `No Mait assigned`,
+`Cannot record events`, `Waiting — phone offline`. A blank cell in an admin table reads as a
+bug in the portal rather than a fact about the row.
+
 **Charts** — Chart.js themed to the palette. Primary series `--color-primary-dark`, secondary
 `--color-success-alt`. Reserve `--color-accent` and `--color-accent-alt` for alerts and
 highlighted series so an orange line always means "look here".

@@ -6,59 +6,11 @@
     <title>Dashboard · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="assets/css/main.css" />
     <link rel="stylesheet" href="assets/css/dashboard.css" />
   </head>
 
   <body>
-    <div class="shell">
-      <aside class="side">
-        <div class="side__mark">
-          <span class="side__mark-name">MAIT AI</span>
-          <span class="side__mark-sub">ADMIN</span>
-        </div>
-
-        <nav aria-label="Main">
-          <a class="side__link is-active" href="index.html" aria-current="page">
-            <span class="side__dot" aria-hidden="true"></span> Dashboard
-          </a>
-          <a class="side__link" href="uploads.html">
-            <span class="side__dot" aria-hidden="true"></span> SAP upload
-          </a>
-          <a class="side__link" href="ai-events.html">
-            <span class="side__dot" aria-hidden="true"></span> AI events
-          </a>
-          <a class="side__link" href="maits.html">
-            <span class="side__dot" aria-hidden="true"></span> Maits
-          </a>
-          <a class="side__link" href="mpps.html">
-            <span class="side__dot" aria-hidden="true"></span> MPPs
-          </a>
-          <a class="side__link" href="members.html">
-            <span class="side__dot" aria-hidden="true"></span> Members
-          </a>
-          <a class="side__link" href="inventory.html">
-            <span class="side__dot" aria-hidden="true"></span> Inventory
-          </a>
-          <a class="side__link" href="indents.html">
-            <span class="side__dot" aria-hidden="true"></span> Indents
-          </a>
-          <a class="side__link" href="leaderboard.html">
-            <span class="side__dot" aria-hidden="true"></span> Leaderboard
-          </a>
-          <a class="side__link" href="exceptions.html">
-            <span class="side__dot" aria-hidden="true"></span> Exceptions
-            <span class="side__badge" id="exception-badge" hidden>0</span>
-          </a>
-          <a class="side__link" href="reports.html">
-            <span class="side__dot" aria-hidden="true"></span> Reports
-          </a>
-          <a class="side__link" href="users.html">
-            <span class="side__dot" aria-hidden="true"></span> Users &amp; roles
-          </a>
-        </nav>
-      </aside>
-
+    <div class="shell" data-page="dashboard">
       <main class="content">
         <header class="topbar">
           <div>
@@ -167,6 +119,8 @@
     -->
     <script src="assets/vendor/jquery-3.7.1.min.js"></script>
     <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
     <script src="assets/js/dashboard.js"></script>
   </body>
 </html>

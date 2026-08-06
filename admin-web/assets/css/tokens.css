@@ -85,6 +85,12 @@
   --color-error: #e54d42;
   --color-info: #3e92e5;
 
+  /* Washes for notices, pills and tinted table rows. Pale enough to carry Ink text at full
+     contrast — the status colour is the swatch and the border, never the text. Mirrored in
+     mobile/src/theme/tokens.ts. */
+  --color-error-wash: #fdecea;
+  --color-info-wash: #d8e7fa;
+
   --color-text: var(--ink-600);
   --color-text-muted: #7a8893;
   --color-text-disabled: var(--ink-300);

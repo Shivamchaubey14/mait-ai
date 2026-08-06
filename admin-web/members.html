@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Members · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="members">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Members</h1>
+            <p class="topbar__meta"><span id="member-count">—</span> from the SAP master</p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn" id="export" type="button">Export (masked)</button>
+            <button class="avatar" id="account" type="button" aria-label="Account"></button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- SRS §16. Stated on the screen rather than assumed: an operator who thinks they
+             are seeing full numbers will read a masked one out to a farmer. -->
+        <div class="notice">
+          <span class="notice__swatch" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">Personal data is masked for everyone below Admin</p>
+            <p class="notice__body">
+              Aadhaar and bank details are never returned in full from this screen. Every unmask is
+              logged against your account.
+            </p>
+          </div>
+        </div>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search name, member code or mobile"
+            aria-label="Search name, member code or mobile"
+          />
+          <select class="select" id="filter-mpp" aria-label="MPP">
+            <option value="">All MPPs</option>
+          </select>
+          <button class="chip" id="filter-no-mobile" type="button" aria-pressed="false">
+            No mobile
+          </button>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Members">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Member</th>
+                  <th scope="col">Code</th>
+                  <th scope="col">MPP</th>
+                  <th scope="col">Mobile</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="5">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </section>
+
+        <p class="topbar__meta" id="unusable-note"></p>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/members.js"></script>
+  </body>
+</html>

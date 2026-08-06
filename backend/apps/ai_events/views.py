@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import django_filters
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Q
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -34,10 +35,29 @@ class AIEventFilter(django_filters.FilterSet):
     mait = django_filters.NumberFilter(field_name="mait_id")
     date_from = django_filters.DateFilter(field_name="created_at", lookup_expr="date__gte")
     date_to = django_filters.DateFilter(field_name="created_at", lookup_expr="date__lte")
+    search = django_filters.CharFilter(method="filter_search")
 
     class Meta:
         model = AIEvent
-        fields = ["status", "mpp", "mait", "date_from", "date_to"]
+        fields = ["status", "mpp", "mait", "date_from", "date_to", "search"]
+
+    def filter_search(self, queryset, name, value):
+        """
+        The three things someone actually has to hand when chasing an event.
+
+        A straw number comes off a complaint, a farmer's name off a phone call, a Mait's name
+        off a roster. Searching all three from one box means the operator does not have to
+        know which kind of thing they are holding.
+        """
+        term = (value or "").strip()
+        if not term:
+            return queryset
+        return queryset.filter(
+            Q(straw_unique_no__icontains=term)
+            | Q(member__member_name__icontains=term)
+            | Q(non_member__name__icontains=term)
+            | Q(mait__name__icontains=term)
+        )
 
 
 @extend_schema(tags=["ai-events"])
@@ -70,8 +90,10 @@ class AIEventViewSet(
         Anyone else sees nothing rather than an error — a role that should not be here is a
         configuration problem, not something to explain to the caller.
         """
+        # `payment` is a reverse one-to-one and is rendered on every row, so it is selected
+        # here rather than fetched per row — 25 rows would otherwise be 25 extra queries.
         base = AIEvent.objects.select_related(
-            "mpp", "member", "non_member", "animal", "mait"
+            "mpp", "member", "non_member", "animal", "mait", "payment"
         ).order_by("-created_at")
 
         user = self.request.user

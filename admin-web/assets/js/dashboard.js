@@ -142,7 +142,7 @@
       (data.low_stock || {}).count +
       (data.stale_indents || {}).count;
 
-    $('#exception-badge').text(count(total)).prop('hidden', !total);
+    MaitAI.shell.setExceptionCount(total);
 
     renderException('pending-payments', data.pending_payments || {});
     renderException('failed-otps', data.failed_otps || {});
@@ -173,10 +173,10 @@
   $(function () {
     // No session, no dashboard. Done before any request so the page does not flash a
     // half-rendered shell on the way to the login screen.
-    if (!api.tokens.get().access) {
-      window.location.replace('login.html');
+    if (!MaitAI.shell.requireSession()) {
       return;
     }
+    MaitAI.shell.mount();
 
     $('#today-date').text(
       new Date().toLocaleDateString('en-IN', {
@@ -195,12 +195,6 @@
 
     $('#range').on('change', function () {
       load(Number($(this).val()));
-    });
-
-    $('#account').on('click', function () {
-      api.logout().always(function () {
-        window.location.replace('login.html');
-      });
     });
 
     $('#export').on('click', function () {

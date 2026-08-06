@@ -1529,6 +1529,20 @@ components:
         mpp_name:
           type: string
           readOnly: true
+        mait:
+          type: integer
+          readOnly: true
+        mait_name:
+          type: string
+          readOnly: true
+        mait_code:
+          type: string
+          readOnly: true
+        payment:
+          allOf:
+          - $ref: '#/components/schemas/PaymentSummary'
+          nullable: true
+          readOnly: true
         owner_type:
           allOf:
           - $ref: '#/components/schemas/OwnerTypeEnum'
@@ -1608,6 +1622,9 @@ components:
       - gps_lat
       - gps_lng
       - id
+      - mait
+      - mait_code
+      - mait_name
       - member
       - mpp
       - mpp_code
@@ -1615,6 +1632,7 @@ components:
       - non_member
       - owner_name
       - owner_type
+      - payment
       - performed_at
       - status
       - status_display
@@ -2570,6 +2588,14 @@ components:
       - member_name
       - mobile_no
       - mpp_code
+    ModeEnum:
+      enum:
+      - ONLINE
+      - COD
+      type: string
+      description: |-
+        * `ONLINE` - Online
+        * `COD` - Cash on delivery
     NonMember:
       type: object
       description: Quick-capture registration by a Mait in the field (SRS §6.3 step
@@ -3001,6 +3027,49 @@ components:
           nullable: true
           minLength: 1
           description: Null unassigns the MPP, leaving it visible to admins only.
+    PaymentSummary:
+      type: object
+      description: Just enough payment to read an AI event row without opening it.
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        mode:
+          allOf:
+          - $ref: '#/components/schemas/ModeEnum'
+          readOnly: true
+        mode_display:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentSummaryStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        is_verified:
+          type: boolean
+          readOnly: true
+      required:
+      - amount
+      - is_verified
+      - mode
+      - mode_display
+      - status
+      - status_display
+    PaymentSummaryStatusEnum:
+      enum:
+      - pending
+      - verified
+      - failed
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `verified` - Verified
+        * `failed` - Failed
     ProductTypeEnum:
       enum:
       - straw

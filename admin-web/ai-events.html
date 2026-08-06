@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI events · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+  </head>
+
+  <body>
+    <!-- The sidebar is rendered by shell.js from one list, so twelve pages cannot drift. -->
+    <div class="shell" data-page="ai-events">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">AI events</h1>
+            <p class="topbar__meta"><span id="event-count">—</span></p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--primary" id="export" type="button">Export CSV →</button>
+            <button class="avatar" id="account" type="button" aria-label="Account"></button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- Filters sit above the table they govern (SRS §9.6 list filters). -->
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search member, Mait or straw number"
+            aria-label="Search member, Mait or straw number"
+          />
+          <select class="select" id="filter-mpp" aria-label="MPP">
+            <option value="">All MPPs</option>
+          </select>
+          <select class="select" id="filter-status" aria-label="Status">
+            <option value="">Status: all</option>
+            <option value="draft">Draft</option>
+            <option value="straw_verified">Straw verified</option>
+            <option value="photo_captured">Photo captured</option>
+            <option value="payment_pending">Payment pending</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <input class="input" id="filter-from" type="date" aria-label="From date" />
+          <input class="input" id="filter-to" type="date" aria-label="To date" />
+        </section>
+
+        <section class="panel panel--flush" aria-label="AI events">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Event</th>
+                  <th scope="col">Farmer</th>
+                  <th scope="col">Mait</th>
+                  <th scope="col">Animal</th>
+                  <th scope="col">Payment</th>
+                  <th scope="col">Captured</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="7">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </section>
+      </main>
+    </div>
+
+    <!--
+      Vendor scripts are served locally, never from a CDN. This portal renders member PII,
+      and a third-party script on the page can read everything the page can — see README.md.
+    -->
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/ai-events.js"></script>
+  </body>
+</html>
