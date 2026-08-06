@@ -431,6 +431,229 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/ai-events/:
+    get:
+      operationId: ai_events_list
+      description: 'Scoped to the caller: a Mait sees their own captures, an admin
+        sees all of them. Filter with `status`, `mpp`, `mait`, `date_from` and `date_to`.'
+      summary: List AI events
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: mait
+        schema:
+          type: number
+      - in: query
+        name: mpp
+        schema:
+          type: string
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - cancelled
+          - completed
+          - draft
+          - payment_pending
+          - photo_captured
+          - straw_verified
+        description: |-
+          * `draft` - Draft
+          * `straw_verified` - Straw verified
+          * `photo_captured` - Photo captured
+          * `payment_pending` - Payment pending
+          * `completed` - Completed
+          * `cancelled` - Cancelled
+      tags:
+      - ai-events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAIEventList'
+          description: ''
+    post:
+      operationId: ai_events_create
+      description: |-
+        Creates the capture and, when `straw_unique_no` is supplied, validates that straw against the Mait's stock in the same transaction — the event comes back as `straw_verified`. Omit the straw to keep a `draft` to return to.
+
+        No stock is deducted here. Inventory moves only at completion, so an abandoned capture leaves the Mait's holding untouched.
+
+        Send the device-generated `client_uuid` on every retry: a repeat returns `200` with the event already created rather than recording the insemination twice.
+      summary: Start an AI event
+      tags:
+      - ai-events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIEventCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIEventCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIEventCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIEvent'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIEvent'
+          description: ''
+  /api/v1/ai-events/{id}/:
+    get:
+      operationId: ai_events_retrieve
+      description: Capture and read AI events (SRS §6.3, §11).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this ai event.
+        required: true
+      tags:
+      - ai-events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIEvent'
+          description: ''
+  /api/v1/ai-events/{id}/timeline/:
+    get:
+      operationId: ai_events_timeline_list
+      description: Every transition the event has been through, in order, with who
+        made it. This is the record a dispute is settled from, so it is readable rather
+        than raw.
+      summary: Step-by-step audit trail
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this ai event.
+        required: true
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: mait
+        schema:
+          type: number
+      - in: query
+        name: mpp
+        schema:
+          type: string
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - cancelled
+          - completed
+          - draft
+          - payment_pending
+          - photo_captured
+          - straw_verified
+        description: |-
+          * `draft` - Draft
+          * `straw_verified` - Straw verified
+          * `photo_captured` - Photo captured
+          * `payment_pending` - Payment pending
+          * `completed` - Completed
+          * `cancelled` - Cancelled
+      tags:
+      - ai-events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAIEventTimelineList'
+          description: ''
   /api/v1/animals/:
     post:
       operationId: animals_create
@@ -1274,6 +1497,211 @@ paths:
           description: ''
 components:
   schemas:
+    AIEvent:
+      type: object
+      description: |-
+        Read shape for an AI event.
+
+        Names are denormalised into the response because the app renders this list offline from
+        its own cache — a row that only carried foreign keys would show blanks with no signal.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client_uuid:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Generated on the device before the first sync attempt.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AIEventStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        mpp:
+          type: integer
+          readOnly: true
+        mpp_code:
+          type: string
+          readOnly: true
+        mpp_name:
+          type: string
+          readOnly: true
+        owner_type:
+          allOf:
+          - $ref: '#/components/schemas/OwnerTypeEnum'
+          readOnly: true
+        member:
+          type: integer
+          readOnly: true
+          nullable: true
+        non_member:
+          type: integer
+          readOnly: true
+          nullable: true
+        owner_name:
+          type: string
+          readOnly: true
+        animal:
+          type: integer
+          readOnly: true
+        animal_type:
+          type: string
+          readOnly: true
+        breed:
+          type: string
+          readOnly: true
+        ear_tag_no:
+          type: string
+          readOnly: true
+        straw_unique_no:
+          type: string
+          readOnly: true
+          description: Denormalised from the batch so history survives any master-data
+            cleanup.
+        ai_photo_url:
+          type: string
+          readOnly: true
+        gps_lat:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          readOnly: true
+          nullable: true
+        gps_lng:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          readOnly: true
+          nullable: true
+        performed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the AI was actually performed — set at photo capture,
+            not at sync, so an offline event reports the real time.
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_reason:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ai_photo_url
+      - animal
+      - animal_type
+      - breed
+      - cancelled_reason
+      - client_uuid
+      - completed_at
+      - created_at
+      - ear_tag_no
+      - gps_lat
+      - gps_lng
+      - id
+      - member
+      - mpp
+      - mpp_code
+      - mpp_name
+      - non_member
+      - owner_name
+      - owner_type
+      - performed_at
+      - status
+      - status_display
+      - straw_unique_no
+    AIEventCreateRequest:
+      type: object
+      description: |-
+        Start a capture (SRS §6.3 steps 1–4).
+
+        ``client_uuid`` is generated on the device before the first sync attempt, so an event
+        queued offline keeps one identity across however many retries it takes to land
+        (ADR 0003). It is required rather than optional: an event that reaches the server without
+        one cannot be de-duplicated afterwards, and by then the damage is a double insemination
+        record.
+
+        ``straw_unique_no`` is optional. Supplied, the event is validated against stock and lands
+        in ``straw_verified``; omitted, it stays a ``draft`` the Mait can come back to.
+      properties:
+        client_uuid:
+          type: string
+          format: uuid
+        mpp_code:
+          type: string
+          minLength: 1
+          maxLength: 20
+        member_code:
+          type: string
+          maxLength: 20
+        non_member_id:
+          type: integer
+          nullable: true
+        animal_id:
+          type: integer
+        straw_unique_no:
+          type: string
+          maxLength: 30
+      required:
+      - animal_id
+      - client_uuid
+      - mpp_code
+    AIEventStatusEnum:
+      enum:
+      - draft
+      - straw_verified
+      - photo_captured
+      - payment_pending
+      - completed
+      - cancelled
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `straw_verified` - Straw verified
+        * `photo_captured` - Photo captured
+        * `payment_pending` - Payment pending
+        * `completed` - Completed
+        * `cancelled` - Cancelled
+    AIEventTimeline:
+      type: object
+      description: One step of the audit trail, served by ``GET /ai-events/{id}/timeline/``.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        from_status:
+          type: string
+          readOnly: true
+        to_status:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        actor_name:
+          type: string
+          readOnly: true
+          default: ''
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actor_name
+      - created_at
+      - from_status
+      - id
+      - note
+      - to_status
     AdminUser:
       type: object
       description: Read shape for the user list (SRS §9.10).
@@ -1599,7 +2027,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/DataUploadLogStatusEnum'
           readOnly: true
         status_display:
           type: string
@@ -1661,6 +2089,20 @@ components:
       - upload_type_display
       - uploaded_by
       - uploaded_by_name
+    DataUploadLogStatusEnum:
+      enum:
+      - queued
+      - processing
+      - completed
+      - completed_with_errors
+      - failed
+      type: string
+      description: |-
+        * `queued` - Queued
+        * `processing` - Processing
+        * `completed` - Completed
+        * `completed_with_errors` - Completed with errors
+        * `failed` - Failed
     LedgerEntry:
       type: object
       description: A movement in the immutable stock ledger (SRS §9.5).
@@ -2224,6 +2666,52 @@ components:
       description: |-
         * `member` - Member
         * `non_member` - Non-member
+    PaginatedAIEventList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIEvent'
+    PaginatedAIEventTimelineList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIEventTimeline'
     PaginatedAdminUserList:
       type: object
       required:
@@ -2515,20 +3003,6 @@ components:
       - received_date
       - semen_station
       - unique_straw_no
-    StatusEnum:
-      enum:
-      - queued
-      - processing
-      - completed
-      - completed_with_errors
-      - failed
-      type: string
-      description: |-
-        * `queued` - Queued
-        * `processing` - Processing
-        * `completed` - Completed
-        * `completed_with_errors` - Completed with errors
-        * `failed` - Failed
     StrawValidation:
       type: object
       description: |-

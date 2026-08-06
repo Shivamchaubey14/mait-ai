@@ -10,10 +10,19 @@ genuinely needs to change, update the contract and the OpenAPI schema in the sam
 request — CI fails on schema drift.
 """
 
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import SimpleRouter
+
+from .views import AIEventViewSet
 
 app_name = "ai_events"
 
-urlpatterns: list[path] = [
-    # Populated in Phase 3, Days 11-13.
+# Empty prefix: config/urls.py already mounts this module at `ai-events/`. SimpleRouter
+# rather than DefaultRouter because the latter's API-root view would sit on the same path as
+# the list route and shadow it.
+router = SimpleRouter()
+router.register("", AIEventViewSet, basename="ai-event")
+
+urlpatterns = [
+    path("", include(router.urls)),
 ]

@@ -55,6 +55,57 @@ def assert_mait_assigned_to_mpp(mait, mpp) -> None:
 
 
 @transaction.atomic
+def start_ai_event(
+    *,
+    mait,
+    mpp,
+    owner_type: str,
+    owner,
+    animal,
+    client_uuid,
+    straw_unique_no: str = "",
+    actor=None,
+    synced_from_offline: bool = False,
+) -> AIEvent:
+    """
+    Open a capture and, when a straw is named, validate it in the same transaction.
+
+    The two are one call because they are one moment in the field: the Mait scans the straw
+    at the animal's side. Splitting them would leave a draft behind every time a scan failed,
+    and the Mait would have no way to tell those drafts from ones they meant to keep.
+
+    Nothing is deducted here. Stock moves only at completion (SRS §6.4.3), so an abandoned
+    capture costs the Mait nothing — which is correct, because no insemination happened.
+    """
+    assert_mait_assigned_to_mpp(mait, mpp)
+
+    event = AIEvent.objects.create(
+        client_uuid=client_uuid,
+        mait=mait,
+        mpp=mpp,
+        owner_type=owner_type,
+        member=owner if owner_type == AIEvent.OwnerType.MEMBER else None,
+        non_member=owner if owner_type == AIEvent.OwnerType.NON_MEMBER else None,
+        animal=animal,
+        synced_from_offline=synced_from_offline,
+    )
+    AIEventTimeline.objects.create(
+        ai_event=event,
+        from_status="",
+        to_status=AIEvent.Status.DRAFT,
+        note="Capture started",
+        actor=actor,
+    )
+
+    if straw_unique_no:
+        # Raises on a straw the Mait does not hold or has already used, which rolls the
+        # draft back with it — a failed scan must not leave a half-started event behind.
+        verify_straw(event, straw_unique_no, actor=actor)
+
+    return event
+
+
+@transaction.atomic
 def verify_straw(event: AIEvent, straw_unique_no: str, *, actor=None) -> AIEvent:
     """
     Validate the scanned straw and advance ``draft`` → ``straw_verified`` (SRS §6.3 step 4).
