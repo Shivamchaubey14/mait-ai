@@ -35,6 +35,7 @@ import LoginScreen from '@/features/auth/LoginScreen';
 import HistoryScreen from '@/features/history/HistoryScreen';
 import HomeScreen from '@/features/home/HomeScreen';
 import ProfileScreen from '@/features/profile/ProfileScreen';
+import RequestStockScreen from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
 import { useAppSelector } from '@/store';
 import { colors, spacing, typography } from '@theme/tokens';
@@ -66,6 +67,7 @@ export default function RootNavigator(): React.JSX.Element {
 
   const [tab, setTab] = useState<Tab>('home');
   const [step, setStep] = useState<CaptureStep | null>(null);
+  const [requestingStock, setRequestingStock] = useState(false);
 
   const [clientUuid, setClientUuid] = useState(newClientUuid);
   const [mpp, setMpp] = useState<MPP | null>(null);
@@ -144,6 +146,17 @@ export default function RootNavigator(): React.JSX.Element {
     setFarmer({ kind: 'nonMember', name: selected.name, nonMemberId: selected.id });
     setStep('selectAnimal');
   };
+
+  // Layered over the tabs like the capture flow, and for the same reason: it is one task
+  // with one forward path.
+  if (requestingStock) {
+    return (
+      <RequestStockScreen
+        onDone={() => setRequestingStock(false)}
+        onBack={() => setRequestingStock(false)}
+      />
+    );
+  }
 
   // -- the capture flow, over the tabs ---------------------------------------------------
   if (step === 'selectMpp') {
@@ -279,7 +292,22 @@ export default function RootNavigator(): React.JSX.Element {
         {tab === 'profile' && <ProfileScreen pending={pending} onSync={sync} online={online} />}
       </View>
 
-      <BottomNav active={tab} pending={pending} onChange={setTab} onStartCapture={startCapture} />
+      {/* The action follows the screen: ask for stock from Stock, start a capture anywhere
+          else. One control, always in the same place, saying what it will do. */}
+      <BottomNav
+        active={tab}
+        pending={pending}
+        onChange={setTab}
+        action={
+          tab === 'stock'
+            ? {
+                label: t('requestStock.action'),
+                onPress: () => setRequestingStock(true),
+                testID: 'bar-request-stock',
+              }
+            : { label: t('home.startNewAi'), onPress: startCapture, testID: 'bar-start-ai' }
+        }
+      />
     </View>
   );
 }

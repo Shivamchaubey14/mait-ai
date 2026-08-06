@@ -225,3 +225,30 @@ export interface ProblemDetails {
   errors?: Record<string, string[]>;
   request_id?: string;
 }
+
+// ---- indents -------------------------------------------------------------------------
+export type IndentStatus = 'requested' | 'approved' | 'issued' | 'rejected';
+
+export interface Indent {
+  id: number;
+  breed: string;
+  item: string;
+  qty_requested: number;
+  qty_issued: number;
+  status: IndentStatus;
+  status_display: string;
+  sync_status: 'pending' | 'synced' | 'failed';
+  sync_status_display: string;
+  requested_at: string;
+  issued_at: string | null;
+  note: string;
+}
+
+export interface IndentDraft {
+  /** Carried as the idempotency key: the app queues indents offline beside AI events. */
+  client_uuid: string;
+  product_type: 'straw' | 'consumable';
+  breed?: string;
+  qty_requested: number;
+  note?: string;
+}

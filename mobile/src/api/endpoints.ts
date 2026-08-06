@@ -21,6 +21,8 @@ import type {
   NonMember,
   NonMemberDetail,
   NonMemberDraft,
+  Indent,
+  IndentDraft,
   Paginated,
   StrawValidation,
   TokenPair,
@@ -150,6 +152,33 @@ export const maitaiApi = api.injectEndpoints({
       invalidatesTags: ['AIEvent'],
     }),
 
+    // ---- indents -------------------------------------------------------------------
+    /**
+     * Raise a stock request (SRS §6.6.1).
+     *
+     * Straws are asked for by breed, not by straw number — which physical straws get issued
+     * is decided at the depot, not by the Mait asking.
+     */
+    createIndent: builder.mutation<Indent, IndentDraft>({
+      query: body => ({
+        url: '/indents/',
+        method: 'POST',
+        headers: idempotencyHeaders(body.client_uuid),
+        body: {
+          product_type: body.product_type,
+          breed: body.breed,
+          qty_requested: body.qty_requested,
+          note: body.note,
+        },
+      }),
+      invalidatesTags: ['Indent'],
+    }),
+
+    listIndents: builder.query<Paginated<Indent>, void>({
+      query: () => '/indents/',
+      providesTags: ['Indent'],
+    }),
+
     listAiEvents: builder.query<Paginated<AIEvent>, { status?: string } | void>({
       query: args => ({
         url: '/ai-events/',
@@ -177,4 +206,6 @@ export const {
   useLazyValidateStrawQuery,
   useCreateAiEventMutation,
   useListAiEventsQuery,
+  useCreateIndentMutation,
+  useListIndentsQuery,
 } = maitaiApi;

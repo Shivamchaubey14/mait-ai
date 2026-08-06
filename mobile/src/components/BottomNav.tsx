@@ -1,9 +1,10 @@
 /**
- * The three places a Mait goes, and the one thing they do.
+ * The four places a Mait goes, and the one thing the screen they are on can do.
  *
- * "New AI" is not a tab. It starts the capture flow, so it is drawn as a raised action button
- * clear of the bar rather than as a fourth destination — a filled circle sitting in the row
- * reads as the selected tab, which it never is.
+ * The action is not a tab. It is drawn as a labelled pill above the bar rather than as a
+ * destination in the row, and its label follows the screen: start a capture from Home, ask
+ * for stock from Stock. One control that says what it does beats a bare "+" the Mait has to
+ * learn.
  *
  * The selected tab is shown by a wash pill behind the icon and label together. Colour alone
  * would not survive sunlight on a cheap screen, which is where this is used.
@@ -38,13 +39,14 @@ const TABS: {
 export default function BottomNav({
   active,
   onChange,
-  onStartCapture,
+  action,
   /** Unsent records. Rides on Home, so the count is visible from any tab. */
   pending = 0,
 }: {
   active: Tab;
   onChange: (tab: Tab) => void;
-  onStartCapture: () => void;
+  /** The one thing this screen does. Absent, the bar shows tabs alone. */
+  action?: { label: string; onPress: () => void; testID?: string };
   pending?: number;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -52,17 +54,18 @@ export default function BottomNav({
 
   return (
     <View style={[styles.wrap, { paddingBottom: insets.bottom + spacing[3] }]}>
-      {/* Clear of the bar rather than sitting on it: overlapping the row made it read as the
-          middle tab, and on a three-tab bar it landed on top of Stock. */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('nav.newAi')}
-        onPress={onStartCapture}
-        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-        testID="tab-newAi"
-      >
-        <Ionicons name="add" size={28} color={colors.surface} />
-      </Pressable>
+      {!!action && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={action.label}
+          onPress={action.onPress}
+          style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+          testID={action.testID ?? 'bar-action'}
+        >
+          <Text style={styles.actionLabel}>{action.label}</Text>
+          <Ionicons name="arrow-forward" size={18} color={colors.surface} />
+        </Pressable>
+      )}
 
       <View style={styles.bar}>
         {TABS.map(({ key, icon, activeIcon }) => {
@@ -101,8 +104,6 @@ export default function BottomNav({
   );
 }
 
-const FAB = 56;
-
 const styles = StyleSheet.create({
   // The bar floats: lifted off the bottom edge so an old Android handset's hardware buttons
   // do not sit against it, and inset from the sides so it reads as a card rather than a
@@ -112,22 +113,24 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
 
-  // Sits on the bar's top edge rather than floating over it. The white ring is what keeps it
-  // legible there: without it the green disc and the white card merge at the join, and on a
-  // sunlit cheap screen the button loses its edge entirely.
-  fab: {
+  // Full width above the bar, labelled and arrowed. It is the screen's one action, so it is
+  // sized like one rather than hidden behind a glyph.
+  action: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'center',
-    width: FAB,
-    height: FAB,
-    borderRadius: FAB / 2,
+    gap: spacing[2],
+    minHeight: MIN_TOUCH_TARGET + 4,
+    marginBottom: spacing[3],
+    paddingHorizontal: spacing[5],
+    borderRadius: radius.pill,
     backgroundColor: colors.primary,
-    borderWidth: 4,
+    borderWidth: 2,
     borderColor: colors.surface,
     ...shadows.raised,
   },
-  fabPressed: { backgroundColor: colors.primaryPressed },
+  actionPressed: { backgroundColor: colors.primaryPressed },
+  actionLabel: { ...typography.bodyStrong, color: colors.surface },
 
   bar: {
     flexDirection: 'row',

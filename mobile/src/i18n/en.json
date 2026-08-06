@@ -281,5 +281,24 @@
     "emptyTitle": "Nothing recorded yet",
     "emptyBody": "Your events appear here.",
     "errorTitle": "Could not load your history"
+  },
+  "requestStock": {
+    "action": "Request stock",
+    "label": "Stock request",
+    "title": "What do you need?",
+    "subtitle": "The depot decides which straws to issue.",
+    "whichBreed": "Which breed?",
+    "inHand": "{{count}} in hand now",
+    "howMany": "How many straws",
+    "howManyHint": "A full round is usually 25.",
+    "note": "Note for the depot (optional)",
+    "noteHint": "Anything they should know before packing it.",
+    "send": "Send request",
+    "sentLabel": "Sent",
+    "sentTitle": "Request sent",
+    "sentSubtitle": "The depot has it. Nothing else to do.",
+    "whatNextTitle": "What happens now",
+    "whatNextBody": "The office approves it and the depot issues the straws. Your stock updates here when they do.",
+    "backToStock": "Back to stock"
   }
 }
