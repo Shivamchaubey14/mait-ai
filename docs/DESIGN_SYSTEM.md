@@ -106,6 +106,42 @@ never colour alone.
 **The 6-step AI flow** — a persistent progress indicator across the top showing all six steps
 with the current one highlighted. Camera-first capture, no gallery picker, per SRS §6.3.
 
+## Capture-flow screen pattern (M4–M14)
+
+Every screen in the six-step flow is built from the same three bands, so a Mait learns the
+shape once and it never moves. Screens are specified in
+[`SCREEN_INVENTORY.md`](SCREEN_INVENTORY.md); this is how they are put together.
+
+**1 · Green hero.** Full-bleed `--color-primary`, rounded bottom corners. In order:
+
+- a circular translucent back button, and beside it the step label — `Step 3 of 6`, or a
+  plain name where the screen is not a numbered step (`Authorisation`, `Proof of payment`,
+  `Done`, whose leading glyph is a tick rather than an arrow);
+- the six-segment progress bar, filled segments in white, remaining ones translucent;
+- the question, as a question, in H1 white: *Which MPP? · Whose animal? · How is she
+  paying?* A Mait reads a question and answers it; a noun phrase leaves them guessing what
+  the screen wants;
+- one line of subtitle explaining the consequence, not the mechanics — "Skipped
+  automatically when you cover only one", "A second OTP records that you received it".
+
+**2 · Body**, on white, `--space-5` gutters. Built from four repeating pieces:
+
+- **Selectable row** — a card with a leading rounded swatch, title, one subtitle line, and
+  an optional right-hand pill (`Nearest`). Chosen: green border, pale green fill. Blocked:
+  greyed with the reason in place of the subtitle and a `Blocked` pill — shown, never
+  hidden, so the Mait knows the record exists and why it cannot be used.
+- **Field card** — label above the value, the same card shape as a row. Never a bare input
+  in the flow.
+- **Info tile** — grey card, small label over a large value (`₹ 300`), pale pill on the
+  right for its qualifier.
+- **Notice** — yellow for something to do, blue for something to know, red for something
+  wrong. Leading swatch, title, one line of body.
+
+**3 · Footer.** One full-width primary CTA, always in the same place, labelled with the verb
+and a forward arrow (`Continue →`, `Save & continue →`, `Submit proof →`). Grey and inert
+until the step is genuinely satisfiable. A secondary route out of the step, when there is
+one, sits above it as a green text link (`Add a non-member`), never as a second button.
+
 **Charts** — Chart.js themed to the palette. Primary series `--color-primary-dark`, secondary
 `--color-success-alt`. Reserve `--color-accent` and `--color-accent-alt` for alerts and
 highlighted series so an orange line always means "look here".

@@ -6,7 +6,8 @@
     "retry": "Retry",
     "save": "Save",
     "search": "Search",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "continue": "Continue"
   },
   "auth": {
     "mobileNumber": "Mobile number",
@@ -63,7 +64,10 @@
     "member": "Member",
     "nonMember": "Non-member",
     "selectAnimal": "Select animal",
-    "animalType": "Animal type",
+    "animalType": {
+      "COW": "Cow",
+      "BUFF": "Buffalo"
+    },
     "breed": "Breed",
     "earTag": "Ear tag number",
     "earTagOptional": "Ear tag (optional)",
@@ -82,7 +86,55 @@
     "address": "Address",
     "mobileUsedForOtp": "The payment OTP will be sent to this number",
     "consentToStoreDetails": "The farmer agrees to their details being stored",
-    "comingNext": "Animal selection and the rest of the flow arrive in the next phase."
+    "comingNext": "Animal selection and the rest of the flow arrive in the next phase.",
+    "whichMpp": "Which MPP?",
+    "whichMppSubtitle": "Skipped automatically when you cover only one.",
+    "searchMppHint": "Search MPP by name or code",
+    "whoseAnimal": "Whose animal?",
+    "whoseAnimalSubtitle": "Search by name, member code or mobile.",
+    "blocked": "Blocked",
+    "farmerNotAMember": "Farmer not a member?",
+    "farmerNotAMemberBody": "Capture them as a non-member instead.",
+    "stepNonMember": "Step 2 of 6 · non-member",
+    "newNonMember": "New non-member",
+    "newNonMemberSubtitle": "Three details and an explicit consent.",
+    "consentRecorded": "Consent recorded",
+    "ticked": "Ticked",
+    "consentMandatory": "Consent is mandatory",
+    "consentMandatoryBody": "The event cannot be submitted without it.",
+    "saveAndContinue": "Save & continue",
+    "whichAnimal": "Which animal?",
+    "whichAnimalSubtitle": "Pick one already on record, or add the one in front of you.",
+    "addAnimalSubtitle": "Registering a new animal for {{name}}.",
+    "animalTypeLabel": "Cow or buffalo?",
+    "animalTypeHint": {
+      "COW": "Gir, Sahiwal, HF and the rest",
+      "BUFF": "Murrah, Mehsana and the rest"
+    },
+    "noEarTag": "{{type}} · no ear tag",
+    "aiCount": "{{count}} AI",
+    "animalNotListed": "Animal not listed?",
+    "animalNotListedBody": "Register the one standing in front of you.",
+    "addAnimal": "Add an animal",
+    "pickExistingAnimal": "Pick one already on record",
+    "earTagHint": "Leave it blank if the animal carries no tag.",
+    "noBreeds": "No breeds configured yet",
+    "noBreedsBody": "Ask the administrator to add them before capturing.",
+    "whichStraw": "Which straw?",
+    "whichStrawSubtitle": "Type the number printed on the straw.",
+    "strawNumberHint": "Exactly as printed, letters and digits.",
+    "checkStraw": "Check the straw",
+    "strawsInStock": "Straws in your stock",
+    "lowStock": "Running low",
+    "inStock": "In stock",
+    "strawVerified": "Straw checked",
+    "strawsLeft": "{{count}} straws left",
+    "raiseIndentSoon": "Raise an indent before your next round.",
+    "strawNotInStockTitle": "Not in your stock",
+    "strawNotInStockBody": "This straw was never issued to you. Check the number, then raise an indent.",
+    "strawAlreadyUsedTitle": "Already used",
+    "strawAlreadyUsedBody": "Another AI event has consumed this straw. Report it — do not retry.",
+    "tryAgainInAMoment": "Try again in a moment."
   },
   "payment": {
     "mode": "Payment mode",
@@ -104,7 +156,8 @@
     "otpIncorrect": "Incorrect OTP.",
     "otpExpired": "This OTP has expired. Request a new one.",
     "offline": "No connection. This will be saved and sent automatically.",
-    "generic": "Something went wrong. Please try again."
+    "generic": "Something went wrong. Please try again.",
+    "tooManyRequests": "Too many attempts. Wait a few minutes and try again."
   },
   "brand": {
     "name": "MAIT AI",

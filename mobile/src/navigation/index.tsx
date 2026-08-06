@@ -2,9 +2,14 @@
  * Navigation shell (SRS §6.3, §10.3).
  *
  * The AI capture flow is a fixed six-step sequence, so a stack that always moves forward
- * fits it better than free navigation. Steps 3–6 land in Phase 3; the header already shows
- * the full progress so the Mait can see where they are in the whole flow, not just the part
- * that exists yet.
+ * fits it better than free navigation. Each screen carries its own header, step number and
+ * progress bar (docs/DESIGN_SYSTEM.md — "Capture-flow screen pattern"), so there is no
+ * chrome here wrapping them: a shared header would have to be told what every screen is
+ * called, and would drift from the screen it describes.
+ *
+ * The capture's `client_uuid` is minted once, when the flow starts, and carried through every
+ * step. That is what makes the event safe to retry from the offline queue (ADR 0003) — a key
+ * generated at send time would be new on every attempt and deduplicate nothing.
  */
 
 import React, { useState } from 'react';
@@ -12,142 +17,159 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import type { Member, MPP, NonMember } from '@api/types';
+import { newClientUuid } from '@api/client';
+import { useGetMemberQuery, useGetNonMemberQuery } from '@api/endpoints';
+import type { AIEvent, Animal, Member, MPP, NonMember } from '@api/types';
 import { Banner, Screen } from '@/components';
-import { AI_FLOW_STEPS } from '@/config/env';
 import AddNonMemberScreen from '@/features/aiFlow/AddNonMemberScreen';
+import ScanStrawScreen from '@/features/aiFlow/ScanStrawScreen';
+import SelectAnimalScreen from '@/features/aiFlow/SelectAnimalScreen';
 import SelectFarmerScreen from '@/features/aiFlow/SelectFarmerScreen';
 import SelectMppScreen from '@/features/aiFlow/SelectMppScreen';
 import LoginScreen from '@/features/auth/LoginScreen';
 import { useAppSelector } from '@/store';
-import { colors, radius, spacing, typography } from '@theme/tokens';
+import { colors, spacing, typography } from '@theme/tokens';
 
-type FlowScreen = 'selectMpp' | 'selectFarmer' | 'addNonMember' | 'notBuiltYet';
+type FlowScreenName =
+  'selectMpp' | 'selectFarmer' | 'addNonMember' | 'selectAnimal' | 'scanStraw' | 'notBuiltYet';
 
-/**
- * Progress across all six steps (SRS §10.3).
- *
- * Shows every step, including the ones not yet implemented — a Mait needs to know how much
- * is left, and hiding future steps would make the flow feel unpredictable.
- */
-function ProgressBar({ current }: { current: number }): React.JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.progress}>
-      <Text style={styles.progressLabel}>
-        {t('aiFlow.stepOf', { current: current + 1, total: AI_FLOW_STEPS.length })}
-      </Text>
-      <View style={styles.progressTrack}>
-        {AI_FLOW_STEPS.map((step, index) => (
-          <View
-            key={step}
-            style={[
-              styles.progressSegment,
-              index < current && styles.progressDone,
-              index === current && styles.progressCurrent,
-            ]}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
+/** Who the capture is for. Exactly one of the two codes is ever set. */
+type Farmer =
+  | { kind: 'member'; name: string; memberCode: string }
+  | { kind: 'nonMember'; name: string; nonMemberId: number };
 
 export default function RootNavigator(): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const accessToken = useAppSelector(state => state.auth.accessToken);
 
-  const [screen, setScreen] = useState<FlowScreen>('selectMpp');
+  const [screen, setScreen] = useState<FlowScreenName>('selectMpp');
+  const [clientUuid, setClientUuid] = useState(newClientUuid);
   const [mpp, setMpp] = useState<MPP | null>(null);
-  const [farmer, setFarmer] = useState<Member | NonMember | null>(null);
+  const [farmer, setFarmer] = useState<Farmer | null>(null);
+  const [animal, setAnimal] = useState<Animal | null>(null);
+  const [event, setEvent] = useState<AIEvent | null>(null);
+
+  // The farmer's animals ride along on their detail record, so step 3 costs no extra call.
+  // Skipped entirely until there is a farmer to fetch.
+  const memberDetail = useGetMemberQuery(farmer?.kind === 'member' ? farmer.memberCode : '', {
+    skip: farmer?.kind !== 'member',
+  });
+  const nonMemberDetail = useGetNonMemberQuery(
+    farmer?.kind === 'nonMember' ? farmer.nonMemberId : 0,
+    { skip: farmer?.kind !== 'nonMember' },
+  );
 
   if (!accessToken) {
     return <LoginScreen />;
   }
 
-  const stepIndex = screen === 'selectMpp' ? 0 : screen === 'notBuiltYet' ? 2 : 1;
+  const animals =
+    (farmer?.kind === 'member' ? memberDetail.data?.animals : nonMemberDetail.data?.animals) ?? [];
 
-  const proceedToAnimal = (selected: Member | NonMember) => {
-    setFarmer(selected);
-    setScreen('notBuiltYet');
+  const chooseMember = (selected: Member) => {
+    setFarmer({ kind: 'member', name: selected.member_name, memberCode: selected.member_code });
+    setScreen('selectAnimal');
   };
 
+  const chooseNonMember = (selected: NonMember) => {
+    setFarmer({ kind: 'nonMember', name: selected.name, nonMemberId: selected.id });
+    setScreen('selectAnimal');
+  };
+
+  if (screen === 'selectMpp') {
+    return (
+      <SelectMppScreen
+        onSelect={selected => {
+          setMpp(selected);
+          setScreen('selectFarmer');
+        }}
+      />
+    );
+  }
+
+  if (screen === 'selectFarmer' && mpp) {
+    return (
+      <SelectFarmerScreen
+        mpp={mpp}
+        onSelectMember={chooseMember}
+        onAddNonMember={() => setScreen('addNonMember')}
+        onBack={() => setScreen('selectMpp')}
+      />
+    );
+  }
+
+  if (screen === 'addNonMember' && mpp) {
+    return (
+      <AddNonMemberScreen
+        mpp={mpp}
+        onCreated={chooseNonMember}
+        onCancel={() => setScreen('selectFarmer')}
+      />
+    );
+  }
+
+  if (screen === 'selectAnimal' && farmer) {
+    return (
+      <SelectAnimalScreen
+        owner={{
+          name: farmer.name,
+          memberCode: farmer.kind === 'member' ? farmer.memberCode : undefined,
+          nonMemberId: farmer.kind === 'nonMember' ? farmer.nonMemberId : undefined,
+        }}
+        animals={animals}
+        onSelect={selected => {
+          setAnimal(selected);
+          setScreen('scanStraw');
+        }}
+        onBack={() => setScreen('selectFarmer')}
+      />
+    );
+  }
+
+  if (screen === 'scanStraw' && mpp && farmer && animal) {
+    return (
+      <ScanStrawScreen
+        capture={{
+          clientUuid,
+          mppCode: mpp.mpp_code,
+          memberCode: farmer.kind === 'member' ? farmer.memberCode : undefined,
+          nonMemberId: farmer.kind === 'nonMember' ? farmer.nonMemberId : undefined,
+          animalId: animal.id,
+        }}
+        onCreated={created => {
+          setEvent(created);
+          // The next capture is a different event, so it needs a different identity — reusing
+          // this one would make the server replay the event that just finished.
+          setClientUuid(newClientUuid());
+          setScreen('notBuiltYet');
+        }}
+        onBack={() => setScreen('selectAnimal')}
+      />
+    );
+  }
+
   return (
-    <View style={styles.flex}>
-      {/* The app draws edge to edge, so the header owns the status bar strip and has to pad
-          itself out of it — otherwise the step title sits under the clock and the battery. */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing[3] }]}>
-        <Text style={styles.headerTitle}>{t(`aiFlow.${AI_FLOW_STEPS[stepIndex]}`)}</Text>
-        {!!mpp && <Text style={styles.headerSubtitle}>{mpp.mpp_name}</Text>}
-      </View>
-      <ProgressBar current={stepIndex} />
-
-      {screen === 'selectMpp' && (
-        <SelectMppScreen
-          onSelect={selected => {
-            setMpp(selected);
-            setScreen('selectFarmer');
-          }}
-        />
-      )}
-
-      {screen === 'selectFarmer' && mpp && (
-        <SelectFarmerScreen
-          mpp={mpp}
-          onSelectMember={proceedToAnimal}
-          onAddNonMember={() => setScreen('addNonMember')}
-        />
-      )}
-
-      {screen === 'addNonMember' && mpp && (
-        <AddNonMemberScreen
-          mpp={mpp}
-          onCreated={proceedToAnimal}
-          onCancel={() => setScreen('selectFarmer')}
-        />
-      )}
-
-      {screen === 'notBuiltYet' && (
-        <Screen>
-          <Banner tone="info" message={t('aiFlow.comingNext')} testID="not-built-yet" />
+    <View style={[styles.flex, { paddingTop: insets.top }]}>
+      <Screen>
+        <Banner tone="info" message={t('aiFlow.comingNext')} testID="not-built-yet" />
+        <Text style={styles.selected}>{farmer?.name}</Text>
+        {!!event && (
           <Text style={styles.selected}>
-            {farmer && 'member_name' in farmer ? farmer.member_name : farmer?.name}
+            {t('aiFlow.strawVerified')} · {event.straw_unique_no}
           </Text>
-        </Screen>
-      )}
+        )}
+      </Screen>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
-  header: {
-    backgroundColor: colors.ink,
-    paddingHorizontal: spacing[4],
-    paddingBottom: spacing[3],
+  selected: {
+    ...typography.h3,
+    color: colors.text,
+    textAlign: 'center',
+    marginTop: spacing[3],
   },
-  headerTitle: { ...typography.h2, color: colors.surface },
-  headerSubtitle: { ...typography.caption, color: colors.surface, opacity: 0.8 },
-  progress: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[3],
-    backgroundColor: colors.surface,
-  },
-  progressLabel: { ...typography.caption, color: colors.textMuted },
-  progressTrack: {
-    flexDirection: 'row',
-    gap: spacing[1],
-    paddingVertical: spacing[2],
-  },
-  progressSegment: {
-    flex: 1,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.border,
-    opacity: 0.25,
-  },
-  progressDone: { backgroundColor: colors.success, opacity: 1 },
-  progressCurrent: { backgroundColor: colors.primary, opacity: 1 },
-  selected: { ...typography.h3, color: colors.text, textAlign: 'center' },
 });

@@ -1,5 +1,5 @@
 /**
- * Step 1 of the AI capture flow — choose the MPP (SRS §6.3 step 1).
+ * Step 1 of the AI capture flow — choose the MPP (SRS §6.3 step 1, M4).
  *
  * The list is whatever the server returns, which is already restricted to this Mait's
  * assigned MPPs (SRS §6.2.3). The app sends no "which Mait am I" filter, because a filter
@@ -10,13 +10,13 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { useListMppsQuery } from '@api/endpoints';
 import type { MPP } from '@api/types';
-import { Banner, EmptyState, Loading, ListRow, Screen, TextField } from '@/components';
-import { spacing } from '@theme/tokens';
+
+import { FieldCard, FlowNotice, FlowScreen, FlowSpacer, OptionCard } from './components';
 
 interface Props {
   onSelect: (mpp: MPP) => void;
@@ -25,7 +25,9 @@ interface Props {
 export default function SelectMppScreen({ onSelect }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
-  const { data, isLoading, isError, refetch, isFetching } = useListMppsQuery(
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const { data, isLoading, isError, refetch } = useListMppsQuery(
     search.length >= 2 ? { search } : undefined,
   );
 
@@ -40,57 +42,58 @@ export default function SelectMppScreen({ onSelect }: Props): React.JSX.Element 
     }
   }, [data, onSelect, results, search]);
 
-  if (isLoading) {
-    return (
-      <Screen>
-        <Loading label={t('common.loading')} />
-      </Screen>
-    );
-  }
-
-  if (isError) {
-    return (
-      <Screen>
-        <Banner message={t('errors.generic')} testID="mpp-error" />
-        <ListRow title={t('common.retry')} onPress={refetch} testID="mpp-retry" />
-      </Screen>
-    );
-  }
+  const chosen = results.find(mpp => mpp.mpp_code === selected) ?? null;
 
   return (
-    <Screen>
+    <FlowScreen
+      step={0}
+      title={t('aiFlow.whichMpp')}
+      subtitle={t('aiFlow.whichMppSubtitle')}
+      cta={{
+        label: t('common.continue'),
+        onPress: () => chosen && onSelect(chosen),
+        disabled: !chosen,
+        testID: 'mpp-continue',
+      }}
+    >
       {/* Searching only matters for a Mait covering several MPPs; below two characters the
           query is not worth a round trip on a rural connection. */}
       {(data?.count ?? 0) > 5 && (
-        <TextField
+        <FieldCard
           label={t('common.search')}
           value={search}
           onChangeText={setSearch}
+          placeholder={t('aiFlow.searchMppHint')}
           autoCorrect={false}
           testID="mpp-search"
         />
       )}
 
-      <FlatList
-        data={results}
-        keyExtractor={item => item.mpp_code}
-        contentContainerStyle={styles.list}
-        refreshing={isFetching}
-        onRefresh={refetch}
-        ListEmptyComponent={<EmptyState message={t('aiFlow.noMppsAssigned')} />}
-        renderItem={({ item }) => (
-          <ListRow
-            title={item.mpp_name}
-            subtitle={item.mpp_code}
-            onPress={() => onSelect(item)}
-            testID={`mpp-${item.mpp_code}`}
-          />
-        )}
-      />
-    </Screen>
+      {isError && (
+        <View>
+          <FlowNotice tone="error" title={t('errors.generic')} testID="mpp-error" />
+          <OptionCard title={t('common.retry')} onPress={refetch} testID="mpp-retry" />
+        </View>
+      )}
+
+      {isLoading && <FlowNotice tone="info" title={t('common.loading')} />}
+
+      {!isLoading && !isError && results.length === 0 && (
+        <FlowNotice tone="info" title={t('aiFlow.noMppsAssigned')} testID="mpp-empty" />
+      )}
+
+      {results.map(mpp => (
+        <OptionCard
+          key={mpp.mpp_code}
+          title={mpp.mpp_name}
+          subtitle={mpp.mpp_code}
+          selected={selected === mpp.mpp_code}
+          onPress={() => setSelected(mpp.mpp_code)}
+          testID={`mpp-${mpp.mpp_code}`}
+        />
+      ))}
+
+      <FlowSpacer />
+    </FlowScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  list: { paddingBottom: spacing[6] },
-});

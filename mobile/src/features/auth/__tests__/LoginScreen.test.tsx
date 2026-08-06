@@ -142,6 +142,47 @@ describe('LoginScreen', () => {
     expect(auth.assignedMppCodes).toEqual(['001303', '001305']);
   });
 
+  it('authenticates the profile call with the token it was just issued', async () => {
+    // The profile is fetched before the session is marked live, so there is no token in the
+    // store yet and the client cannot attach one itself. Sending that request bare returns
+    // 401 and strands the Mait on the OTP screen with valid tokens already in hand.
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(jsonResponse({ detail: 'sent', expires_in_seconds: 300 }))
+      .mockResolvedValueOnce(jsonResponse({ access: 'access-token', refresh: 'refresh-token' }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 7,
+          username: 'mait5500000003',
+          full_name: 'SHIVKUMAR',
+          email: '',
+          mobile_no: MOBILE,
+          role: 'mait',
+          role_display: 'Mait (Field Agent)',
+          is_active: true,
+          last_login_at: null,
+          mait_id: 3,
+          sahayak_vendor_code: '5500000003',
+          assigned_mpp_codes: ['001303'],
+        }),
+      );
+
+    renderWithStore(<LoginScreen />);
+    typeMobileAndSend();
+    await waitFor(() => screen.getByTestId('login-otp'));
+
+    fireEvent.changeText(screen.getByTestId('login-otp'), '123456');
+    fireEvent.press(screen.getByTestId('login-verify'));
+
+    await waitFor(() => expect((global.fetch as jest.Mock).mock.calls.length).toBe(3));
+
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[2];
+    const request = typeof url === 'string' ? { url, headers: init?.headers } : url;
+    const headers = new Headers(request.headers);
+
+    expect(String(request.url ?? url)).toContain('/auth/me/');
+    expect(headers.get('Authorization')).toBe('Bearer access-token');
+  });
+
   it('groups the number 5+5 as it is typed', () => {
     renderWithStore(<LoginScreen />);
     fireEvent.changeText(screen.getByTestId('login-mobile'), '9876543210');

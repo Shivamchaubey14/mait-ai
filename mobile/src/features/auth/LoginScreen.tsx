@@ -31,8 +31,8 @@ import {
   useSendLoginOtpMutation,
   useVerifyLoginOtpMutation,
 } from '@api/endpoints';
-import { Banner } from '@/components';
 import { BrandMark, CapabilityChips, HeroDecoration, LanguageToggle } from '@/components/brand';
+import { Toast } from '@/components/toast';
 import { OTP_EXPIRY_SECONDS, OTP_MAX_ATTEMPTS } from '@/config/env';
 import { useAppDispatch } from '@/store';
 import { colors, ink, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
@@ -183,8 +183,11 @@ export default function LoginScreen(): React.JSX.Element {
       // describe anything true.
       setFailure(null);
       setAttemptsUsed(0);
-    } catch {
-      setError(t('errors.generic'));
+    } catch (err) {
+      // A throttled send is not a fault, and saying "something went wrong" sends the Mait
+      // hunting for a problem that does not exist — they simply have to wait.
+      const status = (err as { status?: number })?.status;
+      setError(status === 429 ? t('errors.tooManyRequests') : t('errors.generic'));
     }
   }, [mobileNo, sendOtp, t]);
 
@@ -195,7 +198,10 @@ export default function LoginScreen(): React.JSX.Element {
 
       // Fetched before the session is marked live: it carries the assigned MPP codes that
       // scope everything, so this order avoids an empty first screen on every login.
-      const user = await fetchCurrentUser().unwrap();
+      //
+      // The token is passed explicitly for exactly that reason — it is not in the store yet,
+      // so there is nothing for the client to attach on its own.
+      const user = await fetchCurrentUser(tokens.access).unwrap();
 
       dispatch(
         loggedIn({
@@ -237,8 +243,10 @@ export default function LoginScreen(): React.JSX.Element {
           }
           break;
         }
-        default:
-          setError(t('errors.generic'));
+        default: {
+          const status = (err as { status?: number })?.status;
+          setError(status === 429 ? t('errors.tooManyRequests') : t('errors.generic'));
+        }
       }
     }
   }, [attemptsUsed, dispatch, fetchCurrentUser, mobileNo, otp, t, verifyOtp]);
@@ -271,6 +279,8 @@ export default function LoginScreen(): React.JSX.Element {
         attemptsUsed={attemptsUsed}
         failure={failure}
         busy={verifyState.isLoading || sendState.isLoading}
+        error={error}
+        onDismissError={() => setError(null)}
       />
     );
   }
@@ -280,6 +290,10 @@ export default function LoginScreen(): React.JSX.Element {
 
   return (
     <View style={styles.root}>
+      {/* Above the hero rather than inside the form: a failed send is about the request, not
+          about the number in the box below it. */}
+      <Toast message={error} onDismiss={() => setError(null)} testID="login-error" />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -306,8 +320,6 @@ export default function LoginScreen(): React.JSX.Element {
           >
             <Text style={styles.title}>{t('auth.signIn')}</Text>
             <Text style={styles.subtitle}>{t('auth.enterMobileToContinue')}</Text>
-
-            {!!error && <Banner message={error} testID="login-error" />}
 
             <Text style={styles.label}>{t('auth.mobileNumber')}</Text>
             <View style={styles.phoneField}>

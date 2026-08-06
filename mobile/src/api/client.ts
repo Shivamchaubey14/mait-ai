@@ -122,3 +122,22 @@ export const api = createApi({
 export function idempotencyHeaders(clientUuid: string): Record<string, string> {
   return { 'Idempotency-Key': clientUuid };
 }
+
+/**
+ * Mint the identity for one capture, at the moment the Mait starts it.
+ *
+ * Hermes has no `crypto.randomUUID`, so this builds a v4 by hand. `Math.random` is fine
+ * here and only here: the value is an identity, not a secret — it authorises nothing, and
+ * every request carrying it is already scoped to the Mait's own token server-side. What it
+ * has to be is *stable*, which is why it is generated once at the start of the flow rather
+ * than at send time. A key minted per attempt would be new on every retry and defeat the
+ * deduplication it exists for.
+ */
+export function newClientUuid(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, char => {
+    const random = Math.floor(Math.random() * 16);
+    // The "y" nibble carries the RFC 4122 variant, which must be one of 8, 9, a or b.
+    const value = char === 'x' ? random : 8 + (random % 4);
+    return value.toString(16);
+  });
+}

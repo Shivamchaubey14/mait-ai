@@ -34,6 +34,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { BrandMark, HeroDecoration } from '@/components/brand';
+import { Toast } from '@/components/toast';
 import { OTP_LENGTH, OTP_MAX_ATTEMPTS } from '@/config/env';
 import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
@@ -54,6 +55,9 @@ interface Props {
   attemptsUsed: number;
   failure: OtpFailure;
   busy?: boolean;
+  /** A request-level failure — network, throttling. Shown as a toast, not inline. */
+  error?: string | null;
+  onDismissError?: () => void;
 }
 
 function mmss(totalSeconds: number): string {
@@ -188,6 +192,8 @@ export default function OtpVerifyScreen({
   attemptsUsed,
   failure,
   busy = false,
+  error = null,
+  onDismissError,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -242,6 +248,8 @@ export default function OtpVerifyScreen({
 
   return (
     <View style={styles.root}>
+      <Toast message={error} onDismiss={onDismissError} testID="otp-error" />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -327,7 +335,10 @@ export default function OtpVerifyScreen({
               />
             </View>
 
-            {!locked && (
+            {/* Hidden once the code has expired: the primary button has already become
+                "Send a new code", and offering the same action twice makes the Mait wonder
+                whether the two do different things. */}
+            {!locked && failure !== 'expired' && (
               <View style={styles.resendRow}>
                 {resendIn > 0 ? (
                   <View style={styles.timerChip}>

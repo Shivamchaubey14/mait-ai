@@ -6,7 +6,8 @@
     "retry": "फिर से",
     "save": "सेव करें",
     "search": "खोजें",
-    "loading": "लोड हो रहा है…"
+    "loading": "लोड हो रहा है…",
+    "continue": "आगे बढ़ें"
   },
   "auth": {
     "mobileNumber": "मोबाइल नंबर",
@@ -63,7 +64,10 @@
     "member": "सदस्य",
     "nonMember": "गैर-सदस्य",
     "selectAnimal": "पशु चुनें",
-    "animalType": "पशु का प्रकार",
+    "animalType": {
+      "COW": "गाय",
+      "BUFF": "भैंस"
+    },
     "breed": "नस्ल",
     "earTag": "कान का टैग नंबर",
     "earTagOptional": "कान का टैग (वैकल्पिक)",
@@ -82,7 +86,55 @@
     "address": "पता",
     "mobileUsedForOtp": "भुगतान का OTP इसी नंबर पर जाएगा",
     "consentToStoreDetails": "किसान अपनी जानकारी सेव करने की सहमति देता है",
-    "comingNext": "पशु चुनना और बाकी प्रक्रिया अगले चरण में आएगी।"
+    "comingNext": "पशु चुनना और बाकी प्रक्रिया अगले चरण में आएगी।",
+    "whichMpp": "कौन सा MPP?",
+    "whichMppSubtitle": "सिर्फ़ एक MPP होने पर यह चरण अपने आप छूट जाता है।",
+    "searchMppHint": "नाम या कोड से MPP खोजें",
+    "whoseAnimal": "किसका पशु?",
+    "whoseAnimalSubtitle": "नाम, सदस्य कोड या मोबाइल से खोजें।",
+    "blocked": "रुका हुआ",
+    "farmerNotAMember": "किसान सदस्य नहीं है?",
+    "farmerNotAMemberBody": "उन्हें गैर-सदस्य के रूप में दर्ज करें।",
+    "stepNonMember": "चरण 2 / 6 · गैर-सदस्य",
+    "newNonMember": "नया गैर-सदस्य",
+    "newNonMemberSubtitle": "तीन जानकारियाँ और स्पष्ट सहमति।",
+    "consentRecorded": "सहमति दर्ज",
+    "ticked": "दर्ज",
+    "consentMandatory": "सहमति अनिवार्य है",
+    "consentMandatoryBody": "इसके बिना घटना दर्ज नहीं की जा सकती।",
+    "saveAndContinue": "सहेजें और आगे बढ़ें",
+    "whichAnimal": "कौन सा पशु?",
+    "whichAnimalSubtitle": "पहले से दर्ज पशु चुनें, या सामने खड़े पशु को दर्ज करें।",
+    "addAnimalSubtitle": "{{name}} के लिए नया पशु दर्ज किया जा रहा है।",
+    "animalTypeLabel": "गाय या भैंस?",
+    "animalTypeHint": {
+      "COW": "गिर, साहीवाल, HF आदि",
+      "BUFF": "मुर्रा, मेहसाणा आदि"
+    },
+    "noEarTag": "{{type}} · कान का टैग नहीं",
+    "aiCount": "{{count}} AI",
+    "animalNotListed": "पशु सूची में नहीं है?",
+    "animalNotListedBody": "सामने खड़े पशु को दर्ज करें।",
+    "addAnimal": "पशु जोड़ें",
+    "pickExistingAnimal": "पहले से दर्ज पशु चुनें",
+    "earTagHint": "टैग न हो तो खाली छोड़ दें।",
+    "noBreeds": "अभी कोई नस्ल दर्ज नहीं है",
+    "noBreedsBody": "दर्ज करने से पहले प्रशासक से नस्लें जुड़वाएँ।",
+    "whichStraw": "कौन सी स्ट्रॉ?",
+    "whichStrawSubtitle": "स्ट्रॉ पर छपा नंबर लिखें।",
+    "strawNumberHint": "जैसा छपा है वैसा ही — अक्षर और अंक।",
+    "checkStraw": "स्ट्रॉ जाँचें",
+    "strawsInStock": "आपके स्टॉक में स्ट्रॉ",
+    "lowStock": "स्टॉक कम",
+    "inStock": "स्टॉक में",
+    "strawVerified": "स्ट्रॉ जाँची गई",
+    "strawsLeft": "{{count}} स्ट्रॉ बाकी",
+    "raiseIndentSoon": "अगले दौरे से पहले इंडेंट भेजें।",
+    "strawNotInStockTitle": "आपके स्टॉक में नहीं",
+    "strawNotInStockBody": "यह स्ट्रॉ आपको जारी नहीं हुई। नंबर जाँचें, फिर इंडेंट भेजें।",
+    "strawAlreadyUsedTitle": "पहले ही इस्तेमाल हो चुकी",
+    "strawAlreadyUsedBody": "यह स्ट्रॉ किसी और AI में लग चुकी है। दोबारा न भेजें — इसकी सूचना दें।",
+    "tryAgainInAMoment": "थोड़ी देर में दोबारा कोशिश करें।"
   },
   "payment": {
     "mode": "भुगतान का तरीका",
@@ -104,7 +156,8 @@
     "otpIncorrect": "गलत OTP।",
     "otpExpired": "यह OTP समाप्त हो गया है। नया मांगें।",
     "offline": "कनेक्शन नहीं है। यह सेव होकर अपने आप भेज दिया जाएगा।",
-    "generic": "कुछ गलत हुआ। फिर से कोशिश करें।"
+    "generic": "कुछ गलत हुआ। फिर से कोशिश करें।",
+    "tooManyRequests": "बहुत बार कोशिश हुई। कुछ मिनट रुककर दोबारा करें।"
   },
   "brand": {
     "name": "MAIT AI",

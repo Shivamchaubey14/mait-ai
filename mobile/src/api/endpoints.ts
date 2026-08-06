@@ -5,15 +5,24 @@
  * own slice and `client.ts` never becomes a dumping ground.
  */
 
-import { api } from './client';
+import { api, idempotencyHeaders } from './client';
 import type {
+  AIEvent,
+  AIEventDraft,
+  Animal,
+  AnimalDraft,
+  AnimalTypeCode,
+  BreedConfig,
   CurrentUser,
+  InventorySummary,
   Member,
   MemberDetail,
   MPP,
   NonMember,
+  NonMemberDetail,
   NonMemberDraft,
   Paginated,
+  StrawValidation,
   TokenPair,
 } from './types';
 
@@ -40,8 +49,20 @@ export const maitaiApi = api.injectEndpoints({
       query: refresh => ({ url: '/auth/logout/', method: 'POST', body: { refresh } }),
     }),
 
-    getCurrentUser: builder.query<CurrentUser, void>({
-      query: () => '/auth/me/',
+    /**
+     * The signed-in user's profile and MPP scope.
+     *
+     * Takes the access token as an argument because of *when* login calls it: the profile is
+     * fetched before the session is marked live, so at that moment there is no token in the
+     * store for `prepareHeaders` to attach. Without this the request goes out unauthenticated,
+     * comes back 401, and the sign-in fails at the last step with the tokens already issued.
+     * Called anywhere else, the argument is unnecessary and the store's token is used.
+     */
+    getCurrentUser: builder.query<CurrentUser, string | void>({
+      query: accessToken => ({
+        url: '/auth/me/',
+        ...(accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : {}),
+      }),
     }),
 
     // ---- master data ---------------------------------------------------------------
@@ -76,6 +97,66 @@ export const maitaiApi = api.injectEndpoints({
       query: body => ({ url: '/non-members/', method: 'POST', body }),
       invalidatesTags: ['Member'],
     }),
+
+    getNonMember: builder.query<NonMemberDetail, number>({
+      query: id => `/non-members/${id}/`,
+      providesTags: ['Member', 'Animal'],
+    }),
+
+    // ---- animals -------------------------------------------------------------------
+    // Fetched whole and cached: a couple of dozen rows, and the picker has to keep working
+    // in a yard with no signal (SRS §6.3.2).
+    listBreeds: builder.query<BreedConfig[], AnimalTypeCode | void>({
+      query: animalType => ({
+        url: '/config/breeds/',
+        params: animalType ? { animal_type: animalType } : undefined,
+      }),
+      providesTags: ['Animal'],
+    }),
+
+    createAnimal: builder.mutation<Animal, AnimalDraft>({
+      query: body => ({ url: '/animals/', method: 'POST', body }),
+      // The farmer's animal list hangs off their detail record, so that is what goes stale.
+      invalidatesTags: ['Animal', 'Member'],
+    }),
+
+    // ---- inventory -----------------------------------------------------------------
+    getInventorySummary: builder.query<InventorySummary, void>({
+      query: () => '/mait/inventory/',
+      providesTags: ['Inventory'],
+    }),
+
+    /**
+     * Check a straw before committing to it.
+     *
+     * Answers 200 either way — a rejected scan is a normal outcome of the flow, not a failed
+     * request. The app reads `reason` to decide what to tell the Mait to do about it.
+     */
+    validateStraw: builder.query<StrawValidation, string>({
+      query: uniqueNo => `/semen-batches/${encodeURIComponent(uniqueNo)}/validate/`,
+      providesTags: ['Inventory'],
+    }),
+
+    // ---- AI event ------------------------------------------------------------------
+    createAiEvent: builder.mutation<AIEvent, AIEventDraft>({
+      query: body => ({
+        url: '/ai-events/',
+        method: 'POST',
+        // Keyed on the device-generated uuid, so a retry after a dropped response returns
+        // the event that already exists instead of recording a second insemination.
+        headers: idempotencyHeaders(body.client_uuid),
+        body,
+      }),
+      invalidatesTags: ['AIEvent'],
+    }),
+
+    listAiEvents: builder.query<Paginated<AIEvent>, { status?: string } | void>({
+      query: args => ({
+        url: '/ai-events/',
+        params: args?.status ? { status: args.status } : undefined,
+      }),
+      providesTags: ['AIEvent'],
+    }),
   }),
 });
 
@@ -89,4 +170,11 @@ export const {
   useListMembersQuery,
   useGetMemberQuery,
   useCreateNonMemberMutation,
+  useGetNonMemberQuery,
+  useListBreedsQuery,
+  useCreateAnimalMutation,
+  useGetInventorySummaryQuery,
+  useLazyValidateStrawQuery,
+  useCreateAiEventMutation,
+  useListAiEventsQuery,
 } = maitaiApi;

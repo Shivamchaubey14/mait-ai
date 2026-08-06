@@ -55,6 +55,7 @@ function mockMembers(results: unknown[]) {
 describe('SelectFarmerScreen', () => {
   const onSelectMember = jest.fn();
   const onAddNonMember = jest.fn();
+  const onBack = jest.fn();
 
   beforeEach(() => {
     global.fetch = jest.fn() as jest.Mock;
@@ -68,6 +69,7 @@ describe('SelectFarmerScreen', () => {
         mpp={MPP_FIXTURE}
         onSelectMember={onSelectMember}
         onAddNonMember={onAddNonMember}
+        onBack={onBack}
       />,
     );
   }
@@ -84,11 +86,24 @@ describe('SelectFarmerScreen', () => {
     renderScreen();
 
     await waitFor(() => screen.getByText('REETA DEVI'));
+    // Tapping the row marks the choice; the step is committed from the footer, so a mis-tap
+    // in a list of a thousand names is a correction rather than a wrong event.
     fireEvent.press(screen.getByTestId(`member-${withMobile.member_code}`));
+    fireEvent.press(screen.getByTestId('farmer-continue'));
 
     expect(onSelectMember).toHaveBeenCalledWith(
       expect.objectContaining({ member_name: 'REETA DEVI' }),
     );
+  });
+
+  it('will not continue until a farmer is chosen', async () => {
+    mockMembers([withMobile]);
+    renderScreen();
+
+    await waitFor(() => screen.getByText('REETA DEVI'));
+    fireEvent.press(screen.getByTestId('farmer-continue'));
+
+    expect(onSelectMember).not.toHaveBeenCalled();
   });
 
   it('blocks a member with no mobile number and says why', async () => {
@@ -98,6 +113,7 @@ describe('SelectFarmerScreen', () => {
     await waitFor(() => screen.getByText('NO PHONE MEMBER'));
 
     fireEvent.press(screen.getByTestId(`member-${withoutMobile.member_code}`));
+    fireEvent.press(screen.getByTestId('farmer-continue'));
 
     expect(onSelectMember).not.toHaveBeenCalled();
     expect(screen.getByText(/No mobile number on record/i)).toBeTruthy();

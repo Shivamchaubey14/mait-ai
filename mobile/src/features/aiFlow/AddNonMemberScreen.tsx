@@ -1,31 +1,23 @@
 /**
- * Register a Non-Member in the field (SRS §6.3 step 2, §7 Compliance).
+ * Step 2b — register a Non-Member in the field (SRS §6.3 step 2, §7 Compliance, M6).
  *
  * The mobile number is mandatory and validated here as well as server-side. Unlike members,
  * whose numbers come from SAP, this one is being typed by the Mait — and it is the only
  * channel for the payment authorisation OTP, so a wrong digit means the code goes to a
  * stranger and the event can never be completed.
  *
- * Consent is captured explicitly because this is personal data collected outside the SAP
- * membership process.
+ * Consent is captured explicitly, and the CTA stays inert without it. This is personal data
+ * collected outside the SAP membership process, so "they probably agreed" is not a record.
  */
 
 import React, { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { useCreateNonMemberMutation } from '@api/endpoints';
 import type { MPP, NonMember, ProblemDetails } from '@api/types';
-import { Banner, Button, Screen, TextField } from '@/components';
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+
+import { FieldCard, FlowNotice, FlowScreen, FlowSpacer, OptionCard } from './components';
 
 interface Props {
   mpp: MPP;
@@ -40,7 +32,7 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
   const [address, setAddress] = useState('');
   const [consent, setConsent] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
-  const [banner, setBanner] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   const [createNonMember, { isLoading }] = useCreateNonMemberMutation();
 
@@ -48,7 +40,7 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
   const canSubmit = name.trim().length >= 2 && isValidMobile && consent;
 
   const handleSubmit = async () => {
-    setBanner(null);
+    setFailed(false);
     setFieldErrors({});
     try {
       const created = await createNonMember({
@@ -65,106 +57,75 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
       if (problem?.errors) {
         setFieldErrors(problem.errors);
       } else {
-        setBanner(t('errors.generic'));
+        setFailed(true);
       }
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <FlowScreen
+      step={1}
+      stepLabel={t('aiFlow.stepNonMember')}
+      title={t('aiFlow.newNonMember')}
+      subtitle={t('aiFlow.newNonMemberSubtitle')}
+      onBack={onCancel}
+      cta={{
+        label: t('aiFlow.saveAndContinue'),
+        onPress: handleSubmit,
+        disabled: !canSubmit,
+        busy: isLoading,
+        testID: 'non-member-save',
+      }}
     >
-      <ScrollView keyboardShouldPersistTaps="handled">
-        <Screen>
-          {!!banner && <Banner message={banner} testID="non-member-error" />}
+      {failed && <FlowNotice tone="error" title={t('errors.generic')} testID="non-member-error" />}
 
-          <TextField
-            label={t('aiFlow.farmerName')}
-            value={name}
-            onChangeText={setName}
-            error={fieldErrors.name?.[0]}
-            autoCapitalize="words"
-            testID="non-member-name"
-          />
+      <FieldCard
+        label={t('aiFlow.farmerName')}
+        value={name}
+        onChangeText={setName}
+        error={fieldErrors.name?.[0]}
+        autoCapitalize="words"
+        testID="non-member-name"
+      />
 
-          <TextField
-            label={t('auth.mobileNumber')}
-            hint={t('aiFlow.mobileUsedForOtp')}
-            value={mobileNo}
-            onChangeText={text => setMobileNo(text.replace(/\D/g, '').slice(0, 10))}
-            error={fieldErrors.mobile_no?.[0]}
-            keyboardType="number-pad"
-            maxLength={10}
-            testID="non-member-mobile"
-          />
+      <FieldCard
+        label={t('auth.mobileNumber')}
+        hint={t('aiFlow.mobileUsedForOtp')}
+        tone="info"
+        value={mobileNo}
+        onChangeText={text => setMobileNo(text.replace(/\D/g, '').slice(0, 10))}
+        error={fieldErrors.mobile_no?.[0]}
+        keyboardType="number-pad"
+        maxLength={10}
+        testID="non-member-mobile"
+      />
 
-          <TextField
-            label={t('aiFlow.address')}
-            value={address}
-            onChangeText={setAddress}
-            error={fieldErrors.address?.[0]}
-            testID="non-member-address"
-          />
+      <FieldCard
+        label={t('aiFlow.address')}
+        tone="accent"
+        value={address}
+        onChangeText={setAddress}
+        error={fieldErrors.address?.[0]}
+        testID="non-member-address"
+      />
 
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: consent }}
-            onPress={() => setConsent(c => !c)}
-            style={styles.consentRow}
-            testID="non-member-consent"
-          >
-            <View style={[styles.checkbox, consent && styles.checkboxChecked]}>
-              {consent && <Text style={styles.checkmark}>✓</Text>}
-            </View>
-            <Text style={styles.consentText}>{t('aiFlow.consentToStoreDetails')}</Text>
-          </Pressable>
+      <View>
+        <OptionCard
+          title={t('aiFlow.consentRecorded')}
+          subtitle={t('aiFlow.consentToStoreDetails')}
+          pill={consent ? t('aiFlow.ticked') : undefined}
+          selected={consent}
+          onPress={() => setConsent(value => !value)}
+          testID="non-member-consent"
+        />
+        <FlowNotice
+          tone="info"
+          title={t('aiFlow.consentMandatory')}
+          body={t('aiFlow.consentMandatoryBody')}
+        />
+      </View>
 
-          <Button
-            label={t('common.save')}
-            variant="accent"
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-            loading={isLoading}
-            testID="non-member-save"
-          />
-          <View style={styles.cancel}>
-            <Button
-              label={t('common.cancel')}
-              variant="ghost"
-              onPress={onCancel}
-              testID="non-member-cancel"
-            />
-          </View>
-        </Screen>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <FlowSpacer />
+    </FlowScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  consentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: MIN_TOUCH_TARGET,
-    marginBottom: spacing[4],
-  },
-  checkbox: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.sm,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing[3],
-  },
-  checkboxChecked: {
-    backgroundColor: colors.success,
-    borderColor: colors.success,
-  },
-  checkmark: { color: colors.surface, fontWeight: '700' },
-  consentText: { ...typography.body, color: colors.text, flex: 1 },
-  cancel: { marginTop: spacing[2] },
-});
