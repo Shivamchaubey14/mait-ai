@@ -35,7 +35,7 @@ import LoginScreen from '@/features/auth/LoginScreen';
 import HistoryScreen from '@/features/history/HistoryScreen';
 import HomeScreen from '@/features/home/HomeScreen';
 import SettingsScreen from '@/features/settings/SettingsScreen';
-import RequestStockScreen from '@/features/stock/RequestStockScreen';
+import RequestStockScreen, { RequestFormState } from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
 import { useAppSelector } from '@/store';
 import { colors, spacing, typography } from '@theme/tokens';
@@ -68,6 +68,9 @@ export default function RootNavigator(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('home');
   const [step, setStep] = useState<CaptureStep | null>(null);
   const [requestingStock, setRequestingStock] = useState(false);
+  // Lets the bar's action button submit the indent form, so this screen's one action sits
+  // where every other screen's action sits.
+  const [requestForm, setRequestForm] = useState<RequestFormState | null>(null);
 
   const [clientUuid, setClientUuid] = useState(newClientUuid);
   const [mpp, setMpp] = useState<MPP | null>(null);
@@ -146,17 +149,6 @@ export default function RootNavigator(): React.JSX.Element {
     setFarmer({ kind: 'nonMember', name: selected.name, nonMemberId: selected.id });
     setStep('selectAnimal');
   };
-
-  // Layered over the tabs like the capture flow, and for the same reason: it is one task
-  // with one forward path.
-  if (requestingStock) {
-    return (
-      <RequestStockScreen
-        onDone={() => setRequestingStock(false)}
-        onBack={() => setRequestingStock(false)}
-      />
-    );
-  }
 
   // -- the capture flow, over the tabs ---------------------------------------------------
   if (step === 'selectMpp') {
@@ -278,7 +270,17 @@ export default function RootNavigator(): React.JSX.Element {
   return (
     <View style={styles.flex}>
       <View style={styles.flex}>
-        {tab === 'home' && (
+        {/* Keeps the bar, unlike the capture flow: asking for stock is a form a Mait can
+            abandon by tapping another tab, not a sequence they can strand halfway. */}
+        {requestingStock && (
+          <RequestStockScreen
+            onDone={() => setRequestingStock(false)}
+            onBack={() => setRequestingStock(false)}
+            onFormState={setRequestForm}
+          />
+        )}
+
+        {!requestingStock && tab === 'home' && (
           <HomeScreen
             onOpenStock={() => setTab('stock')}
             online={online}
@@ -287,9 +289,11 @@ export default function RootNavigator(): React.JSX.Element {
             lastSyncAt={lastSyncAt}
           />
         )}
-        {tab === 'stock' && <StockScreen />}
-        {tab === 'history' && <HistoryScreen />}
-        {tab === 'settings' && <SettingsScreen pending={pending} onSync={sync} online={online} />}
+        {!requestingStock && tab === 'stock' && <StockScreen />}
+        {!requestingStock && tab === 'history' && <HistoryScreen />}
+        {!requestingStock && tab === 'settings' && (
+          <SettingsScreen pending={pending} onSync={sync} online={online} />
+        )}
       </View>
 
       {/* The action follows the screen: ask for stock from Stock, start a capture anywhere
@@ -297,15 +301,26 @@ export default function RootNavigator(): React.JSX.Element {
       <BottomNav
         active={tab}
         pending={pending}
-        onChange={setTab}
+        onChange={next => {
+          // Switching tabs leaves the form. Nothing is lost that was worth keeping — an
+          // unsent indent is a decision not yet made.
+          setRequestingStock(false);
+          setTab(next);
+        }}
         action={
-          tab === 'stock'
+          requestingStock
             ? {
-                label: t('requestStock.action'),
-                onPress: () => setRequestingStock(true),
-                testID: 'bar-request-stock',
+                label: t('requestStock.submit'),
+                onPress: () => requestForm?.submit(),
+                testID: 'bar-submit-indent',
               }
-            : { label: t('home.startNewAi'), onPress: startCapture, testID: 'bar-start-ai' }
+            : tab === 'stock'
+              ? {
+                  label: t('requestStock.action'),
+                  onPress: () => setRequestingStock(true),
+                  testID: 'bar-request-stock',
+                }
+              : { label: t('home.startNewAi'), onPress: startCapture, testID: 'bar-start-ai' }
         }
       />
     </View>

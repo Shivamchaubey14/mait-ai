@@ -1,22 +1,27 @@
 /**
- * Request stock (SRS §6.6.1).
+ * Request stock — M18 (SRS §6.6.1).
  *
  * A Mait asks for straws by breed and quantity. Which physical straws get issued is decided
- * at the depot, so there is nothing here to scan or pick — that is the whole reason this is a
- * two-field screen rather than a flow.
+ * at the depot, so there is nothing here to scan or pick.
  *
- * Sent with the request's own uuid as an idempotency key, so a Mait who taps twice on a bad
- * connection raises one indent rather than two, and the depot does not pack double.
+ * A request can carry several lines — straws of one breed, gloves, sheaths — because that is
+ * how a Mait thinks about restocking: one trip, one list. The API takes one product per
+ * indent, so each line is posted as its own request; the depot sees them together because
+ * they arrive at the same moment from the same Mait.
+ *
+ * Every line carries its own uuid as an idempotency key, so a Mait tapping twice on a bad
+ * connection raises one request per line rather than doubling the order.
  */
 
-import React, { useState } from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { newClientUuid } from '@api/client';
 import {
   useCreateIndentMutation,
   useGetInventorySummaryQuery,
+  useListAiEventsQuery,
   useListBreedsQuery,
 } from '@api/endpoints';
 import type { ProblemDetails } from '@api/types';
@@ -28,59 +33,112 @@ import {
   FlowSpacer,
   OptionCard,
 } from '@/features/aiFlow/components';
+import { colors, spacing, typography } from '@theme/tokens';
 
-/** What a round typically needs. A Mait can change it; most will not have to. */
-const DEFAULT_QTY = '25';
+/** What a full round usually needs. A Mait can change it; most will not have to. */
+const USUAL_QTY = 25;
+
+interface Line {
+  id: string;
+  product: 'straw' | 'consumable';
+  breed: string | null;
+  qty: string;
+}
+
+function blankLine(): Line {
+  return { id: newClientUuid(), product: 'straw', breed: null, qty: String(USUAL_QTY) };
+}
+
+export interface RequestFormState {
+  canSubmit: boolean;
+  busy: boolean;
+  submit: () => void;
+}
 
 export default function RequestStockScreen({
   onDone,
   onBack,
+  onFormState,
 }: {
   onDone: () => void;
   onBack: () => void;
+  /** Lets the bar's action button drive this form (SRS §10.3 — one action per screen). */
+  onFormState: (state: RequestFormState) => void;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const hindi = i18n.language.startsWith('hi');
 
   const breeds = useListBreedsQuery();
   const stock = useGetInventorySummaryQuery();
+  const events = useListAiEventsQuery();
   const [createIndent, { isLoading }] = useCreateIndentMutation();
 
-  const [breed, setBreed] = useState<string | null>(null);
-  const [qty, setQty] = useState(DEFAULT_QTY);
-  const [note, setNote] = useState('');
+  const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [failed, setFailed] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState(0);
 
-  const quantity = Number(qty.replace(/\D/g, '')) || 0;
   const held = stock.data?.by_breed ?? {};
+
+  const usedLastMonth = (events.data?.results ?? []).filter(event => {
+    const when = new Date(event.completed_at ?? event.created_at);
+    const now = new Date();
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return (
+      event.status === 'completed' &&
+      when.getMonth() === lastMonth.getMonth() &&
+      when.getFullYear() === lastMonth.getFullYear()
+    );
+  }).length;
+
+  const valid = (line: Line) =>
+    (line.product === 'consumable' || !!line.breed) && Number(line.qty) > 0;
+  const canSubmit = lines.length > 0 && lines.every(valid);
+
+  const update = (id: string, patch: Partial<Line>) =>
+    setLines(current => current.map(line => (line.id === id ? { ...line, ...patch } : line)));
 
   const submit = async () => {
     setFailed(null);
+    let posted = 0;
     try {
-      await createIndent({
-        client_uuid: newClientUuid(),
-        product_type: 'straw',
-        breed: breed as string,
-        qty_requested: quantity,
-        note: note.trim(),
-      }).unwrap();
-      setSent(true);
+      for (const line of lines) {
+        await createIndent({
+          client_uuid: line.id,
+          product_type: line.product,
+          breed: line.breed ?? '',
+          qty_requested: Number(line.qty),
+        }).unwrap();
+        posted += 1;
+      }
+      setSent(posted);
     } catch (err) {
       const problem = (err as { data?: ProblemDetails })?.data;
-      setFailed(problem?.detail ?? t('errors.generic'));
+      // Says how many landed: a partial failure must not read as though nothing was sent,
+      // or the Mait resends the whole list and the depot packs twice.
+      setFailed(
+        posted > 0
+          ? t('requestStock.partial', { sent: posted, total: lines.length })
+          : (problem?.detail ?? t('errors.generic')),
+      );
     }
   };
 
-  if (sent) {
+  // Reported upward rather than rendered here: the one action on this screen lives on the
+  // bar, where every other screen's action lives.
+  useEffect(() => {
+    onFormState({ canSubmit, busy: isLoading, submit });
+    // `submit` closes over the current lines, so it is refreshed whenever they change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSubmit, isLoading, lines]);
+
+  if (sent > 0) {
     return (
       <FlowScreen
         step={null}
         stepLabel={t('requestStock.sentLabel')}
         title={t('requestStock.sentTitle')}
-        subtitle={t('requestStock.sentSubtitle')}
+        subtitle={t('requestStock.sentSubtitle', { count: sent })}
         onBack={onDone}
-        cta={{ label: t('requestStock.backToStock'), onPress: onDone, testID: 'indent-done' }}
       >
         <FlowNotice
           tone="info"
@@ -100,57 +158,109 @@ export default function RequestStockScreen({
       title={t('requestStock.title')}
       subtitle={t('requestStock.subtitle')}
       onBack={onBack}
-      cta={{
-        label: t('requestStock.send'),
-        onPress: submit,
-        disabled: !breed || quantity < 1,
-        busy: isLoading,
-        testID: 'indent-send',
-      }}
     >
-      <FlowLabel>{t('requestStock.whichBreed')}</FlowLabel>
+      {lines.map((line, index) => (
+        <View key={line.id} style={index > 0 ? styles.extraLine : undefined}>
+          {index > 0 && (
+            <View style={styles.lineHead}>
+              <Text style={styles.lineLabel}>{t('requestStock.lineN', { n: index + 1 })}</Text>
+              <Text
+                style={styles.remove}
+                onPress={() => setLines(current => current.filter(l => l.id !== line.id))}
+                testID={`indent-remove-${index}`}
+              >
+                {t('requestStock.remove')}
+              </Text>
+            </View>
+          )}
 
-      {breeds.isLoading ? (
-        <FlowNotice tone="info" title={t('common.loading')} />
-      ) : (
-        (breeds.data ?? []).map(option => (
+          <FlowLabel>{t('requestStock.product')}</FlowLabel>
           <OptionCard
-            key={option.code}
-            title={(hindi && option.name_hi) || option.name}
-            // The count they already hold, so the ask is made against a number rather than
-            // from memory.
-            subtitle={t('requestStock.inHand', { count: held[option.code] ?? 0 })}
+            title={t('requestStock.semenStraw')}
+            subtitle={t('requestStock.semenStrawHint')}
             radio
-            selected={breed === option.code}
-            onPress={() => setBreed(option.code)}
-            testID={`indent-breed-${option.code}`}
+            selected={line.product === 'straw'}
+            onPress={() => update(line.id, { product: 'straw' })}
+            testID={`indent-product-straw-${index}`}
           />
-        ))
-      )}
+          <OptionCard
+            title={t('requestStock.consumable')}
+            subtitle={t('requestStock.consumableHint')}
+            tone="info"
+            radio
+            selected={line.product === 'consumable'}
+            onPress={() => update(line.id, { product: 'consumable', breed: null })}
+            testID={`indent-product-consumable-${index}`}
+          />
 
-      <FieldCard
-        label={t('requestStock.howMany')}
-        hint={t('requestStock.howManyHint')}
-        value={qty}
-        onChangeText={text => setQty(text.replace(/\D/g, '').slice(0, 4))}
-        keyboardType="number-pad"
-        testID="indent-qty"
+          {line.product === 'straw' && (
+            <View>
+              <FlowLabel>{t('requestStock.breed')}</FlowLabel>
+              {(breeds.data ?? []).map(option => (
+                <OptionCard
+                  key={option.code}
+                  title={(hindi && option.name_hi) || option.name}
+                  // The count already held, so the ask is made against a number rather than
+                  // from memory.
+                  subtitle={t('requestStock.inHand', { count: held[option.code] ?? 0 })}
+                  radio
+                  selected={line.breed === option.code}
+                  onPress={() => update(line.id, { breed: option.code })}
+                  testID={`indent-breed-${option.code}-${index}`}
+                />
+              ))}
+            </View>
+          )}
+
+          <FlowLabel>{t('requestStock.quantity')}</FlowLabel>
+          <FieldCard
+            label={line.product === 'straw' ? t('requestStock.straws') : t('requestStock.units')}
+            value={line.qty}
+            onChangeText={text => update(line.id, { qty: text.replace(/\D/g, '').slice(0, 4) })}
+            keyboardType="number-pad"
+            testID={`indent-qty-${index}`}
+          />
+        </View>
+      ))}
+
+      {/* Grounds the number in what actually happened rather than leaving it to memory. */}
+      <FlowNotice
+        tone="accent"
+        title={t('requestStock.usualTitle', { count: USUAL_QTY })}
+        body={t('requestStock.usualBody', { count: usedLastMonth })}
+        testID="indent-usual"
       />
 
-      <FieldCard
-        label={t('requestStock.note')}
-        hint={t('requestStock.noteHint')}
-        tone="accent"
-        value={note}
-        onChangeText={setNote}
-        testID="indent-note"
+      <FlowLabel style={styles.addLabel}>{t('requestStock.addAnother')}</FlowLabel>
+      <OptionCard
+        title={t('requestStock.addLine')}
+        subtitle={t('requestStock.addLineHint')}
+        tone="neutral"
+        onPress={() => setLines(current => [...current, blankLine()])}
+        testID="indent-add-line"
       />
 
       {!!failed && <FlowNotice tone="error" title={failed} testID="indent-error" />}
 
-      <View>
-        <FlowSpacer />
-      </View>
+      <FlowSpacer />
     </FlowScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  extraLine: {
+    marginTop: spacing[4],
+    paddingTop: spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  lineHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing[2],
+  },
+  lineLabel: { ...typography.label, color: colors.ink },
+  remove: { ...typography.label, color: colors.error },
+  addLabel: { marginTop: spacing[4] },
+});
