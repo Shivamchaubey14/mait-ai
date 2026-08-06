@@ -198,7 +198,8 @@
     "home": "Home",
     "newAi": "New AI",
     "stock": "Stock",
-    "profile": "Profile"
+    "profile": "Profile",
+    "history": "History"
   },
   "states": {
     "errorBody": "The server did not answer. Your queued records are safe on this phone.",
@@ -249,7 +250,17 @@
     "emptyTitle": "Nothing in your flask",
     "emptyBody": "Stock appears here once the depot issues it to you.",
     "consumables": "Other items",
-    "errorTitle": "Could not load your stock"
+    "errorTitle": "Could not load your stock",
+    "inHand": "Straws in hand",
+    "belowThreshold": "Below the 10 threshold",
+    "usedThisMonth": "Used this month",
+    "acrossBreeds": "Across {{count}} breeds",
+    "byBreed": "By breed",
+    "noneInHand": "none in hand",
+    "low": "Low",
+    "unknownAnimal": "Unknown type",
+    "breedsLow": "{{count}} breeds are low",
+    "breedsLowBody": "Raise an indent before your next round."
   },
   "profile": {
     "maitId": "Mait #{{id}}",
@@ -261,5 +272,14 @@
     "signOutAnyway": "Sign out anyway",
     "signOutWarnTitle": "{{count}} records have not been sent",
     "signOutWarnBody": "They stay on this phone and can only be sent by you, on this phone. Find signal first if you can."
+  },
+  "history": {
+    "title": "History",
+    "subtitle": "{{count}} events recorded",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "emptyTitle": "Nothing recorded yet",
+    "emptyBody": "Your events appear here.",
+    "errorTitle": "Could not load your history"
   }
 }

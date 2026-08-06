@@ -32,6 +32,7 @@ import SelectAnimalScreen from '@/features/aiFlow/SelectAnimalScreen';
 import SelectFarmerScreen from '@/features/aiFlow/SelectFarmerScreen';
 import SelectMppScreen from '@/features/aiFlow/SelectMppScreen';
 import LoginScreen from '@/features/auth/LoginScreen';
+import HistoryScreen from '@/features/history/HistoryScreen';
 import HomeScreen from '@/features/home/HomeScreen';
 import ProfileScreen from '@/features/profile/ProfileScreen';
 import StockScreen from '@/features/stock/StockScreen';
@@ -274,6 +275,7 @@ export default function RootNavigator(): React.JSX.Element {
           />
         )}
         {tab === 'stock' && <StockScreen />}
+        {tab === 'history' && <HistoryScreen />}
         {tab === 'profile' && <ProfileScreen pending={pending} onSync={sync} online={online} />}
       </View>
 

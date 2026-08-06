@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
 /** `newAi` is an action rather than a destination — it never becomes the active tab. */
-export type Tab = 'home' | 'stock' | 'profile';
+export type Tab = 'home' | 'stock' | 'history' | 'profile';
 
 const TABS: {
   key: Tab;
@@ -31,6 +31,7 @@ const TABS: {
 }[] = [
   { key: 'home', icon: 'home-outline', activeIcon: 'home' },
   { key: 'stock', icon: 'layers-outline', activeIcon: 'layers' },
+  { key: 'history', icon: 'time-outline', activeIcon: 'time' },
   { key: 'profile', icon: 'person-outline', activeIcon: 'person' },
 ];
 
@@ -147,8 +148,8 @@ const styles = StyleSheet.create({
   pill: {
     alignItems: 'center',
     gap: spacing[1],
-    minWidth: 72,
-    paddingHorizontal: spacing[3],
+    minWidth: 56,
+    paddingHorizontal: spacing[2],
     paddingVertical: spacing[2],
     borderRadius: radius.md,
   },
