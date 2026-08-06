@@ -14,13 +14,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { useGetInventorySummaryQuery, useListAiEventsQuery } from '@api/endpoints';
 import { pendingCount, readQueue } from '@api/queue';
 import type { AIEvent } from '@api/types';
-import { BrandMark, HeroDecoration } from '@/components/brand';
+import { BrandMark } from '@/components/brand';
+import PageHero from '@/components/hero';
 import { EmptyState, ErrorState, SkeletonList, SyncBanner } from '@/components/states';
 import { useAppSelector } from '@/store';
 import { colors, radius, spacing, typography } from '@theme/tokens';
@@ -54,7 +54,6 @@ export default function HomeScreen({
   lastSyncAt,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const user = useAppSelector(state => state.auth.user);
 
   const [queuedNames, setQueuedNames] = useState<number>(0);
@@ -77,14 +76,11 @@ export default function HomeScreen({
 
   return (
     <View style={styles.root}>
-      <View style={[styles.hero, { paddingTop: insets.top + spacing[3] }]}>
-        <HeroDecoration size={200} top={-90} right={-70} />
-        <View style={styles.heroTop}>
-          <BrandMark size="small" />
-        </View>
-        <Text style={styles.greeting}>{t('home.greeting', { name: user?.fullName ?? '' })}</Text>
-        <Text style={styles.heroSub}>{t('home.subtitle')}</Text>
-      </View>
+      <PageHero
+        top={<BrandMark size="small" />}
+        title={t('home.greeting', { name: user?.fullName ?? '' })}
+        subtitle={t('home.subtitle')}
+      />
 
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: spacing[6] }]}
@@ -241,18 +237,6 @@ function EventRow({ event }: { event: AIEvent }): React.JSX.Element {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-
-  hero: {
-    backgroundColor: colors.primary,
-    borderBottomLeftRadius: radius.xl,
-    borderBottomRightRadius: radius.xl,
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[5],
-    overflow: 'hidden',
-  },
-  heroTop: { flexDirection: 'row', marginBottom: spacing[4] },
-  greeting: { ...typography.h1, color: colors.surface },
-  heroSub: { ...typography.body, color: colors.surface, opacity: 0.92, marginTop: spacing[1] },
 
   body: { padding: spacing[5] },
 

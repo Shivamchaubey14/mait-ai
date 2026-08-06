@@ -15,7 +15,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
 // --------------------------------------------------------------------------------------
 // Loading
@@ -160,38 +160,63 @@ export function SyncBanner({
   title,
   body,
   action,
+  /** A short figure worth reading before the sentence — "3 sent", "12 straws". */
+  metric,
   testID,
 }: {
   tone: SyncTone;
   title: string;
   body?: string;
   action?: { label: string; onPress: () => void };
+  metric?: string;
   testID?: string;
 }): React.JSX.Element {
   const palette = {
-    offline: { dot: colors.secondary, wash: colors.secondaryWash, border: colors.secondary },
-    queued: { dot: colors.secondary, wash: colors.secondaryWash, border: colors.secondary },
-    synced: { dot: colors.primary, wash: colors.primaryWash, border: colors.primary },
+    offline: {
+      tint: colors.secondaryPressed,
+      wash: colors.secondaryWash,
+      icon: 'cloud-offline' as const,
+    },
+    queued: {
+      tint: colors.secondaryPressed,
+      wash: colors.secondaryWash,
+      icon: 'time' as const,
+    },
+    synced: {
+      tint: colors.primary,
+      wash: colors.primaryWash,
+      icon: 'checkmark-done' as const,
+    },
   }[tone];
 
   return (
-    <View
-      style={[styles.banner, { backgroundColor: palette.wash, borderColor: palette.border }]}
-      testID={testID}
-    >
-      <View style={[styles.bannerDot, { backgroundColor: palette.dot }]} />
+    <View style={[styles.banner, { borderLeftColor: palette.tint }]} testID={testID}>
+      {/* A glyph in a disc rather than a bare dot: this card is read a hundred times a day,
+          and at a glance the shape is what carries the meaning, not the colour. */}
+      <View style={[styles.bannerIcon, { backgroundColor: palette.wash }]}>
+        <Ionicons name={palette.icon} size={18} color={palette.tint} />
+      </View>
+
       <View style={styles.bannerBody}>
         <Text style={styles.bannerTitle}>{title}</Text>
         {!!body && <Text style={styles.bannerText}>{body}</Text>}
       </View>
+
+      {!!metric && (
+        <View style={[styles.bannerMetric, { backgroundColor: palette.wash }]}>
+          <Text style={[styles.bannerMetricLabel, { color: palette.tint }]}>{metric}</Text>
+        </View>
+      )}
+
       {!!action && (
         <Pressable
           accessibilityRole="button"
           onPress={action.onPress}
-          style={styles.bannerAction}
+          style={({ pressed }) => [styles.bannerAction, pressed && styles.bannerActionPressed]}
           testID={testID ? `${testID}-action` : undefined}
         >
           <Text style={styles.bannerActionLabel}>{action.label}</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.primaryDark} />
         </Pressable>
       )}
     </View>
@@ -258,23 +283,42 @@ const styles = StyleSheet.create({
   centredCtaLabel: { ...typography.bodyStrong, color: colors.surface },
 
   // -- sync banner ------------------------------------------------------------------------
+  // White card with a coloured spine, not a tinted block. It sits at the top of a screen a
+  // Mait opens all day, so it has to read as information rather than as a warning.
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     padding: spacing[3],
     marginBottom: spacing[3],
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderLeftWidth: 4,
+    ...shadows.card,
   },
-  bannerDot: { width: 10, height: 10, borderRadius: 5 },
+  bannerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bannerBody: { flex: 1 },
   bannerTitle: { ...typography.bodyStrong, color: colors.ink },
   bannerText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  bannerAction: {
-    minHeight: MIN_TOUCH_TARGET - 12,
-    justifyContent: 'center',
-    paddingHorizontal: spacing[2],
+  bannerMetric: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: radius.pill,
   },
+  bannerMetricLabel: { ...typography.label },
+  bannerAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    minHeight: MIN_TOUCH_TARGET - 12,
+    paddingLeft: spacing[2],
+  },
+  bannerActionPressed: { opacity: 0.6 },
   bannerActionLabel: { ...typography.label, color: colors.primaryDark },
 });

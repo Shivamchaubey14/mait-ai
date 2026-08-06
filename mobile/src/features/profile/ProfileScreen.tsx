@@ -10,11 +10,11 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { useLogoutMutation } from '@api/endpoints';
 import { LanguageToggle } from '@/components/brand';
+import PageHero from '@/components/hero';
 import { SyncBanner } from '@/components/states';
 import { loggedOut } from '@/features/auth/authSlice';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -30,7 +30,6 @@ export default function ProfileScreen({
   online: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
   const user = useAppSelector(state => state.auth.user);
   const refreshToken = useAppSelector(state => state.auth.refreshToken);
@@ -56,18 +55,20 @@ export default function ProfileScreen({
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
-        <View style={styles.avatar}>
-          <Ionicons name="person" size={24} color={colors.primaryDark} />
-        </View>
-        <View style={styles.identity}>
-          <Text style={styles.name}>{user?.fullName ?? '—'}</Text>
-          <Text style={styles.meta}>
-            {user?.maitId ? t('profile.maitId', { id: user.maitId }) : ''}
-            {user?.mobileNo ? ` · ${user.mobileNo}` : ''}
-          </Text>
-        </View>
-      </View>
+      <PageHero
+        top={
+          <View style={styles.avatar}>
+            <Ionicons name="person" size={22} color={colors.surface} />
+          </View>
+        }
+        title={user?.fullName ?? '—'}
+        subtitle={[
+          user?.maitId ? t('profile.maitId', { id: user.maitId }) : '',
+          user?.mobileNo ?? '',
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      />
 
       <ScrollView contentContainerStyle={styles.body}>
         {pending > 0 ? (
@@ -136,25 +137,15 @@ export default function ProfileScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[4],
-    backgroundColor: colors.surface,
-  },
+  // Translucent on the green, the same treatment the capture flow's back button uses.
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.primaryWash,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  identity: { flex: 1 },
-  name: { ...typography.h2, color: colors.ink },
-  meta: { ...typography.caption, color: colors.textMuted },
 
   body: { padding: spacing[5] },
 

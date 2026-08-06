@@ -8,10 +8,10 @@
 
 import React from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { useGetInventorySummaryQuery } from '@api/endpoints';
+import PageHero from '@/components/hero';
 import { EmptyState, ErrorState, SkeletonList, SyncBanner } from '@/components/states';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
@@ -21,7 +21,6 @@ export default function StockScreen({
   onStartCapture: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const stock = useGetInventorySummaryQuery();
 
   const byBreed = Object.entries(stock.data?.by_breed ?? {});
@@ -29,10 +28,7 @@ export default function StockScreen({
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
-        <Text style={styles.title}>{t('stock.title')}</Text>
-        <Text style={styles.meta}>{t('stock.subtitle')}</Text>
-      </View>
+      <PageHero title={t('stock.title')} subtitle={t('stock.subtitle')} />
 
       <ScrollView
         contentContainerStyle={styles.body}
@@ -124,14 +120,6 @@ export default function StockScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[4],
-    backgroundColor: colors.surface,
-  },
-  title: { ...typography.h1, color: colors.ink },
-  meta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-
   body: { padding: spacing[5] },
 
   total: {

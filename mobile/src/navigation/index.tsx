@@ -148,6 +148,9 @@ export default function RootNavigator(): React.JSX.Element {
   if (step === 'selectMpp') {
     return (
       <SelectMppScreen
+        // Back from step 1 leaves the flow. Without it the capture is a one-way door: the tab
+        // bar is hidden here, so this arrow is the only way home.
+        onBack={leaveCapture}
         onSelect={selected => {
           setMpp(selected);
           setStep('selectFarmer');
@@ -275,19 +278,7 @@ export default function RootNavigator(): React.JSX.Element {
         {tab === 'profile' && <ProfileScreen pending={pending} onSync={sync} online={online} />}
       </View>
 
-      <BottomNav
-        active={tab}
-        pending={pending}
-        onChange={next => {
-          // "New AI" is an action rather than a destination: it starts the flow instead of
-          // parking the Mait on a fifth screen they then have to leave.
-          if (next === 'newAi') {
-            startCapture();
-            return;
-          }
-          setTab(next);
-        }}
-      />
+      <BottomNav active={tab} pending={pending} onChange={setTab} onStartCapture={startCapture} />
     </View>
   );
 }

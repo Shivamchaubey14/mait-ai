@@ -20,9 +20,11 @@ import { FieldCard, FlowNotice, FlowScreen, FlowSpacer, OptionCard } from './com
 
 interface Props {
   onSelect: (mpp: MPP) => void;
+  /** Leaves the capture flow. The tab bar is hidden here, so this is the only way out. */
+  onBack?: () => void;
 }
 
-export default function SelectMppScreen({ onSelect }: Props): React.JSX.Element {
+export default function SelectMppScreen({ onSelect, onBack }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
@@ -49,6 +51,7 @@ export default function SelectMppScreen({ onSelect }: Props): React.JSX.Element 
       step={0}
       title={t('aiFlow.whichMpp')}
       subtitle={t('aiFlow.whichMppSubtitle')}
+      onBack={onBack}
       cta={{
         label: t('common.continue'),
         onPress: () => chosen && onSelect(chosen),
