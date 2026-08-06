@@ -192,7 +192,7 @@ export function SyncBanner({
   }[tone];
 
   return (
-    <View style={[styles.banner, { borderLeftColor: palette.tint }]} testID={testID}>
+    <View style={[styles.banner, { borderColor: palette.tint }]} testID={testID}>
       {/* A glyph in a disc rather than a bare dot: this card is read a hundred times a day,
           and at a glance the shape is what carries the meaning, not the colour. */}
       <View style={[styles.bannerIcon, { backgroundColor: palette.wash }]}>
@@ -288,8 +288,8 @@ const styles = StyleSheet.create({
   centredCtaLabel: { ...typography.bodyStrong, color: colors.surface },
 
   // -- sync banner ------------------------------------------------------------------------
-  // White card with a coloured spine, not a tinted block. It sits at the top of a screen a
-  // Mait opens all day, so it has to read as information rather than as a warning.
+  // White card outlined in the tone's colour on every side, so the state is legible from the
+  // whole card rather than from one edge a thumb may be covering.
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[3],
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-    borderLeftWidth: 4,
+    borderWidth: 1.5,
     ...shadows.card,
   },
   bannerIcon: {

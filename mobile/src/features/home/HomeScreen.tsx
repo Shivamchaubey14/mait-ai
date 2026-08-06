@@ -131,7 +131,12 @@ export default function HomeScreen({
         {/* Stock, because it decides whether the day can start at all. */}
         <View style={styles.tiles}>
           <View style={styles.tile}>
-            <Text style={styles.tileLabel}>{t('home.strawsHeld')}</Text>
+            <View style={[styles.tileIcon, styles.tileIconStock]}>
+              <Ionicons name="flask" size={18} color={colors.primaryDark} />
+            </View>
+            <Text style={styles.tileLabel} numberOfLines={1}>
+              {t('home.strawsHeld')}
+            </Text>
             {stock.isLoading ? (
               <View style={styles.tileSkeleton} />
             ) : (
@@ -139,24 +144,32 @@ export default function HomeScreen({
                 style={[
                   styles.tileValue,
                   (stock.data?.total_straws ?? 0) === 0 && styles.tileValueBad,
+                  stock.data?.is_low_stock && styles.tileValueWarn,
                 ]}
               >
                 {stock.isError ? '—' : (stock.data?.total_straws ?? 0)}
               </Text>
             )}
-            <Text style={styles.tileFoot}>
+            <Text style={styles.tileFoot} numberOfLines={1}>
               {stock.data?.is_low_stock ? t('home.lowStock') : t('home.inYourFlask')}
             </Text>
           </View>
 
           <View style={styles.tile}>
-            <Text style={styles.tileLabel}>{t('home.doneToday')}</Text>
+            <View style={[styles.tileIcon, styles.tileIconDone]}>
+              <Ionicons name="checkmark-done" size={18} color={colors.info} />
+            </View>
+            <Text style={styles.tileLabel} numberOfLines={1}>
+              {t('home.doneToday')}
+            </Text>
             {events.isLoading ? (
               <View style={styles.tileSkeleton} />
             ) : (
               <Text style={styles.tileValue}>{today.length}</Text>
             )}
-            <Text style={styles.tileFoot}>{t('home.sinceMorning')}</Text>
+            <Text style={styles.tileFoot} numberOfLines={1}>
+              {t('home.sinceMorning')}
+            </Text>
           </View>
         </View>
 
@@ -237,18 +250,38 @@ const styles = StyleSheet.create({
   tiles: { flexDirection: 'row', gap: spacing[3], marginBottom: spacing[4] },
   tile: {
     flex: 1,
-    padding: spacing[4],
+    alignItems: 'center',
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[2],
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     ...shadows.card,
   },
-  tileLabel: { ...typography.caption, color: colors.textMuted },
-  tileValue: { ...typography.display, color: colors.ink },
+  tileIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[2],
+  },
+  tileIconStock: { backgroundColor: colors.primaryWash },
+  tileIconDone: { backgroundColor: colors.infoWash },
+  tileLabel: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
+  // The figure carries its own meaning: green while there is stock, yellow when it is
+  // running out, red at zero — the same vocabulary the rest of the app uses.
+  tileValue: {
+    ...typography.display,
+    color: colors.primaryDark,
+    textAlign: 'center',
+    marginVertical: 2,
+  },
+  tileValueWarn: { color: colors.secondaryPressed },
   tileValueBad: { color: colors.error },
-  tileFoot: { ...typography.caption, color: colors.textMuted },
+  tileFoot: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
   tileSkeleton: {
-    width: 64,
-    height: 30,
+    width: 56,
+    height: 34,
     marginVertical: spacing[1],
     borderRadius: radius.sm,
     backgroundColor: colors.background,
