@@ -14,8 +14,48 @@ class ConsumableSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Consumable
-        fields = ["id", "code", "name", "category", "category_display", "unit", "display_order"]
+        fields = [
+            "id",
+            "code",
+            "name",
+            "category",
+            "category_display",
+            "unit",
+            "rate",
+            "display_order",
+        ]
         read_only_fields = fields
+
+
+class ConsumableWriteSerializer(serializers.ModelSerializer):
+    """
+    The admin's edit shape for the catalogue (SRS §6.6.1).
+
+    ``code`` is what indents, uploads and the app all key on, so it is set once at creation
+    and never edited: renaming it would orphan every indent already raised against it. The
+    display name is the editable one — that is what the wording on both screens comes from.
+    """
+
+    class Meta:
+        model = Consumable
+        fields = ["id", "code", "name", "category", "unit", "rate", "display_order", "is_active"]
+
+    def validate_code(self, value: str) -> str:
+        code = (value or "").strip().upper()
+        if not code:
+            raise serializers.ValidationError("A code is required.")
+        existing = Consumable.objects.filter(code=code)
+        if self.instance is not None:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError("Another product already uses this code.")
+        return code
+
+    def update(self, instance, validated_data):
+        # Silently ignored rather than rejected: the portal sends the whole object back, and
+        # an unchanged code in the payload is not an attempt to rename anything.
+        validated_data.pop("code", None)
+        return super().update(instance, validated_data)
 
 
 class SemenBatchSerializer(serializers.ModelSerializer):
@@ -38,6 +78,12 @@ class StrawValidationSerializer(serializers.Serializer):
     reason = serializers.CharField(allow_null=True)
     straw = SemenBatchSerializer(allow_null=True)
     available_straws = serializers.IntegerField()
+    breed_choices = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        help_text="Breeds the Mait holds as unnumbered stock. Present when `reason` is "
+        "`breed_required`, so the app can ask instead of guessing.",
+    )
 
 
 class MaitInventorySerializer(serializers.ModelSerializer):

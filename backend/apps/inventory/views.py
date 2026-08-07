@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.db.models import Sum
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import api_view, permission_classes
@@ -18,20 +19,26 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.exceptions import InsufficientStock, StrawAlreadyConsumed
+from apps.core.exceptions import (
+    BreedRequired,
+    InsufficientStock,
+    RecordInUse,
+    StrawAlreadyConsumed,
+)
 from apps.core.permissions import IsAdmin, IsMait
 from apps.masterdata.models import Mait
 
 from .models import Consumable, MaitInventory, MaitInventoryLedger, ProductType, SemenBatch
 from .serializers import (
     ConsumableSerializer,
+    ConsumableWriteSerializer,
     InventorySummarySerializer,
     LedgerEntrySerializer,
     MaitInventorySerializer,
     SemenBatchSerializer,
     StrawValidationSerializer,
 )
-from .services import available_straw_count, get_straw_for_mait
+from .services import available_straw_count, get_straw_for_mait, unnumbered_breeds
 
 
 def _mait(request):
@@ -62,7 +69,21 @@ class StrawValidateView(APIView):
         available = available_straw_count(mait)
 
         try:
-            straw = get_straw_for_mait(mait, unique_no.strip())
+            # Previewing only. The claim that names an unnumbered straw belongs to the event
+            # that uses it, inside its own transaction — a GET must not rename anything.
+            straw = get_straw_for_mait(
+                mait, unique_no.strip(), breed=request.query_params.get("breed")
+            )
+        except BreedRequired:
+            return Response(
+                {
+                    "valid": False,
+                    "reason": "breed_required",
+                    "straw": None,
+                    "available_straws": available,
+                    "breed_choices": unnumbered_breeds(mait),
+                }
+            )
         except StrawAlreadyConsumed:
             return Response(
                 {
@@ -112,16 +133,14 @@ def product_catalogue(request):
     return Response(ConsumableSerializer(products, many=True).data)
 
 
-@extend_schema(tags=["inventory"])
-@api_view(["GET"])
-@permission_classes([IsMait])
-def inventory_summary(request):
+def build_summary(mait) -> dict:
     """
-    The Mait's current stock, in the shape the app gates on (SRS §6.4.1).
+    One Mait's stock, split the way it gets used.
 
-    Refreshed at login and after every completed AI and fulfilled indent.
+    Shared by the Mait's own endpoint and the admin's per-Mait view rather than written
+    twice: an admin looking at a Mait's stock to answer a phone call has to be seeing the
+    same numbers the Mait is looking at, or the call goes nowhere.
     """
-    mait = _mait(request)
     lines = list(
         MaitInventory.objects.filter(mait=mait, qty_available__gt=0).only(
             "product_type", "product_ref_id", "qty_available"
@@ -133,6 +152,13 @@ def inventory_summary(request):
 
     by_breed: dict[str, int] = {}
     for line in lines:
+        # The product_type check is not redundant. `product_ref_id` means SemenBatch.id for
+        # straws and Consumable.id for everything else, and the two id spaces overlap — so a
+        # box of 40 sheaths whose Consumable.id happens to match a straw id was being counted
+        # as 40 straws of that breed. The number this endpoint exists to give is the one the
+        # capture flow gates on, and it was reading high.
+        if line.product_type != ProductType.STRAW:
+            continue
         batch = batches.get(line.product_ref_id)
         if batch is not None:
             by_breed[batch.breed] = by_breed.get(batch.breed, 0) + line.qty_available
@@ -162,14 +188,118 @@ def inventory_summary(request):
             consumables.append(row)
 
     total = sum(by_breed.values())
-    payload = {
+    return {
         "total_straws": total,
         "is_low_stock": total <= settings.LOW_STOCK_THRESHOLD,
         "by_breed": by_breed,
         "consumables": consumables,
         "assets": assets,
     }
-    return Response(InventorySummarySerializer(payload).data)
+
+
+@extend_schema(tags=["inventory"])
+@api_view(["GET"])
+@permission_classes([IsMait])
+def inventory_summary(request):
+    """
+    The Mait's current stock, in the shape the app gates on (SRS §6.4.1).
+
+    Refreshed at login and after every completed AI and fulfilled indent.
+    """
+    return Response(InventorySummarySerializer(build_summary(_mait(request))).data)
+
+
+@extend_schema(
+    tags=["inventory"],
+    summary="One Mait's stock, for the admin",
+    description=(
+        "The same breakdown the Mait sees in the app — straws by breed, consumables and "
+        "equipment — for whichever Mait is being looked at.\n\n"
+        "The oversight list carries straw counts only, because that is what decides whether "
+        "someone can work. This is the rest of the answer, for the moment an admin has a Mait "
+        "on the phone."
+    ),
+    responses={200: InventorySummarySerializer},
+)
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def mait_inventory_detail(request, mait_id: int):
+    mait = get_object_or_404(Mait, pk=mait_id)
+    payload = build_summary(mait)
+    payload["mait_id"] = mait.id
+    payload["mait_name"] = mait.name
+    payload["sahayak_vendor_code"] = mait.sahayak_vendor_code
+    return Response(payload)
+
+
+@extend_schema(tags=["inventory"])
+class ProductAdminViewSet(viewsets.ModelViewSet):
+    """
+    Maintain the catalogue a Mait can ask for (SRS §6.6.1).
+
+    Straws are absent by design — they are requested by breed, and the breed list is its own
+    config. This is everything else: sheaths, gloves, liquid nitrogen, AI guns.
+
+    Full CRUD, with one guard on delete: a product an indent or a stock row already points at
+    cannot be removed, because those references carry no copy of the name and would be left
+    reading as a quantity of something. Retiring takes it off the app and keeps the history
+    legible. Deleting stays available for what it is actually for — a row added by mistake.
+    """
+
+    serializer_class = ConsumableWriteSerializer
+    permission_classes = [IsAdmin]
+    queryset = Consumable.objects.all().order_by("category", "display_order", "name")
+    http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
+
+    def perform_destroy(self, instance):
+        from apps.indents.models import IndentRequest
+
+        referenced = (
+            IndentRequest.objects.filter(
+                product_type=ProductType.CONSUMABLE, product_ref_id=instance.pk
+            ).exists()
+            or MaitInventory.objects.filter(
+                product_type=ProductType.CONSUMABLE, product_ref_id=instance.pk
+            ).exists()
+        )
+        if referenced:
+            raise RecordInUse(
+                f"{instance.name} is already on an indent or in a Mait's stock, so it cannot "
+                "be deleted. Retire it instead — it disappears from the request form and the "
+                "existing records keep their name."
+            )
+        instance.delete()
+
+    @extend_schema(summary="List catalogue products", responses={200: ConsumableWriteSerializer})
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Add a catalogue product",
+        description="`code` is set once here and never edited — indents key on it.",
+        responses={201: ConsumableWriteSerializer},
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Edit a catalogue product",
+        description="Name, unit, rate, ordering and active state. `code` is ignored.",
+        responses={200: ConsumableWriteSerializer},
+    )
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Delete a catalogue product",
+        description=(
+            "Only for a row added by mistake. A product already on an indent or in a Mait's "
+            "stock answers `409 record-in-use` — retire it instead, which takes it off the "
+            "request form and leaves those records still naming it."
+        ),
+    )
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
 
 
 @extend_schema(tags=["inventory"])

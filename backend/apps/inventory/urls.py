@@ -14,16 +14,19 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     InventoryLineViewSet,
     LedgerViewSet,
+    ProductAdminViewSet,
     StrawValidateView,
     inventory_oversight,
     inventory_summary,
     ledger_balance_check,
+    mait_inventory_detail,
     product_catalogue,
 )
 
 app_name = "inventory"
 
 router = DefaultRouter()
+router.register("admin/products", ProductAdminViewSet, basename="admin-product")
 router.register("mait/inventory/lines", InventoryLineViewSet, basename="inventory-line")
 router.register("mait/inventory/ledger", LedgerViewSet, basename="inventory-ledger")
 
@@ -39,5 +42,10 @@ urlpatterns = [
     # Admin oversight across every Mait. Deliberately not under `mait/`, which is the
     # namespace for "the caller's own".
     path("admin/inventory/", inventory_oversight, name="inventory-oversight"),
+    path(
+        "admin/inventory/<int:mait_id>/",
+        mait_inventory_detail,
+        name="inventory-mait-detail",
+    ),
     path("", include(router.urls)),
 ]

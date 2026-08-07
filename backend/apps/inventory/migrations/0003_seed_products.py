@@ -11,7 +11,7 @@ Straws are not here. They are asked for by breed, and the breed list is its own 
 from django.db import migrations
 
 CONSUMABLES = [
-    ("SHEATH", "AI sheaths", "box of 50", 10),
+    ("SHEATH", "AI sheaths", "", 10),
     ("GLOVES", "Gloves", "pair", 20),
     ("LN2", "Liquid nitrogen", "litre", 30),
 ]
