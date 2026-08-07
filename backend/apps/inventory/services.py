@@ -12,29 +12,103 @@ from __future__ import annotations
 
 import logging
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Sum
 
-from apps.core.exceptions import InsufficientStock, StrawAlreadyConsumed
+from apps.core.exceptions import BreedRequired, InsufficientStock, StrawAlreadyConsumed
 
 from .models import MaitInventory, MaitInventoryLedger, ProductType, SemenBatch
 
 logger = logging.getLogger(__name__)
 
 
-def get_straw_for_mait(mait, straw_unique_no: str) -> SemenBatch:
+def unnumbered_breeds(mait) -> list[str]:
+    """Breeds this Mait holds as unnumbered stock, for disambiguating a claim."""
+    holdings = MaitInventory.objects.filter(
+        mait=mait, product_type=ProductType.STRAW, qty_available__gt=0
+    ).values_list("product_ref_id", flat=True)
+    return sorted(
+        SemenBatch.objects.filter(id__in=list(holdings), is_unnumbered=True, is_consumed=False)
+        .values_list("breed", flat=True)
+        .distinct()
+    )
+
+
+def _claim_unnumbered(mait, straw_unique_no: str, breed: str | None, claim: bool) -> SemenBatch:
+    """
+    Resolve a number the platform has never seen against unnumbered stock the Mait holds.
+
+    Straws issued as "25 MURRAH" arrive with no numbers — the depot hands over a bundle and
+    the number that matters is the one printed on whichever straw is used. So the first time
+    a Mait names one, it claims a placeholder from their balance and becomes that straw.
+
+    Uniqueness is unaffected: the number is written onto a row the Mait already holds, and
+    the unique constraint still means one number can serve exactly one animal.
+    """
+    available = SemenBatch.objects.filter(
+        id__in=list(
+            MaitInventory.objects.filter(
+                mait=mait, product_type=ProductType.STRAW, qty_available__gt=0
+            ).values_list("product_ref_id", flat=True)
+        ),
+        is_unnumbered=True,
+        is_consumed=False,
+    )
+    if breed:
+        available = available.filter(breed=breed.strip().upper())
+
+    candidate = available.order_by("id").first()
+    if candidate is None:
+        raise InsufficientStock(
+            f"Straw {straw_unique_no} is not in your current stock. Raise a new indent."
+        )
+
+    # Ambiguous only when the Mait is carrying more than one breed of unnumbered stock: the
+    # number alone cannot say which bundle it came out of, and guessing would record the
+    # wrong bull against the animal.
+    if not breed and available.values("breed").distinct().count() > 1:
+        raise BreedRequired(f"Straw {straw_unique_no} is not on record yet. Say which breed it is.")
+
+    if not claim:
+        return candidate
+
+    candidate.unique_straw_no = straw_unique_no
+    candidate.is_unnumbered = False
+    try:
+        with transaction.atomic():
+            candidate.save(update_fields=["unique_straw_no", "is_unnumbered", "updated_at"])
+    except IntegrityError:
+        # Another event claimed this number between the lookup and here. The number is taken;
+        # this Mait's placeholder is untouched and still theirs to name something else.
+        raise StrawAlreadyConsumed(
+            f"Straw {straw_unique_no} has already been recorded against another AI event."
+        ) from None
+
+    logger.info(
+        "Unnumbered straw claimed",
+        extra={"mait_id": mait.id, "straw_id": candidate.id, "breed": candidate.breed},
+    )
+    return candidate
+
+
+def get_straw_for_mait(
+    mait, straw_unique_no: str, *, breed: str | None = None, claim: bool = False
+) -> SemenBatch:
     """
     Resolve a scanned straw number and confirm this Mait may use it (SRS §6.3 step 4).
 
     Two distinct rejections, because the field user needs to know which one it is: "not in
     your stock" means raise an indent, "already used" means a data problem worth reporting.
+
+    A number the platform has never seen is not automatically a mistake — stock issued as a
+    quantity of a breed carries no numbers until a Mait reads one off a straw. ``claim``
+    decides whether that naming is written: the validation endpoint previews without claiming,
+    and the event that actually uses the straw claims inside its own transaction.
     """
     try:
         straw = SemenBatch.objects.get(unique_straw_no=straw_unique_no)
     except SemenBatch.DoesNotExist:
-        raise InsufficientStock(
-            f"Straw {straw_unique_no} is not recognised. Check the number and try again."
-        ) from None
+        return _claim_unnumbered(mait, straw_unique_no, breed, claim)
 
     if straw.is_consumed:
         raise StrawAlreadyConsumed(

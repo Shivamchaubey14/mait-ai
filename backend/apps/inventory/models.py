@@ -37,6 +37,13 @@ class SemenBatch(TimeStampedModel):
         db_index=True,
         help_text="Set when an AI event completes against this straw. Never reset.",
     )
+    is_unnumbered = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Issued as a quantity of a breed rather than by number, so this row is a "
+        "placeholder carrying a generated number. The Mait supplies the real one at the AI "
+        "step, which claims this row and clears the flag (SRS §6.3 step 4).",
+    )
 
     class Meta:
         db_table = "semen_batch"
@@ -69,6 +76,13 @@ class Consumable(TimeStampedModel):
         max_length=12, choices=Category.choices, default=Category.CONSUMABLE, db_index=True
     )
     unit = models.CharField(max_length=20, default="piece")
+    rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Cost of one unit, in rupees. Zero means not priced — the catalogue is "
+        "maintained by hand and a rate nobody has entered yet must not read as free.",
+    )
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
 
