@@ -15,6 +15,8 @@
 
   const ui = MaitAI.ui;
 
+  const state = { ranked: [], leader: 0 };
+
   function cashShare(entry) {
     const total = Number(entry.amount_collected) || 0;
     if (!total) {
@@ -53,6 +55,57 @@
     );
   }
 
+  /**
+   * Ranks are worked out before filtering, and carried on the row.
+   *
+   * A Mait searched for is still fourth in the district — renumbering the visible rows would
+   * make every search result look like a winner.
+   */
+  function ranked(results) {
+    return results.map(function (entry, index) {
+      return { entry: entry, rank: index };
+    });
+  }
+
+  function matching(rows) {
+    const term = ($('#search').val() || '').trim().toLowerCase();
+    if (!term) {
+      return rows;
+    }
+    return rows.filter(function (item) {
+      return (
+        String(item.entry.name || '')
+          .toLowerCase()
+          .indexOf(term) >= 0 ||
+        String(item.entry.sahayak_vendor_code || '')
+          .toLowerCase()
+          .indexOf(term) >= 0
+      );
+    });
+  }
+
+  function render() {
+    const shown = matching(state.ranked);
+
+    ui.rows(
+      $('#rows'),
+      shown,
+      function (item) {
+        return row(item.entry, item.rank, state.leader);
+      },
+      state.ranked.length
+        ? 'No Mait matches that search.'
+        : 'No AI events were recorded in this period.',
+      5
+    );
+
+    $('#foot').text(
+      state.ranked.length
+        ? 'Bars are relative to the leading Mait. Yellow marks anyone below half of them.'
+        : ''
+    );
+  }
+
   function load(days) {
     MaitAI.shell.clearAlert();
     $('#period-label').text('Last ' + days + ' days');
@@ -61,23 +114,9 @@
       .maitPerformance({ days: days })
       .done(function (data) {
         const results = data.results || [];
-        const leader = results.length ? results[0].ai_count : 0;
-
-        ui.rows(
-          $('#rows'),
-          results,
-          function (entry, index) {
-            return row(entry, index, leader);
-          },
-          'No AI events were recorded in this period.',
-          5
-        );
-
-        $('#foot').text(
-          results.length
-            ? 'Bars are relative to the leading Mait. Yellow marks anyone below half of them.'
-            : ''
-        );
+        state.leader = results.length ? results[0].ai_count : 0;
+        state.ranked = ranked(results);
+        render();
       })
       .fail(function (problem) {
         MaitAI.shell.alert(problem.detail);
@@ -95,5 +134,9 @@
     $('#period').on('change', function () {
       load(Number($(this).val()));
     });
+
+    // Filtered on the rows already fetched: the roster is a few hundred at most, and the
+    // ranking has to be worked out across all of them anyway.
+    $('#search').on('input', render);
   });
 })(window.MaitAI, jQuery);

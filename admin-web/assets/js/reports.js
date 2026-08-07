@@ -32,6 +32,7 @@
     const to = $('#date-to').val();
     const mpp = $('#filter-mpp').val();
     const status = $('#filter-status').val();
+    const search = ($('#search').val() || '').trim();
 
     if (from) {
       params.date_from = from;
@@ -44,6 +45,9 @@
     }
     if (status) {
       params.status = status;
+    }
+    if (search) {
+      params.search = search;
     }
     return params;
   }

@@ -63,13 +63,40 @@
     );
   }
 
+  /**
+   * Searched on the server, not in the browser.
+   *
+   * The account list is paged, so filtering what happened to arrive would hide matches on
+   * every page but the one being looked at.
+   */
+  function query() {
+    const params = { limit: LIMIT, offset: state.offset };
+    const search = ($('#search').val() || '').trim();
+    const role = $('#filter-role').val();
+    if (search) {
+      params.search = search;
+    }
+    if (role) {
+      params.role = role;
+    }
+    return params;
+  }
+
   function load() {
     MaitAI.shell.clearAlert();
     MaitAI.api
-      .users({ limit: LIMIT, offset: state.offset })
+      .users(query())
       .done(function (page) {
         $('#user-count').text(ui.number(page.count));
-        ui.rows($('#rows'), page.results, row, 'No portal accounts yet.', 6);
+        ui.rows(
+          $('#rows'),
+          page.results,
+          row,
+          ($('#search').val() || '').trim() || $('#filter-role').val()
+            ? 'No account matches those filters.'
+            : 'No portal accounts yet.',
+          6
+        );
         ui.pager(
           $('#pager'),
           { count: page.count, limit: LIMIT, offset: state.offset },
@@ -91,6 +118,21 @@
     }
     MaitAI.shell.mount();
     load();
+
+    // Debounced: every keystroke is a round trip otherwise, and the list is paged.
+    let debounce = null;
+    $('#search').on('input', function () {
+      window.clearTimeout(debounce);
+      debounce = window.setTimeout(function () {
+        state.offset = 0;
+        load();
+      }, 350);
+    });
+
+    $('#filter-role').on('change', function () {
+      state.offset = 0;
+      load();
+    });
 
     $('#create').on('click', function () {
       $('#create-panel').prop('hidden', false);

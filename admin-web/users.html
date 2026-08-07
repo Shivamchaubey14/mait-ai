@@ -25,6 +25,22 @@
 
         <div id="alert-region" role="alert" aria-live="polite"></div>
 
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search by username, name or mobile"
+            aria-label="Search by username, name or mobile"
+          />
+          <select class="select" id="filter-role" aria-label="Role">
+            <option value="">Role: all</option>
+            <option value="super_admin">Super admin</option>
+            <option value="admin">Admin</option>
+            <option value="mait">Mait</option>
+          </select>
+        </section>
+
         <!-- SRS §9.10. Hidden behind a dialog until asked for: this screen is read far more
              often than it is written to. -->
         <section class="panel" id="create-panel" hidden aria-label="Create an office account">

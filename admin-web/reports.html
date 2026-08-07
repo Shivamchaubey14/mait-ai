@@ -57,6 +57,20 @@
             </div>
 
             <div class="field">
+              <label class="field__label" for="search">Search</label>
+              <input
+                class="input field__control"
+                id="search"
+                type="search"
+                placeholder="Farmer, Mait, village or straw number"
+              />
+              <!-- Carried into the export as well as the preview: a report is defined by the
+                   filters that produced it, and a search left out of the download would make
+                   the file disagree with the screen it was taken from. -->
+              <p class="field__hint">Narrows the preview and the download alike</p>
+            </div>
+
+            <div class="field">
               <label class="field__label" for="filter-status">Status</label>
               <select class="select field__control" id="filter-status">
                 <option value="">All statuses</option>

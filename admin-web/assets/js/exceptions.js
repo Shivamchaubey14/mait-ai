@@ -23,13 +23,47 @@
     'stale-indents': 'stale_indents',
   };
 
+  const state = { queues: {} };
+
+  /**
+   * Searched across every queue at once.
+   *
+   * Triage starts from a name or a number — a Mait who rang in, an event someone is asking
+   * about — and which of the four queues it landed in is the thing being looked up, not
+   * something already known.
+   */
+  function matching(rows) {
+    const term = ($('#search').val() || '').trim().toLowerCase();
+    if (!term) {
+      return rows;
+    }
+    return rows.filter(function (row) {
+      return (
+        String(row.label || '')
+          .toLowerCase()
+          .indexOf(term) >= 0 ||
+        String(row.meta || '')
+          .toLowerCase()
+          .indexOf(term) >= 0
+      );
+    });
+  }
+
   function renderQueue(name, queue) {
-    const rows = queue.rows || [];
-    $('[data-count="' + name + '"]').text(ui.number(queue.count || 0));
+    const searching = !!($('#search').val() || '').trim();
+    const all = queue.rows || [];
+    const rows = matching(all);
+    $('[data-count="' + name + '"]').text(
+      searching ? rows.length + ' of ' + ui.number(queue.count || 0) : ui.number(queue.count || 0)
+    );
 
     if (!rows.length) {
       // Named rather than blank: an empty queue is good news and should read as good news.
-      $('[data-rows="' + name + '"]').html('<p class="exception__meta">Nothing waiting.</p>');
+      $('[data-rows="' + name + '"]').html(
+        '<p class="exception__meta">' +
+          (searching && all.length ? 'Nothing here matches.' : 'Nothing waiting.') +
+          '</p>'
+      );
       return;
     }
 
@@ -50,7 +84,9 @@
       })
       .join('');
 
-    const remaining = (queue.count || 0) - rows.length;
+    // Only meaningful against the full queue. While searching, "N more" would be counting
+    // rows that were never on this page to begin with.
+    const remaining = searching ? 0 : (queue.count || 0) - all.length;
     $('[data-rows="' + name + '"]').html(
       html +
         (remaining > 0
@@ -69,8 +105,10 @@
         const exceptions = data.exceptions || {};
         let total = 0;
 
+        state.queues = {};
         QUEUES.forEach(function (name) {
           const queue = exceptions[KEY[name]] || {};
+          state.queues[name] = queue;
           total += queue.count || 0;
           renderQueue(name, queue);
         });
@@ -89,5 +127,13 @@
     MaitAI.shell.mount();
     load();
     $('#refresh').on('click', load);
+
+    // Filtered on the sample already fetched. Each queue ships a bounded sample rather than
+    // the whole thing, so the counts keep saying how deep the queue really is.
+    $('#search').on('input', function () {
+      QUEUES.forEach(function (name) {
+        renderQueue(name, state.queues[name] || {});
+      });
+    });
   });
 })(window.MaitAI, jQuery);
