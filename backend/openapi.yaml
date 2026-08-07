@@ -6,6 +6,228 @@ info:
     Producer Company. Serves the Mait mobile app, the admin web portal and the Indent
     Easy integration.
 paths:
+  /api/v1/admin/breeds/:
+    get:
+      operationId: admin_breeds_list
+      description: |-
+        Maintain the semen list — the breeds a Mait can be issued and can ask for.
+
+        The straw half of the catalogue. Straws themselves are not rows an admin types: they
+        arrive by being issued against an indent, either by number or as a bundle of one of these
+        breeds. What is maintained here is the list itself, its labels in both languages, and the
+        rate per straw.
+
+        Full CRUD, with one guard on delete: a breed already carried by an animal, a straw or an
+        indent cannot be removed, because all three reference it by code and none of them keeps a
+        copy of the name. Retiring takes it off the app and leaves those records legible.
+      parameters:
+      - in: query
+        name: animal_type
+        schema:
+          type: string
+          enum:
+          - BUFF
+          - COW
+        description: |-
+          * `COW` - Cow
+          * `BUFF` - Buffalo
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      tags:
+      - animals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BreedConfigWrite'
+          description: ''
+    post:
+      operationId: admin_breeds_create
+      description: |-
+        Maintain the semen list — the breeds a Mait can be issued and can ask for.
+
+        The straw half of the catalogue. Straws themselves are not rows an admin types: they
+        arrive by being issued against an indent, either by number or as a bundle of one of these
+        breeds. What is maintained here is the list itself, its labels in both languages, and the
+        rate per straw.
+
+        Full CRUD, with one guard on delete: a breed already carried by an animal, a straw or an
+        indent cannot be removed, because all three reference it by code and none of them keeps a
+        copy of the name. Retiring takes it off the app and leaves those records legible.
+      tags:
+      - animals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreedConfigWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BreedConfigWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BreedConfigWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreedConfigWrite'
+          description: ''
+  /api/v1/admin/breeds/{id}/:
+    get:
+      operationId: admin_breeds_retrieve
+      description: |-
+        Maintain the semen list — the breeds a Mait can be issued and can ask for.
+
+        The straw half of the catalogue. Straws themselves are not rows an admin types: they
+        arrive by being issued against an indent, either by number or as a bundle of one of these
+        breeds. What is maintained here is the list itself, its labels in both languages, and the
+        rate per straw.
+
+        Full CRUD, with one guard on delete: a breed already carried by an animal, a straw or an
+        indent cannot be removed, because all three reference it by code and none of them keeps a
+        copy of the name. Retiring takes it off the app and leaves those records legible.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this breed config.
+        required: true
+      tags:
+      - animals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreedConfigWrite'
+          description: ''
+    put:
+      operationId: admin_breeds_update
+      description: |-
+        Maintain the semen list — the breeds a Mait can be issued and can ask for.
+
+        The straw half of the catalogue. Straws themselves are not rows an admin types: they
+        arrive by being issued against an indent, either by number or as a bundle of one of these
+        breeds. What is maintained here is the list itself, its labels in both languages, and the
+        rate per straw.
+
+        Full CRUD, with one guard on delete: a breed already carried by an animal, a straw or an
+        indent cannot be removed, because all three reference it by code and none of them keeps a
+        copy of the name. Retiring takes it off the app and leaves those records legible.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this breed config.
+        required: true
+      tags:
+      - animals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreedConfigWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BreedConfigWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BreedConfigWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreedConfigWrite'
+          description: ''
+    patch:
+      operationId: admin_breeds_partial_update
+      description: |-
+        Maintain the semen list — the breeds a Mait can be issued and can ask for.
+
+        The straw half of the catalogue. Straws themselves are not rows an admin types: they
+        arrive by being issued against an indent, either by number or as a bundle of one of these
+        breeds. What is maintained here is the list itself, its labels in both languages, and the
+        rate per straw.
+
+        Full CRUD, with one guard on delete: a breed already carried by an animal, a straw or an
+        indent cannot be removed, because all three reference it by code and none of them keeps a
+        copy of the name. Retiring takes it off the app and leaves those records legible.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this breed config.
+        required: true
+      tags:
+      - animals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBreedConfigWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBreedConfigWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBreedConfigWriteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreedConfigWrite'
+          description: ''
+    delete:
+      operationId: admin_breeds_destroy
+      description: |-
+        Maintain the semen list — the breeds a Mait can be issued and can ask for.
+
+        The straw half of the catalogue. Straws themselves are not rows an admin types: they
+        arrive by being issued against an indent, either by number or as a bundle of one of these
+        breeds. What is maintained here is the list itself, its labels in both languages, and the
+        rate per straw.
+
+        Full CRUD, with one guard on delete: a breed already carried by an animal, a straw or an
+        indent cannot be removed, because all three reference it by code and none of them keeps a
+        copy of the name. Retiring takes it off the app and leaves those records legible.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this breed config.
+        required: true
+      tags:
+      - animals
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/admin/inventory/:
     get:
       operationId: admin_inventory_retrieve
@@ -26,6 +248,234 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/admin/inventory/{mait_id}/:
+    get:
+      operationId: admin_inventory_retrieve_2
+      description: |-
+        The same breakdown the Mait sees in the app — straws by breed, consumables and equipment — for whichever Mait is being looked at.
+
+        The oversight list carries straw counts only, because that is what decides whether someone can work. This is the rest of the answer, for the moment an admin has a Mait on the phone.
+      summary: One Mait's stock, for the admin
+      parameters:
+      - in: path
+        name: mait_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventorySummary'
+          description: ''
+  /api/v1/admin/products/:
+    get:
+      operationId: admin_products_list
+      description: |-
+        Maintain the catalogue a Mait can ask for (SRS §6.6.1).
+
+        Straws are absent by design — they are requested by breed, and the breed list is its own
+        config. This is everything else: sheaths, gloves, liquid nitrogen, AI guns.
+
+        Full CRUD, with one guard on delete: a product an indent or a stock row already points at
+        cannot be removed, because those references carry no copy of the name and would be left
+        reading as a quantity of something. Retiring takes it off the app and keeps the history
+        legible. Deleting stays available for what it is actually for — a row added by mistake.
+      summary: List catalogue products
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedConsumableWriteList'
+          description: ''
+    post:
+      operationId: admin_products_create
+      description: '`code` is set once here and never edited — indents key on it.'
+      summary: Add a catalogue product
+      tags:
+      - inventory
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsumableWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConsumableWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConsumableWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsumableWrite'
+          description: ''
+  /api/v1/admin/products/{id}/:
+    get:
+      operationId: admin_products_retrieve
+      description: |-
+        Maintain the catalogue a Mait can ask for (SRS §6.6.1).
+
+        Straws are absent by design — they are requested by breed, and the breed list is its own
+        config. This is everything else: sheaths, gloves, liquid nitrogen, AI guns.
+
+        Full CRUD, with one guard on delete: a product an indent or a stock row already points at
+        cannot be removed, because those references carry no copy of the name and would be left
+        reading as a quantity of something. Retiring takes it off the app and keeps the history
+        legible. Deleting stays available for what it is actually for — a row added by mistake.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this consumable.
+        required: true
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsumableWrite'
+          description: ''
+    put:
+      operationId: admin_products_update
+      description: |-
+        Maintain the catalogue a Mait can ask for (SRS §6.6.1).
+
+        Straws are absent by design — they are requested by breed, and the breed list is its own
+        config. This is everything else: sheaths, gloves, liquid nitrogen, AI guns.
+
+        Full CRUD, with one guard on delete: a product an indent or a stock row already points at
+        cannot be removed, because those references carry no copy of the name and would be left
+        reading as a quantity of something. Retiring takes it off the app and keeps the history
+        legible. Deleting stays available for what it is actually for — a row added by mistake.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this consumable.
+        required: true
+      tags:
+      - inventory
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsumableWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConsumableWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConsumableWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsumableWrite'
+          description: ''
+    patch:
+      operationId: admin_products_partial_update
+      description: Name, unit, rate, ordering and active state. `code` is ignored.
+      summary: Edit a catalogue product
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this consumable.
+        required: true
+      tags:
+      - inventory
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedConsumableWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedConsumableWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedConsumableWriteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsumableWrite'
+          description: ''
+    delete:
+      operationId: admin_products_destroy
+      description: Only for a row added by mistake. A product already on an indent
+        or in a Mait's stock answers `409 record-in-use` — retire it instead, which
+        takes it off the request form and leaves those records still naming it.
+      summary: Delete a catalogue product
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this consumable.
+        required: true
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/admin/uploads/:
     get:
       operationId: admin_uploads_list
@@ -70,6 +520,7 @@ paths:
         schema:
           type: string
           enum:
+          - assignment
           - mait
           - member
           - mpp
@@ -77,6 +528,7 @@ paths:
           * `member` - Member Master
           * `mait` - Mait / Vendor Master
           * `mpp` - MPP / Sahayak Master
+          * `assignment` - Mait ↔ MPP assignment
       tags:
       - master-data
       security:
@@ -163,6 +615,7 @@ paths:
         schema:
           type: string
           enum:
+          - assignment
           - mait
           - member
           - mpp
@@ -170,6 +623,7 @@ paths:
           * `member` - Member Master
           * `mait` - Mait / Vendor Master
           * `mpp` - MPP / Sahayak Master
+          * `assignment` - Mait ↔ MPP assignment
       tags:
       - master-data
       security:
@@ -180,6 +634,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedUploadErrorRowList'
+          description: ''
+  /api/v1/admin/uploads/assignment-template/:
+    get:
+      operationId: admin_uploads_assignment_template_retrieve
+      description: |-
+        Every MPP, one per row, with whichever Mait currently covers it — so an admin edits what is there instead of composing a file and guessing at the headers.
+
+        Unassigned MPPs are included with the Sahayak columns blank: they are the rows most likely to need filling, and a template that omitted them would hide the work.
+      summary: Download the assignment sheet, already filled in
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/admin/uploads/assignments/:
+    post:
+      operationId: admin_uploads_assignments_create
+      description: |-
+        The round-trip workbook from `assignment-template`, edited and sent back.
+
+        Only the assignment moves. MPPs are never created here — they come from SAP, and an unknown code is reported as a bad row rather than quietly brought into existence. A Mait may be created when the row names them, since a new Sahayak has to start somewhere. A blank Sahayak column unassigns the MPP.
+
+        Partial success, like every other upload: good rows commit, bad rows come back with their spreadsheet row number.
+      summary: Upload the Mait ↔ MPP assignment sheet
+      tags:
+      - master-data
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MasterUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataUploadLog'
           description: ''
   /api/v1/admin/uploads/maits/:
     post:
@@ -320,8 +824,8 @@ paths:
     post:
       operationId: admin_users_create
       description: Maits are not created here. They are activated from an existing
-        SAP Sahayak record via `/admin/users/activate-mait/`, so every field login
-        traces back to a real Sahayak.
+        Mait record via `/admin/users/activate-mait/`, so every field login traces
+        back to a real one.
       summary: Create an office account
       tags:
       - auth
@@ -405,9 +909,9 @@ paths:
     post:
       operationId: admin_users_activate_mait_create
       description: |-
-        Gives an existing SAP Sahayak record a login and sets the mobile number their OTP will be sent to.
+        Gives an existing Mait record a login and sets the mobile number their OTP will be sent to.
 
-        The number is set here because 2,886 of 3,110 Sahayak records arrive from SAP without one, and OTP is a Mait's only way in. No password is created — that is what keeps OTP the sole route into a field account.
+        The number is set here because SAP records routinely arrive without one, and OTP is a Mait's only way in. No password is created — that is what keeps OTP the sole route into a field account.
       summary: Activate a Mait
       tags:
       - auth
@@ -436,11 +940,13 @@ paths:
     get:
       operationId: admin_users_maits_retrieve
       description: |-
-        Every Sahayak from the SAP master, activated or not — the list the admin portal's Maits screen works from.
+        Every Mait on the current roster, activated or not — the list the admin portal's Maits screen works from.
 
-        Separate from `/admin/users/` because most of the roster has no login: 93% arrive from SAP with no mobile number, and a user-only list would show a handful of activated Maits and silently omit everyone still waiting.
+        Separate from `/admin/users/` because much of the roster has no login yet, and a user-only list would show the handful already activated and silently omit everyone still waiting.
 
         Filter with `?needs_mobile=true`, `?activated=false`, `?mpp=<code>` or `?search=<name or code>`.
+
+        Retired records are excluded unless `?include_retired=true`. Those are the pseudo-Maits the MPP master used to mint from its Sahayak column, kept so old AI events still name somebody (SRS §18.2).
       summary: The Mait roster
       tags:
       - auth
@@ -454,12 +960,51 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/admin/users/maits/{vendor_code}/:
+    patch:
+      operationId: admin_users_maits_partial_update
+      description: |-
+        Mobile and MPP coverage together, because they are corrected together — an operator on the phone to a Sahayak fixes both in one conversation.
+
+        `mpp_codes` is the complete set this Mait covers, not an addition: MPPs missing from it are unassigned. Every field is optional and absence leaves it alone.
+
+        The assignment is what scopes a Mait's whole app, so this moves MPPs and their members between Maits (SRS §6.2.2–6.2.3).
+      summary: Correct one Mait's number or coverage
+      parameters:
+      - in: path
+        name: vendor_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMaitUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMaitUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMaitUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/admin/users/pending-maits/:
     get:
       operationId: admin_users_pending_maits_retrieve
-      description: Sahayak records with no login yet, so an admin can work through
-        them. `needs_mobile` flags the ones whose SAP record has no number — those
-        cannot receive an OTP until one is supplied at activation.
+      description: Maits with no login yet, so an admin can work through them. `needs_mobile`
+        flags the ones whose SAP record has no number — those cannot receive an OTP
+        until one is supplied at activation.
       summary: Maits awaiting activation
       tags:
       - auth
@@ -1366,6 +1911,128 @@ paths:
               schema:
                 $ref: '#/components/schemas/Indent'
           description: ''
+  /api/v1/indents/{id}/approve/:
+    post:
+      operationId: indents_approve_create
+      description: Agrees to the request. Moves no stock — that is `issue`.
+      summary: Approve an indent
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this indent request.
+        required: true
+      tags:
+      - indents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Indent'
+          description: ''
+  /api/v1/indents/{id}/confirm-collection/:
+    post:
+      operationId: indents_confirm_collection_create
+      description: The Mait acknowledges that issued stock reached them. Moves no
+        stock — the balance rose when it was issued — and is the only step in the
+        chain the Mait owns. Allowed once, on an issued indent.
+      summary: Confirm collection
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this indent request.
+        required: true
+      tags:
+      - indents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Indent'
+          description: ''
+  /api/v1/indents/{id}/issue/:
+    post:
+      operationId: indents_issue_create
+      description: |-
+        Credits the stock to the Mait and closes the indent.
+
+        Straw requests take `straw_numbers` — the number printed on each straw handed over — and never a bare quantity: the app scans a straw against the Mait's stock, so a count with no numbers behind it credits a balance nothing can be scanned against. Consumable requests take `qty`.
+
+        Issuing fewer than were requested is allowed and closes the indent; the remainder needs a fresh request.
+      summary: Issue an approved indent
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this indent request.
+        required: true
+      tags:
+      - indents
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndentIssueRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IndentIssueRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IndentIssueRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Indent'
+          description: ''
+  /api/v1/indents/{id}/reject/:
+    post:
+      operationId: indents_reject_create
+      description: Declines the request. The reason is stored on the indent, where
+        the Mait can read it, rather than only in the audit log.
+      summary: Reject an indent
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this indent request.
+        required: true
+      tags:
+      - indents
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndentRejectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IndentRejectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IndentRejectRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Indent'
+          description: ''
   /api/v1/mait/inventory/:
     get:
       operationId: mait_inventory_retrieve
@@ -1972,6 +2639,12 @@ components:
         straw_unique_no:
           type: string
           maxLength: 30
+        semen_breed:
+          type: string
+          description: Breed of the straw used. Needed only when the number is not
+            on record yet and the Mait is carrying unnumbered stock in more than one
+            breed — the number alone cannot say which bundle it came from.
+          maxLength: 30
       required:
       - animal_id
       - client_uuid
@@ -2249,6 +2922,14 @@ components:
           allOf:
           - $ref: '#/components/schemas/AnimalTypeEnum'
           readOnly: true
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Cost of one straw of this breed, in rupees. Zero means not
+            priced — the list is maintained by hand and a rate nobody has entered
+            must not read as free.
         display_order:
           type: integer
           readOnly: true
@@ -2258,6 +2939,89 @@ components:
       - display_order
       - name
       - name_hi
+      - rate
+    BreedConfigWrite:
+      type: object
+      description: |-
+        The admin's edit shape for the semen list (SRS §6.3 step 3, §6.6.1).
+
+        ``code`` and ``animal_type`` are set once together: they are the pair every straw, indent
+        and stock row keys on, and changing either would orphan the lot. Everything a Mait reads
+        — both labels, the rate, the ordering — stays editable.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          maxLength: 30
+        name:
+          type: string
+          maxLength: 60
+        name_hi:
+          type: string
+          description: Devanagari label for the Hindi toggle.
+          maxLength: 60
+        animal_type:
+          $ref: '#/components/schemas/AnimalTypeEnum'
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Cost of one straw of this breed, in rupees. Zero means not
+            priced — the list is maintained by hand and a rate nobody has entered
+            must not read as free.
+        display_order:
+          type: integer
+          maximum: 65535
+          minimum: 0
+        is_active:
+          type: boolean
+      required:
+      - animal_type
+      - code
+      - id
+      - name
+    BreedConfigWriteRequest:
+      type: object
+      description: |-
+        The admin's edit shape for the semen list (SRS §6.3 step 3, §6.6.1).
+
+        ``code`` and ``animal_type`` are set once together: they are the pair every straw, indent
+        and stock row keys on, and changing either would orphan the lot. Everything a Mait reads
+        — both labels, the rate, the ordering — stays editable.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 30
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        name_hi:
+          type: string
+          description: Devanagari label for the Hindi toggle.
+          maxLength: 60
+        animal_type:
+          $ref: '#/components/schemas/AnimalTypeEnum'
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Cost of one straw of this breed, in rupees. Zero means not
+            priced — the list is maintained by hand and a rate nobody has entered
+            must not read as free.
+        display_order:
+          type: integer
+          maximum: 65535
+          minimum: 0
+        is_active:
+          type: boolean
+      required:
+      - animal_type
+      - code
+      - name
     CategoryEnum:
       enum:
       - consumable
@@ -2289,6 +3053,14 @@ components:
         unit:
           type: string
           readOnly: true
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Cost of one unit, in rupees. Zero means not priced — the catalogue
+            is maintained by hand and a rate nobody has entered yet must not read
+            as free.
         display_order:
           type: integer
           readOnly: true
@@ -2299,7 +3071,87 @@ components:
       - display_order
       - id
       - name
+      - rate
       - unit
+    ConsumableWrite:
+      type: object
+      description: |-
+        The admin's edit shape for the catalogue (SRS §6.6.1).
+
+        ``code`` is what indents, uploads and the app all key on, so it is set once at creation
+        and never edited: renaming it would orphan every indent already raised against it. The
+        display name is the editable one — that is what the wording on both screens comes from.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          maxLength: 30
+        name:
+          type: string
+          maxLength: 100
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        unit:
+          type: string
+          maxLength: 20
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Cost of one unit, in rupees. Zero means not priced — the catalogue
+            is maintained by hand and a rate nobody has entered yet must not read
+            as free.
+        display_order:
+          type: integer
+          maximum: 65535
+          minimum: 0
+        is_active:
+          type: boolean
+      required:
+      - code
+      - id
+      - name
+    ConsumableWriteRequest:
+      type: object
+      description: |-
+        The admin's edit shape for the catalogue (SRS §6.6.1).
+
+        ``code`` is what indents, uploads and the app all key on, so it is set once at creation
+        and never edited: renaming it would orphan every indent already raised against it. The
+        display name is the editable one — that is what the wording on both screens comes from.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 30
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 20
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Cost of one unit, in rupees. Zero means not priced — the catalogue
+            is maintained by hand and a rate nobody has entered yet must not read
+            as free.
+        display_order:
+          type: integer
+          maximum: 65535
+          minimum: 0
+        is_active:
+          type: boolean
+      required:
+      - code
+      - name
     CurrentUser:
       type: object
       description: |-
@@ -2499,7 +3351,16 @@ components:
           description: For straw requests (SRS §6.6.1).
         item:
           type: string
-          description: What was asked for, in the words the admin screen shows.
+          description: |-
+            What was asked for, in the words the Mait used when asking.
+
+            Named, not categorised. "1 × Consumable" tells nobody whether the sheaths or the
+            gloves are coming, and both the app and the admin screen show this string as the
+            whole description of the request.
+
+            The code fallback covers indents raised before the app started sending
+            ``product_ref_id``: it used to put the product code in ``note`` instead, so those rows
+            can still be named rather than being stuck reading "Consumable" forever.
           readOnly: true
         qty_requested:
           type: integer
@@ -2541,6 +3402,15 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        received_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the Mait confirmed they collected it. This is where stock
+            is credited — between issue and collection the goods are at the depot,
+            not in the Mait's flask, and a balance that says otherwise would let them
+            start an AI they cannot finish.
         note:
           type: string
           readOnly: true
@@ -2558,6 +3428,7 @@ components:
       - product_type
       - qty_issued
       - qty_requested
+      - received_at
       - requested_at
       - status
       - status_display
@@ -2591,6 +3462,37 @@ components:
       required:
       - product_type
       - qty_requested
+    IndentIssueRequest:
+      type: object
+      description: |-
+        What an admin is handing over.
+
+        Either shape works for straws. Numbers, when the depot slip lists them, and the record
+        names exactly which straws moved. Or a bare quantity, when it does not: a bundle of a
+        breed is handed over and the number that matters is the one printed on whichever straw
+        gets used, which the Mait reads off at the AI step.
+      properties:
+        straw_numbers:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 30
+          description: One per straw handed over. Optional — omit to issue by quantity
+            instead.
+        qty:
+          type: integer
+          minimum: 1
+          description: Units handed over. Defaults to the full request. Ignored when
+            `straw_numbers` is given, since the list already says how many.
+    IndentRejectRequest:
+      type: object
+      description: A reason is optional to the API and asked for in the portal — the
+        Mait reads it.
+      properties:
+        reason:
+          type: string
+          maxLength: 200
     IndentStatusEnum:
       enum:
       - requested
@@ -2603,6 +3505,39 @@ components:
         * `approved` - Approved
         * `issued` - Issued
         * `rejected` - Rejected
+    InventorySummary:
+      type: object
+      description: |-
+        What the app actually gates on (SRS §6.4.1).
+
+        ``total_straws`` is the number that decides whether a Mait can start another AI at all,
+        so it is returned as a single figure rather than left to the client to add up — a client
+        that sums a paginated list will eventually sum the wrong page.
+      properties:
+        total_straws:
+          type: integer
+        is_low_stock:
+          type: boolean
+        by_breed:
+          type: object
+          additionalProperties:
+            type: integer
+        consumables:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        assets:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - assets
+      - by_breed
+      - consumables
+      - is_low_stock
+      - total_straws
     LedgerEntry:
       type: object
       description: A movement in the immutable stock ledger (SRS §9.5).
@@ -2705,6 +3640,12 @@ components:
         mait_activated:
           type: boolean
           readOnly: true
+        sahayak_name:
+          type: string
+          readOnly: true
+        sahayak_mobile_no:
+          type: string
+          readOnly: true
         member_count:
           type: integer
           readOnly: true
@@ -2758,6 +3699,8 @@ components:
       - panchayat_code
       - plant_code
       - plant_name
+      - sahayak_mobile_no
+      - sahayak_name
       - start_date
       - state_code
       - tehsil_code
@@ -2793,8 +3736,9 @@ components:
           type: integer
           readOnly: true
           nullable: true
-          description: Assigned Sahayak/Mait. Admin can override the SAP default (SRS
-            §6.2.2).
+          description: The Mait covering this MPP (SRS §6.2.2). Set from the assignment
+            sheet, never from the SAP master — the master's Sahayak column is a different
+            person.
         mait_name:
           type: string
           readOnly: true
@@ -2803,6 +3747,12 @@ components:
           readOnly: true
         mait_activated:
           type: boolean
+          readOnly: true
+        sahayak_name:
+          type: string
+          readOnly: true
+        sahayak_mobile_no:
+          type: string
           readOnly: true
         member_count:
           type: integer
@@ -2820,6 +3770,8 @@ components:
       - mobile_no
       - mpp_code
       - mpp_name
+      - sahayak_mobile_no
+      - sahayak_name
       - tehsil_code
       - village_code
     Mait:
@@ -3320,6 +4272,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AdminUser'
+    PaginatedConsumableWriteList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsumableWrite'
     PaginatedDataUploadLogList:
       type: object
       required:
@@ -3567,6 +4542,78 @@ components:
           type: string
           nullable: true
           maxLength: 20
+    PatchedBreedConfigWriteRequest:
+      type: object
+      description: |-
+        The admin's edit shape for the semen list (SRS §6.3 step 3, §6.6.1).
+
+        ``code`` and ``animal_type`` are set once together: they are the pair every straw, indent
+        and stock row keys on, and changing either would orphan the lot. Everything a Mait reads
+        — both labels, the rate, the ordering — stays editable.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 30
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        name_hi:
+          type: string
+          description: Devanagari label for the Hindi toggle.
+          maxLength: 60
+        animal_type:
+          $ref: '#/components/schemas/AnimalTypeEnum'
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Cost of one straw of this breed, in rupees. Zero means not
+            priced — the list is maintained by hand and a rate nobody has entered
+            must not read as free.
+        display_order:
+          type: integer
+          maximum: 65535
+          minimum: 0
+        is_active:
+          type: boolean
+    PatchedConsumableWriteRequest:
+      type: object
+      description: |-
+        The admin's edit shape for the catalogue (SRS §6.6.1).
+
+        ``code`` is what indents, uploads and the app all key on, so it is set once at creation
+        and never edited: renaming it would orphan every indent already raised against it. The
+        display name is the editable one — that is what the wording on both screens comes from.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 30
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 20
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Cost of one unit, in rupees. Zero means not priced — the catalogue
+            is maintained by hand and a rate nobody has entered yet must not read
+            as free.
+        display_order:
+          type: integer
+          maximum: 65535
+          minimum: 0
+        is_active:
+          type: boolean
     PatchedMPPAssignmentRequest:
       type: object
       description: |-
@@ -3580,6 +4627,32 @@ components:
           nullable: true
           minLength: 1
           description: Null unassigns the MPP, leaving it visible to admins only.
+    PatchedMaitUpdateRequest:
+      type: object
+      description: |-
+        Correct one Mait's row from the assignment screen (SRS §6.2.2).
+
+        Mobile and MPP coverage together, because they are corrected together: an operator on the
+        phone to a Sahayak fixes the number they can be reached on and the villages they actually
+        cover in one conversation.
+
+        Every field is optional and absence means "leave alone" — a screen that sent the whole
+        object back would wipe whatever it had not loaded.
+      properties:
+        name:
+          type: string
+          maxLength: 150
+        mobile_no:
+          type: string
+          maxLength: 15
+        mpp_codes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 15
+          description: The complete set this Mait covers. An empty list clears their
+            coverage.
     PaymentSummary:
       type: object
       description: Just enough payment to read an AI event row without opening it.
@@ -3701,6 +4774,12 @@ components:
           nullable: true
         available_straws:
           type: integer
+        breed_choices:
+          type: array
+          items:
+            type: string
+          description: Breeds the Mait holds as unnumbered stock. Present when `reason`
+            is `breed_required`, so the app can ask instead of guessing.
       required:
       - available_straws
       - reason
@@ -3777,11 +4856,13 @@ components:
       - member
       - mait
       - mpp
+      - assignment
       type: string
       description: |-
         * `member` - Member Master
         * `mait` - Mait / Vendor Master
         * `mpp` - MPP / Sahayak Master
+        * `assignment` - Mait ↔ MPP assignment
   securitySchemes:
     jwtAuth:
       type: http

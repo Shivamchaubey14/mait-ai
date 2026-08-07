@@ -71,6 +71,20 @@ returns `429` with `Retry-After`.
 | GET | `/admin/uploads/` | List upload history with status | Admin |
 | GET | `/admin/uploads/{id}/` | Upload job detail incl. success/fail counts | Admin |
 | GET | `/admin/uploads/{id}/errors/` | Downloadable row-level error report | Admin |
+| GET | `/admin/uploads/assignment-template/` | Download the Mait ↔ MPP sheet, already filled in | Admin |
+| POST | `/admin/uploads/assignments/` | Upload the edited assignment sheet | Admin |
+
+**The assignment sheet is a round trip, not a form.** It is handed out already carrying every
+MPP and whoever covers it, so an admin edits the handful of rows that changed instead of
+retyping three thousand. It runs the same pipeline as the SAP masters — queued, polled for
+progress, partial success, row-level errors — and its headers are the ones the importer reads
+back, so a file downloaded and returned unedited is a no-op.
+
+Only the assignment moves. MPPs are never created here: they come from SAP, and an unknown
+code is reported as a bad row rather than quietly brought into existence. A Mait *may* be
+created when the row names them, since a new Sahayak has to start somewhere. A blank Sahayak
+column unassigns the MPP, and a blank mobile leaves the one on record alone — clearing it
+would lock a working Mait out of the app.
 
 ## 9.3 MPP, member & non-member
 
@@ -100,6 +114,22 @@ returns `429` with `Retry-After`.
 | GET | `/mait/inventory/` | Logged-in Mait's current stock balance by product | Mait |
 | GET | `/mait/inventory/ledger/` | Stock movement history (issues, consumption, returns) | Mait |
 | GET | `/admin/inventory/` | Stock across every Mait, with low/at-zero counts | Admin |
+| GET/POST | `/admin/products/` | The consumable & equipment catalogue | Admin |
+| GET/PATCH/DELETE | `/admin/products/{id}/` | Edit or remove one | Admin |
+| GET/POST | `/admin/breeds/` | The semen list — breeds, labels in both languages, rate | Admin |
+| GET/PATCH/DELETE | `/admin/breeds/{id}/` | Edit or remove one | Admin |
+
+**The catalogue is what names an indent.** A stock request is stored against a product id or
+a breed code, and neither reference keeps a copy of the name — so a request raised against
+something not on these lists reads as "25 × Consumable" everywhere it appears. Both carry a
+`rate` per unit, defaulting to `0` for "not priced yet" rather than free.
+
+`code` is set once on both and ignored on update; breeds are keyed by `(code, animal_type)`,
+so the same word can name a cow and a buffalo. **Delete is guarded, not disabled**: a row
+nothing points at is removed, and one already on an indent, a straw, an animal or a Mait's
+stock answers `409 record-in-use` and should be retired (`is_active: false`) instead — which
+takes it off the app while leaving the existing records legible. Individual straws are never
+created here; they arrive by being issued against an indent.
 
 ## 9.6 AI event
 
@@ -129,8 +159,53 @@ returns `429` with `Retry-After`.
 | POST | `/indents/` | Mait raises a stock indent (product, qty) | Mait |
 | GET | `/indents/` | List logged-in Mait's indents & status | Mait |
 | GET | `/indents/{id}/` | Indent detail | JWT |
+| POST | `/indents/{id}/approve/` | Back office agrees to the request. Moves no stock | Admin |
+| POST | `/indents/{id}/reject/` | Decline, with a reason the Mait can read | Admin |
+| POST | `/indents/{id}/issue/` | Record the handover and credit the stock | Admin |
+| POST | `/indents/{id}/confirm-collection/` | Mait acknowledges the stock reached them, and it becomes theirs | Mait |
 | POST | `/integrations/indent-easy/grn-callback/` | Webhook — Indent Easy notifies GRN/issue completion | HMAC API key |
 | GET | `/integrations/indent-easy/status/` | Integration health check | Admin |
+
+**Approve, reject and issue are the manual stand-in for the GRN callback**, added because
+that integration is not built (ROADMAP phase 5, days 20–22) and without them an indent raised
+in the app can never leave `requested`. They were deliberately absent from the original
+contract: an admin marking stock issued asserts a handover this platform cannot verify.
+
+`issue` takes either shape for straws:
+
+```json
+{ "qty": 25 }                                  // a bundle of the requested breed
+{ "straw_numbers": ["MUR-0001", "MUR-0002"] }  // when the depot slip lists them
+```
+
+**Quantity is the normal case.** The number that matters is the one printed on whichever
+straw gets used, and the Mait reads it off at the AI step — transcribing 25 of them twice
+buys nothing. Straws issued this way become `SemenBatch` rows flagged `is_unnumbered`, one
+per straw, each carrying a generated placeholder. Naming one at capture claims it (see
+below). Numbers given at issue are validated up front instead: one already held, already set
+aside for another uncollected indent, or already consumed is refused with `409
+straw-already-issued` / `409 straw-already-consumed`.
+
+Consumable indents take `{"qty": N}`. Issuing fewer than were requested is allowed and closes
+the indent; the remainder needs a fresh request.
+
+`confirm-collection` is **where stock is credited**, not `issue`. Until a Mait has collected,
+the goods are at the depot — a balance counting them would tell them they can start an AI
+whose straw is miles away, and the platform rests on not being able to consume a straw you do
+not hold (ADR 0002). Allowed once, on an issued indent, by the Mait it belongs to; an admin
+gets `403`, because signing for goods you did not receive is the thing this step rules out.
+
+### Claiming an unnumbered straw
+
+`GET /semen-batches/{no}/validate/` and `POST /ai-events/` both accept a number the platform
+has never seen. If the Mait holds unnumbered stock, that number names one of their placeholder
+straws — validate previews it, and `POST /ai-events/` writes it inside the event's own
+transaction. The count cannot grow: the number is written onto a row they already hold, and
+the unique constraint still means one number serves exactly one animal.
+
+Carrying unnumbered stock in more than one breed makes the number ambiguous, since it cannot
+say which bundle it came out of. Validate then answers `reason: "breed_required"` with a
+`breed_choices` list, and the app passes the answer back as `?breed=` / `semen_breed`.
 
 ## 9.9 Dashboard & reports
 
@@ -152,6 +227,14 @@ returns `429` with `Retry-After`.
 | GET | `/admin/users/maits/` | The Sahayak roster, activated or not (filters: search, needs_mobile, activated, mpp) | Admin |
 | GET | `/admin/users/pending-maits/` | Sahayaks with no login yet | Admin |
 | POST | `/admin/users/activate-mait/` | Give a Sahayak a mobile number and a login | Admin |
+| PATCH | `/admin/users/maits/{vendor_code}/` | Correct one Mait's name, mobile or MPP coverage | Admin |
+
+`/admin/users/maits/` hides retired records unless `?include_retired=true` — those are the
+pseudo-Maits the MPP master used to mint from its Sahayak column, kept so old AI events still
+name somebody. `mpp_codes` on that PATCH is the **complete set** the Mait covers, not an addition: MPPs left
+out of it are unassigned. Every field is optional and absence means "leave alone", so a screen
+cannot wipe what it did not load. The assignment is what scopes a Mait's whole app, so this
+moves MPPs, their members and the permission to serve them between Maits.
 
 ## Operational
 

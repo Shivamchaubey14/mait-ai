@@ -18,7 +18,7 @@ endpoint surface, [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) for both UI patterns, a
 | 2 · Master data & auth | 4–8 | Done |
 | 3 · Core AI event & inventory | 9–14 | **Done** |
 | 4 · Payments | 15–18 | **Not started** — `apps/payments/urls.py` is empty |
-| 5 · Indent & Indent Easy | 19–22 | Day 19 done (indent API + screens). Days 20–22 — the outbound push, the GRN webhook and reconciliation — not started |
+| 5 · Indent & Indent Easy | 19–22 | Day 19 done (indent API + screens). An admin can now approve, reject and issue from the portal — see below. Days 20–22 — the outbound push, the GRN webhook and reconciliation — still not started |
 | 6 · Mobile polish | 23–25 | Substantially done ahead of schedule |
 | 7 · Admin dashboard & reports | 26–28 | Done — all 16 portal screens built |
 | 8 · Hardening, UAT, go-live | 29–30 | Not started |
@@ -111,9 +111,33 @@ multi-line form and a review sheet, and the offline queue.
   barcode scanner is a small job, but it is not done.
 - **The admin portal's Indents screen only has data if the app has raised one.** Same for
   payments columns everywhere — Phase 4.
+- **An admin can now approve, reject and issue indents from the portal**, because the GRN
+  callback that was meant to be the only path does not exist yet — without it an indent never
+  leaves `requested`. Read the docstring in `apps/indents/services.py` before touching it: the
+  original design deliberately had no such path, and what keeps it honest is that issuing only
+  *sets stock aside*. The balance moves at `confirm-collection`, which the Mait does from the
+  app once the goods are in their hands. When Indent Easy lands, this becomes the fallback,
+  not the route.
+- **Straws issued as a quantity have no numbers until they are used.** They are `SemenBatch`
+  rows flagged `is_unnumbered`, and the number a Mait types at the AI step claims one
+  (`get_straw_for_mait(..., claim=True)`). Uniqueness is untouched — the number is written
+  onto a row they already hold. A Mait carrying unnumbered stock in two breeds gets
+  `400 breed-required`, because the number alone cannot say which bundle it came from.
 - **Commits carry no `Co-Authored-By` trailer** in this repo. The trailer is still on commits
   pushed before 2026-08-06; removing it there means rewriting published history, which was
   deliberately not done.
+- **A Sahayak is not a Mait.** `Sahyak.xlsx` carries an MPP and the Sahayak who staffs it on
+  one row, and the importer used to turn that column into a `Mait` — producing one pseudo-Mait
+  per village, 3,110 of them, each "covering" the single MPP they came from, while the real
+  roster (the ZMAI vendor export, ~58 rows) had no coverage at all. Settled on 2026-08-07:
+  the master now stores the Sahayak as an MPP *contact* (`MPP.sahayak_name` and friends) and
+  creates no Maits, and `manage.py retire_sahayak_maits` deactivated the rows left behind.
+  They are deactivated rather than deleted because inventory, indents and AI events point at
+  them. `/admin/users/maits/` hides them unless `?include_retired=true`.
+- **Coverage now comes only from the assignment sheet.** The MPP master no longer writes
+  `MPP.mait` at all, so a master refresh cannot silently undo an assignment — which it used
+  to do. Assign from the portal's Assignment screen (bulk `.xlsx` round trip, or one row at a
+  time). After the retirement, 3,131 of 3,134 MPPs are unassigned and need doing.
 - **`develop` is pushed to directly**, bypassing the branch-protection rule. That is a known,
   accepted deviation from `BRANCHING.md`.
 
