@@ -34,6 +34,7 @@ from .serializers import (
     UploadErrorRowSerializer,
 )
 from .tasks import process_master_upload
+from .templates_xlsx import assignment_template_response
 
 
 @extend_schema(tags=["master-data"])
@@ -116,6 +117,39 @@ class MasterUploadViewSet(
     @action(detail=False, methods=["post"], url_path="mpp")
     def mpp(self, request):
         return self._accept(request, DataUploadLog.UploadType.MPP)
+
+    @extend_schema(
+        summary="Upload the Mait ↔ MPP assignment sheet",
+        description=(
+            "The round-trip workbook from `assignment-template`, edited and sent back.\n\n"
+            "Only the assignment moves. MPPs are never created here — they come from SAP, and "
+            "an unknown code is reported as a bad row rather than quietly brought into "
+            "existence. A Mait may be created when the row names them, since a new Sahayak "
+            "has to start somewhere. A blank Sahayak column unassigns the MPP.\n\n"
+            "Partial success, like every other upload: good rows commit, bad rows come back "
+            "with their spreadsheet row number."
+        ),
+        request=MasterUploadSerializer,
+        responses={202: DataUploadLogSerializer},
+    )
+    @action(detail=False, methods=["post"], url_path="assignments")
+    def assignments(self, request):
+        return self._accept(request, DataUploadLog.UploadType.ASSIGNMENT)
+
+    @extend_schema(
+        summary="Download the assignment sheet, already filled in",
+        description=(
+            "Every MPP, one per row, with whichever Mait currently covers it — so an admin "
+            "edits what is there instead of composing a file and guessing at the headers.\n\n"
+            "Unassigned MPPs are included with the Sahayak columns blank: they are the rows "
+            "most likely to need filling, and a template that omitted them would hide the "
+            "work."
+        ),
+        responses={200: bytes},
+    )
+    @action(detail=False, methods=["get"], url_path="assignment-template")
+    def assignment_template(self, request):
+        return assignment_template_response()
 
     @extend_schema(
         summary="Row-level error report",

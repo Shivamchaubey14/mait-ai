@@ -90,13 +90,23 @@ class MPP(TimeStampedModel):
     end_date = models.DateField(null=True, blank=True)
     revival_date = models.DateField(null=True, blank=True)
 
+    # The Sahayak who runs this collection point. Their own role, not the Mait's: a Sahayak
+    # staffs one MPP and takes the milk in, while a Mait is the AI technician covering many.
+    # Held as plain contact fields rather than a relation because SAP owns them and they are
+    # refreshed wholesale on each upload — and because making a Mait record out of every one
+    # of them is precisely the mistake this platform used to make.
+    sahayak_vendor_code = models.CharField(max_length=20, blank=True, db_index=True)
+    sahayak_name = models.CharField(max_length=150, blank=True)
+    sahayak_mobile_no = models.CharField(max_length=15, blank=True)
+
     mait = models.ForeignKey(
         Mait,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="mpps",
-        help_text="Assigned Sahayak/Mait. Admin can override the SAP default (SRS §6.2.2).",
+        help_text="The Mait covering this MPP (SRS §6.2.2). Set from the assignment sheet, "
+        "never from the SAP master — the master's Sahayak column is a different person.",
     )
 
     class Meta:
@@ -227,6 +237,9 @@ class DataUploadLog(TimeStampedModel):
         MEMBER = "member", "Member Master"
         MAIT = "mait", "Mait / Vendor Master"
         MPP = "mpp", "MPP / Sahayak Master"
+        # Not a SAP export: the round-trip workbook the portal hands out already filled with
+        # the current mapping, so an admin edits what is there rather than composing a file.
+        ASSIGNMENT = "assignment", "Mait ↔ MPP assignment"
 
     class Status(models.TextChoices):
         QUEUED = "queued", "Queued"

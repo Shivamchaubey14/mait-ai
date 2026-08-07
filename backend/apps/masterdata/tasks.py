@@ -45,6 +45,7 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
     DataUploadLog.UploadType.MEMBER: cols.REQUIRED_MEMBER,
     DataUploadLog.UploadType.MPP: cols.REQUIRED_MPP,
     DataUploadLog.UploadType.MAIT: cols.REQUIRED_VENDOR,
+    DataUploadLog.UploadType.ASSIGNMENT: cols.REQUIRED_ASSIGNMENT,
 }
 
 
@@ -109,6 +110,7 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
         DataUploadLog.UploadType.MEMBER: _upsert_member,
         DataUploadLog.UploadType.MAIT: _upsert_vendor,
         DataUploadLog.UploadType.MPP: _upsert_mpp_and_sahayak,
+        DataUploadLog.UploadType.ASSIGNMENT: _upsert_assignment,
     }[upload.upload_type]
 
     context = ImportContext()
@@ -119,14 +121,12 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
     sheet = workbook.active
 
     header_row_index, headers = _detect_header(sheet, upload.upload_type)
-    missing = set(REQUIRED_COLUMNS[upload.upload_type]) - set(headers)
+    missing = _missing_columns(REQUIRED_COLUMNS[upload.upload_type], headers)
     if missing:
         # SRS §6.1.2 — reject the whole file, and say what was actually found so the fix is
         # obvious rather than a guessing game.
         found = ", ".join(sorted(h for h in headers if h)[:25])
-        raise ValueError(
-            f"Required column(s) missing: {', '.join(sorted(missing))}. Found: {found}"
-        )
+        raise ValueError(f"Required column(s) missing: {', '.join(missing)}. Found: {found}")
 
     errors: list[dict[str, Any]] = []
     success = failed = processed = 0
@@ -168,6 +168,23 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
     return {"total": processed, "success": success, "failed": failed}
 
 
+def _missing_columns(required, headers) -> list[str]:
+    """
+    Which required columns the sheet does not have.
+
+    An entry may be a nested tuple, meaning any one of those spellings satisfies it: the same
+    export has shipped with different header sets, and demanding every alias would reject both
+    versions of a file that is perfectly readable.
+    """
+    present = set(headers)
+    missing = []
+    for entry in required:
+        options = (entry,) if isinstance(entry, str) else entry
+        if not present.intersection(options):
+            missing.append(" or ".join(options))
+    return sorted(missing)
+
+
 def _commit_batch(batch, handler, errors, context: ImportContext) -> tuple[int, int]:
     """
     Commit one chunk.
@@ -205,18 +222,23 @@ def _detect_header(sheet, upload_type: str) -> tuple[int, list[str]]:
     ``Member.xlsx`` carries a company name, a description, a status line, a member count and
     a blank row before the real header on row 6, so the first row cannot be assumed.
 
-    The header is the first row within the search window containing every required column.
+    The header is the first row within the search window containing every required column —
+    where a required entry may be a nested tuple of acceptable spellings, so the same export
+    is found under either of its header sets.
     """
-    required = set(REQUIRED_COLUMNS[upload_type])
+    required = REQUIRED_COLUMNS[upload_type]
     for index, raw in enumerate(
         sheet.iter_rows(min_row=1, max_row=HEADER_SEARCH_ROWS, values_only=True)
     ):
         headers = cols.build_header_index(raw)
-        if required <= set(headers):
+        if not _missing_columns(required, headers):
             return index + 1, headers
+    expected = ", ".join(
+        entry if isinstance(entry, str) else " or ".join(entry) for entry in required
+    )
     raise ValueError(
         f"Could not locate a header row in the first {HEADER_SEARCH_ROWS} rows. "
-        f"Expected column(s): {', '.join(sorted(required))}."
+        f"Expected column(s): {expected}."
     )
 
 
@@ -306,30 +328,21 @@ def _upsert_mpp_and_sahayak(row: dict, context: ImportContext) -> None:
     """
     Upsert one row of ``Sahyak.xlsx``.
 
-    This file carries both records: the MPP and the Sahayak (Mait) assigned to it. The Mait
-    is upserted first so the MPP can link to it in the same row — that link is what scopes a
-    Mait's app to their own MPPs (SRS §6.2.3), and it is the reason this file is the
-    authoritative Mait source rather than the separately-numbered vendor export.
+    **This file is MPP data. It does not define Maits.**
+
+    It used to. Each row carries an MPP and the Sahayak who staffs it, and the Sahayak column
+    was turned into a ``Mait`` record — which produced one pseudo-Mait per village, 3,110 of
+    them, each "covering" exactly one MPP. They are not Maits. A Sahayak runs a single
+    collection point and takes the milk in; a Mait is the AI technician who covers many of
+    them, and the real roster is the ZMAI vendor export (SRS §18.2, now settled).
+
+    So the Sahayak is kept here as what it is — the contact for this collection point — and
+    ``mait`` is deliberately absent from the defaults below. Coverage is assigned from the
+    assignment sheet (SRS §6.2.2), and a master refresh must not silently undo it.
     """
     mpp_code = _clean(cols.pick(row, *cols.MPP["mpp_code"]))
     if not mpp_code:
         raise ValueError("MPP Code is blank.")
-
-    mait = None
-    vendor_code = _clean(cols.pick(row, *cols.SAHAYAK["sahayak_vendor_code"]))
-    if vendor_code:
-        mait, _ = Mait.objects.update_or_create(
-            sahayak_vendor_code=vendor_code,
-            defaults={
-                "name": _clean(cols.pick(row, *cols.SAHAYAK["name"])),
-                "mobile_no": _mobile(cols.pick(row, *cols.SAHAYAK["mobile_no"])),
-                "pan_no": _clean(cols.pick(row, *cols.SAHAYAK["pan_no"])),
-                "aadhar_no": _clean(cols.pick(row, *cols.SAHAYAK["aadhar_no"])),
-                "bank_account_no": _clean(cols.pick(row, *cols.SAHAYAK["bank_account_no"])),
-                "ifsc_code": _clean(cols.pick(row, *cols.SAHAYAK["ifsc_code"]))[:15],
-                "is_active": True,
-            },
-        )
 
     MPP.objects.update_or_create(
         mpp_code=mpp_code,
@@ -351,7 +364,10 @@ def _upsert_mpp_and_sahayak(row: dict, context: ImportContext) -> None:
             "start_date": _date_or_none(cols.pick(row, *cols.MPP["start_date"])),
             "end_date": _date_or_none(cols.pick(row, *cols.MPP["end_date"])),
             "revival_date": _date_or_none(cols.pick(row, *cols.MPP["revival_date"])),
-            "mait": mait,
+            # The person at the collection point, recorded as a contact and nothing more.
+            "sahayak_vendor_code": _clean(cols.pick(row, *cols.SAHAYAK["sahayak_vendor_code"])),
+            "sahayak_name": _clean(cols.pick(row, *cols.SAHAYAK["name"])),
+            "sahayak_mobile_no": _mobile(cols.pick(row, *cols.SAHAYAK["mobile_no"])),
         },
     )
 
@@ -360,29 +376,45 @@ def _upsert_vendor(row: dict, context: ImportContext) -> None:
     """
     Upsert one row of ``Maits Vendor C.xlsx``.
 
-    This file's ``CUSTOMER ID`` occupies a different number range (9900000000+) from the
-    ``Sahayak Vendor`` codes in ``Sahyak.xlsx`` (5500000003+), so rows loaded here link to no
-    MPP. Pending business confirmation of what the file represents, it is imported as its own
-    set of Mait records rather than merged into the Sahayak ones — merging on a guess would
-    silently corrupt the MPP assignment.
+    This file's vendor key occupies a different number range (9900000000+) from the ``Sahayak
+    Vendor`` codes in ``Sahyak.xlsx`` (5500000003+), so rows loaded here link to no MPP —
+    coverage is assigned separately, from the assignment sheet (SRS §6.2.2).
+
+    **Blank does not mean "clear it."** The export has shipped with columns renamed and, in
+    the EXPORT_* variant, with the PAN column carrying no header at all. Overwriting every
+    field unconditionally would silently wipe the PAN, GST and bank details of every Mait the
+    moment a slightly different export was uploaded, and nothing on any screen would say so.
+    So only the fields the row actually carries are written.
     """
     vendor_code = _clean(cols.pick(row, *cols.VENDOR["sahayak_vendor_code"]))
     if not vendor_code:
-        raise ValueError("CUSTOMER ID is blank.")
+        raise ValueError("Vendor code is blank.")
 
-    Mait.objects.update_or_create(
-        sahayak_vendor_code=vendor_code,
-        defaults={
-            "name": _clean(cols.pick(row, *cols.VENDOR["name"])),
-            "mobile_no": _mobile(cols.pick(row, *cols.VENDOR["mobile_no"])),
-            "pan_no": _clean(cols.pick(row, *cols.VENDOR["pan_no"])),
-            "aadhar_no": _clean(cols.pick(row, *cols.VENDOR["aadhar_no"])),
-            "gst_no": _clean(cols.pick(row, *cols.VENDOR["gst_no"]))[:20],
-            "bank_account_no": _clean(cols.pick(row, *cols.VENDOR["bank_account_no"])),
-            "ifsc_code": _clean(cols.pick(row, *cols.VENDOR["ifsc_code"]))[:15],
-            "is_active": True,
-        },
-    )
+    incoming = {
+        "name": _clean(cols.pick(row, *cols.VENDOR["name"])),
+        "mobile_no": _mobile(cols.pick(row, *cols.VENDOR["mobile_no"])),
+        "pan_no": _clean(cols.pick(row, *cols.VENDOR["pan_no"])),
+        "aadhar_no": _clean(cols.pick(row, *cols.VENDOR["aadhar_no"])),
+        "gst_no": _clean(cols.pick(row, *cols.VENDOR["gst_no"]))[:20],
+        "bank_account_no": _clean(cols.pick(row, *cols.VENDOR["bank_account_no"])),
+        "ifsc_code": _clean(cols.pick(row, *cols.VENDOR["ifsc_code"]))[:15],
+    }
+    supplied = {field: value for field, value in incoming.items() if value}
+
+    mait = Mait.objects.filter(sahayak_vendor_code=vendor_code).first()
+    if mait is None:
+        Mait.objects.create(sahayak_vendor_code=vendor_code, is_active=True, **supplied)
+        return
+
+    changed = [field for field, value in supplied.items() if getattr(mait, field) != value]
+    if not mait.is_active:
+        mait.is_active = True
+        changed.append("is_active")
+    if changed:
+        for field in changed:
+            if field != "is_active":
+                setattr(mait, field, supplied[field])
+        mait.save(update_fields=[*changed, "updated_at"])
 
 
 def _upsert_member(row: dict, context: ImportContext) -> None:
@@ -427,3 +459,92 @@ def _upsert_member(row: dict, context: ImportContext) -> None:
             "remarks": _clean(cols.pick(row, *cols.MEMBER["remarks"])),
         },
     )
+
+
+def _upsert_assignment(row: dict, context: ImportContext) -> None:
+    """
+    Upsert one row of the assignment workbook.
+
+    This file says one thing: which Mait covers which MPP. An MPP is the village collection
+    point a Mait works — it is the area marker the whole app scopes on, so getting a row
+    wrong moves a Mait's members, their animals and their permission to record an AI event
+    (SRS §6.2.2–6.2.3).
+
+    That is why nothing here creates an MPP. MPPs come from SAP, and a typo in a code must
+    read as "no such MPP" rather than quietly bringing a new one into existence for a Mait to
+    stare at. A Mait, by contrast, may be created — a genuinely new Sahayak has to be able to
+    start somewhere — but only when the row names them, because a bare vendor code with no
+    name produces a nameless row nobody can identify afterwards.
+
+    A blank Sahayak column is not a missing value. It is the instruction to unassign, which
+    is how an MPP is taken off a Mait who has left.
+    """
+    mpp_code = _clean(cols.pick(row, *cols.ASSIGNMENT["mpp_code"]))
+    if not mpp_code:
+        raise ValueError("MPP Code is blank.")
+
+    # One MPP has one Mait, so the same MPP twice in a file is a contradiction rather than a
+    # repeat: the later row would silently win and the count would look clean.
+    context.check_duplicate(mpp_code)
+
+    try:
+        mpp = MPP.objects.get(mpp_code=mpp_code)
+    except MPP.DoesNotExist:
+        raise ValueError(
+            f"No MPP with code '{mpp_code}'. MPPs come from the SAP master — check the code, "
+            "or upload the MPP master first."
+        ) from None
+
+    vendor_code = _clean(cols.pick(row, *cols.ASSIGNMENT["sahayak_vendor_code"]))
+    if not vendor_code:
+        mpp.mait = None
+        mpp.save(update_fields=["mait", "updated_at"])
+        return
+
+    name = _clean(cols.pick(row, *cols.ASSIGNMENT["name"]))
+    mobile = _mobile(cols.pick(row, *cols.ASSIGNMENT["mobile_no"]))
+    raw_mobile = _clean(cols.pick(row, *cols.ASSIGNMENT["mobile_no"]))
+
+    # Salvaged or refused, never guessed: this number is the Mait's only way into the app and
+    # the channel their OTP goes to, so a value we could not parse is an error rather than a
+    # silent blank (SRS §6.5).
+    if raw_mobile and not mobile:
+        raise ValueError(f"'{raw_mobile}' is not a usable Indian mobile number.")
+
+    mait = Mait.objects.filter(sahayak_vendor_code=vendor_code).first()
+    if mait is not None and not mait.is_active:
+        # Almost always a Sahayak code pasted in from the MPP master. Those are the people who
+        # staff a collection point, not the Maits who cover it, and they were retired for
+        # exactly that reason — assigning to one gives the MPP to nobody who can work it.
+        raise ValueError(
+            f"'{vendor_code}' is a retired record ({mait.name}) and cannot be given an MPP. "
+            "Use a code from the current Mait roster."
+        )
+    if mait is None:
+        if not name:
+            raise ValueError(
+                f"Vendor code '{vendor_code}' is not on record, and the row gives no name "
+                "to create them with."
+            )
+        mait = Mait.objects.create(
+            sahayak_vendor_code=vendor_code,
+            name=name,
+            mobile_no=mobile,
+            is_active=True,
+        )
+    else:
+        # Only what the row actually carries. A blank name or mobile leaves the existing one
+        # alone — the file is an assignment sheet, not a replacement for the Sahayak master,
+        # and clearing a mobile would lock a working Mait out of the app.
+        changed = []
+        if name and mait.name != name:
+            mait.name = name
+            changed.append("name")
+        if mobile and mait.mobile_no != mobile:
+            mait.mobile_no = mobile
+            changed.append("mobile_no")
+        if changed:
+            mait.save(update_fields=[*changed, "updated_at"])
+
+    mpp.mait = mait
+    mpp.save(update_fields=["mait", "updated_at"])

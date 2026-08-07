@@ -153,6 +153,11 @@ class MPPListSerializer(serializers.ModelSerializer):
             "mait_name",
             "mait_code",
             "mait_activated",
+            # The person who staffs this collection point, straight from the SAP master. Not
+            # the Mait — a Sahayak takes the milk in at one MPP, a Mait covers many — but the
+            # only contact an office has for an MPP nobody is assigned to yet.
+            "sahayak_name",
+            "sahayak_mobile_no",
             "member_count",
         ]
         read_only_fields = fields

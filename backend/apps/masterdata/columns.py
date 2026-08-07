@@ -78,7 +78,11 @@ def pick(row: dict, *aliases: str):
 
 REQUIRED_MEMBER = ("member code", "member name")
 REQUIRED_MPP = ("mpp code",)
-REQUIRED_VENDOR = ("customer id",)
+# A nested tuple means "any one of these will do". The vendor export has shipped under two
+# header sets and both name the same column — see the note on VENDOR below.
+REQUIRED_VENDOR = (("customer id", "vendor"),)
+# Only the MPP is required. A blank Sahayak column is meaningful — it unassigns.
+REQUIRED_ASSIGNMENT = ("mpp code",)
 
 
 # --------------------------------------------------------------------------------------
@@ -149,13 +153,48 @@ SAHAYAK = {
 
 # Maits Vendor C.xlsx — a separate customer-numbered file. See the note in tasks.py about
 # its identifier space not matching the Sahayak vendor codes.
+# The vendor export has been seen under two header sets. The older one is customer-flavoured
+# ("CUSTOMER ID", "NAME OF THE CUSTOMER"); the SAP EXPORT_* one is vendor-flavoured ("VENDOR",
+# "VENDOR NAME", "CONTACT NO") and carries the ZMAI account group. Both are the same list of
+# Maits, so both spellings are accepted rather than making an operator rename columns.
 VENDOR = {
-    "sahayak_vendor_code": ("customer id",),
-    "name": ("name of the customer", "contact person name", "name"),
-    "mobile_no": ("customer contact number", "contact number", "mobile no"),
+    "sahayak_vendor_code": ("customer id", "vendor"),
+    "name": (
+        "name of the customer",
+        "vendor name",
+        "contact person name",
+        "contact person",
+        "name",
+    ),
+    "mobile_no": ("customer contact number", "contact no", "contact number", "mobile no"),
     "pan_no": ("pan number", "pan no"),
     "aadhar_no": ("aadhar number", "aadhar no", "aadhaar number"),
     "gst_no": ("gst number", "gst no"),
-    "bank_account_no": ("account number",),
+    "bank_account_no": ("account number", "bank account"),
     "ifsc_code": ("bank key", "ifsc code"),
+}
+
+
+# ----------------------------------------------------------------------------------------
+# Assignment workbook — the round-trip file, not a SAP export.
+# ----------------------------------------------------------------------------------------
+# Downloaded from the portal already filled with the current mapping, edited, and uploaded
+# back. Its headers are ours rather than SAP's, so they are spelled the way the template
+# writes them — but the aliases still accept the SAP spellings, because an operator working
+# from Sahyak.xlsx will paste those column names in without thinking about it.
+# "Mait", not "Sahayak": the MPP master's Sahayak column is the person staffing the collection
+# point, which is a different job from covering it. The sahayak spellings stay accepted so a
+# sheet downloaded before the rename still uploads, and a row naming a retired Sahayak is
+# caught by the handler rather than silently assigned.
+ASSIGNMENT = {
+    "mpp_code": ("mpp code", "mppcode"),
+    "sahayak_vendor_code": (
+        "mait vendor",
+        "mait vendor code",
+        "sahayak vendor",
+        "sahayak vendor code",
+        "vendor code",
+    ),
+    "name": ("mait name", "sahayak name", "name"),
+    "mobile_no": ("mobile no", "mait mobile no", "sahayak mobile no", "mobile"),
 }

@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from apps.masterdata import columns as cols
+from apps.masterdata.tasks import _missing_columns
 
 
 class TestNormalise:
@@ -172,6 +173,25 @@ class TestAliasCoverage:
         "BANK KEY",
         "ACCOUNT NUMBER",
     ]
+    # The same list of Maits under SAP's vendor-flavoured headers (EXPORT_*.xlsx, ZMAI
+    # account group). Its PAN column carries no header at all, which is why the importer
+    # leaves absent fields alone rather than writing a blank over one.
+    VENDOR_EXPORT = [
+        "VENDOR",
+        "VENDOR NAME",
+        "ACCOUNT GROUP",
+        "SEARCH TERM 1",
+        "ADDRESS",
+        "CITY",
+        "CONTACT PERSON",
+        "CONTACT NO",
+        "EMAIL",
+        "BANK KEY",
+        "BANK ACCOUNT",
+        "ACCOUNT HOLDER",
+        "",
+        "GST NUMBER",
+    ]
 
     @pytest.mark.parametrize(
         ("headers", "table", "required"),
@@ -183,11 +203,27 @@ class TestAliasCoverage:
         ],
     )
     def test_every_mapped_field_resolves(self, headers, table, required):
-        index = set(cols.build_header_index(headers))
+        index = cols.build_header_index(headers)
 
-        assert set(required) <= index, f"required columns missing: {set(required) - index}"
+        # Asked the way the importer asks it: a nested entry means any one of those spellings
+        # will do, so the test cannot drift from what actually gates a file.
+        assert not _missing_columns(required, index)
 
         unresolved = [
-            field for field, aliases in table.items() if not any(a in index for a in aliases)
+            field for field, aliases in table.items() if not any(a in set(index) for a in aliases)
         ]
         assert not unresolved, f"no alias matched a real header for: {unresolved}"
+
+    def test_the_vendor_export_headers_are_accepted(self):
+        """The EXPORT_* spelling of the same file must not be rejected at the door."""
+        index = cols.build_header_index(self.VENDOR_EXPORT)
+
+        assert not _missing_columns(cols.REQUIRED_VENDOR, index)
+        for field in ("sahayak_vendor_code", "name", "mobile_no", "bank_account_no"):
+            assert any(alias in set(index) for alias in cols.VENDOR[field]), field
+
+    def test_a_file_missing_the_key_is_still_rejected(self):
+        index = cols.build_header_index(["VENDOR NAME", "CONTACT NO"])
+
+        # Either spelling satisfies it; neither present must still fail.
+        assert _missing_columns(cols.REQUIRED_VENDOR, index) == ["customer id or vendor"]
