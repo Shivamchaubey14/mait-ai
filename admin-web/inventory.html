@@ -6,7 +6,8 @@
     <title>Inventory oversight · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="assets/css/portal.css" />
+    <!-- inventory.css imports forms.css, which imports portal.css. -->
+    <link rel="stylesheet" href="assets/css/inventory.css" />
   </head>
 
   <body>
@@ -59,6 +60,19 @@
           <button class="chip is-active" id="filter-low" type="button" aria-pressed="true">
             Low stock first
           </button>
+        </section>
+
+        <!-- Opened by clicking a row. Above the table rather than in a dialog: an admin is
+             usually reading it down the phone and wants the list still in view. -->
+        <section class="panel" id="holding" aria-label="Mait stock" hidden>
+          <div class="panel__head">
+            <h2 class="panel__title" id="holding-title">—</h2>
+            <span class="panel__count" id="holding-count">—</span>
+          </div>
+          <div class="holding" id="holding-body"></div>
+          <div class="form-actions">
+            <button class="btn btn--danger" id="holding-close" type="button">Close</button>
+          </div>
         </section>
 
         <section class="panel panel--flush" aria-label="Stock by Mait">

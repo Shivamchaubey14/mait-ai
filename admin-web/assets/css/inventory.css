@@ -1,0 +1,172 @@
+/**
+ * Inventory oversight (W12) — the panel behind a Mait's row.
+ *
+ * The table answers one question: who can still work. This panel answers the other one an
+ * admin has on the phone — what exactly is that Mait carrying — so it is three cards side by
+ * side rather than one long column: straws, the consumables that run out, and the equipment
+ * that does not. Read across, not down.
+ *
+ * Each card is colour-coded and carries its own glyph, because the three are scanned for
+ * rather than read: an admin looking for the gloves should land on the middle card without
+ * reading either of the others.
+ */
+
+@import url('forms.css');
+
+.holding {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+/* The cards run to the edge of the panel, so without this the Close button sits against
+   them and reads as part of the last card rather than as the panel's own control. */
+#holding .form-actions {
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.holding__group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* The tint is the whole point of the head: it is what tells the three cards apart at a
+   glance, before a single label has been read. */
+.holding__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.holding__group--semen .holding__head {
+  background: var(--color-primary-wash);
+}
+
+.holding__group--consumable .holding__head {
+  background: var(--color-info-wash);
+}
+
+.holding__group--asset .holding__head {
+  background: var(--color-secondary-wash);
+}
+
+.holding__icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+}
+
+.holding__group--semen .holding__icon {
+  color: var(--color-primary-dark);
+}
+
+.holding__group--consumable .holding__icon {
+  color: var(--color-info);
+}
+
+.holding__group--asset .holding__icon {
+  color: var(--color-secondary-pressed);
+}
+
+.holding__heading {
+  min-width: 0;
+}
+
+.holding__label {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* The group's own total, so each card can be read without adding its rows up. */
+.holding__total {
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+}
+
+.holding__rows {
+  padding: 0 var(--space-3);
+}
+
+.holding__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.holding__row:last-child {
+  border-bottom: 0;
+}
+
+.holding__name {
+  min-width: 0;
+  font-size: var(--text-body);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.holding__unit {
+  display: block;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+/* Numbers in the heading face, right-aligned: the quantity is what gets scanned down. */
+.holding__qty {
+  flex-shrink: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  color: var(--color-text);
+}
+
+/* A breed running out is the reason this panel gets opened, so it is coloured rather than
+   left to be worked out from the number. */
+.holding__qty--low {
+  color: var(--color-secondary-pressed);
+}
+
+.holding__qty--out {
+  color: var(--color-error);
+}
+
+.holding__empty {
+  padding: var(--space-3) 0 var(--space-4);
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+}
+
+.holding__error {
+  grid-column: 1 / -1;
+  font-size: var(--text-body);
+  color: var(--color-error);
+}
+
+/* Loading placeholders, so the panel keeps its shape while the request is in flight rather
+   than snapping open around content that arrives a moment later. */
+.holding__skeleton {
+  height: 132px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
