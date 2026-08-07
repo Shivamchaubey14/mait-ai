@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Products · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/forms.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="products">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Products</h1>
+            <p class="topbar__meta"><span id="product-count">—</span></p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--primary" id="add" type="button">Add</button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search by code or name"
+            aria-label="Search by code or name"
+          />
+          <!-- Straws sit beside the rest because they are a kind of thing a Mait asks for.
+               They are kept on their own list because they are keyed by breed, not by a
+               catalogue id, and carry a Hindi label the others do not. -->
+          <button class="chip is-active" id="kind-consumable" type="button" aria-pressed="true">
+            Consumables
+          </button>
+          <button class="chip" id="kind-asset" type="button" aria-pressed="false">Equipment</button>
+          <button class="chip" id="kind-straw" type="button" aria-pressed="false">Straws</button>
+          <button class="chip" id="filter-retired" type="button" aria-pressed="false">
+            Include retired
+          </button>
+        </section>
+
+        <section class="panel" id="editor" aria-label="Product details" hidden>
+          <div class="panel__head">
+            <h2 class="panel__title" id="editor-title">Add</h2>
+            <p class="panel__count" id="editor-meta">
+              This is the name a Mait picks from, and the name the depot packs against.
+            </p>
+          </div>
+
+          <!-- Not a <form>: saving, retiring and deleting are three different decisions. -->
+          <div class="form-grid">
+            <div class="field">
+              <label class="field__label" for="code">Code</label>
+              <input
+                class="input field__control"
+                id="code"
+                type="text"
+                maxlength="30"
+                placeholder="SHEATH"
+                autocomplete="off"
+              />
+              <p class="field__hint" id="code-hint">Set once and never changed</p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="name">Name</label>
+              <input
+                class="input field__control"
+                id="name"
+                type="text"
+                maxlength="100"
+                placeholder="AI sheaths"
+              />
+              <p class="field__hint">What the Mait and the depot both see</p>
+            </div>
+
+            <div class="field" id="field-name-hi" hidden>
+              <label class="field__label" for="name-hi">Name in Hindi</label>
+              <input class="input field__control" id="name-hi" type="text" maxlength="60" />
+              <p class="field__hint">Shown when the Mait switches the app to Hindi</p>
+            </div>
+
+            <div class="field" id="field-animal" hidden>
+              <label class="field__label" for="animal-type">Animal</label>
+              <select class="select field__control" id="animal-type">
+                <option value="COW">Cow</option>
+                <option value="BUFF">Buffalo</option>
+              </select>
+              <p class="field__hint">Set once — straws and animals both key on it</p>
+            </div>
+
+            <div class="field" id="field-category">
+              <label class="field__label" for="category">Kind</label>
+              <select class="select field__control" id="category">
+                <option value="consumable">Consumable — used up and reordered</option>
+                <option value="asset">Equipment — issued once and kept</option>
+              </select>
+              <p class="field__hint">Five boxes of gloves is a Tuesday; five AI guns is not</p>
+            </div>
+
+            <div class="field" id="field-unit">
+              <label class="field__label" for="unit">Unit</label>
+              <input
+                class="input field__control"
+                id="unit"
+                type="text"
+                maxlength="20"
+                placeholder="piece"
+              />
+              <p class="field__hint">piece, pair, box, litre</p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="rate">Rate (₹ per unit)</label>
+              <input
+                class="input field__control"
+                id="rate"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+              />
+              <p class="field__hint">Leave at 0 if it is not priced yet</p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="display-order">Order</label>
+              <input
+                class="input field__control"
+                id="display-order"
+                type="number"
+                min="0"
+                step="1"
+              />
+              <p class="field__hint">Lower shows first on the request form</p>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn--primary" id="save" type="button">Save</button>
+              <button class="btn" id="retire" type="button" hidden>Retire</button>
+              <button class="btn" id="restore" type="button" hidden>Bring back</button>
+              <button class="btn" id="remove" type="button" hidden>Delete</button>
+              <button class="btn" id="cancel" type="button">Cancel</button>
+              <p class="field__hint" id="editor-hint">—</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Products">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Code</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Kind</th>
+                  <th scope="col" id="col-measure">Unit</th>
+                  <th scope="col">Rate</th>
+                  <th scope="col">State</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="7">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- The reason this screen exists, stated where it will be read. -->
+        <div class="notice">
+          <span class="notice__swatch" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">This list is what names an indent</p>
+            <p class="notice__body">
+              A stock request is stored against something from here. Anything asked for that is not
+              on these lists arrives at the depot as "25 × Consumable", which says nothing about
+              what to pack. Individual straws are never added here — they arrive by being issued
+              against an indent, by number or as a bundle of one of these breeds.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/products.js"></script>
+  </body>
+</html>
