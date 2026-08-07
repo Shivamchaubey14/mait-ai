@@ -179,6 +179,16 @@ class AIEventCreateSerializer(serializers.Serializer):
     non_member_id = serializers.IntegerField(required=False, allow_null=True)
     animal_id = serializers.IntegerField()
     straw_unique_no = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    semen_breed = serializers.CharField(
+        max_length=30,
+        required=False,
+        allow_blank=True,
+        help_text=(
+            "Breed of the straw used. Needed only when the number is not on record yet and "
+            "the Mait is carrying unnumbered stock in more than one breed — the number alone "
+            "cannot say which bundle it came from."
+        ),
+    )
 
     def validate(self, attrs):
         mait = self.context["mait"]
@@ -232,3 +242,6 @@ class AIEventCreateSerializer(serializers.Serializer):
 
     def validate_straw_unique_no(self, value: str) -> str:
         return (value or "").strip()
+
+    def validate_semen_breed(self, value: str) -> str:
+        return (value or "").strip().upper()

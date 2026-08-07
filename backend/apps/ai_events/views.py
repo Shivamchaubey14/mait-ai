@@ -36,6 +36,29 @@ from .services import attach_photo, complete_ai_event, start_ai_event
 from .storage import store_photo
 
 
+def search_events(queryset, term: str):
+    """
+    The three things someone actually has to hand when chasing an event.
+
+    A straw number comes off a complaint, a farmer's name off a phone call, a Mait's name off
+    a roster. Searching all three from one box means the operator does not have to know which
+    kind of thing they are holding.
+
+    Shared with the CSV export rather than reimplemented there: a report is defined by the
+    filters that produced it, and an export that quietly ignored the search would hand back a
+    file disagreeing with the screen it was taken from.
+    """
+    term = (term or "").strip()
+    if not term:
+        return queryset
+    return queryset.filter(
+        Q(straw_unique_no__icontains=term)
+        | Q(member__member_name__icontains=term)
+        | Q(non_member__name__icontains=term)
+        | Q(mait__name__icontains=term)
+    )
+
+
 class AIEventFilter(django_filters.FilterSet):
     """The filters the admin list and the Mait's own history need (SRS §9.6)."""
 
@@ -50,22 +73,7 @@ class AIEventFilter(django_filters.FilterSet):
         fields = ["status", "mpp", "mait", "date_from", "date_to", "search"]
 
     def filter_search(self, queryset, name, value):
-        """
-        The three things someone actually has to hand when chasing an event.
-
-        A straw number comes off a complaint, a farmer's name off a phone call, a Mait's name
-        off a roster. Searching all three from one box means the operator does not have to
-        know which kind of thing they are holding.
-        """
-        term = (value or "").strip()
-        if not term:
-            return queryset
-        return queryset.filter(
-            Q(straw_unique_no__icontains=term)
-            | Q(member__member_name__icontains=term)
-            | Q(non_member__name__icontains=term)
-            | Q(mait__name__icontains=term)
-        )
+        return search_events(queryset, value)
 
 
 @extend_schema(tags=["ai-events"])
@@ -182,6 +190,7 @@ class AIEventViewSet(
             animal=data["animal"],
             client_uuid=data["client_uuid"],
             straw_unique_no=data.get("straw_unique_no", ""),
+            semen_breed=data.get("semen_breed", ""),
             actor=request.user,
         )
 

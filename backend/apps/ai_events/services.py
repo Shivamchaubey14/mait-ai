@@ -64,6 +64,7 @@ def start_ai_event(
     animal,
     client_uuid,
     straw_unique_no: str = "",
+    semen_breed: str = "",
     actor=None,
     synced_from_offline: bool = False,
 ) -> AIEvent:
@@ -100,21 +101,28 @@ def start_ai_event(
     if straw_unique_no:
         # Raises on a straw the Mait does not hold or has already used, which rolls the
         # draft back with it — a failed scan must not leave a half-started event behind.
-        verify_straw(event, straw_unique_no, actor=actor)
+        verify_straw(event, straw_unique_no, semen_breed=semen_breed, actor=actor)
 
     return event
 
 
 @transaction.atomic
-def verify_straw(event: AIEvent, straw_unique_no: str, *, actor=None) -> AIEvent:
+def verify_straw(
+    event: AIEvent, straw_unique_no: str, *, semen_breed: str = "", actor=None
+) -> AIEvent:
     """
     Validate the scanned straw and advance ``draft`` → ``straw_verified`` (SRS §6.3 step 4).
 
     This only checks and reserves nothing — stock is not deducted until completion. A Mait
     who abandons the flow here leaves their inventory untouched, which is correct: no
     insemination happened.
+
+    ``claim=True`` because this is the moment a number becomes real. Stock issued as a
+    quantity of a breed carries no numbers, and the Mait reading one off the straw in their
+    hand is what names it — written here, inside the event's own transaction, so a number and
+    the event that used it commit together or not at all.
     """
-    straw = get_straw_for_mait(event.mait, straw_unique_no)
+    straw = get_straw_for_mait(event.mait, straw_unique_no, breed=semen_breed or None, claim=True)
 
     _transition(
         event,
