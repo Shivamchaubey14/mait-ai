@@ -144,12 +144,20 @@ export default function RequestStockScreen({
     let posted = 0;
     try {
       for (const line of lines) {
+        // Straws are asked for by breed; everything else by catalogue id. Sending the id
+        // rather than the code is what lets the depot and the admin screen say "Sheaths"
+        // instead of "Consumable" — the server has no other way to name what was asked for.
+        const product =
+          line.category === 'straw'
+            ? undefined
+            : (products.data ?? []).find(row => row.code === line.product);
+
         await createIndent({
           client_uuid: line.id,
           product_type: line.category === 'straw' ? 'straw' : 'consumable',
           breed: line.category === 'straw' ? (line.product ?? '') : '',
+          ...(product ? { product_ref_id: product.id } : {}),
           qty_requested: Number(line.qty),
-          note: line.category === 'straw' ? '' : (line.product ?? ''),
         }).unwrap();
         posted += 1;
       }
