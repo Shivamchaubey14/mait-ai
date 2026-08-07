@@ -297,13 +297,116 @@ window.MaitAI = window.MaitAI || {};
       return request({ path: '/admin/users/maits/', query: query });
     },
 
+    /**
+     * Correct one Mait's number or coverage.
+     *
+     * `mpp_codes` is the complete set they cover, not an addition — MPPs left out of it are
+     * unassigned, which is what moves their members to somebody else.
+     */
+    updateMait: function (vendorCode, body) {
+      return request({
+        path: '/admin/users/maits/' + encodeURIComponent(vendorCode) + '/',
+        method: 'PATCH',
+        body: body,
+      });
+    },
+
+    /**
+     * The Mait ↔ MPP assignment sheet, edited and sent back.
+     *
+     * Runs the same import pipeline as the SAP masters: accepted, queued, polled through
+     * `uploadStatus`, with rejected rows available from `uploadErrors`.
+     */
+    uploadAssignments: function (file) {
+      const form = new FormData();
+      form.append('file', file);
+      return request({ path: '/admin/uploads/assignments/', method: 'POST', body: form });
+    },
+
     /** Stock across every Mait. The mait/ endpoints only ever report the caller's own. */
     inventoryOversight: function () {
       return request({ path: '/admin/inventory/' });
     },
 
+    /**
+     * One Mait's stock, in the same breakdown they see in the app.
+     *
+     * The oversight list carries straw counts only, because that is what decides whether
+     * someone can work. This is the rest of the answer.
+     */
+    maitInventory: function (maitId) {
+      return request({ path: '/admin/inventory/' + maitId + '/' });
+    },
+
     indents: function (query) {
       return request({ path: '/indents/', query: query });
+    },
+
+    /**
+     * The catalogue a Mait can ask for, straws aside.
+     *
+     * It is what names an indent: a request raised against a product that is not here reads
+     * as "25 × Consumable" on every screen, which tells a depot nothing about what to pack.
+     */
+    products: function (query) {
+      return request({ path: '/admin/products/', query: query });
+    },
+
+    createProduct: function (body) {
+      return request({ path: '/admin/products/', method: 'POST', body: body });
+    },
+
+    updateProduct: function (id, body) {
+      return request({ path: '/admin/products/' + id + '/', method: 'PATCH', body: body });
+    },
+
+    deleteProduct: function (id) {
+      return request({ path: '/admin/products/' + id + '/', method: 'DELETE' });
+    },
+
+    /**
+     * The semen list — the breeds a Mait can be issued and can ask for.
+     *
+     * Straws themselves are never typed in: they arrive by being issued against an indent,
+     * by number or as a bundle of one of these breeds. This is the list behind that.
+     */
+    breeds: function (query) {
+      return request({ path: '/admin/breeds/', query: query });
+    },
+
+    createBreed: function (body) {
+      return request({ path: '/admin/breeds/', method: 'POST', body: body });
+    },
+
+    updateBreed: function (id, body) {
+      return request({ path: '/admin/breeds/' + id + '/', method: 'PATCH', body: body });
+    },
+
+    deleteBreed: function (id) {
+      return request({ path: '/admin/breeds/' + id + '/', method: 'DELETE' });
+    },
+
+    approveIndent: function (id) {
+      return request({ path: '/indents/' + id + '/approve/', method: 'POST', body: {} });
+    },
+
+    rejectIndent: function (id, reason) {
+      return request({
+        path: '/indents/' + id + '/reject/',
+        method: 'POST',
+        body: { reason: reason || '' },
+      });
+    },
+
+    /**
+     * Record a handover.
+     *
+     * Straw indents pass `straw_numbers` — the number printed on each straw — and never a
+     * count: the app scans a number against the Mait's stock, so a quantity with nothing
+     * behind it credits a balance that cannot be scanned. Consumables pass `qty`.
+     */
+    issueIndent: function (id, body) {
+      return request({ path: '/indents/' + id + '/issue/', method: 'POST', body: body });
     },
 
     activationReadiness: function () {
