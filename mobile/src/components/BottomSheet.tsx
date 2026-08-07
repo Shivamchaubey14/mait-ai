@@ -15,7 +15,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
+import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
 export interface SheetOption {
   value: string;
@@ -200,6 +200,9 @@ export default function BottomSheet({
 const styles = StyleSheet.create({
   scrim: { flex: 1, backgroundColor: 'rgba(37,61,78,0.08)' },
 
+  // No elevation. Android draws an elevation shadow from a rectangular outline, and this
+  // panel rounds only its top two corners — the result is a square edge showing behind the
+  // curve. The scrim tint and the hairline do the separating instead.
   sheet: {
     maxHeight: '78%',
     paddingHorizontal: spacing[5],
@@ -209,7 +212,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     borderTopWidth: 1,
     borderColor: colors.border,
-    ...shadows.card,
   },
   grabber: {
     alignSelf: 'center',
