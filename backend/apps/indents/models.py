@@ -59,6 +59,20 @@ class IndentRequest(TimeStampedModel):
 
     requested_at = models.DateTimeField(auto_now_add=True, db_index=True)
     issued_at = models.DateTimeField(null=True, blank=True)
+    received_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the Mait confirmed they collected it. This is where stock is "
+        "credited — between issue and collection the goods are at the depot, not in the "
+        "Mait's flask, and a balance that says otherwise would let them start an AI they "
+        "cannot finish.",
+    )
+    issued_straw_numbers = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Straws set aside for this indent at issue, credited on collection. Held "
+        "here rather than as stock because they are not the Mait's until they collect them.",
+    )
     note = models.CharField(max_length=255, blank=True)
 
     class Meta:
