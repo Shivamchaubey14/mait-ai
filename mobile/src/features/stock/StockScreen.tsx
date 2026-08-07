@@ -19,6 +19,7 @@ import {
   useGetInventorySummaryQuery,
   useListAiEventsQuery,
   useListBreedsQuery,
+  useListIndentsQuery,
 } from '@api/endpoints';
 import PageHero from '@/components/hero';
 import { EmptyState, ErrorState, SkeletonList, SyncBanner } from '@/components/states';
@@ -55,6 +56,13 @@ export default function StockScreen({
   const stock = useGetInventorySummaryQuery();
   const breeds = useListBreedsQuery();
   const events = useListAiEventsQuery();
+  const indents = useListIndentsQuery();
+
+  // Requested and approved are the ones still owed to the Mait. Issued and rejected are
+  // finished business, and counting them would make the card claim work that is not coming.
+  const openIndents = (indents.data?.results ?? []).filter(
+    indent => indent.status === 'requested' || indent.status === 'approved',
+  ).length;
 
   const hindi = i18n.language.startsWith('hi');
   const total = stock.data?.total_straws ?? 0;
@@ -75,6 +83,14 @@ export default function StockScreen({
       when.getFullYear() === now.getFullYear()
     );
   }).length;
+
+  // Consumables are counted in units held, equipment in items held: a Mait with 40 sheaths
+  // and one AI gun is carrying both, and a single "products" number would hide which.
+  const consumables = stock.data?.consumables ?? [];
+  const assets = stock.data?.assets ?? [];
+  const consumableUnits = consumables.reduce((sum, item) => sum + item.qty, 0);
+  const assetUnits = assets.reduce((sum, item) => sum + item.qty, 0);
+  const everything = total + consumableUnits + assetUnits;
 
   const config = (code: string) => (breeds.data ?? []).find(breed => breed.code === code);
 
@@ -114,24 +130,86 @@ export default function StockScreen({
           />
         ) : (
           <View>
-            {/* What is left and what has gone, read together: that pair is what says whether
-                the round can continue. */}
-            <View style={styles.summary}>
-              <View style={styles.summaryHalf}>
-                <Text style={styles.summaryLabel}>{t('stock.inHand')}</Text>
+            {/* Everything held, split the way it gets used. A Mait opening this screen is
+                asking two questions at once — can I work, and what am I carrying — so the
+                straw count keeps the emphasis and the rest is read in the same glance. */}
+            <View style={styles.summary} testID="stock-insight">
+              <Text style={styles.summaryEyebrow}>{t('stock.inventoryTitle')}</Text>
+              <Text style={styles.summaryHeadline}>
+                {everything > 0
+                  ? t('stock.thingsWithYou', { count: everything })
+                  : t('stock.nothingWithYou')}
+              </Text>
+
+              <View style={styles.stats}>
+                <View style={[styles.stat, styles.statLead]} testID="stat-semen">
+                  <Text style={styles.statLabel} numberOfLines={1}>
+                    {t('stock.semen')}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.statValue,
+                      total === 0 && styles.statValueBad,
+                      total > 0 && stock.data?.is_low_stock && styles.statValueWarn,
+                    ]}
+                  >
+                    {total}
+                  </Text>
+                  <Text style={styles.statFoot} numberOfLines={1}>
+                    {rows.length > 0 ? t('stock.acrossBreeds', { count: rows.length }) : '—'}
+                  </Text>
+                </View>
+
+                <View style={styles.stat} testID="stat-consumables">
+                  <Text style={styles.statLabel} numberOfLines={1}>
+                    {t('stock.consumables')}
+                  </Text>
+                  <Text style={[styles.statValue, styles.statValueInfo]}>{consumableUnits}</Text>
+                  <Text style={styles.statFoot} numberOfLines={1}>
+                    {consumables.length > 0
+                      ? t('stock.kinds', { count: consumables.length })
+                      : t('stock.noneHeld')}
+                  </Text>
+                </View>
+
+                <View style={styles.stat} testID="stat-assets">
+                  <Text style={styles.statLabel} numberOfLines={1}>
+                    {t('stock.assets')}
+                  </Text>
+                  <Text style={[styles.statValue, styles.statValueAsset]}>{assetUnits}</Text>
+                  <Text style={styles.statFoot} numberOfLines={1}>
+                    {assets.length > 0
+                      ? t('stock.kinds', { count: assets.length })
+                      : t('stock.noneHeld')}
+                  </Text>
+                </View>
+              </View>
+
+              {/* The verdict, spelled out under the numbers rather than left to be worked
+                  out from them — and carrying a glyph, so it is not colour alone. */}
+              <View style={styles.verdict}>
+                <Ionicons
+                  name={
+                    total === 0
+                      ? 'alert-circle'
+                      : stock.data?.is_low_stock
+                        ? 'warning'
+                        : 'checkmark-circle'
+                  }
+                  size={15}
+                  color={
+                    total === 0
+                      ? colors.error
+                      : stock.data?.is_low_stock
+                        ? colors.secondaryPressed
+                        : colors.primaryDark
+                  }
+                />
                 <Text
                   style={[
-                    styles.summaryValue,
-                    total === 0 && styles.summaryValueBad,
-                    total > 0 && stock.data?.is_low_stock && styles.summaryValueWarn,
-                  ]}
-                >
-                  {total}
-                </Text>
-                <Text
-                  style={[
-                    styles.summaryFoot,
-                    (total === 0 || stock.data?.is_low_stock) && styles.summaryFootBad,
+                    styles.verdictLabel,
+                    total === 0 && styles.verdictLabelBad,
+                    total > 0 && stock.data?.is_low_stock && styles.verdictLabelWarn,
                   ]}
                   numberOfLines={1}
                 >
@@ -141,16 +219,39 @@ export default function StockScreen({
                       ? t('stock.belowThreshold')
                       : t('stock.enoughForNow')}
                 </Text>
-              </View>
-
-              <View style={styles.summaryHalf}>
-                <Text style={styles.summaryLabel}>{t('stock.usedThisMonth')}</Text>
-                <Text style={[styles.summaryValue, styles.summaryValueInfo]}>{usedThisMonth}</Text>
-                <Text style={styles.summaryFoot} numberOfLines={1}>
-                  {t('stock.acrossBreeds', { count: byBreed.length })}
+                <Text style={styles.verdictMeta} numberOfLines={1}>
+                  {t('stock.usedThisMonthFoot', { count: usedThisMonth })}
                 </Text>
               </View>
             </View>
+
+            {/* Where a request goes after it is sent. Above the breed rows rather than under
+                the equipment at the bottom: a Mait wondering where their stock is should not
+                have to scroll past everything they already hold to find out. */}
+            <Pressable
+              accessibilityRole="button"
+              onPress={onOpenIndents}
+              style={({ pressed }) => [styles.indentsLink, pressed && styles.indentsLinkPressed]}
+              testID="stock-open-indents"
+            >
+              <View style={[styles.swatch, styles.swatchAlt]}>
+                <Ionicons name="cube-outline" size={17} color={colors.info} />
+              </View>
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>{t('stock.yourIndents')}</Text>
+                <Text style={styles.rowMeta}>
+                  {openIndents > 0
+                    ? t('stock.indentsOpen', { count: openIndents })
+                    : t('stock.yourIndentsHint')}
+                </Text>
+              </View>
+              {openIndents > 0 && (
+                <View style={styles.openPill}>
+                  <Text style={styles.openPillLabel}>{openIndents}</Text>
+                </View>
+              )}
+              <Ionicons name="chevron-forward" size={16} color={colors.textDisabled} />
+            </Pressable>
 
             <Text style={styles.section}>{t('stock.byBreed')}</Text>
 
@@ -252,24 +353,6 @@ export default function StockScreen({
               </View>
             )}
 
-            {/* Where a request goes after it is sent. Reachable from the screen that made
-                them wonder about it. */}
-            <Pressable
-              accessibilityRole="button"
-              onPress={onOpenIndents}
-              style={({ pressed }) => [styles.indentsLink, pressed && styles.indentsLinkPressed]}
-              testID="stock-open-indents"
-            >
-              <View style={[styles.swatch, styles.swatchAlt]}>
-                <Ionicons name="cube-outline" size={17} color={colors.info} />
-              </View>
-              <View style={styles.rowBody}>
-                <Text style={styles.rowTitle}>{t('stock.yourIndents')}</Text>
-                <Text style={styles.rowMeta}>{t('stock.yourIndentsHint')}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textDisabled} />
-            </Pressable>
-
             {/* Named rather than left to be inferred from the rows above. */}
             {lowBreeds > 0 && (
               <SyncBanner
@@ -299,23 +382,53 @@ const styles = StyleSheet.create({
   body: { padding: spacing[5] },
 
   summary: {
-    flexDirection: 'row',
-    gap: spacing[4],
     padding: spacing[4],
     marginBottom: spacing[5],
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.card,
   },
-  summaryHalf: { flex: 1 },
-  summaryLabel: { ...typography.caption, color: colors.textMuted },
-  summaryValue: { ...typography.display, color: colors.primaryDark, marginVertical: 2 },
-  summaryValueInfo: { color: colors.info },
-  summaryValueWarn: { color: colors.secondaryPressed },
-  summaryValueBad: { color: colors.error },
-  summaryFoot: { ...typography.caption, color: colors.textMuted },
-  summaryFootBad: { color: colors.error },
+  summaryEyebrow: {
+    ...typography.caption,
+    color: colors.textMuted,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  summaryHeadline: { ...typography.h2, color: colors.ink, marginTop: 2 },
+
+  stats: { flexDirection: 'row', gap: spacing[2], marginTop: spacing[4] },
+  stat: {
+    flex: 1,
+    padding: spacing[3],
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
+  },
+  // The straw count is the one that decides whether the day can start, so it is tinted
+  // rather than left to sit as one of three equal boxes.
+  statLead: { backgroundColor: colors.primaryWash },
+  statLabel: { ...typography.caption, color: colors.textMuted },
+  statValue: { ...typography.h1, color: colors.primaryDark, marginVertical: 2 },
+  statValueInfo: { color: colors.info },
+  statValueAsset: { color: colors.ink },
+  statValueWarn: { color: colors.secondaryPressed },
+  statValueBad: { color: colors.error },
+  statFoot: { ...typography.caption, color: colors.textMuted },
+
+  verdict: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginTop: spacing[3],
+    paddingTop: spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  verdictLabel: { ...typography.label, color: colors.primaryDark, flexShrink: 1 },
+  verdictLabelWarn: { color: colors.secondaryPressed },
+  verdictLabelBad: { color: colors.error },
+  verdictMeta: { ...typography.caption, color: colors.textMuted, marginLeft: 'auto' },
 
   section: { ...typography.h3, color: colors.ink, marginBottom: spacing[3] },
 
@@ -361,12 +474,24 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET + spacing[2],
     padding: spacing[3],
-    marginTop: spacing[3],
+    marginBottom: spacing[5],
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
     ...shadows.card,
   },
   indentsLinkPressed: { backgroundColor: colors.background },
+
+  openPill: {
+    minWidth: 24,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    backgroundColor: colors.infoWash,
+  },
+  openPillLabel: { ...typography.label, color: colors.info },
 
   rowBody: { flex: 1 },
   rowTitle: { ...typography.bodyStrong, color: colors.ink },
