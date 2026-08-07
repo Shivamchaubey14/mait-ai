@@ -200,9 +200,9 @@ export default function BottomSheet({
 const styles = StyleSheet.create({
   scrim: { flex: 1, backgroundColor: 'rgba(37,61,78,0.08)' },
 
-  // No elevation. Android draws an elevation shadow from a rectangular outline, and this
-  // panel rounds only its top two corners — the result is a square edge showing behind the
-  // curve. The scrim tint and the hairline do the separating instead.
+  // Rounded top corners and nothing else behind them. Both an elevation shadow and a
+  // partial border get drawn from a rectangular outline on Android, and either one squares
+  // off the curve into what looks like a second card sitting behind the sheet.
   sheet: {
     maxHeight: '78%',
     paddingHorizontal: spacing[5],
@@ -210,8 +210,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    borderTopWidth: 1,
-    borderColor: colors.border,
+    overflow: 'hidden',
   },
   grabber: {
     alignSelf: 'center',
