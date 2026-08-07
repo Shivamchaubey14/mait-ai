@@ -47,6 +47,47 @@ class StrawAlreadyConsumed(DomainError):
     default_detail = "This straw has already been used for another AI event."
 
 
+class RecordInUse(DomainError):
+    """
+    Deleting a catalogue row that other records point at.
+
+    Products and breeds are referenced by id or code from indents, stock and the ledger, and
+    those references carry no copy of the name — so removing the row leaves them reading as a
+    quantity of something. Retiring keeps the history legible and takes it off the app.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    error_code = "record-in-use"
+    default_detail = "Other records point at this. Retire it instead of deleting it."
+
+
+class BreedRequired(DomainError):
+    """
+    A straw number was named that the platform has never seen, and the Mait is carrying
+    unnumbered stock in more than one breed (SRS §6.3 step 4).
+
+    The number alone cannot say which bundle it came out of, and guessing would record the
+    wrong bull against the animal — so the Mait is asked rather than assumed about.
+    """
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    error_code = "breed-required"
+    default_detail = "Say which breed this straw is."
+
+
+class StrawAlreadyIssued(DomainError):
+    """
+    Someone already holds this straw (SRS §6.6.3).
+
+    Distinct from consumed: the straw is unused, but issuing it again would put one physical
+    object in two Maits' stock and let both of them scan it.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    error_code = "straw-already-issued"
+    default_detail = "This straw is already in another Mait's stock."
+
+
 class InvalidStateTransition(DomainError):
     """A client asked for a transition the state machine does not allow (SRS §11)."""
 
