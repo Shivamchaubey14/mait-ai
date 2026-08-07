@@ -1,10 +1,16 @@
 """
 Indent endpoints (SRS §9.8).
 
-Read and raise only. Fulfilment lives in Indent Easy — this platform pushes the request out
-and credits stock when the GRN callback arrives (SRS §6.6.2–6.6.3), so there is deliberately
-no way to mark an indent issued from here. An admin who could would be creating stock that
-no depot ever handed over.
+Fulfilment belongs to Indent Easy: this platform pushes the request out and credits stock
+when the GRN callback arrives (SRS §6.6.2–6.6.3). That integration is not built yet
+(ROADMAP phase 5, days 20–22), and until it is, an indent raised in the app can never leave
+``requested``.
+
+So approve/reject/issue exist here as the manual back-office path, admin-only. They were
+deliberately absent before, and the reason still stands — an admin marking stock issued is
+asserting a handover the platform cannot verify. What keeps that honest is in
+``services.py``: straws are issued by their printed numbers, never as a bare quantity, and a
+straw already held or already consumed is refused. Read that module before changing this one.
 """
 
 from __future__ import annotations
@@ -14,17 +20,24 @@ from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import Role
 from apps.core.idempotency import idempotent
 from apps.core.models import AuditLog
-from apps.core.permissions import IsMait
+from apps.core.permissions import IsAdmin, IsMait
 from apps.core.services import record_audit
 
 from .models import IndentRequest
-from .serializers import IndentCreateSerializer, IndentSerializer
+from .serializers import (
+    IndentCreateSerializer,
+    IndentIssueSerializer,
+    IndentRejectSerializer,
+    IndentSerializer,
+)
+from .services import approve_indent, confirm_collection, issue_indent, reject_indent
 
 # An approved indent that has not been issued after this long is not moving on its own.
 STALE_AFTER_DAYS = 7
@@ -79,8 +92,14 @@ class IndentViewSet(
     http_method_names = ["get", "post", "head", "options"]
 
     def get_permissions(self):
-        if self.action == "create":
+        if self.action in ("create", "confirm_collection"):
+            # Collection is the Mait's own acknowledgement, and the queryset already scopes
+            # them to their own indents — so this is theirs to confirm, nobody else's.
             return [IsMait()]
+        # Fulfilment is a back-office decision. Enforced here rather than by hiding buttons —
+        # a Mait who could approve their own request could credit themselves stock.
+        if self.action in ("approve", "reject", "issue"):
+            return [IsAdmin()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -140,3 +159,77 @@ class IndentViewSet(
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Approve an indent",
+        description="Agrees to the request. Moves no stock — that is `issue`.",
+        request=None,
+        responses={200: IndentSerializer},
+    )
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        indent = approve_indent(self.get_object(), actor=request.user, request=request)
+        return Response(IndentSerializer(indent).data)
+
+    @extend_schema(
+        summary="Reject an indent",
+        description=(
+            "Declines the request. The reason is stored on the indent, where the Mait can "
+            "read it, rather than only in the audit log."
+        ),
+        request=IndentRejectSerializer,
+        responses={200: IndentSerializer},
+    )
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        payload = IndentRejectSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        indent = reject_indent(
+            self.get_object(),
+            reason=payload.validated_data.get("reason", ""),
+            actor=request.user,
+            request=request,
+        )
+        return Response(IndentSerializer(indent).data)
+
+    @extend_schema(
+        summary="Confirm collection",
+        description=(
+            "The Mait acknowledges that issued stock reached them. Moves no stock — the "
+            "balance rose when it was issued — and is the only step in the chain the Mait "
+            "owns. Allowed once, on an issued indent."
+        ),
+        request=None,
+        responses={200: IndentSerializer},
+    )
+    @action(detail=True, methods=["post"], url_path="confirm-collection")
+    def confirm_collection(self, request, pk=None):
+        indent = confirm_collection(self.get_object(), actor=request.user, request=request)
+        return Response(IndentSerializer(indent).data)
+
+    @extend_schema(
+        summary="Issue an approved indent",
+        description=(
+            "Credits the stock to the Mait and closes the indent.\n\n"
+            "Straw requests take `straw_numbers` — the number printed on each straw handed "
+            "over — and never a bare quantity: the app scans a straw against the Mait's "
+            "stock, so a count with no numbers behind it credits a balance nothing can be "
+            "scanned against. Consumable requests take `qty`.\n\n"
+            "Issuing fewer than were requested is allowed and closes the indent; the "
+            "remainder needs a fresh request."
+        ),
+        request=IndentIssueSerializer,
+        responses={200: IndentSerializer},
+    )
+    @action(detail=True, methods=["post"])
+    def issue(self, request, pk=None):
+        payload = IndentIssueSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        indent = issue_indent(
+            self.get_object(),
+            straw_numbers=payload.validated_data.get("straw_numbers"),
+            qty=payload.validated_data.get("qty"),
+            actor=request.user,
+            request=request,
+        )
+        return Response(IndentSerializer(indent).data)
