@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assignments · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/assignments.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="assignments">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Mait &amp; MPP assignment</h1>
+            <p class="topbar__meta"><span id="roster-count">—</span></p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- Numbered, because the order is the instruction. An operator who uploads without
+             downloading first is composing a file by hand and guessing at the headers. -->
+        <section class="round-trip" aria-label="Bulk assignment">
+          <div class="step">
+            <span class="step__number" aria-hidden="true">1</span>
+            <div class="step__body">
+              <p class="step__title">Download the sheet</p>
+              <p class="step__meta">
+                Every MPP with whoever covers it now. Unassigned ones are tinted and come first —
+                they are the rows worth filling.
+              </p>
+              <button class="btn" id="download" type="button">Download .xlsx</button>
+            </div>
+          </div>
+
+          <div class="step">
+            <span class="step__number" aria-hidden="true">2</span>
+            <div class="step__body">
+              <p class="step__title">Edit it in Excel</p>
+              <p class="step__meta">
+                Change the Sahayak Vendor beside an MPP to move it. Clear the column to unassign.
+                Leave a row alone and nothing happens to it.
+              </p>
+              <p class="step__meta">Do not rename the column headers.</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <span class="step__number" aria-hidden="true">3</span>
+            <div class="step__body">
+              <p class="step__title">Upload it back</p>
+              <p class="step__meta">
+                Good rows are applied even if others fail. Anything rejected is listed below with
+                its spreadsheet row number.
+              </p>
+              <input class="visually-hidden" id="file" type="file" accept=".xlsx,.xls" />
+              <button class="btn btn--primary" id="upload" type="button">Choose a file…</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- SRS §6.1.6: parsed asynchronously, so the page has to say what is happening or
+             an operator closes the tab and assumes it failed. -->
+        <section class="panel running" id="running" hidden aria-live="polite">
+          <div class="panel__head">
+            <h2 class="panel__title" id="running-title">Importing…</h2>
+            <span class="panel__count" id="running-percent">0%</span>
+          </div>
+          <p class="topbar__meta" id="running-meta">—</p>
+          <div class="bar running__bar">
+            <span class="bar__fill running__fill" id="running-bar"></span>
+          </div>
+          <div class="stages">
+            <div class="stage">
+              <p class="tile__label">Uploaded</p>
+              <p id="stage-uploaded">—</p>
+            </div>
+            <div class="stage">
+              <p class="tile__label">Rows read</p>
+              <p id="stage-read">—</p>
+            </div>
+            <div class="stage">
+              <p class="tile__label">Applied</p>
+              <p id="stage-applied">—</p>
+            </div>
+            <div class="stage">
+              <p class="tile__label">Rejected</p>
+              <p id="stage-rejected">—</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel--error" id="rejects" hidden aria-label="Rejected rows">
+          <div class="panel__head">
+            <h2 class="panel__title">Rows that were not applied</h2>
+            <span class="panel__count" id="rejects-count">—</span>
+          </div>
+          <p class="topbar__meta">
+            Everything else in the file was applied. Fix these in the sheet and upload it again —
+            re-uploading an unchanged row does nothing.
+          </p>
+          <div class="rejects" id="rejects-body"></div>
+          <div class="form-actions">
+            <button class="btn" id="rejects-close" type="button">Dismiss</button>
+          </div>
+        </section>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search by Mait name, code or mobile"
+            aria-label="Search by Mait name, code or mobile"
+          />
+          <button class="chip" id="filter-uncovered" type="button" aria-pressed="false">
+            No MPPs
+          </button>
+          <button class="chip" id="filter-nomobile" type="button" aria-pressed="false">
+            No mobile
+          </button>
+        </section>
+
+        <!-- The shared Mait editor renders itself here (assets/js/mait-editor.js). -->
+        <div id="mait-editor"></div>
+
+        <section class="panel panel--flush" aria-label="Maits and their MPPs">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Mait</th>
+                  <th scope="col">Mobile</th>
+                  <th scope="col">MPPs covered</th>
+                  <th scope="col">State</th>
+                  <th scope="col">Edit</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="5">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </section>
+
+        <div class="notice">
+          <span class="notice__swatch" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">An MPP is a Mait's area, not just a label</p>
+            <p class="notice__body">
+              The assignment is what scopes the whole app. A Mait sees the members of the MPPs they
+              cover and can record an AI event only for those — so moving an MPP moves its farmers,
+              their animals and the permission to serve them. MPPs themselves come from the SAP
+              master and are never created here.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/mait-editor.js"></script>
+    <script src="assets/js/assignments.js"></script>
+  </body>
+</html>

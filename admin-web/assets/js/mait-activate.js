@@ -80,7 +80,7 @@
 
     $('#sahayak').html(
       options.length
-        ? '<option value="">Choose a Sahayak…</option>' + options.join('')
+        ? '<option value="">Choose a Mait…</option>' + options.join('')
         : '<option value="">Nobody is waiting for activation</option>'
     );
 

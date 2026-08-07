@@ -6,7 +6,8 @@
     <title>Maits · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="assets/css/portal.css" />
+    <!-- maits.css pulls in the shared Mait editor, which imports forms.css and portal.css. -->
+    <link rel="stylesheet" href="assets/css/maits.css" />
   </head>
 
   <body>
@@ -25,14 +26,14 @@
 
         <div id="alert-region" role="alert" aria-live="polite"></div>
 
-        <!-- The single fact that decides the rollout schedule: most of the roster cannot sign
-             in yet, and no amount of app work changes that. -->
+        <!-- The fact that decides the rollout schedule: a Mait with no number cannot sign in
+             at all, and no amount of app work changes that. -->
         <div class="notice notice--warn" id="backlog" hidden>
           <span class="notice__swatch" aria-hidden="true"></span>
           <div>
             <p class="notice__title" id="backlog-title">—</p>
             <p class="notice__body">
-              They cannot sign in until a number is set. Work through them MPP by MPP.
+              They cannot sign in until a number is set. Give them one from the activation queue.
             </p>
           </div>
           <a class="btn btn--dark notice__action" href="mait-activate.html">Open the queue</a>
@@ -54,6 +55,9 @@
           </button>
         </section>
 
+        <!-- The shared Mait editor renders itself here (assets/js/mait-editor.js). -->
+        <div id="mait-editor"></div>
+
         <section class="panel panel--flush" aria-label="Maits">
           <div class="table-wrap">
             <table class="table">
@@ -64,11 +68,12 @@
                   <th scope="col">MPPs</th>
                   <th scope="col">Mobile</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Edit</th>
                 </tr>
               </thead>
               <tbody id="rows">
                 <tr>
-                  <td class="table__empty" colspan="5">Loading…</td>
+                  <td class="table__empty" colspan="6">Loading…</td>
                 </tr>
               </tbody>
             </table>
@@ -82,6 +87,7 @@
     <script src="assets/js/api.js"></script>
     <script src="assets/js/ui.js"></script>
     <script src="assets/js/shell.js"></script>
+    <script src="assets/js/mait-editor.js"></script>
     <script src="assets/js/maits.js"></script>
   </body>
 </html>

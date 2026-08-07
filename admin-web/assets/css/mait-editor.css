@@ -1,0 +1,187 @@
+/**
+ * The Mait editor — name, mobile and MPP coverage.
+ *
+ * Its own sheet because two screens open the same editor: Assignment, where coverage is the
+ * job, and Maits, where a row is corrected in place. One copy, so the two cannot drift into
+ * looking like different controls for the same thing.
+ */
+
+@import url('forms.css');
+
+/* --- editor ------------------------------------------------------------------------------ */
+/* A green edge, so the open editor reads as the thing being worked on rather than as another
+   panel in the stack. */
+.editor {
+  border-left: 3px solid var(--color-primary);
+}
+
+.editor__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Initials rather than a photo: there are none, and a grey circle says less than two
+   letters do. */
+.editor__avatar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  font-family: var(--font-heading);
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+  border-radius: 50%;
+}
+
+.editor__who {
+  min-width: 0;
+}
+
+.editor__name {
+  font-family: var(--font-heading);
+  font-size: var(--text-h2);
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+}
+
+.editor__code {
+  font-family: var(--font-heading);
+  font-size: var(--text-label);
+  color: var(--color-text-muted);
+}
+
+.editor__head > span:last-child {
+  margin-left: auto;
+}
+
+/* --- iconed fields ------------------------------------------------------------------------ */
+.field--iconed .field__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.field--wide {
+  grid-column: 1 / -1;
+}
+
+/* One tint per field, so the three are told apart before a label is read — the same trick
+   the stock cards use. */
+.field__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+}
+
+.field__icon--name {
+  color: var(--color-ink);
+  background: var(--color-background);
+}
+
+.field__icon--mobile {
+  color: var(--color-info);
+  background: var(--color-info-wash);
+}
+
+.field__icon--mpps {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+}
+
+.field__count {
+  padding: 0 var(--space-2);
+  margin-left: auto;
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+  border-radius: var(--radius-pill);
+}
+
+/* --- the MPP chip box ---------------------------------------------------------------------
+   Chips rather than a textarea. Removing one village from a paragraph of comma-separated
+   codes means finding it and deleting the right comma; removing a chip is one click, and the
+   count beside the label keeps saying what the total is. */
+.chip-box {
+  padding: var(--space-3);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.chip-box__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip-box__chips:not(:empty) {
+  margin-bottom: var(--space-3);
+}
+
+.chip-box__empty {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-body);
+  color: var(--color-error);
+}
+
+.mpp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  font-family: var(--font-heading);
+  font-size: var(--text-label);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+/* Newly added, until saved: the operator should be able to see what this click did. */
+.mpp-chip--new {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+  border-color: var(--color-primary);
+}
+
+.mpp-chip__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+}
+
+.mpp-chip__remove:hover {
+  color: var(--color-surface);
+  background: var(--color-error);
+}
+
+.chip-box__add {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.chip-box__input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', monospace;
+}

@@ -19,7 +19,14 @@
 
   function assignmentCell(mpp) {
     if (!mpp.mait) {
-      return '<span class="table__sub">No Mait assigned</span>';
+      // The Sahayak is not the Mait — they staff this collection point rather than covering
+      // it — but they are the only contact the office has for an MPP nobody covers yet.
+      return (
+        '<span class="table__sub">No Mait assigned</span>' +
+        (mpp.sahayak_name
+          ? '<span class="table__sub">Sahayak: ' + ui.escapeHtml(mpp.sahayak_name) + '</span>'
+          : '')
+      );
     }
     return ui.identity(mpp.mait_name, mpp.mait_code);
   }

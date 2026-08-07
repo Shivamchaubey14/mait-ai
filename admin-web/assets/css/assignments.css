@@ -1,0 +1,113 @@
+/**
+ * Mait ↔ MPP assignment (W19).
+ *
+ * Imports uploads.css for the progress bar and stage tiles rather than restyling them: this
+ * screen runs the same import pipeline, and an operator who has watched a SAP upload should
+ * recognise what they are looking at without being taught it twice.
+ */
+
+@import url('uploads.css');
+@import url('mait-editor.css');
+
+/* --- the round trip --------------------------------------------------------------------- */
+.round-trip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.step {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* Numbered because the order is the instruction: download, edit, upload. An operator who
+   uploads before downloading is composing a file by hand, which is where errors come from. */
+.step__number {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+  border-radius: 50%;
+}
+
+.step__body {
+  min-width: 0;
+}
+
+.step__title {
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  color: var(--color-text);
+}
+
+.step__meta {
+  margin: var(--space-1) 0 var(--space-3);
+  font-size: var(--text-label);
+  color: var(--color-text-muted);
+}
+
+/* --- coverage cell ---------------------------------------------------------------------- */
+.codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.code-chip {
+  padding: 2px var(--space-2);
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+.code-chip--more {
+  color: var(--color-text-muted);
+  background: transparent;
+  border-style: dashed;
+}
+
+/* --- error report ------------------------------------------------------------------------ */
+.rejects {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.reject {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.reject:last-child {
+  border-bottom: 0;
+}
+
+/* The spreadsheet row number, so the fix happens at source rather than by guesswork. */
+.reject__row {
+  flex-shrink: 0;
+  width: 4.5rem;
+  font-family: var(--font-heading);
+  font-size: var(--text-label);
+  color: var(--color-text-muted);
+}
+
+.reject__why {
+  font-size: var(--text-body);
+  color: var(--color-error);
+}
