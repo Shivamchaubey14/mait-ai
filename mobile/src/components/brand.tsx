@@ -75,8 +75,10 @@ export function CapabilityChips({ style }: { style?: ViewStyle }) {
 /**
  * EN / हिं switch.
  *
- * Sits in the hero rather than behind a settings screen: a Mait who cannot read the app
- * cannot navigate to the setting that would fix it.
+ * Lives in the green hero on both screens that carry it — sign-in and Settings. The styling
+ * is white-on-green and only legible there: on a white card the unselected option and the
+ * track both vanish into the background, leaving the language already in use as the only
+ * one that can be seen, which is the one option nobody needs to tap.
  */
 export function LanguageToggle() {
   const { i18n } = useTranslation();

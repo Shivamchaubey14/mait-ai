@@ -111,19 +111,18 @@ export default function SettingsScreen({
 
   return (
     <View style={styles.root}>
+      {/* The toggle rides in the green header, in the same spot it holds on sign-in. It is
+          white-on-green and reads only against that; on the white card it sat in before,
+          the unselected language was white on white and could not be seen at all. */}
       <PageHero
         title={t('settings.title')}
         subtitle={[user?.fullName, user?.maitId ? `M-${user.maitId}` : null]
           .filter(Boolean)
           .join(' · ')}
+        top={<LanguageToggle />}
       />
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.section}>{t('settings.language')}</Text>
-        <View style={styles.languageCard}>
-          <LanguageToggle />
-        </View>
-
         <Text style={styles.section}>{t('settings.profile')}</Text>
         <Row
           tone="info"
@@ -228,14 +227,6 @@ const styles = StyleSheet.create({
     color: colors.ink,
     marginTop: spacing[3],
     marginBottom: spacing[3],
-  },
-
-  languageCard: {
-    flexDirection: 'row',
-    padding: spacing[3],
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    ...shadows.card,
   },
 
   row: {

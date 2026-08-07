@@ -307,8 +307,9 @@ export default function RootNavigator(): React.JSX.Element {
         )}
       </View>
 
-      {/* The action follows the screen: ask for stock from Stock, start a capture anywhere
-          else. One control, always in the same place, saying what it will do. */}
+      {/* The action follows the screen: ask for stock from Stock, start a capture from Home
+          and History, nothing from Settings or the indent screens. One control, always in the
+          same place, saying what it will do. */}
       <BottomNav
         active={tab}
         pending={pending}
@@ -320,7 +321,11 @@ export default function RootNavigator(): React.JSX.Element {
           setTab(next);
         }}
         action={
-          requestingStock
+          // Settings has no action of its own, and starting a capture from it is a jump
+          // sideways out of what the Mait came here to do. Neither do the indent screens:
+          // they are somewhere a Mait reads what they already asked for, and "Request stock"
+          // sitting under a list of requests invites a duplicate of the one they are reading.
+          requestingStock || tab === 'settings' || indentView !== null
             ? undefined
             : tab === 'stock'
               ? {
