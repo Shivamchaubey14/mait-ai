@@ -239,6 +239,24 @@ a:hover {
   border-color: var(--color-error-pressed);
 }
 
+/* The same red as signing out, under a name that says what it is rather than where it is
+   used. `--logout` stays because that button is a fixed thing in the topbar; anything else
+   that needs to read as the closing or discarding action takes this.
+
+   Defined after `.btn` for the same reason as above: both are single-class selectors, so the
+   one written last wins. */
+.btn--danger,
+.btn--danger:hover {
+  color: var(--color-surface);
+  background: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.btn--danger:hover {
+  background: var(--color-error-pressed);
+  border-color: var(--color-error-pressed);
+}
+
 .btn[disabled] {
   color: var(--color-text-disabled);
   background: var(--color-disabled-fill);

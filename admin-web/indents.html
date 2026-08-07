@@ -6,7 +6,8 @@
     <title>Indents · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="assets/css/portal.css" />
+    <!-- forms.css imports portal.css: this screen fulfils indents as well as watching them. -->
+    <link rel="stylesheet" href="assets/css/forms.css" />
   </head>
 
   <body>
@@ -50,6 +51,64 @@
           </select>
         </section>
 
+        <!-- Fulfilment sits above the table rather than in a modal: the operator works a
+             queue, and a dialog that covers the queue hides the row they are acting on. -->
+        <section class="panel" id="fulfil" aria-label="Fulfil indent" hidden>
+          <div class="panel__head">
+            <h2 class="panel__title" id="fulfil-title">—</h2>
+            <p class="panel__count" id="fulfil-meta">—</p>
+          </div>
+
+          <!-- Not a <form>: there is no single submit here. Approve, reject and issue are
+               three different decisions, and one of them credits stock. -->
+          <div class="form-grid">
+            <div class="field" id="field-qty" hidden>
+              <label class="field__label" for="issue-qty">How many handed over</label>
+              <input class="input field__control" id="issue-qty" type="number" min="1" step="1" />
+              <p class="field__hint" id="qty-hint">—</p>
+            </div>
+
+            <div class="field" id="field-straws" hidden>
+              <label class="field__label" for="straw-numbers">Straw numbers (optional)</label>
+              <textarea
+                class="textarea field__control"
+                id="straw-numbers"
+                rows="6"
+                spellcheck="false"
+                autocomplete="off"
+                placeholder="Leave blank unless the depot slip lists them"
+              ></textarea>
+              <!-- Optional because the numbers that matter are read off the straws at the AI
+                   step. Filling them in here is for when the depot slip already lists them. -->
+              <p class="field__hint" id="straw-hint">
+                Leave blank to issue by quantity — the Mait records each number as they use it
+              </p>
+            </div>
+
+            <div class="field" id="field-reason" hidden>
+              <label class="field__label" for="reject-reason">Reason for rejecting</label>
+              <input
+                class="input field__control"
+                id="reject-reason"
+                type="text"
+                maxlength="200"
+                placeholder="No Murrah stock at the depot"
+              />
+              <p class="field__hint">The Mait reads this on their phone. Say what to do next.</p>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn--primary" id="do-approve" type="button" hidden>Approve</button>
+              <button class="btn btn--primary" id="do-issue" type="button" hidden>
+                Issue stock
+              </button>
+              <button class="btn" id="do-reject" type="button" hidden>Reject</button>
+              <button class="btn" id="do-close" type="button">Close</button>
+              <p class="field__hint" id="fulfil-hint">—</p>
+            </div>
+          </div>
+        </section>
+
         <section class="panel panel--flush" aria-label="Indents">
           <div class="table-wrap">
             <table class="table">
@@ -61,11 +120,12 @@
                   <th scope="col">Raised</th>
                   <th scope="col">Indent Easy</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Action</th>
                 </tr>
               </thead>
               <tbody id="rows">
                 <tr>
-                  <td class="table__empty" colspan="6">Loading…</td>
+                  <td class="table__empty" colspan="7">Loading…</td>
                 </tr>
               </tbody>
             </table>

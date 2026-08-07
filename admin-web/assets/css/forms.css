@@ -64,3 +64,25 @@
 .form-panel__head {
   padding: var(--space-4) var(--space-4) 0;
 }
+
+/* Straw numbers are copied off a depot slip a line at a time, so the control is sized to
+   show a whole handover rather than scroll one line at a time. Monospaced: these are codes
+   read digit by digit, and a proportional face makes 0/O and 1/l an operator's problem. */
+.textarea {
+  min-height: 8.5rem;
+  padding: var(--space-2) var(--space-3);
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', monospace;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.textarea:focus {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary-wash);
+  outline-offset: 1px;
+}
