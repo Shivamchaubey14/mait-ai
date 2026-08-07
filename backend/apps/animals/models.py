@@ -28,6 +28,13 @@ class BreedConfig(TimeStampedModel):
     name_hi = models.CharField(
         max_length=60, blank=True, help_text="Devanagari label for the Hindi toggle."
     )
+    rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Cost of one straw of this breed, in rupees. Zero means not priced — the "
+        "list is maintained by hand and a rate nobody has entered must not read as free.",
+    )
     display_order = models.PositiveSmallIntegerField(default=100)
     is_active = models.BooleanField(default=True, db_index=True)
 

@@ -19,8 +19,51 @@ class BreedConfigSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BreedConfig
-        fields = ["code", "name", "name_hi", "animal_type", "display_order"]
+        fields = ["code", "name", "name_hi", "animal_type", "rate", "display_order"]
         read_only_fields = fields
+
+
+class BreedConfigWriteSerializer(serializers.ModelSerializer):
+    """
+    The admin's edit shape for the semen list (SRS §6.3 step 3, §6.6.1).
+
+    ``code`` and ``animal_type`` are set once together: they are the pair every straw, indent
+    and stock row keys on, and changing either would orphan the lot. Everything a Mait reads
+    — both labels, the rate, the ordering — stays editable.
+    """
+
+    class Meta:
+        model = BreedConfig
+        fields = [
+            "id",
+            "code",
+            "name",
+            "name_hi",
+            "animal_type",
+            "rate",
+            "display_order",
+            "is_active",
+        ]
+
+    def validate(self, attrs):
+        code = (attrs.get("code") or "").strip().upper()
+        animal_type = attrs.get("animal_type")
+        if self.instance is None:
+            if not code:
+                raise serializers.ValidationError({"code": "A code is required."})
+            if BreedConfig.objects.filter(code=code, animal_type=animal_type).exists():
+                raise serializers.ValidationError(
+                    {"code": "This breed is already listed for that animal type."}
+                )
+            attrs["code"] = code
+        return attrs
+
+    def update(self, instance, validated_data):
+        # Ignored rather than rejected: the portal sends the whole object back, and an
+        # unchanged key in the payload is not an attempt to re-key the breed.
+        validated_data.pop("code", None)
+        validated_data.pop("animal_type", None)
+        return super().update(instance, validated_data)
 
 
 class AnimalSerializer(serializers.ModelSerializer):

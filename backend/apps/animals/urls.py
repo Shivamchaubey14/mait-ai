@@ -11,13 +11,14 @@ request — CI fails on schema drift.
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import AnimalViewSet, BreedConfigViewSet
+from .views import AnimalViewSet, BreedAdminViewSet, BreedConfigViewSet
 
 app_name = "animals"
 
 router = DefaultRouter()
 router.register("animals", AnimalViewSet, basename="animal")
 router.register("config/breeds", BreedConfigViewSet, basename="breed-config")
+router.register("admin/breeds", BreedAdminViewSet, basename="admin-breed")
 
 urlpatterns = [
     path("", include(router.urls)),

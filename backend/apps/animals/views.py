@@ -8,8 +8,9 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.response import Response
 
+from apps.core.exceptions import RecordInUse
 from apps.core.models import AuditLog
-from apps.core.permissions import IsAdminOrMaitReadOnly, IsMait
+from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait
 from apps.core.services import record_audit
 
 from .models import Animal, BreedConfig
@@ -18,7 +19,48 @@ from .serializers import (
     AnimalSerializer,
     AnimalUpdateSerializer,
     BreedConfigSerializer,
+    BreedConfigWriteSerializer,
 )
+
+
+@extend_schema(tags=["animals"])
+class BreedAdminViewSet(viewsets.ModelViewSet):
+    """
+    Maintain the semen list — the breeds a Mait can be issued and can ask for.
+
+    The straw half of the catalogue. Straws themselves are not rows an admin types: they
+    arrive by being issued against an indent, either by number or as a bundle of one of these
+    breeds. What is maintained here is the list itself, its labels in both languages, and the
+    rate per straw.
+
+    Full CRUD, with one guard on delete: a breed already carried by an animal, a straw or an
+    indent cannot be removed, because all three reference it by code and none of them keeps a
+    copy of the name. Retiring takes it off the app and leaves those records legible.
+    """
+
+    serializer_class = BreedConfigWriteSerializer
+    permission_classes = [IsAdmin]
+    queryset = BreedConfig.objects.all().order_by("animal_type", "display_order", "name")
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["animal_type", "is_active"]
+    pagination_class = None
+
+    def perform_destroy(self, instance):
+        from apps.indents.models import IndentRequest
+        from apps.inventory.models import SemenBatch
+
+        referenced = (
+            Animal.objects.filter(breed=instance.code).exists()
+            or SemenBatch.objects.filter(breed=instance.code).exists()
+            or IndentRequest.objects.filter(breed=instance.code).exists()
+        )
+        if referenced:
+            raise RecordInUse(
+                f"{instance.name} is already on an animal, a straw or an indent, so it "
+                "cannot be deleted. Retire it instead — it disappears from the app and the "
+                "existing records keep their name."
+            )
+        instance.delete()
 
 
 @extend_schema(tags=["animals"])
@@ -41,6 +83,8 @@ class BreedConfigViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 
     @extend_schema(
         summary="Breed options by animal type",
+        # Kept on the read endpoint deliberately: the app caches this whole list offline, so
+        # a retired breed must disappear from it rather than arrive flagged.
         description=(
             "Filter with `?animal_type=COW` or `BUFF`. The app pulls the whole list at login "
             "and caches it, so the picker keeps working with no signal (SRS §6.3.2)."
