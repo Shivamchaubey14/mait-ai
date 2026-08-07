@@ -8,10 +8,12 @@ expose one by accident.
 
 from __future__ import annotations
 
+import re
+
 from django.db import transaction
 from rest_framework import serializers
 
-from apps.masterdata.models import Mait
+from apps.masterdata.models import MPP, Mait
 
 from .models import Role, User, mobile_validator
 
@@ -218,5 +220,57 @@ class MPPAssignmentSerializer(serializers.Serializer):
         try:
             self.context["mait"] = Mait.objects.get(sahayak_vendor_code=value, is_active=True)
         except Mait.DoesNotExist:
+            # `is_active=True` is doing real work here: the Sahayak records retired from the
+            # roster still exist, and handing an MPP to one gives it to nobody who can work it.
             raise serializers.ValidationError("No active Mait with that vendor code.") from None
         return value
+
+
+class MaitUpdateSerializer(serializers.Serializer):
+    """
+    Correct one Mait's row from the assignment screen (SRS §6.2.2).
+
+    Mobile and MPP coverage together, because they are corrected together: an operator on the
+    phone to a Sahayak fixes the number they can be reached on and the villages they actually
+    cover in one conversation.
+
+    Every field is optional and absence means "leave alone" — a screen that sent the whole
+    object back would wipe whatever it had not loaded.
+    """
+
+    name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    mobile_no = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    mpp_codes = serializers.ListField(
+        child=serializers.CharField(max_length=15),
+        required=False,
+        help_text="The complete set this Mait covers. An empty list clears their coverage.",
+    )
+
+    def validate_mobile_no(self, value):
+        digits = re.sub(r"\D", "", value or "")
+        if digits.startswith("91") and len(digits) == 12:
+            digits = digits[2:]
+        if not digits:
+            # Blank is allowed and means "no number on record" — 93% of the roster arrives
+            # that way. It is not the same as a number we failed to parse.
+            return ""
+        if not re.fullmatch(r"[6-9]\d{9}", digits):
+            raise serializers.ValidationError(
+                "Indian mobile numbers are ten digits starting 6, 7, 8 or 9."
+            )
+        clash = Mait.objects.filter(mobile_no=digits)
+        if self.instance is not None:
+            clash = clash.exclude(pk=self.instance.pk)
+        if clash.exists():
+            # The number is the only channel into the app. Two Maits sharing one means an OTP
+            # reaching the wrong person, and the second of them can never sign in.
+            raise serializers.ValidationError("Another Mait already uses this number.")
+        return digits
+
+    def validate_mpp_codes(self, value):
+        codes = [code.strip() for code in value if code and code.strip()]
+        found = set(MPP.objects.filter(mpp_code__in=codes).values_list("mpp_code", flat=True))
+        missing = sorted(set(codes) - found)
+        if missing:
+            raise serializers.ValidationError(f"No MPP with code: {', '.join(missing)}.")
+        return codes
