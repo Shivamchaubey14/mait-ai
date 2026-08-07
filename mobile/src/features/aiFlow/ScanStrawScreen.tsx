@@ -41,13 +41,15 @@ interface Props {
   onBack: () => void;
 }
 
-type Rejection = 'not_in_stock' | 'already_used' | 'generic' | null;
+type Rejection = 'not_in_stock' | 'already_used' | 'breed_required' | 'generic' | null;
 
 export default function ScanStrawScreen({ capture, onCreated, onBack }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [strawNo, setStrawNo] = useState('');
   const [checked, setChecked] = useState<StrawValidation | null>(null);
   const [rejection, setRejection] = useState<Rejection>(null);
+  const [breed, setBreed] = useState<string | null>(null);
+  const [breedChoices, setBreedChoices] = useState<string[]>([]);
 
   const { data: stock } = useGetInventorySummaryQuery();
   const [validateStraw, { isFetching: checking }] = useLazyValidateStrawQuery();
@@ -55,14 +57,18 @@ export default function ScanStrawScreen({ capture, onCreated, onBack }: Props): 
 
   const entered = strawNo.trim();
 
-  const handleCheck = async () => {
+  const handleCheck = async (withBreed?: string) => {
+    const chosen = withBreed ?? breed ?? undefined;
     setRejection(null);
     setChecked(null);
     try {
-      const result = await validateStraw(entered).unwrap();
+      const result = await validateStraw({ uniqueNo: entered, breed: chosen }).unwrap();
       setChecked(result);
       if (!result.valid) {
         setRejection(result.reason ?? 'generic');
+        // A number the server has never seen is not a mistake when the straws were issued
+        // as a bundle. It only needs the Mait to say which bundle it came out of.
+        setBreedChoices(result.breed_choices ?? []);
       }
     } catch {
       setRejection('generic');
@@ -80,6 +86,7 @@ export default function ScanStrawScreen({ capture, onCreated, onBack }: Props): 
           : { non_member_id: capture.nonMemberId }),
         animal_id: capture.animalId,
         straw_unique_no: entered,
+        ...(breed ? { semen_breed: breed } : {}),
       }).unwrap();
       onCreated(event);
     } catch (err) {
@@ -111,6 +118,10 @@ export default function ScanStrawScreen({ capture, onCreated, onBack }: Props): 
     already_used: {
       title: t('aiFlow.strawAlreadyUsedTitle'),
       body: t('aiFlow.strawAlreadyUsedBody'),
+    },
+    breed_required: {
+      title: t('aiFlow.whichBreedTitle'),
+      body: t('aiFlow.whichBreedBody'),
     },
     generic: { title: t('errors.generic'), body: t('aiFlow.tryAgainInAMoment') },
   };
@@ -174,12 +185,29 @@ export default function ScanStrawScreen({ capture, onCreated, onBack }: Props): 
 
       {!!rejection && (
         <FlowNotice
-          tone="error"
+          tone={rejection === 'breed_required' ? 'accent' : 'error'}
           title={notice[rejection].title}
           body={notice[rejection].body}
           testID={`straw-rejected-${rejection}`}
         />
       )}
+
+      {/* Asked rather than guessed at. Picking wrong records the wrong bull against the
+          animal, and nothing downstream would ever catch it. */}
+      {rejection === 'breed_required' &&
+        breedChoices.map(choice => (
+          <OptionCard
+            key={choice}
+            title={choice}
+            subtitle={t('aiFlow.breedInFlask', { count: stock?.by_breed?.[choice] ?? 0 })}
+            selected={breed === choice}
+            onPress={() => {
+              setBreed(choice);
+              handleCheck(choice);
+            }}
+            testID={`straw-breed-${choice}`}
+          />
+        ))}
 
       <FlowSpacer />
     </FlowScreen>
