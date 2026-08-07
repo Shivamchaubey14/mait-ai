@@ -160,9 +160,17 @@ export interface SemenBatch {
  */
 export interface StrawValidation {
   valid: boolean;
-  reason: 'not_in_stock' | 'already_used' | null;
+  reason: 'not_in_stock' | 'already_used' | 'breed_required' | null;
   straw: SemenBatch | null;
   available_straws: number;
+  /**
+   * Breeds held as unnumbered stock, sent with `breed_required`.
+   *
+   * Straws issued as a quantity carry no numbers until used, so a number the server has
+   * never seen is not a mistake — but with two bundles in the flask, only the Mait can say
+   * which one the straw came out of.
+   */
+  breed_choices?: string[];
 }
 
 export interface StockLine {
@@ -235,6 +243,13 @@ export interface AIEventDraft {
   non_member_id?: number;
   animal_id: number;
   straw_unique_no?: string;
+  /**
+   * Breed of the straw used.
+   *
+   * Only needed when the number is not on record yet and the Mait carries unnumbered stock
+   * in more than one breed — the number alone cannot say which bundle it came from.
+   */
+  semen_breed?: string;
 }
 
 /** RFC 7807 problem details — the shape of every API error (SRS §9.11). */
@@ -262,6 +277,8 @@ export interface Indent {
   sync_status_display: string;
   requested_at: string;
   issued_at: string | null;
+  /** Set when the Mait confirms they collected it. This is when the stock becomes theirs. */
+  received_at: string | null;
   note: string;
 }
 
@@ -270,6 +287,8 @@ export interface IndentDraft {
   client_uuid: string;
   product_type: 'straw' | 'consumable';
   breed?: string;
+  /** Catalogue id for anything that is not a straw. Without it the request has no name. */
+  product_ref_id?: number;
   qty_requested: number;
   note?: string;
 }

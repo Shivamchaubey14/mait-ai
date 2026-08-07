@@ -141,8 +141,11 @@ export const maitaiApi = api.injectEndpoints({
      * Answers 200 either way — a rejected scan is a normal outcome of the flow, not a failed
      * request. The app reads `reason` to decide what to tell the Mait to do about it.
      */
-    validateStraw: builder.query<StrawValidation, string>({
-      query: uniqueNo => `/semen-batches/${encodeURIComponent(uniqueNo)}/validate/`,
+    validateStraw: builder.query<StrawValidation, { uniqueNo: string; breed?: string }>({
+      query: ({ uniqueNo, breed }) => ({
+        url: `/semen-batches/${encodeURIComponent(uniqueNo)}/validate/`,
+        params: breed ? { breed } : undefined,
+      }),
       providesTags: ['Inventory'],
     }),
 
@@ -174,6 +177,7 @@ export const maitaiApi = api.injectEndpoints({
         body: {
           product_type: body.product_type,
           breed: body.breed,
+          product_ref_id: body.product_ref_id,
           qty_requested: body.qty_requested,
           note: body.note,
         },
@@ -189,6 +193,17 @@ export const maitaiApi = api.injectEndpoints({
     getIndent: builder.query<Indent, number>({
       query: id => `/indents/${id}/`,
       providesTags: ['Indent'],
+    }),
+
+    /**
+     * The Mait acknowledges that issued stock reached them.
+     *
+     * This is where the stock becomes theirs — until they collect, it is at the depot — so
+     * `Inventory` goes stale the moment it lands.
+     */
+    confirmIndentCollection: builder.mutation<Indent, number>({
+      query: id => ({ url: `/indents/${id}/confirm-collection/`, method: 'POST' }),
+      invalidatesTags: ['Indent', 'Inventory'],
     }),
 
     listAiEvents: builder.query<Paginated<AIEvent>, { status?: string } | void>({
@@ -222,4 +237,5 @@ export const {
   useCreateIndentMutation,
   useListIndentsQuery,
   useGetIndentQuery,
+  useConfirmIndentCollectionMutation,
 } = maitaiApi;

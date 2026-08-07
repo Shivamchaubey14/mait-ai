@@ -33,6 +33,7 @@ export interface ProblemDetails {
 export const ErrorCode = {
   INSUFFICIENT_STOCK: 'insufficient-stock',
   STRAW_ALREADY_CONSUMED: 'straw-already-consumed',
+  BREED_REQUIRED: 'breed-required',
   INVALID_STATE_TRANSITION: 'invalid-state-transition',
   PAYMENT_NOT_VERIFIED: 'payment-not-verified',
   OTP_INVALID: 'otp-invalid',
