@@ -119,7 +119,7 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
           testID="non-member-consent"
         />
         <FlowNotice
-          tone="info"
+          tone="accent"
           title={t('aiFlow.consentMandatory')}
           body={t('aiFlow.consentMandatoryBody')}
         />

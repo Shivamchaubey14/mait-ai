@@ -413,27 +413,41 @@ export function FlowNotice({
   tone,
   title,
   body,
+  /** Overrides the tone's default glyph when the notice means something more specific. */
+  icon,
   testID,
 }: {
   tone: 'accent' | 'info' | 'error';
   title: string;
   body?: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
   testID?: string;
 }): React.JSX.Element {
-  const swatch = {
-    accent: colors.secondary,
-    info: colors.info,
-    error: colors.error,
-  }[tone];
-  const wash = {
-    accent: colors.secondaryWash,
-    info: colors.infoWash,
-    error: colors.errorWash,
+  const { swatch, wash, glyph } = {
+    accent: {
+      swatch: colors.secondary,
+      wash: colors.secondaryWash,
+      glyph: 'warning' as const,
+    },
+    info: {
+      swatch: colors.info,
+      wash: colors.infoWash,
+      glyph: 'information-circle' as const,
+    },
+    error: {
+      swatch: colors.error,
+      wash: colors.errorWash,
+      glyph: 'alert-circle' as const,
+    },
   }[tone];
 
   return (
     <View style={[styles.notice, { backgroundColor: wash }]} testID={testID}>
-      <View style={[styles.noticeSwatch, { backgroundColor: swatch }]} />
+      {/* A glyph, not a blank square. A coloured block asks the reader to remember what the
+          colour meant; a warning triangle does not. */}
+      <View style={[styles.noticeSwatch, { backgroundColor: swatch }]}>
+        <Ionicons name={icon ?? glyph} size={15} color={colors.surface} />
+      </View>
       <View style={styles.cardBody}>
         <Text style={styles.cardTitle}>{title}</Text>
         {!!body && <Text style={styles.cardSubtitle}>{body}</Text>}
@@ -599,7 +613,13 @@ const styles = StyleSheet.create({
     padding: spacing[3],
     marginTop: spacing[2],
   },
-  noticeSwatch: { width: 26, height: 26, borderRadius: radius.sm },
+  noticeSwatch: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // -- footer ---------------------------------------------------------------------------
   footer: { paddingTop: spacing[4] },

@@ -398,7 +398,7 @@ export default function RequestStockScreen({
         ))}
 
         <FlowNotice
-          tone="info"
+          tone="accent"
           title={t('requestStock.reviewNoteTitle')}
           body={t('requestStock.reviewNoteBody')}
         />
