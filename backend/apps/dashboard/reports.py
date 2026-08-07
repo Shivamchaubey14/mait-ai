@@ -22,6 +22,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import api_view, permission_classes
 
 from apps.ai_events.models import AIEvent
+from apps.ai_events.views import search_events
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin
 from apps.core.services import record_audit
@@ -124,6 +125,8 @@ def export_csv(request):
         queryset = queryset.filter(mait_id=params["mait"])
     if params.get("status"):
         queryset = queryset.filter(status=params["status"])
+    # The same predicate the list uses, so the file matches the preview it was taken from.
+    queryset = search_events(queryset, params.get("search"))
 
     # A ceiling rather than an unbounded stream. Beyond this the honest answer is a narrower
     # date range, not a file nobody can open.
