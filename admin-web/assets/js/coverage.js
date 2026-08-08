@@ -25,9 +25,20 @@
     return null;
   }
 
+  /**
+   * Zero has three causes and three different people to call: nobody is assigned to the
+   * village, somebody is but cannot log in, or they can and have not been. The API says which
+   * — before it did not, and every zero was reported as "Mait inactive".
+   */
   function label(mpp) {
     if (!mpp.coverage_percent) {
-      return mpp.members_served === 0 && !mpp.mait_activated ? 'Mait inactive' : 'Nothing yet';
+      if (!mpp.mait_code) {
+        return 'No Mait assigned';
+      }
+      if (!mpp.mait_activated) {
+        return 'Mait not activated';
+      }
+      return 'Nothing yet';
     }
     if (mpp.coverage_percent >= 40) {
       return 'Strong';
@@ -56,14 +67,15 @@
       '<td class="table__num">' +
       ui.number(mpp.members_served) +
       '</td>' +
-      '<td>' +
-      '<span class="table__num">' +
+      // Figure, bar, word — in a flex row, so the column lines up down the page rather than
+      // each cell flowing to whatever width its own pill happens to need.
+      '<td><div class="meter">' +
+      '<span class="meter__value">' +
       percent +
-      '%</span> ' +
+      '%</span>' +
       ui.bar(percent, tone(percent)) +
-      ' ' +
       ui.pill(label(mpp), percent >= 40 ? 'good' : percent ? 'warn' : 'bad') +
-      '</td>' +
+      '</div></td>' +
       '</tr>'
     );
   }
@@ -74,26 +86,23 @@
       .mppCoverage({ days: days })
       .done(function (data) {
         const results = data.results || [];
+        // The network, computed server-side over every active MPP that has members. Totalling
+        // the rows would describe the hundred largest villages while wearing the word "every".
+        const summary = data.summary || {};
 
-        const served = results.reduce(function (sum, mpp) {
-          return sum + (mpp.members_served || 0);
-        }, 0);
-        const total = results.reduce(function (sum, mpp) {
-          return sum + (mpp.total_members || 0);
-        }, 0);
-        const above = results.filter(function (mpp) {
-          return (mpp.coverage_percent || 0) >= 40;
-        }).length;
-        const zero = results.filter(function (mpp) {
-          return !mpp.coverage_percent;
-        }).length;
+        $('#served').text(ui.number(summary.members_served));
+        $('#served-foot').text('Of ' + ui.number(summary.members) + ' on the master');
+        $('#coverage').text(summary.members ? summary.coverage_percent + '%' : '—');
+        $('#above').text(ui.number(summary.mpps_above_40));
+        $('#above-foot').text('Of ' + ui.number(summary.mpps) + ' MPPs with members');
+        $('#zero').text(ui.number(summary.mpps_at_zero));
 
-        $('#served').text(ui.number(served));
-        $('#served-foot').text('Of ' + ui.number(total) + ' on the master');
-        $('#coverage').text(total ? Math.round((served / total) * 1000) / 10 + '%' : '—');
-        $('#above').text(ui.number(above));
-        $('#above-foot').text('Of ' + ui.number(results.length));
-        $('#zero').text(ui.number(zero));
+        // Says what the table is, so nobody totals it and calls the answer the network.
+        $('#rows-note').text(
+          summary.mpps > results.length
+            ? 'Largest ' + ui.number(results.length) + ' of ' + ui.number(summary.mpps)
+            : ui.number(results.length) + ' MPPs'
+        );
 
         ui.rows($('#rows'), results, row, 'No coverage data for this period.', 5);
       })

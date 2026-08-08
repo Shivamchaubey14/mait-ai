@@ -87,15 +87,14 @@
   gap: var(--space-3);
 }
 
+/* Centred to match the stat tile, whose label class this borrows: centring the label and
+   leaving the value at the left edge would put the two halves of one fact in two places. */
 .stage {
   padding: var(--space-3);
+  text-align: center;
   background: var(--color-background);
   border-radius: var(--radius-sm);
   font-size: var(--text-label);
-}
-
-.upload-history__head {
-  padding: var(--space-4) var(--space-4) 0;
 }
 
 /* --- error report (W4) -------------------------------------------------------------------- */

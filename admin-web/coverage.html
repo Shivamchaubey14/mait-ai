@@ -18,7 +18,24 @@
             <p class="topbar__meta">Members served against total</p>
           </div>
           <div class="topbar__actions">
-            <a class="btn" href="mpps.html">← MPPs</a>
+            <!-- Ink, to match the button on MPPs that opens this screen: the pair is one route
+                 travelled in two directions, so it should not be solid one way and blank the
+                 other. -->
+            <a class="btn btn--dark" href="mpps.html">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6" />
+              </svg>
+              ← MPPs
+            </a>
             <select class="select" id="period" aria-label="Period">
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
@@ -29,38 +46,102 @@
 
         <div id="alert-region" role="alert" aria-live="polite"></div>
 
+        <!-- Every tile here is the whole network: `summary` from the API, not a total of the
+             rows below, which are only the largest villages. -->
         <section class="tiles" aria-label="Coverage summary">
-          <article class="tile">
-            <p class="tile__label">Members served</p>
+          <article class="tile tile--info">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M3 20a6 6 0 0 1 12 0M17 11a3 3 0 1 0 0-6M21 20a6 6 0 0 0-4-5.6"
+                  />
+                </svg>
+              </span>
+              Members served
+            </p>
             <p class="tile__value" id="served">—</p>
             <p class="tile__foot" id="served-foot"></p>
           </article>
-          <article class="tile">
-            <p class="tile__label">Coverage</p>
+          <article class="tile tile--good">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 12V3a9 9 0 0 1 9 9z" />
+                </svg>
+              </span>
+              Coverage
+            </p>
             <p class="tile__value" id="coverage">—</p>
-            <p class="tile__foot">Of every member on the master</p>
+            <p class="tile__foot">Across every active MPP</p>
           </article>
-          <article class="tile">
-            <p class="tile__label">MPPs above 40%</p>
+          <article class="tile tile--good">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 17l6-6 4 4 8-8M15 7h6v6" />
+                </svg>
+              </span>
+              MPPs above 40%
+            </p>
             <p class="tile__value" id="above">—</p>
             <p class="tile__foot" id="above-foot"></p>
           </article>
-          <article class="tile">
-            <p class="tile__label">MPPs at zero</p>
+          <article class="tile tile--bad">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3 2 20h20zM12 9v5M12 17.5v.5" />
+                </svg>
+              </span>
+              MPPs at zero
+            </p>
             <p class="tile__value tile__value--bad" id="zero">—</p>
-            <p class="tile__foot tile__foot--bad">No Mait, or no stock</p>
+            <p class="tile__foot tile__foot--bad">No Mait, no login, or no visit</p>
           </article>
         </section>
 
         <section class="panel panel--flush" aria-label="Coverage by MPP">
+          <div class="panel__head panel__head--flush">
+            <h2 class="panel__title">Coverage by MPP</h2>
+            <span class="panel__count" id="rows-note">—</span>
+          </div>
           <div class="table-wrap">
             <table class="table">
               <thead>
                 <tr>
                   <th scope="col">MPP</th>
                   <th scope="col">District</th>
-                  <th scope="col">Members</th>
-                  <th scope="col">Served</th>
+                  <th class="table__num" scope="col">Members</th>
+                  <th class="table__num" scope="col">Served</th>
                   <th scope="col">Coverage</th>
                 </tr>
               </thead>

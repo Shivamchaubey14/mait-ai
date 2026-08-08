@@ -33,12 +33,14 @@
     $('#head').html(
       '<th scope="col">Mait</th>' +
         '<th scope="col">MPPs</th>' +
+        // Right-aligned, because the quantities under them are. A left-aligned header over a
+        // right-aligned column is what makes a table look broken.
         state.breeds
           .map(function (breed) {
-            return '<th scope="col">' + ui.escapeHtml(breed) + '</th>';
+            return '<th class="table__num" scope="col">' + ui.escapeHtml(breed) + '</th>';
           })
           .join('') +
-        '<th scope="col">Total</th>' +
+        '<th class="table__num" scope="col">Total</th>' +
         '<th scope="col">Status</th>' +
         '<th scope="col">Holding</th>'
     );

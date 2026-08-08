@@ -18,7 +18,23 @@
             <p class="topbar__meta"><span id="mpp-count">—</span></p>
           </div>
           <div class="topbar__actions">
-            <a class="btn" href="coverage.html">Coverage →</a>
+            <!-- Ink rather than green: green is reserved for the one action a screen exists
+                 for, and this one leaves the screen. White made it look disabled. -->
+            <a class="btn btn--dark" href="coverage.html">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+              </svg>
+              Coverage →
+            </a>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
         </header>
@@ -66,7 +82,7 @@
         <!-- An MPP with no Mait, or with one who never activated, records nothing at all.
              Spelled out because "Assign" in a table cell does not convey that. -->
         <div class="notice notice--warn">
-          <span class="notice__swatch" aria-hidden="true"></span>
+          <span class="notice__icon" aria-hidden="true"></span>
           <div>
             <p class="notice__title">An MPP without an active Mait records nothing</p>
             <p class="notice__body">

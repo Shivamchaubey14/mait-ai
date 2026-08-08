@@ -37,14 +37,16 @@
       '<td>' +
       ui.identity(entry.name, entry.sahayak_vendor_code) +
       '</td>' +
-      '<td>' +
-      '<span class="table__num">' +
+      // Same meter as the coverage table: the count in a fixed gutter, then the bar, so the
+      // bars start at one x and can be compared by eye down the column.
+      '<td><div class="meter">' +
+      '<span class="meter__value">' +
       ui.number(entry.ai_count) +
-      '</span> ' +
+      '</span>' +
       // Below half the leader is worth a second look, so it is coloured rather than left to
       // be worked out from bar lengths.
       ui.bar(relative, relative < 50 ? 'behind' : null) +
-      '</td>' +
+      '</div></td>' +
       '<td class="table__num">' +
       ui.money(entry.amount_collected) +
       '</td>' +

@@ -36,7 +36,17 @@ window.MaitAI = window.MaitAI || {};
     exceptions: 'M12 3 2 20h20zM12 9v5M12 17.5v.5',
     reports: 'M6 3h9l5 5v13H6zM14 3v6h6M9 14h7M9 18h7',
     users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M2 20a7 7 0 0 1 14 0M18 8v6M15 11h6',
+
+    /* Not sidebar sections: the filter bar's magnifier and the four notice tones. */
+    search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4.3-4.3',
+    info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 11v5.5M12 7.5v.5',
+    warn: 'M12 3 2 20h20zM12 9v5M12 17.5v.5',
+    bad: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M9 9l6 6M15 9l-6 6',
+    good: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M8 12.5l2.5 2.5L16 9.5',
   };
+
+  /* Which glyph a notice gets, by the tone modifier already on it. */
+  const NOTICE_ICON = { 'notice--warn': 'warn', 'notice--bad': 'bad', 'notice--good': 'good' };
 
   /* Order is the order they appear. `key` matches the page's data-page attribute. */
   const SECTIONS = [
@@ -56,9 +66,12 @@ window.MaitAI = window.MaitAI || {};
     { key: 'users', label: 'Users & roles', href: 'users.html' },
   ];
 
-  function icon(key) {
+  /* `className` is optional — a notice's glyph is sized by its container, not by a class. */
+  function icon(key, className) {
     return (
-      '<svg class="side__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      '<svg' +
+      (className ? ' class="' + className + '"' : '') +
+      ' viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
       'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
       '<path d="' +
       (ICONS[key] || '') +
@@ -78,7 +91,7 @@ window.MaitAI = window.MaitAI || {};
       return [
         '<a class="side__link' + (isActive ? ' is-active' : '') + '"',
         ' href="' + section.href + '"' + (isActive ? ' aria-current="page"' : '') + '>',
-        icon(section.key),
+        icon(section.key, 'side__icon'),
         '<span class="side__label">' + escapeHtml(section.label) + '</span>',
         section.badge ? '<span class="side__badge" id="exception-badge" hidden>0</span>' : '',
         '</a>',
@@ -96,6 +109,36 @@ window.MaitAI = window.MaitAI || {};
       '<nav aria-label="Main">' + links + '</nav>',
       '</aside>',
     ].join('');
+  }
+
+  /**
+   * Fill the icon slots the shared components leave empty.
+   *
+   * A notice already carries its tone in its markup and a filter search box is the same box on
+   * every screen, so the glyph is decided here rather than pasted into eleven HTML files —
+   * the same reason the sidebar is not copied into them. Both are decorative and marked
+   * `aria-hidden`: the notice's words and the field's own label carry the meaning.
+   */
+  function decorate() {
+    $('.notice__icon').each(function () {
+      const $slot = $(this);
+      if ($slot.children().length) {
+        return;
+      }
+      const $notice = $slot.closest('.notice');
+      const tone = Object.keys(NOTICE_ICON).filter(function (cls) {
+        return $notice.hasClass(cls);
+      })[0];
+      $slot.html(icon(NOTICE_ICON[tone] || 'info'));
+    });
+
+    $('.filters__search').each(function () {
+      const $input = $(this);
+      if ($input.parent().hasClass('search')) {
+        return;
+      }
+      $input.wrap('<div class="search"></div>').before(icon('search', 'search__icon'));
+    });
   }
 
   /**
@@ -117,14 +160,18 @@ window.MaitAI = window.MaitAI || {};
     sections: SECTIONS,
     escapeHtml: escapeHtml,
 
-    /** Insert the sidebar and mark the current section. */
+    /** Insert the sidebar, mark the current section, and fill the shared icon slots. */
     mount: function () {
       const $shell = $('.shell');
       const active = $shell.data('page');
       $shell.prepend(renderSidebar(active));
       wireAccount();
+      decorate();
       return active;
     },
+
+    /** Re-run the icon slots after a screen has rendered notices of its own. */
+    decorate: decorate,
 
     /**
      * Send anyone without a session to login before the page renders anything.
@@ -155,7 +202,9 @@ window.MaitAI = window.MaitAI || {};
       $('#alert-region').html(
         '<div class="' +
           cls +
-          '"><span class="notice__swatch" aria-hidden="true"></span>' +
+          '"><span class="notice__icon" aria-hidden="true">' +
+          icon(tone === 'warn' ? 'warn' : 'bad') +
+          '</span>' +
           '<div><p class="notice__title">' +
           escapeHtml(message) +
           '</p></div></div>'

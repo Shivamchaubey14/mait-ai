@@ -15,6 +15,11 @@
   box-sizing: border-box;
 }
 
+/* Beats any component that sets its own `display` — see the same rule in portal.css. */
+[hidden] {
+  display: none !important;
+}
+
 body,
 h1,
 h2,

@@ -29,7 +29,7 @@
         <!-- The fact that decides the rollout schedule: a Mait with no number cannot sign in
              at all, and no amount of app work changes that. -->
         <div class="notice notice--warn" id="backlog" hidden>
-          <span class="notice__swatch" aria-hidden="true"></span>
+          <span class="notice__icon" aria-hidden="true"></span>
           <div>
             <p class="notice__title" id="backlog-title">—</p>
             <p class="notice__body">
@@ -37,6 +37,31 @@
             </p>
           </div>
           <a class="btn btn--dark notice__action" href="mait-activate.html">Open the queue</a>
+        </div>
+
+        <!-- The same fact when it is good news. A screen whose job is a backlog needs to be
+             able to say the backlog is empty: with only "work to do" or nothing at all, an
+             operator cannot tell an all-clear from a page that failed to load. -->
+        <div class="notice notice--good" id="all-clear" hidden>
+          <span class="notice__icon" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">Every Mait has a mobile number</p>
+            <p class="notice__body" id="all-clear-body">—</p>
+          </div>
+          <a class="btn btn--dark notice__action" href="mait-activate.html">Activation queue</a>
+        </div>
+
+        <!-- An empty roster is not an empty backlog. It means SAP has not been uploaded, and
+             the fix is on another screen entirely. -->
+        <div class="notice" id="roster-empty" hidden>
+          <span class="notice__icon" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">No Maits on the roster yet</p>
+            <p class="notice__body">
+              The roster is whatever the Mait master says. Upload it and they appear here.
+            </p>
+          </div>
+          <a class="btn btn--dark notice__action" href="uploads.html">Go to SAP upload</a>
         </div>
 
         <section class="filters" aria-label="Filters">
@@ -47,10 +72,42 @@
             placeholder="Search name or Mait code"
             aria-label="Search name or Mait code"
           />
-          <button class="chip" id="filter-needs-mobile" type="button" aria-pressed="false">
+          <!-- Toned to what they select: these two filters pull up blocked and waiting work,
+               and a green chip over the Maits who cannot sign in says the opposite of what the
+               rows below it show. -->
+          <button
+            class="chip chip--bad"
+            id="filter-needs-mobile"
+            type="button"
+            aria-pressed="false"
+          >
+            <svg
+              class="chip__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M8 3h8v18H8zM11 18.5h2M4 4l16 16" />
+            </svg>
             Needs mobile
           </button>
-          <button class="chip" id="filter-pending" type="button" aria-pressed="false">
+          <button class="chip chip--warn" id="filter-pending" type="button" aria-pressed="false">
+            <svg
+              class="chip__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7.5V12l3 2" />
+            </svg>
             Not activated
           </button>
         </section>

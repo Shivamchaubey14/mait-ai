@@ -19,6 +19,14 @@
   box-sizing: border-box;
 }
 
+/* The attribute has to beat any component that sets its own `display`. The browser's own
+   [hidden] rule is weaker than a single class, so `.notice { display: flex }` quietly won and
+   every `hidden` banner in the portal showed itself on load — carrying the em dash it was
+   built with instead of the sentence JS had not written yet. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: var(--font-body);
@@ -243,6 +251,13 @@ a:hover {
   border-color: var(--color-error-pressed);
 }
 
+/* `.btn` is already an inline-flex row with a gap, so a glyph only needs a size. */
+.btn__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
 .btn[disabled] {
   color: var(--color-text-disabled);
   background: var(--color-disabled-fill);
@@ -288,6 +303,33 @@ a:hover {
   min-width: 200px;
 }
 
+/* The magnifier is a sibling laid over the input, not a background image: a background image
+   would mean an SVG with a colour spelled out in this file, and the palette lives in
+   tokens.css. shell.js builds the wrapper, so no page has to remember it. */
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 260px;
+  min-width: 200px;
+}
+
+.search .filters__search {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: calc(var(--space-3) * 2 + 16px);
+}
+
+/* Never intercepts the click that was meant for the field behind it. */
+.search__icon {
+  position: absolute;
+  left: var(--space-3);
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
 /* A chip states what it is currently doing — "Status: all", not "Status". Reading the bar
    should be enough to know what the table below is showing. */
 .chip {
@@ -311,6 +353,33 @@ a:hover {
   background: var(--color-primary-wash);
 }
 
+/* A chip that selects blocked or waiting work turns that colour when it is on. Green is the
+   portal's "this is fine", and a green chip listing the Maits who cannot sign in says the
+   opposite of what the rows below it show. */
+.chip--bad.is-active {
+  color: var(--color-error-pressed);
+  border-color: var(--color-error);
+  background: var(--color-error-wash);
+}
+
+.chip--warn.is-active {
+  color: var(--yolk-800);
+  border-color: var(--color-secondary);
+  background: var(--color-secondary-wash);
+}
+
+.chip__icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  opacity: 0.65;
+}
+
+.chip:hover .chip__icon,
+.chip.is-active .chip__icon {
+  opacity: 1;
+}
+
 /* --- stat tiles ------------------------------------------------------------------------- */
 .tiles {
   display: grid;
@@ -319,16 +388,79 @@ a:hover {
   margin-bottom: var(--space-4);
 }
 
+/* Centred and tinted. A summary row is read as a row — four figures scanned left to right —
+   and centring puts them on one sightline instead of four ragged left edges. The tint is the
+   tile's own tone; a white card in a row of coloured ones reads as the one that failed to
+   load, which is why the neutral tile is greyed rather than left white. */
 .tile {
   padding: var(--space-4);
-  background: var(--color-surface);
+  text-align: center;
+  background: var(--ink-50);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
 
 .tile__label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   font-size: var(--text-caption);
   color: var(--color-text-muted);
+}
+
+.tile--info {
+  background: var(--color-info-wash);
+  border-color: var(--ink-100);
+}
+
+.tile--good {
+  background: var(--color-primary-wash);
+  border-color: var(--green-200);
+}
+
+.tile--warn {
+  background: var(--color-secondary-wash);
+  border-color: var(--yolk-200);
+}
+
+.tile--bad {
+  background: var(--color-error-wash);
+  border-color: var(--color-error);
+}
+
+/* The icon rides in the label rather than above it, so a tile reads as one line of meaning
+   with a number under it. Tinted per tone: four white cards in a row are four numbers an
+   operator has to read before knowing which one is the problem. */
+/* White chip on the tinted card, the same way round as a notice's icon: the card carries the
+   wash, the chip carries the glyph, and the glyph carries the colour. */
+.tile__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-info);
+  background: var(--color-surface);
+}
+
+.tile__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tile--good .tile__icon {
+  color: var(--color-primary-dark);
+}
+
+.tile--warn .tile__icon {
+  color: var(--color-secondary-pressed);
+}
+
+.tile--bad .tile__icon {
+  color: var(--color-error);
 }
 
 .tile__value {
@@ -383,6 +515,12 @@ a:hover {
   margin-bottom: var(--space-4);
 }
 
+/* A head inside `.panel--flush`, which has no padding of its own so the table can meet the
+   panel's edges. */
+.panel__head--flush {
+  padding: var(--space-4) var(--space-4) 0;
+}
+
 .panel__title {
   display: flex;
   align-items: center;
@@ -411,12 +549,20 @@ a:hover {
   font-size: var(--text-body);
 }
 
+/* The head is a tinted band rather than white-on-white: on a long roster it is the only thing
+   telling the operator which column they are reading once the rows fill the screen. `.panel--flush`
+   clips it, so the tint follows the panel's rounded corners. */
+.table thead {
+  background: var(--ink-50);
+}
+
 .table th {
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-caption);
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--color-ink);
   text-align: left;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   border-bottom: 1px solid var(--color-border);
 }
@@ -435,6 +581,13 @@ a:hover {
   text-align: right;
   font-family: var(--font-heading);
   font-weight: 600;
+}
+
+/* A right-aligned column needs a right-aligned header. Without this the label sits at the far
+   left of a column whose figures sit at the far right, and the table reads as misaligned even
+   though the numbers line up with each other perfectly. */
+.table th.table__num {
+  text-align: right;
 }
 
 /* Codes and identifiers read as data rather than prose. */
@@ -526,20 +679,44 @@ a:hover {
   border: 1px solid var(--color-error);
 }
 
-.notice__swatch {
+/* The all-clear. A screen whose whole job is a backlog has to be able to say the backlog is
+   empty — otherwise the only two states it can show are "work to do" and nothing at all,
+   and nothing at all reads as a page that failed to load. */
+.notice--good {
+  background: var(--color-primary-wash);
+  border: 1px solid var(--green-200);
+}
+
+/* A glyph, not a plain block of colour: the shape is the part that still carries the meaning
+   for an operator who cannot tell this yellow from that red. Drawn in `currentColor` so a
+   tone sets one property. */
+.notice__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 26px;
   height: 26px;
   flex: none;
   border-radius: var(--radius-sm);
-  background: var(--color-info);
+  color: var(--color-info);
+  background: var(--color-surface);
 }
 
-.notice--warn .notice__swatch {
-  background: var(--color-secondary);
+.notice__icon svg {
+  width: 17px;
+  height: 17px;
 }
 
-.notice--bad .notice__swatch {
-  background: var(--color-error);
+.notice--warn .notice__icon {
+  color: var(--color-secondary-pressed);
+}
+
+.notice--bad .notice__icon {
+  color: var(--color-error);
+}
+
+.notice--good .notice__icon {
+  color: var(--color-primary-dark);
 }
 
 .notice__title {
@@ -557,7 +734,12 @@ a:hover {
 }
 
 /* --- progress ----------------------------------------------------------------------------- */
+/* `ui.bar()` emits spans, and an inline element ignores height and width outright — the bars
+   in the coverage and leaderboard tables were drawing as nothing at all, leaving the pill
+   beside them to float against a number with no rule under it. */
 .bar {
+  display: inline-block;
+  vertical-align: middle;
   height: 6px;
   min-width: 90px;
   border-radius: var(--radius-pill);
@@ -566,9 +748,37 @@ a:hover {
 }
 
 .bar__fill {
+  display: block;
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--color-primary);
+}
+
+/* A proportion cell: figure, bar, then the word for it. The figure sits in a fixed gutter so
+   every bar in the column starts at the same x and the pills form a column of their own —
+   three parts left to flow inline line up with nothing. */
+.meter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.meter__value {
+  min-width: 3.5em;
+  flex: none;
+  text-align: right;
+  font-family: var(--font-heading);
+  font-weight: 600;
+}
+
+.meter .bar {
+  flex: 1 1 90px;
+}
+
+.meter .pill {
+  flex: none;
+  min-width: 8.5em;
+  text-align: center;
 }
 
 /* Behind target. Yellow is the alert colour everywhere in this product, so it means the same

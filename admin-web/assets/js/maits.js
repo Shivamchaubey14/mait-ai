@@ -89,15 +89,21 @@
         const summary = page.summary || {};
         const total = summary.total || page.count || 0;
         const stranded = summary.without_mobile || 0;
+        const activated = summary.activated || 0;
         state.rows = page.results || [];
         $('#mait-count').text(ui.number(total));
 
-        // Nothing to say when nobody is stranded — a standing warning over an empty backlog
-        // is the kind of banner people learn to scroll past.
-        //
-        // Worded to scale when there is. "1,099 of 1,183" is a rollout problem; "1 Mait" is a
-        // phone call, and dressing the second up as the first spends the alarm on nothing.
-        if (stranded && total) {
+        // Three states, three cards, one shown at a time. The backlog is this screen's whole
+        // subject, so an empty one is news rather than nothing: yellow when Maits are stranded,
+        // green when none are, and neither when SAP has not been uploaded at all — that is a
+        // different problem, fixed on a different screen.
+        $('#backlog').prop('hidden', !(total && stranded));
+        $('#all-clear').prop('hidden', !(total && !stranded));
+        $('#roster-empty').prop('hidden', Boolean(total));
+
+        // Worded to scale. "1,099 of 1,183" is a rollout problem; "One Mait" is a phone call,
+        // and dressing the second up as the first spends the alarm on nothing.
+        if (total && stranded) {
           const percent = Math.round((stranded / total) * 100);
           $('#backlog-title').text(
             stranded === 1
@@ -109,9 +115,22 @@
                   percent +
                   '%) have no mobile number'
           );
-          $('#backlog').prop('hidden', false);
-        } else {
-          $('#backlog').prop('hidden', true);
+        }
+
+        // What is left once nobody is stranded: signing in is possible for everyone, and the
+        // remainder is waiting on the Maits themselves rather than on the office.
+        if (total && !stranded) {
+          const waiting = total - activated;
+          $('#all-clear-body').text(
+            'All ' +
+              ui.number(total) +
+              ' can sign in. ' +
+              (waiting === 0
+                ? 'Every one of them has activated.'
+                : waiting === 1
+                  ? 'One has not opened the app yet.'
+                  : ui.number(waiting) + ' have not opened the app yet.')
+          );
         }
 
         ui.rows($('#rows'), state.rows, row, 'No Maits match these filters.', 6);
