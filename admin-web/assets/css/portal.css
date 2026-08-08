@@ -10,6 +10,7 @@
  */
 
 @import url('tokens.css');
+@import url('brand.css');
 
 /* --- reset ---------------------------------------------------------------------------- */
 *,
@@ -60,27 +61,12 @@ a:hover {
   background: var(--color-ink);
 }
 
+/* Placement only — the mark itself is `.brand` in brand.css, so the sidebar shows the same
+   tile the operator signed in under. `align-self` keeps it from stretching to the full width
+   of the sidebar column, which would make a wider tile out of the same component. */
 .side__mark {
-  padding: var(--space-3) var(--space-4);
+  align-self: flex-start;
   margin-bottom: var(--space-3);
-  background: var(--ink-700);
-  border-radius: var(--radius-md);
-}
-
-.side__mark-name {
-  display: block;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: var(--text-h3);
-  color: var(--color-surface);
-  letter-spacing: 0.04em;
-}
-
-.side__mark-sub {
-  font-size: 0.625rem;
-  font-weight: 600;
-  color: var(--color-primary);
-  letter-spacing: 0.18em;
 }
 
 /* The gap lives here rather than on `.side`, which only separates the mark from the nav as a
@@ -674,7 +660,10 @@ a:hover {
     align-items: center;
   }
 
+  /* The sidebar is a horizontal bar here, so the cross axis flips: centre the mark against
+     the links rather than pinning it to the top of the bar. */
   .side__mark {
+    align-self: center;
     margin-bottom: 0;
   }
 }

@@ -39,30 +39,11 @@
   pointer-events: none;
 }
 
+/* Placement only — the mark itself is `.brand` in brand.css. `relative` lifts it above the
+   disc, which is absolutely positioned in this same panel. */
 .auth__mark {
   position: relative;
-  display: inline-flex;
-  flex-direction: column;
   align-self: flex-start;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-}
-
-.auth__mark-name {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: var(--text-h3);
-  color: var(--color-ink);
-  letter-spacing: 0.04em;
-}
-
-.auth__mark-sub {
-  font-family: var(--font-body);
-  font-size: 0.625rem;
-  font-weight: 600;
-  color: var(--color-primary);
-  letter-spacing: 0.18em;
 }
 
 .auth__headline {

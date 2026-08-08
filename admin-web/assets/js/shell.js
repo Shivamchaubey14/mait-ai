@@ -87,9 +87,11 @@ window.MaitAI = window.MaitAI || {};
 
     return [
       '<aside class="side">',
-      '<div class="side__mark">',
-      '<span class="side__mark-name">MAIT AI</span>',
-      '<span class="side__mark-sub">ADMIN</span>',
+      // `.brand` is the shared wordmark (brand.css) — the same tile sign-in shows, so the
+      // portal does not appear to change product the moment someone logs in.
+      '<div class="brand side__mark">',
+      '<span class="brand__name">MAIT AI</span>',
+      '<span class="brand__sub">ADMIN PORTAL</span>',
       '</div>',
       '<nav aria-label="Main">' + links + '</nav>',
       '</aside>',

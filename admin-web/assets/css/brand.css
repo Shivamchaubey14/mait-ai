@@ -1,0 +1,37 @@
+/**
+ * The wordmark, in one place.
+ *
+ * Sign-in and the sidebar each drew their own, and drifted: the same product showed a white
+ * tile reading "MAIT AI / ADMIN PORTAL" before sign-in and a dark one reading "MAIT AI /
+ * ADMIN" a click later. One component, so the mark cannot differ by page again.
+ *
+ * Only the mark itself lives here. Where it sits on a page belongs to that page — the tile is
+ * the same object whether it is pinned to the top of the sidebar or the corner of the Ink
+ * panel, and it renders on Ink in both.
+ */
+
+@import url('tokens.css');
+
+.brand {
+  display: inline-flex;
+  flex-direction: column;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+}
+
+.brand__name {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h3);
+  color: var(--color-ink);
+  letter-spacing: 0.04em;
+}
+
+.brand__sub {
+  font-family: var(--font-body);
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  letter-spacing: 0.18em;
+}
