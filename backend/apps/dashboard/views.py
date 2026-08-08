@@ -11,7 +11,7 @@ wrong right now, and a stale answer there is worse than a slightly slower one.
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import timedelta
 
 from django.conf import settings
 from django.db.models import Count, Q, Sum
@@ -22,6 +22,7 @@ from rest_framework.response import Response
 
 from apps.ai_events.models import AIEvent
 from apps.core.permissions import IsAdmin
+from apps.core.timeframe import end_of_day, local_day, start_of_day
 from apps.indents.models import IndentRequest
 from apps.inventory.models import MaitInventory, ProductType
 from apps.masterdata.models import Mait
@@ -39,9 +40,17 @@ MAX_COVERAGE_DAYS = 365
 
 
 def _completed_between(start, end=None):
-    qs = AIEvent.objects.filter(status=AIEvent.Status.COMPLETED, completed_at__date__gte=start)
+    """
+    Completed events in a range of local days, `end` included.
+
+    Compared against instants rather than `completed_at__date`, which returns nothing at all
+    on a MySQL without timezone tables — see `apps.core.timeframe`.
+    """
+    qs = AIEvent.objects.filter(
+        status=AIEvent.Status.COMPLETED, completed_at__gte=start_of_day(start)
+    )
     if end is not None:
-        qs = qs.filter(completed_at__date__lte=end)
+        qs = qs.filter(completed_at__lt=end_of_day(end))
     return qs.count()
 
 
@@ -236,16 +245,18 @@ def trends(request):
     }
 
     # Pending payments are read live: they are by definition not yet aggregated, and the
-    # number is small.
+    # number is small. Small enough that the day each one falls on is worked out here rather
+    # than asked of the database, which cannot answer it without timezone tables.
     pending_qs = AIEvent.objects.filter(
-        status=AIEvent.Status.PAYMENT_PENDING, created_at__date__gte=start
+        status=AIEvent.Status.PAYMENT_PENDING, created_at__gte=start_of_day(start)
     )
     if district:
         pending_qs = pending_qs.filter(mpp__district_code=district)
-    pending_by_day = {
-        row["created_at__date"]: row["n"]
-        for row in pending_qs.values("created_at__date").annotate(n=Count("id"))
-    }
+
+    pending_by_day: dict = {}
+    for created_at in pending_qs.values_list("created_at", flat=True):
+        day = local_day(created_at)
+        pending_by_day[day] = pending_by_day.get(day, 0) + 1
 
     results = []
     for offset in range(days):
@@ -343,13 +354,9 @@ def mpp_coverage(request):
     except (TypeError, ValueError):
         days = 30
 
-    # Local midnight as an instant, rather than `completed_at__date__gte`. Two reasons, and the
-    # first is not a preference: `__date` compiles to CONVERT_TZ, which returns NULL on any
-    # MySQL whose timezone tables were never loaded — the filter then matches nothing at all
-    # and the screen reports a confident zero. It is also not sargable, so the comparison
-    # against an instant is what lets `aievent_completed_idx` serve the window.
-    start_date = timezone.localdate() - timedelta(days=days - 1)
-    window_start = timezone.make_aware(datetime.combine(start_date, time.min))
+    # An instant, never `completed_at__date` — see `apps.core.timeframe` for why that returns
+    # nothing at all here, and why this is also the form the index can serve.
+    window_start = start_of_day(timezone.localdate() - timedelta(days=days - 1))
 
     # Every active MPP with members, not a page of them. The tiles on the coverage screen speak
     # for the network, and a network total computed from the hundred biggest villages is a

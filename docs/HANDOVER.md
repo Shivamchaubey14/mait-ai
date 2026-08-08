@@ -138,6 +138,15 @@ multi-line form and a review sheet, and the offline queue.
   `MPP.mait` at all, so a master refresh cannot silently undo an assignment — which it used
   to do. Assign from the portal's Assignment screen (bulk `.xlsx` round trip, or one row at a
   time). After the retirement, 3,131 of 3,134 MPPs are unassigned and need doing.
+- **Never ask MySQL what local day a timestamp falls on.** `__date` and `TruncDate` on an aware
+  `DateTimeField` compile to `CONVERT_TZ`, which returns NULL unless `mysql.time_zone*` was
+  loaded with `mysql_tzinfo_to_sql` — and this database's is empty, as most are. A NULL
+  comparison matches nothing, so the whole dashboard reported zero on a database full of
+  events, and the hourly aggregate job keyed every slice on NULL. Nothing in either answer said
+  the filter was at fault rather than the data. Fixed 2026-08-08 by comparing against instants
+  and grouping by day in Python: see `apps/core/timeframe.py`, and use it rather than
+  reintroducing `__date`. Loading the timezone tables in production is still worth doing, but
+  no query should need it.
 - **`develop` is pushed to directly**, bypassing the branch-protection rule. That is a known,
   accepted deviation from `BRANCHING.md`.
 
