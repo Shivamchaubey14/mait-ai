@@ -38,6 +38,9 @@ from .models import MPP, DataUploadLog, Mait, Member
 logger = logging.getLogger(__name__)
 
 CHUNK_SIZE = 1000
+# Rows between progress writes. Smaller than a chunk on purpose: the chunk size is a
+# transaction decision and one write per thousand rows is not a progress bar.
+PROGRESS_EVERY = 100
 HEADER_SEARCH_ROWS = 15  # Member.xlsx puts its header on row 6
 MAX_ERRORS_STORED = 5000  # bounded so one bad file cannot blow up the JSON column
 
@@ -118,6 +121,16 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
         context.load_mpp_map()
 
     workbook = load_workbook(upload.file, read_only=True, data_only=True)
+    try:
+        return _read_and_apply(upload, workbook, handler, context)
+    finally:
+        # In a `finally` because a read-only workbook holds the file open, and openpyxl's
+        # read-only mode leaks the handle if the run does not reach its own close(). On Windows
+        # that handle then blocks anything touching the stored file — including deleting it.
+        workbook.close()
+
+
+def _read_and_apply(upload: DataUploadLog, workbook, handler, context) -> dict[str, int]:
     sheet = workbook.active
 
     header_row_index, headers = _detect_header(sheet, upload.upload_type)
@@ -127,6 +140,18 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
         # obvious rather than a guessing game.
         found = ", ".join(sorted(h for h in headers if h)[:25])
         raise ValueError(f"Required column(s) missing: {', '.join(missing)}. Found: {found}")
+
+    # The bar has to have something to be a fraction of. `progress_percent` is
+    # processed/total_rows and total_rows was only written once the import had finished, so
+    # every upload — including the 105k-row Member master — reported 0% for its entire run and
+    # then jumped to 100% when there was nothing left to wait for. The sheet's own declared
+    # dimension is an estimate, which is all a bar needs; the exact count is written at the end
+    # as before. Some writers omit the dimension, and then there is simply no estimate to give.
+    declared_rows = max(0, (sheet.max_row or 0) - header_row_index)
+    if declared_rows:
+        DataUploadLog.objects.filter(pk=upload.pk).update(
+            total_rows=declared_rows, updated_at=timezone.now()
+        )
 
     errors: list[dict[str, Any]] = []
     success = failed = processed = 0
@@ -141,6 +166,12 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
             success += ok
             failed += bad
             batch = []
+            _report_progress(upload, processed, success, failed)
+        elif processed % PROGRESS_EVERY == 0:
+            # Reading runs ahead of applying by up to one chunk, which is exactly what the two
+            # stage tiles say it does. Without this, a file of a thousand rows commits once —
+            # at the end — and the bar has nothing to report until there is nothing left to
+            # wait for, which is the state the operator described as "stuck at 0%".
             _report_progress(upload, processed, success, failed)
 
     if batch:
@@ -163,7 +194,6 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
             "updated_at",
         ]
     )
-    workbook.close()
     logger.info("Upload %s finished: %s ok, %s failed of %s", upload.id, success, failed, processed)
     return {"total": processed, "success": success, "failed": failed}
 
