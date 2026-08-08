@@ -214,8 +214,17 @@ say which bundle it came out of. Validate then answers `reason: "breed_required"
 | GET | `/dashboard/summary/` | AI counts today/week/month/lifetime + all-time highs | Admin |
 | GET | `/dashboard/trends/` | Daily/monthly AI trend series, filterable | Admin |
 | GET | `/dashboard/mait-performance/` | Per-Mait AI count & collections for a period | Admin |
-| GET | `/dashboard/mpp-coverage/` | Members served vs. total per MPP | Admin |
+| GET | `/dashboard/mpp-coverage/` | Members served vs. total per MPP for a window (`?days=`, default 30, max 365) | Admin |
 | GET | `/reports/export/` | CSV/Excel export of AI events / payments (query-filtered) | Admin |
+
+`/dashboard/mpp-coverage/` answers with `summary` and `results`, and they are not the same
+population. `summary` is every active MPP that has members; `results` is the largest
+`rows_shown` of them by member count, so totalling the rows describes the villages listed and
+nothing more. A member counts once however many inseminations they bought — coverage is reach,
+not volume, which is what separates it from the leaderboard. Each row carries `mait_code`,
+`mait_name` and `mait_activated` because zero coverage has three causes and three different
+people to call: nobody assigned, somebody assigned who cannot log in, or somebody who can and
+has not been.
 
 ## 9.10 Admin — users
 

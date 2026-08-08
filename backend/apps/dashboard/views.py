@@ -11,7 +11,7 @@ wrong right now, and a stale answer there is worse than a slightly slower one.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.conf import settings
 from django.db.models import Count, Q, Sum
@@ -31,6 +31,11 @@ from .models import DailyAIAggregate, PlatformMilestone
 
 MAX_EXCEPTION_ROWS = 3
 MAX_TREND_DAYS = 120
+
+# Coverage is reported for the whole network but tabulated for the largest villages only —
+# nobody reads three thousand rows, and the summary is what the tiles are for.
+MAX_COVERAGE_ROWS = 100
+MAX_COVERAGE_DAYS = 365
 
 
 def _completed_between(start, end=None):
@@ -308,9 +313,24 @@ def mait_performance(request):
     tags=["dashboard"],
     summary="MPP coverage",
     description=(
-        "Members served versus total members per MPP (SRS §6.7.5). Coverage is what tells "
-        "the business where the service is reaching people and where it is not."
+        "Members served versus total members per MPP for a window (SRS §6.7.5). Coverage is "
+        "what tells the business where the service is reaching people and where it is not: a "
+        "member counts once however many inseminations they bought, so an MPP cannot look "
+        "covered because one farmer is a heavy user.\n\n"
+        "`summary` is the whole network — every active MPP that has members. `results` is the "
+        "leaderboard's worth of that, the largest MPPs by member count, so the two must not be "
+        "confused: totalling `results` describes the villages shown and nothing more."
     ),
+    parameters=[
+        OpenApiParameter(
+            "days",
+            int,
+            description=(
+                "Window in days, counted on `completed_at`. Default 30, capped at "
+                f"{MAX_COVERAGE_DAYS}."
+            ),
+        )
+    ],
     responses={200: dict},
 )
 @api_view(["GET"])
@@ -318,33 +338,78 @@ def mait_performance(request):
 def mpp_coverage(request):
     from apps.masterdata.models import MPP
 
-    rows = (
+    try:
+        days = min(MAX_COVERAGE_DAYS, max(1, int(request.query_params.get("days", 30))))
+    except (TypeError, ValueError):
+        days = 30
+
+    # Local midnight as an instant, rather than `completed_at__date__gte`. Two reasons, and the
+    # first is not a preference: `__date` compiles to CONVERT_TZ, which returns NULL on any
+    # MySQL whose timezone tables were never loaded — the filter then matches nothing at all
+    # and the screen reports a confident zero. It is also not sargable, so the comparison
+    # against an instant is what lets `aievent_completed_idx` serve the window.
+    start_date = timezone.localdate() - timedelta(days=days - 1)
+    window_start = timezone.make_aware(datetime.combine(start_date, time.min))
+
+    # Every active MPP with members, not a page of them. The tiles on the coverage screen speak
+    # for the network, and a network total computed from the hundred biggest villages is a
+    # different number wearing the same label.
+    #
+    # This does group over ai_event, which the rest of this module avoids — but it groups by
+    # MPP, and there are thousands of MPPs rather than millions. The window is what keeps it
+    # off the whole table, and `aievent_completed_idx` is what serves the window.
+    ranked = (
         MPP.objects.filter(is_active=True)
         .annotate(
             total_members=Count("members", distinct=True),
             served=Count(
                 "ai_events__member",
-                filter=Q(ai_events__status=AIEvent.Status.COMPLETED),
+                filter=Q(
+                    ai_events__status=AIEvent.Status.COMPLETED,
+                    ai_events__completed_at__gte=window_start,
+                ),
                 distinct=True,
             ),
         )
         .filter(total_members__gt=0)
-        .order_by("-total_members")[:100]
+        .select_related("mait")
+        .order_by("-total_members")
     )
+
+    network = list(ranked)
+    members = sum(r.total_members for r in network)
+    # A member belongs to exactly one MPP and is counted once within it, so this sums cleanly.
+    served = sum(r.served for r in network)
+
+    def as_row(r):
+        return {
+            "mpp_code": r.mpp_code,
+            "mpp_name": r.mpp_name,
+            "district_code": r.district_code,
+            "total_members": r.total_members,
+            "members_served": r.served,
+            "coverage_percent": round(r.served / r.total_members * 100, 1),
+            # Zero coverage has three different causes and three different fixes: nobody is
+            # assigned, somebody is assigned but cannot log in, or they can and have not been.
+            # The screen cannot tell them apart without being told which.
+            "mait_code": r.mait.sahayak_vendor_code if r.mait_id else "",
+            "mait_name": r.mait.name if r.mait_id else "",
+            "mait_activated": bool(r.mait_id and r.mait.user_id),
+        }
 
     return Response(
         {
-            "results": [
-                {
-                    "mpp_code": r.mpp_code,
-                    "mpp_name": r.mpp_name,
-                    "district_code": r.district_code,
-                    "total_members": r.total_members,
-                    "members_served": r.served,
-                    "coverage_percent": round(r.served / r.total_members * 100, 1),
-                }
-                for r in rows
-            ]
+            "days": days,
+            "summary": {
+                "mpps": len(network),
+                "members": members,
+                "members_served": served,
+                "coverage_percent": round(served / members * 100, 1) if members else 0.0,
+                "mpps_above_40": sum(1 for r in network if r.served / r.total_members >= 0.4),
+                "mpps_at_zero": sum(1 for r in network if not r.served),
+            },
+            "rows_shown": min(len(network), MAX_COVERAGE_ROWS),
+            "results": [as_row(r) for r in network[:MAX_COVERAGE_ROWS]],
         }
     )
 
