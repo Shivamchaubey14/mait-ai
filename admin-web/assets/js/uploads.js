@@ -20,7 +20,24 @@
 
   const state = { offset: 0, polling: null };
 
-  const TYPE_LABEL = { members: 'Member', maits: 'Mait', mpp: 'MPP' };
+  /**
+   * The three cards, each pairing the URL a file is posted to with the type the history
+   * reports back. They are not the same word — `POST /uploads/maits/` stores `mait` — and
+   * treating them as one is why every card but MPP read "Never uploaded" after a good import.
+   */
+  const MASTERS = [
+    { endpoint: 'members', type: 'member' },
+    { endpoint: 'maits', type: 'mait' },
+    { endpoint: 'mpp', type: 'mpp' },
+  ];
+
+  const STORED_TYPE = MASTERS.reduce(function (map, master) {
+    map[master.endpoint] = master.type;
+    return map;
+  }, {});
+
+  /* Keyed by what the API stores, not by what the endpoint is called. */
+  const TYPE_LABEL = { member: 'Member', mait: 'Mait', mpp: 'MPP' };
 
   const STATUS_TONE = {
     completed: 'good',
@@ -97,16 +114,51 @@
           if (['queued', 'processing'].indexOf(upload.status) >= 0) {
             poll(id);
           } else {
-            // Finished: the history table is now the truth about this file.
+            // Finished: the history table and the card are now the truth about this file.
             load();
+            loadCards();
           }
         })
         .fail(function () {
           // A dropped poll is not a failed import. Stop asking and let the history show it.
           renderRunning(null);
           load();
+          loadCards();
         });
     }, POLL_MS);
+  }
+
+  /**
+   * The one-line summary under each card's title.
+   *
+   * "105,412 rows last time" tells the operator whether the file they are about to send is the
+   * size they expect, before they send it. Asked per type rather than picked out of the history
+   * page: a card must not claim a master was never uploaded because fifteen newer uploads of
+   * another type pushed it onto page two.
+   */
+  function loadCards() {
+    MASTERS.forEach(function (master) {
+      const $meta = $('[data-last="' + master.type + '"]');
+      MaitAI.api
+        .uploadHistory({ upload_type: master.type, limit: 1 })
+        .done(function (page) {
+          const last = (page.results || [])[0];
+          if (!last) {
+            $meta.text('Never uploaded');
+          } else if (last.status === 'failed') {
+            $meta.text('Last attempt failed on ' + ui.dateTime(last.created_at));
+          } else if (!last.finished_at) {
+            $meta.text('Importing now — ' + ui.number(last.processed_rows) + ' rows read');
+          } else {
+            $meta.text(
+              'Last: ' + ui.number(last.total_rows) + ' rows on ' + ui.date(last.finished_at)
+            );
+          }
+        })
+        .fail(function () {
+          $meta.text('—');
+        });
+    });
   }
 
   function load() {
@@ -122,19 +174,6 @@
             load();
           }
         );
-
-        // "105,412 rows last time" tells the operator whether the file they are about to
-        // send is the size they expect, before they send it.
-        ['members', 'maits', 'mpp'].forEach(function (type) {
-          const last = (page.results || []).filter(function (u) {
-            return u.upload_type === type;
-          })[0];
-          $('[data-last="' + type + '"]').text(
-            last
-              ? 'Last: ' + ui.number(last.total_rows) + ' rows on ' + ui.date(last.finished_at)
-              : 'Never uploaded'
-          );
-        });
 
         const running = (page.results || []).filter(function (u) {
           return ['queued', 'processing'].indexOf(u.status) >= 0;
@@ -156,9 +195,10 @@
     }
     MaitAI.shell.mount();
     load();
+    loadCards();
 
     $('[data-upload]').on('change', function () {
-      const type = $(this).data('upload');
+      const endpoint = $(this).data('upload');
       const file = this.files && this.files[0];
       if (!file) {
         return;
@@ -166,10 +206,10 @@
       MaitAI.shell.clearAlert();
 
       MaitAI.api
-        .uploadMaster(type, file, function (percent) {
+        .uploadMaster(endpoint, file, function (percent) {
           renderRunning({
             file_name: file.name,
-            upload_type: type,
+            upload_type: STORED_TYPE[endpoint],
             progress_percent: percent,
             total_rows: 0,
             processed_rows: 0,
@@ -182,6 +222,7 @@
           renderRunning(upload);
           poll(upload.id);
           load();
+          loadCards();
         })
         .fail(function (problem) {
           renderRunning(null);

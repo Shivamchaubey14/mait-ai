@@ -19,26 +19,37 @@
   border-radius: var(--radius-md);
 }
 
-/* A colour per master, carried through to the history table, so an operator can tell at a
-   glance which of the three they are looking at without reading the type column. */
-.drop__swatch {
-  display: inline-block;
-  width: 34px;
-  height: 34px;
+/* A glyph and a colour per master, so an operator picking one of three near-identical cards
+   has something to aim at other than the title. The tile carries the wash; the icon is drawn
+   in `currentColor`, so a card's colour is set once here rather than twice. */
+.drop__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   margin-bottom: var(--space-3);
   border-radius: var(--radius-sm);
 }
 
-.drop__swatch--member {
+.drop__icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.drop__icon--member {
   background: var(--color-primary-wash);
+  color: var(--color-primary-dark);
 }
 
-.drop__swatch--mait {
+.drop__icon--mait {
   background: var(--color-info-wash);
+  color: var(--color-info);
 }
 
-.drop__swatch--mpp {
+.drop__icon--mpp {
   background: var(--color-secondary-wash);
+  color: var(--color-secondary-pressed);
 }
 
 .drop__title {
