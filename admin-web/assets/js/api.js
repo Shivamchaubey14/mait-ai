@@ -168,6 +168,30 @@ window.MaitAI = window.MaitAI || {};
     });
   }
 
+  /**
+   * ajax options for sending a file, reporting the transfer as it goes.
+   *
+   * Shared by every upload rather than written out per endpoint: the seconds a 28 MB workbook
+   * spends on an office line are seconds the operator is looking at a card that says nothing,
+   * and one of the two upload calls having a progress hook was simply an oversight.
+   */
+  function sending(onProgress) {
+    return {
+      xhr: function () {
+        const xhr = new window.XMLHttpRequest();
+        if (typeof onProgress === 'function') {
+          xhr.upload.addEventListener('progress', function (event) {
+            if (event.lengthComputable) {
+              onProgress(Math.round((event.loaded / event.total) * 100));
+            }
+          });
+        }
+        return xhr;
+      },
+      timeout: 0, // a 28 MB upload on a slow office line must not be cut off
+    };
+  }
+
   /* --- public surface ------------------------------------------------------------------
    * Mirrors docs/API_CONTRACT.md. Keep it in step — the contract is frozen, and a client
    * that drifts from it fails in production rather than in review.
@@ -220,20 +244,7 @@ window.MaitAI = window.MaitAI || {};
         path: '/admin/uploads/' + type + '/',
         method: 'POST',
         body: form,
-        ajax: {
-          xhr: function () {
-            const xhr = new window.XMLHttpRequest();
-            if (typeof onProgress === 'function') {
-              xhr.upload.addEventListener('progress', function (event) {
-                if (event.lengthComputable) {
-                  onProgress(Math.round((event.loaded / event.total) * 100));
-                }
-              });
-            }
-            return xhr;
-          },
-          timeout: 0, // a 28 MB upload on a slow office line must not be cut off
-        },
+        ajax: sending(onProgress),
       });
     },
 
@@ -317,10 +328,15 @@ window.MaitAI = window.MaitAI || {};
      * Runs the same import pipeline as the SAP masters: accepted, queued, polled through
      * `uploadStatus`, with rejected rows available from `uploadErrors`.
      */
-    uploadAssignments: function (file) {
+    uploadAssignments: function (file, onProgress) {
       const form = new FormData();
       form.append('file', file);
-      return request({ path: '/admin/uploads/assignments/', method: 'POST', body: form });
+      return request({
+        path: '/admin/uploads/assignments/',
+        method: 'POST',
+        body: form,
+        ajax: sending(onProgress),
+      });
     },
 
     /** Stock across every Mait. The mait/ endpoints only ever report the caller's own. */

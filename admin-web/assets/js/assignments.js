@@ -27,6 +27,12 @@
     rows: [],
     editing: null,
     polling: null,
+    // The follower's timer, and whether a POST is still open. Separate from `polling`: one
+    // follows the newest row by type, the other polls one row by id once its id is known.
+    watching: null,
+    sending: false,
+    // High-water mark for the bar, so it only ever grows within one import.
+    shown: 0,
     uncoveredOnly: false,
     noMobileOnly: false,
   };
@@ -99,7 +105,10 @@
   }
 
   function load() {
-    MaitAI.shell.clearAlert();
+    // Does not clear the alert region. It used to, and every message the screen produced was
+    // wiped by the reload that followed it — "3,134 rows applied" was written and then removed
+    // a few milliseconds later by this very function. Alerts are cleared where a new action
+    // starts instead.
     MaitAI.api
       .maitRoster(query())
       .done(function (page) {
@@ -143,26 +152,70 @@
 
   /* --- the round trip --------------------------------------------------------------------- */
 
+  /**
+   * Write one stage tile and colour it by where the import has got to — blue while it is inside
+   * that stage, green once it is past it. Same card as the SAP upload screen, deliberately:
+   * this is the same pipeline, and nobody should have to open that screen to watch this file.
+   */
+  function stage(id, value, tone) {
+    $(id)
+      .text(value)
+      .closest('.stage')
+      .removeClass('is-live is-done')
+      .addClass(tone || '');
+  }
+
   function renderRunning(upload) {
     if (!upload) {
       $('#running').prop('hidden', true);
+      state.shown = 0;
       return;
     }
 
-    const percent = upload.progress_percent || 0;
+    const total = upload.total_rows || 0;
+    const processed = upload.processed_rows || 0;
+    const reading = !total || processed < total;
+    // Sending is not importing. The transfer finishes in one event on a file this size, and
+    // putting its percentage on this bar ran the fill to the far end and then dropped it back
+    // to whatever the import had actually reached.
+    const sendingFile = Boolean(upload.sending);
+
+    // Never backwards. The follower and the id poll can answer out of order, and a bar that
+    // retreats reads as work being undone.
+    const percent = sendingFile ? 0 : Math.max(state.shown, upload.progress_percent || 0);
+    state.shown = percent;
+
     $('#running').prop('hidden', false);
-    $('#running-title').text('Applying ' + upload.file_name + ' — do not close this tab');
-    $('#running-percent').text(percent + '%');
-    $('#running-bar').css('width', percent + '%');
+    $('#running-title').text(
+      (sendingFile ? 'Sending ' : 'Applying ') + upload.file_name + ' — do not close this tab'
+    );
+    $('#running-percent').text(sendingFile ? 'Sending…' : percent + '%');
+    // #running-bar is the fill itself; the indeterminate class belongs on the track around it.
+    // Clearing the inline width lets the stylesheet's stripe width take over while sending.
+    const $fill = $('#running-bar');
+    $fill.closest('.bar').toggleClass('is-indeterminate', sendingFile);
+    $fill.css('width', sendingFile ? '' : percent + '%');
     $('#running-meta').text(
-      ui.number(upload.total_rows) + ' rows · started ' + ui.dateTime(upload.created_at)
+      (sendingFile
+        ? ui.number(upload.progress_percent || 0) + '% of the file sent'
+        : total
+          ? ui.number(total) + ' rows'
+          : 'counting rows') +
+        ' · started ' +
+        ui.dateTime(upload.created_at)
     );
 
-    $('#stage-uploaded').text('Received');
-    $('#stage-read').text(ui.number(upload.processed_rows) + ' read');
-    $('#stage-applied').text(ui.number(upload.success_rows) + ' applied');
-    $('#stage-rejected').text(
-      upload.failed_rows ? ui.number(upload.failed_rows) + ' rejected' : 'None so far'
+    stage('#stage-uploaded', 'Received', 'is-done');
+    stage(
+      '#stage-read',
+      ui.number(processed) + (total ? ' of ' + ui.number(total) : ' rows'),
+      reading ? 'is-live' : 'is-done'
+    );
+    stage('#stage-applied', ui.number(upload.success_rows) + ' applied', reading ? '' : 'is-live');
+    stage(
+      '#stage-rejected',
+      upload.failed_rows ? ui.number(upload.failed_rows) + ' rejected' : 'None so far',
+      upload.failed_rows ? 'is-live' : ''
     );
   }
 
@@ -198,35 +251,81 @@
     });
   }
 
+  /**
+   * Follow the newest assignment import without knowing its id.
+   *
+   * Two jobs, one mechanism. It picks up an import that was already running when the page
+   * loaded — a sheet takes a while and tabs get reloaded, and without this the card only ever
+   * existed in the session that started the upload, leaving the SAP upload screen as the only
+   * place to watch it. And it follows an import that is running *right now* inside the POST
+   * this page is still waiting on: with CELERY_TASK_ALWAYS_EAGER the response is the last thing
+   * to arrive, so the id it carries is useless for watching, while the row it describes has
+   * been counting rows since the request was accepted.
+   *
+   * Keeps asking while `state.sending` is true even if nothing is running yet, because the row
+   * appears a moment after the file does.
+   */
+  function followLatest() {
+    window.clearTimeout(state.watching);
+    return MaitAI.api
+      .uploadHistory({ upload_type: 'assignment', limit: 1 })
+      .done(function (page) {
+        const latest = (page.results || [])[0];
+        const running = latest && ['queued', 'processing'].indexOf(latest.status) >= 0;
+        if (running) {
+          renderRunning(latest);
+        }
+        if (running || state.sending) {
+          state.watching = window.setTimeout(followLatest, POLL_MS);
+        }
+      })
+      .fail(function () {
+        // Nothing to say: the roster still loads, and the response will settle the card.
+      });
+  }
+
+  /**
+   * Ask once, now, and decide what to do with the answer.
+   *
+   * Called straight after the POST as well as on every tick. The POST answers 202 with the row
+   * as it was created — queued, no rows counted — so rendering that and then waiting a whole
+   * interval before asking means a quick file shows 0% for a second and a half and then simply
+   * disappears. Which is what it does with CELERY_TASK_ALWAYS_EAGER set, as dev has it: the
+   * import is already over by the time the response arrives.
+   */
+  function check(id) {
+    return MaitAI.api
+      .uploadStatus(id)
+      .done(function (upload) {
+        const running = ['queued', 'processing'].indexOf(upload.status) >= 0;
+        renderRunning(running ? upload : null);
+        if (running) {
+          poll(id);
+          return;
+        }
+        // Finished. Say what happened in one line, then show the rows that did not land.
+        MaitAI.shell.alert(
+          ui.number(upload.success_rows) +
+            ' of ' +
+            ui.number(upload.total_rows) +
+            ' rows applied' +
+            (upload.failed_rows ? ' · ' + ui.number(upload.failed_rows) + ' rejected' : ''),
+          upload.failed_rows ? 'bad' : 'good'
+        );
+        showRejects(upload.id, upload.failed_rows);
+        load();
+      })
+      .fail(function () {
+        // A dropped poll is not a failed import. Stop asking and reload the roster.
+        renderRunning(null);
+        load();
+      });
+  }
+
   function poll(id) {
     window.clearTimeout(state.polling);
     state.polling = window.setTimeout(function () {
-      MaitAI.api
-        .uploadStatus(id)
-        .done(function (upload) {
-          const running = ['queued', 'processing'].indexOf(upload.status) >= 0;
-          renderRunning(running ? upload : null);
-          if (running) {
-            poll(id);
-            return;
-          }
-          // Finished. Say what happened in one line, then show the rows that did not land.
-          MaitAI.shell.alert(
-            ui.number(upload.success_rows) +
-              ' of ' +
-              ui.number(upload.total_rows) +
-              ' rows applied' +
-              (upload.failed_rows ? ' · ' + ui.number(upload.failed_rows) + ' rejected' : ''),
-            upload.failed_rows ? 'bad' : 'warn'
-          );
-          showRejects(upload.id, upload.failed_rows);
-          load();
-        })
-        .fail(function () {
-          // A dropped poll is not a failed import. Stop asking and reload the roster.
-          renderRunning(null);
-          load();
-        });
+      check(id);
     }, POLL_MS);
   }
 
@@ -268,10 +367,11 @@
     }
     MaitAI.shell.mount();
     MaitAI.maitEditor.mount('#mait-editor', function (saved) {
-      MaitAI.shell.alert(saved.name + ' saved · ' + saved.mpp_count + ' MPP(s) covered', 'warn');
+      MaitAI.shell.alert(saved.name + ' saved · ' + saved.mpp_count + ' MPP(s) covered', 'good');
       load();
     });
     load();
+    followLatest();
 
     $('#download').on('click', download);
 
@@ -287,13 +387,46 @@
       MaitAI.shell.clearAlert();
       $('#rejects').prop('hidden', true);
 
+      /**
+       * Paint the card now, before the request has left, and repaint it as the file goes up.
+       *
+       * Painting only from the transfer callback was why this screen appeared to have no card
+       * at all: a workbook of a few hundred kilobytes finishes sending in a single event, and
+       * with the import running inside the web process (CELERY_TASK_ALWAYS_EAGER) the response
+       * does not come back until every row has been applied. So the one paint happened in the
+       * first instant and the next thing to happen was the card being hidden as finished —
+       * leaving the whole import with nothing on screen.
+       */
+      const startedAt = new Date().toISOString();
+      const sending = function (percent) {
+        renderRunning({
+          file_name: file.name,
+          sending: true,
+          progress_percent: percent || 0,
+          total_rows: 0,
+          processed_rows: 0,
+          success_rows: 0,
+          failed_rows: 0,
+          created_at: startedAt,
+        });
+      };
+      state.shown = 0;
+      sending(0);
+      state.sending = true;
+      followLatest();
+
       MaitAI.api
-        .uploadAssignments(file)
+        .uploadAssignments(file, sending)
         .done(function (upload) {
-          renderRunning(upload);
-          poll(upload.id);
+          // The response is authoritative and carries the id, so the follower stands down.
+          state.sending = false;
+          window.clearTimeout(state.watching);
+          check(upload.id);
         })
         .fail(function (problem) {
+          state.sending = false;
+          window.clearTimeout(state.watching);
+          renderRunning(null);
           MaitAI.shell.alert(MaitAI.api.problemToLines(problem).join(' · '));
         });
 
@@ -310,6 +443,7 @@
       window.clearTimeout(debounce);
       debounce = window.setTimeout(function () {
         state.offset = 0;
+        MaitAI.shell.clearAlert();
         MaitAI.maitEditor.close();
         load();
       }, 350);

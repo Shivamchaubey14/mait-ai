@@ -1,9 +1,13 @@
 /**
- * The Mait editor — name, mobile and MPP coverage.
+ * The editor panel — the shape every screen uses to work on one record.
  *
- * Its own sheet because two screens open the same editor: Assignment, where coverage is the
- * job, and Maits, where a row is corrected in place. One copy, so the two cannot drift into
- * looking like different controls for the same thing.
+ * A titled head that says which record is open, fields that carry a tinted glyph so three
+ * inputs on a white card are told apart before a label is read, and the chip box for a list
+ * that is pasted in as often as it is typed.
+ *
+ * Shared rather than copied. Assignment and Maits both open the Mait editor, and Indents
+ * opens a fulfilment panel of the same shape — three screens that would otherwise drift into
+ * looking like three different controls for the same job.
  */
 
 @import url('forms.css');

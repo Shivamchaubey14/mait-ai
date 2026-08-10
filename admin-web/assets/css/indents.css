@@ -1,0 +1,141 @@
+/**
+ * Indents (W13) — the fulfilment panel.
+ *
+ * Built on the shared editor shape, because deciding an indent is the same kind of act as
+ * correcting a Mait: one record open, a few fields, an action that changes something real.
+ *
+ * What is specific here is the summary strip. An operator approving or issuing is answering
+ * "is this reasonable" — how much, of what, raised how long ago — and those three facts have
+ * to be on the panel rather than left in the table row behind it.
+ */
+
+@import url('editor.css');
+
+/* --- who and what ------------------------------------------------------------------------ */
+/* Square rather than the editor's circle: this is a request, not a person. */
+.fulfil__mark {
+  border-radius: var(--radius-sm);
+}
+
+.fulfil__mark--requested {
+  color: var(--color-secondary-pressed);
+  background: var(--color-secondary-wash);
+}
+
+.fulfil__mark--approved {
+  color: var(--color-info);
+  background: var(--color-info-wash);
+}
+
+/* --- the summary strip -------------------------------------------------------------------- */
+.fulfil__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.fact {
+  padding: var(--space-3);
+  background: var(--color-background);
+  border-radius: var(--radius-sm);
+}
+
+/* The quantity asked for is the number the decision is actually about. */
+.fact--lead {
+  background: var(--color-primary-wash);
+}
+
+.fact__label {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.fact__value {
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+}
+
+.fact__meta {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+/* --- field tints -------------------------------------------------------------------------- */
+.field__icon--qty {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+}
+
+/* Amber: the numbers box is the optional path, and an operator should be able to see that
+   before reading the label. */
+.field__icon--straws {
+  color: var(--color-secondary-pressed);
+  background: var(--color-secondary-wash);
+}
+
+.field__icon--reason {
+  color: var(--color-error);
+  background: var(--color-error-wash);
+}
+
+/* Straw numbers are copied off a depot slip a line at a time, so the control is sized to show
+   a whole handover. Monospaced: these are codes read digit by digit, and a proportional face
+   makes 0/O and 1/l the operator's problem. */
+.straw-field {
+  min-height: 7rem;
+  padding: var(--space-2) var(--space-3);
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', monospace;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.straw-field:focus {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary-wash);
+  outline-offset: 1px;
+}
+
+.straw-field[disabled] {
+  color: var(--color-text-disabled);
+  background: var(--color-background);
+}
+
+/* --- what the action will do --------------------------------------------------------------
+   Issuing credits a Mait's stock. The panel says so in a line of its own rather than leaving
+   it to be inferred from a button label. */
+.fulfil__effect {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  grid-column: 1 / -1;
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-body);
+  color: var(--color-text);
+  background: var(--color-primary-wash);
+  border-radius: var(--radius-sm);
+}
+
+.fulfil__effect--decide {
+  background: var(--color-secondary-wash);
+}
+
+.fulfil__effect-icon {
+  flex-shrink: 0;
+  color: var(--color-primary-dark);
+}
+
+.fulfil__effect--decide .fulfil__effect-icon {
+  color: var(--color-secondary-pressed);
+}

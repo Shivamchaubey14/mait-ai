@@ -6,8 +6,8 @@
     <title>Indents · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <!-- forms.css imports portal.css: this screen fulfils indents as well as watching them. -->
-    <link rel="stylesheet" href="assets/css/forms.css" />
+    <!-- indents.css pulls in the shared editor panel, which imports forms.css and portal.css. -->
+    <link rel="stylesheet" href="assets/css/indents.css" />
   </head>
 
   <body>
@@ -53,27 +53,113 @@
 
         <!-- Fulfilment sits above the table rather than in a modal: the operator works a
              queue, and a dialog that covers the queue hides the row they are acting on. -->
-        <section class="panel" id="fulfil" aria-label="Fulfil indent" hidden>
-          <div class="panel__head">
-            <h2 class="panel__title" id="fulfil-title">—</h2>
-            <p class="panel__count" id="fulfil-meta">—</p>
+        <section class="panel editor" id="fulfil" aria-label="Fulfil indent" hidden>
+          <div class="editor__head">
+            <span class="editor__avatar fulfil__mark" id="fulfil-mark" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M6 3h9l5 5v13H6zM14 3v6h6M9 13h7M9 17h5" />
+              </svg>
+            </span>
+            <div class="editor__who">
+              <h2 class="editor__name" id="fulfil-title">—</h2>
+              <p class="editor__code" id="fulfil-who">—</p>
+            </div>
+            <span id="fulfil-status"></span>
+          </div>
+
+          <!-- The three facts the decision is actually about. Left in the row behind the
+               panel, an operator has to remember them while they type. -->
+          <div class="fulfil__facts">
+            <div class="fact fact--lead">
+              <p class="fact__label">Requested</p>
+              <p class="fact__value" id="fact-qty">—</p>
+              <p class="fact__meta" id="fact-unit">—</p>
+            </div>
+            <div class="fact">
+              <p class="fact__label">Item</p>
+              <p class="fact__value" id="fact-item">—</p>
+              <p class="fact__meta" id="fact-kind">—</p>
+            </div>
+            <div class="fact">
+              <p class="fact__label">Raised</p>
+              <p class="fact__value" id="fact-raised">—</p>
+              <p class="fact__meta" id="fact-age">—</p>
+            </div>
           </div>
 
           <!-- Not a <form>: there is no single submit here. Approve, reject and issue are
                three different decisions, and one of them credits stock. -->
           <div class="form-grid">
-            <div class="field" id="field-qty" hidden>
-              <label class="field__label" for="issue-qty">How many handed over</label>
+            <p class="fulfil__effect" id="fulfil-effect">
+              <span class="fulfil__effect-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 8v5M12 16.5v.5M12 3l9 17H3z" />
+                </svg>
+              </span>
+              <span id="fulfil-effect-text">—</span>
+            </p>
+
+            <div class="field field--iconed" id="field-qty" hidden>
+              <label class="field__label" for="issue-qty">
+                <span class="field__icon field__icon--qty" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18" /></svg
+                ></span>
+                How many handed over
+              </label>
               <input class="input field__control" id="issue-qty" type="number" min="1" step="1" />
               <p class="field__hint" id="qty-hint">—</p>
             </div>
 
-            <div class="field" id="field-straws" hidden>
-              <label class="field__label" for="straw-numbers">Straw numbers (optional)</label>
+            <div class="field field--iconed field--wide" id="field-straws" hidden>
+              <label class="field__label" for="straw-numbers">
+                <span class="field__icon field__icon--straws" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg
+                ></span>
+                Straw numbers
+                <span class="field__count" id="straw-count">optional</span>
+              </label>
               <textarea
-                class="textarea field__control"
+                class="straw-field field__control"
                 id="straw-numbers"
-                rows="6"
+                rows="5"
                 spellcheck="false"
                 autocomplete="off"
                 placeholder="Leave blank unless the depot slip lists them"
@@ -85,8 +171,23 @@
               </p>
             </div>
 
-            <div class="field" id="field-reason" hidden>
-              <label class="field__label" for="reject-reason">Reason for rejecting</label>
+            <div class="field field--iconed field--wide" id="field-reason" hidden>
+              <label class="field__label" for="reject-reason">
+                <span class="field__icon field__icon--reason" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 8v5M12 16.5v.5M12 3l9 17H3z" /></svg
+                ></span>
+                Reason for rejecting
+              </label>
               <input
                 class="input field__control"
                 id="reject-reason"
@@ -102,7 +203,7 @@
               <button class="btn btn--primary" id="do-issue" type="button" hidden>
                 Issue stock
               </button>
-              <button class="btn" id="do-reject" type="button" hidden>Reject</button>
+              <button class="btn btn--danger" id="do-reject" type="button" hidden>Reject</button>
               <button class="btn" id="do-close" type="button">Close</button>
               <p class="field__hint" id="fulfil-hint">—</p>
             </div>
@@ -136,7 +237,7 @@
         <!-- Two statuses that routinely disagree, and the disagreement is the bug worth
              catching. -->
         <div class="notice">
-          <span class="notice__swatch" aria-hidden="true"></span>
+          <span class="notice__icon" aria-hidden="true"></span>
           <div>
             <p class="notice__title">Approved is not the same as delivered</p>
             <p class="notice__body">

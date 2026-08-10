@@ -27,22 +27,64 @@
         <!-- Numbered, because the order is the instruction. An operator who uploads without
              downloading first is composing a file by hand and guessing at the headers. -->
         <section class="round-trip" aria-label="Bulk assignment">
-          <div class="step">
+          <div class="step step--info">
             <span class="step__number" aria-hidden="true">1</span>
             <div class="step__body">
-              <p class="step__title">Download the sheet</p>
+              <p class="step__title">
+                <svg
+                  class="step__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+                </svg>
+                Download the sheet
+              </p>
               <p class="step__meta">
                 Every MPP with whoever covers it now. Unassigned ones are tinted and come first —
                 they are the rows worth filling.
               </p>
-              <button class="btn" id="download" type="button">Download .xlsx</button>
+              <button class="btn btn--dark" id="download" type="button">
+                <svg
+                  class="btn__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+                </svg>
+                Download .xlsx
+              </button>
             </div>
           </div>
 
-          <div class="step">
+          <div class="step step--warn">
             <span class="step__number" aria-hidden="true">2</span>
             <div class="step__body">
-              <p class="step__title">Edit it in Excel</p>
+              <p class="step__title">
+                <svg
+                  class="step__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17zM14 7l3 3" />
+                </svg>
+                Edit it in Excel
+              </p>
               <p class="step__meta">
                 Change the Sahayak Vendor beside an MPP to move it. Clear the column to unassign.
                 Leave a row alone and nothing happens to it.
@@ -51,10 +93,24 @@
             </div>
           </div>
 
-          <div class="step">
+          <div class="step step--good">
             <span class="step__number" aria-hidden="true">3</span>
             <div class="step__body">
-              <p class="step__title">Upload it back</p>
+              <p class="step__title">
+                <svg
+                  class="step__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 20V8m0 0-5 5m5-5 5 5M4 4h16" />
+                </svg>
+                Upload it back
+              </p>
               <p class="step__meta">
                 Good rows are applied even if others fail. Anything rejected is listed below with
                 its spreadsheet row number.
@@ -69,8 +125,21 @@
              an operator closes the tab and assumes it failed. -->
         <section class="panel running" id="running" hidden aria-live="polite">
           <div class="panel__head">
-            <h2 class="panel__title" id="running-title">Importing…</h2>
-            <span class="panel__count" id="running-percent">0%</span>
+            <h2 class="panel__title">
+              <svg
+                class="running__spinner"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M12 3a9 9 0 1 0 9 9" />
+              </svg>
+              <span id="running-title">Applying…</span>
+            </h2>
+            <span class="panel__count running__percent" id="running-percent">0%</span>
           </div>
           <p class="topbar__meta" id="running-meta">—</p>
           <div class="bar running__bar">
@@ -78,20 +147,80 @@
           </div>
           <div class="stages">
             <div class="stage">
-              <p class="tile__label">Uploaded</p>
-              <p id="stage-uploaded">—</p>
+              <p class="tile__label">
+                <svg
+                  class="stage__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 20V8m0 0-5 5m5-5 5 5M4 4h16" />
+                </svg>
+                Uploaded
+              </p>
+              <p class="stage__value" id="stage-uploaded">—</p>
             </div>
             <div class="stage">
-              <p class="tile__label">Rows read</p>
-              <p id="stage-read">—</p>
+              <p class="tile__label">
+                <svg
+                  class="stage__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6"
+                  />
+                </svg>
+                Rows read
+              </p>
+              <p class="stage__value" id="stage-read">—</p>
             </div>
             <div class="stage">
-              <p class="tile__label">Applied</p>
-              <p id="stage-applied">—</p>
+              <p class="tile__label">
+                <svg
+                  class="stage__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 7c4.4 0 8-1.1 8-2.5S16.4 2 12 2 4 3.1 4 4.5 7.6 7 12 7M4 4.5v15C4 20.9 7.6 22 12 22s8-1.1 8-2.5v-15M4 12c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5"
+                  />
+                </svg>
+                Applied
+              </p>
+              <p class="stage__value" id="stage-applied">—</p>
             </div>
             <div class="stage">
-              <p class="tile__label">Rejected</p>
-              <p id="stage-rejected">—</p>
+              <p class="tile__label">
+                <svg
+                  class="stage__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 3h9l5 5v13H6zM14 3v6h6M9 14h7M9 18h5" />
+                </svg>
+                Rejected
+              </p>
+              <p class="stage__value" id="stage-rejected">—</p>
             </div>
           </div>
         </section>
@@ -119,10 +248,36 @@
             placeholder="Search by Mait name, code or mobile"
             aria-label="Search by Mait name, code or mobile"
           />
-          <button class="chip" id="filter-uncovered" type="button" aria-pressed="false">
+          <!-- Toned to match the rows they pull up: a Mait with no MPPs tints the table yellow,
+               and one with no mobile cannot sign in at all. -->
+          <button class="chip chip--warn" id="filter-uncovered" type="button" aria-pressed="false">
+            <svg
+              class="chip__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6M3 3l18 18" />
+            </svg>
             No MPPs
           </button>
-          <button class="chip" id="filter-nomobile" type="button" aria-pressed="false">
+          <button class="chip chip--bad" id="filter-nomobile" type="button" aria-pressed="false">
+            <svg
+              class="chip__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M8 3h8v18H8zM11 18.5h2M4 4l16 16" />
+            </svg>
             No mobile
           </button>
         </section>
