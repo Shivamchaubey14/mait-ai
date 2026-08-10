@@ -160,6 +160,18 @@ window.MaitAI = window.MaitAI || {};
     sections: SECTIONS,
     escapeHtml: escapeHtml,
 
+    /**
+     * One query parameter, or ''.
+     *
+     * Exceptions and the dashboard link into the screens where a queue is actually worked, and
+     * a link that lands on an unfiltered roster of 1,900 Maits has answered a different
+     * question than the one that was clicked. The filter travels in the URL so the deep link
+     * is also shareable and survives a refresh.
+     */
+    param: function (name) {
+      return new URLSearchParams(window.location.search).get(name) || '';
+    },
+
     /** Insert the sidebar, mark the current section, and fill the shared icon slots. */
     mount: function () {
       const $shell = $('.shell');
@@ -196,14 +208,20 @@ window.MaitAI = window.MaitAI || {};
       $badge.text(count).prop('hidden', !count);
     },
 
-    /** Show a page-level failure without leaving the operator looking at a blank table. */
+    /**
+     * Show a page-level message without leaving the operator looking at a blank table.
+     *
+     * `good` exists so a finished import can say so in green. Reporting a clean result in the
+     * same yellow used for a backlog teaches an operator to read yellow as "nothing to see".
+     */
     alert: function (message, tone) {
-      const cls = tone === 'warn' ? 'notice notice--warn' : 'notice notice--bad';
+      const glyph = tone === 'warn' ? 'warn' : tone === 'good' ? 'good' : 'bad';
+      const cls = 'notice notice--' + (tone === 'warn' ? 'warn' : tone === 'good' ? 'good' : 'bad');
       $('#alert-region').html(
         '<div class="' +
           cls +
           '"><span class="notice__icon" aria-hidden="true">' +
-          icon(tone === 'warn' ? 'warn' : 'bad') +
+          icon(glyph) +
           '</span>' +
           '<div><p class="notice__title">' +
           escapeHtml(message) +

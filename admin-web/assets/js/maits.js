@@ -82,7 +82,8 @@
   }
 
   function load() {
-    MaitAI.shell.clearAlert();
+    // Deliberately does not clear the alert region — see the same note on the Assignment
+    // screen. "ROHIT KUMAR saved." was being erased by the reload that proved it.
     MaitAI.api
       .maitRoster(query())
       .done(function (page) {
@@ -157,9 +158,17 @@
     // Same editor the Assignment screen opens, so a row is corrected the same way wherever
     // the operator happens to be standing.
     MaitAI.maitEditor.mount('#mait-editor', function (saved) {
-      MaitAI.shell.alert(saved.name + ' saved.', 'warn');
+      MaitAI.shell.alert(saved.name + ' saved.', 'good');
       load();
     });
+    // Arrived from the Failed OTPs card: the numbers there are masked, and the Maits who never
+    // got past the OTP are the ones this roster can do something about. Same reason as the
+    // other two deep links for switching the chip on rather than filtering silently.
+    if (MaitAI.shell.param('filter') === 'not-activated') {
+      state.pendingOnly = true;
+      $('#filter-pending').addClass('is-active').attr('aria-pressed', 'true');
+    }
+
     load();
 
     // Delegated: the table is rebuilt on every load and pager click.
@@ -178,6 +187,7 @@
       window.clearTimeout(debounce);
       debounce = window.setTimeout(function () {
         state.offset = 0;
+        MaitAI.shell.clearAlert();
         load();
       }, 350);
     });

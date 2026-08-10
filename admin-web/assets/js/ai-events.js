@@ -163,6 +163,16 @@
     }
     MaitAI.shell.mount();
     loadMppOptions();
+
+    // Arrived from a queue card on Exceptions or the dashboard. Set the control rather than
+    // filtering behind its back: the operator has to be able to see why this list is short,
+    // and to widen it without going back the way they came. An unknown value leaves the select
+    // alone, so a mistyped URL shows everything rather than nothing.
+    const status = MaitAI.shell.param('status');
+    if (status) {
+      $('#filter-status').val(status);
+    }
+
     load();
 
     $('#filter-status, #filter-mpp, #filter-from, #filter-to').on('change', function () {
