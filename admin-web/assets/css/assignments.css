@@ -26,8 +26,30 @@
   border-radius: var(--radius-md);
 }
 
+/* A colour per step, carried by the whole card — the same construction as the three master
+   cards on SAP upload, which is the screen this one sends an operator to and back from. Blue
+   is the thing to fetch, yellow the step where a wrong keystroke breaks the file, green the
+   one that finishes the round trip. Three identical white rectangles put the whole burden of
+   "which step am I on" on a numeral 28px wide. */
+.step--info {
+  background: var(--color-info-wash);
+  border-color: var(--ink-100);
+}
+
+.step--warn {
+  background: var(--color-secondary-wash);
+  border-color: var(--yolk-200);
+}
+
+.step--good {
+  background: var(--color-primary-wash);
+  border-color: var(--green-200);
+}
+
 /* Numbered because the order is the instruction: download, edit, upload. An operator who
-   uploads before downloading is composing a file by hand, which is where errors come from. */
+   uploads before downloading is composing a file by hand, which is where errors come from.
+   White chip on the tinted card, like a notice's or a stat tile's glyph: the card carries the
+   wash, the chip carries the numeral, and the numeral carries the colour. */
 .step__number {
   display: flex;
   flex-shrink: 0;
@@ -37,8 +59,8 @@
   height: 28px;
   font-family: var(--font-heading);
   font-weight: 700;
-  color: var(--color-primary-dark);
-  background: var(--color-primary-wash);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
   border-radius: 50%;
 }
 
@@ -46,10 +68,39 @@
   min-width: 0;
 }
 
+/* Flex, not a bare inline SVG in a paragraph: an `<svg>` with a viewBox and no size of its own
+   is a replaced element, and a replaced element with no width falls back to 300×150 — which is
+   how a 20px glyph came to be taller than the card it labels. */
 .step__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--font-heading);
   font-size: var(--text-h3);
   color: var(--color-text);
+}
+
+/* Sized to sit on the title's own line rather than on a second chip beside the number — one
+   card does not need two badges. Drawn in `currentColor`, so a tone sets one property below. */
+.step__icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.step--info .step__number,
+.step--info .step__icon {
+  color: var(--color-info);
+}
+
+.step--warn .step__number,
+.step--warn .step__icon {
+  color: var(--color-secondary-pressed);
+}
+
+.step--good .step__number,
+.step--good .step__icon {
+  color: var(--color-primary-dark);
 }
 
 .step__meta {
