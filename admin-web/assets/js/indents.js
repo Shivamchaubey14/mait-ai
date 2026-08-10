@@ -7,9 +7,13 @@
  *
  * And fulfilling. Approve, reject and issue are the manual stand-in for the Indent Easy GRN
  * callback (SRS §6.6.2–6.6.3), which is not built yet — without them an indent raised in the
- * app never leaves `requested`. Issuing credits a Mait's stock directly, so the screen asks
- * for the number printed on each straw rather than a count: the app scans that number against
- * their stock, and a quantity with nothing behind it credits a balance nothing can scan.
+ * app never leaves `requested`.
+ *
+ * The panel says what each button will actually do, because they do very different things.
+ * Approving records that the office agrees and moves nothing. Issuing sets stock aside
+ * against a Mait's name; it becomes theirs when they confirm they collected it. Straw numbers
+ * are optional — the ones that matter are read off the straws at the AI step — and filling
+ * them in here is for a depot slip that already lists them.
  */
 
 (function (MaitAI, $) {
@@ -17,6 +21,9 @@
 
   const ui = MaitAI.ui;
   const LIMIT = 25;
+
+  /* Mirrors STALE_AFTER_DAYS in apps/indents/models.py. */
+  const STALE_AFTER_DAYS = 3;
 
   const state = { offset: 0, staleOnly: false, rows: [], selected: null };
 
@@ -28,6 +35,14 @@
   };
 
   const SYNC_TONE = { synced: 'good', pending: 'warn', failed: 'bad' };
+
+  /** The status pill's quieter companion: pushed, or not, and whether that failed. */
+  function syncPill(indent) {
+    return ui.pill(
+      indent.sync_status === 'synced' ? 'Synced' : indent.sync_status_display,
+      SYNC_TONE[indent.sync_status]
+    );
+  }
 
   function syncCell(indent) {
     const label =
@@ -52,11 +67,22 @@
     );
   }
 
+  /**
+   * The same rule as `stale_indent_q` in the API, which is what `?stale=true` filters on.
+   *
+   * It has to be the same, because this is what tints the row and prints the pill: a screen
+   * that fetched the stale ones and then declined to mark them stale is a screen arguing with
+   * itself. Whether the office has approved it yet is not the Mait's problem — an unapproved
+   * request that has sat for days is stock nobody is bringing, exactly like an approved one.
+   */
   function isStale(indent) {
-    return (
-      indent.sync_status === 'failed' ||
-      (indent.status === 'approved' && ui.daysAgo(indent.requested_at) >= 7)
-    );
+    if (indent.sync_status === 'failed') {
+      return true;
+    }
+    if (indent.status === 'issued' || indent.status === 'rejected') {
+      return false;
+    }
+    return ui.daysAgo(indent.requested_at) >= STALE_AFTER_DAYS;
   }
 
   /** Only the two open states have anything an admin can do to them. */
@@ -139,14 +165,26 @@
     const requested = indent.status === 'requested';
 
     $('#fulfil').prop('hidden', false);
-    $('#fulfil-title').text('IND-' + indent.id + ' · ' + indent.mait_name);
-    $('#fulfil-meta').text(
-      indent.item +
-        ' · raised ' +
-        ui.date(indent.requested_at) +
-        ' · ' +
-        indent.status_display.toLowerCase()
+    $('#fulfil-title').text('IND-' + indent.id);
+    $('#fulfil-who').text(indent.mait_name + ' · ' + indent.mait_code);
+    $('#fulfil-status').html(
+      ui.pill(indent.status_display, STATUS_TONE[indent.status] || null) + ' ' + syncPill(indent)
     );
+    // The mark takes the colour of the stage, so the panel reads as "a decision" or "a
+    // handover" before a word of it has been read.
+    $('#fulfil-mark')
+      .toggleClass('fulfil__mark--requested', requested)
+      .toggleClass('fulfil__mark--approved', !requested);
+
+    // The three facts the decision is about, so an operator is not holding them in their head
+    // while they type into the row behind the panel.
+    $('#fact-qty').text(ui.number(indent.qty_requested));
+    $('#fact-unit').text(isStraw ? 'straws' : 'units');
+    $('#fact-item').text(indent.breed || indent.item);
+    $('#fact-kind').text(isStraw ? 'Semen straws' : 'Consumable or equipment');
+    $('#fact-raised').text(ui.date(indent.requested_at));
+    const days = ui.daysAgo(indent.requested_at);
+    $('#fact-age').text(days === 0 ? 'today' : days + ' days ago');
 
     // Approving is only offered on a fresh request; issuing only on an approved one. But an
     // approved indent can still be declined — stock runs out between the office agreeing and
@@ -160,6 +198,17 @@
     $('#field-qty').prop('hidden', requested);
     $('#field-straws').prop('hidden', requested || !isStraw);
     $('#do-issue').prop('hidden', requested);
+
+    // Says what the buttons will actually do. Approving moves nothing; issuing sets stock
+    // aside against a Mait's name, and that is worth stating rather than inferring.
+    $('#fulfil-effect').toggleClass('fulfil__effect--decide', requested);
+    $('#fulfil-effect-text').text(
+      requested
+        ? 'Approving moves no stock — it records that the office agrees. Rejecting closes the request, and the Mait reads your reason.'
+        : 'Issuing sets this stock aside for ' +
+            indent.mait_name +
+            '. It becomes theirs when they confirm they have collected it.'
+    );
 
     $('#straw-numbers').val('');
     $('#reject-reason').val('');
@@ -201,6 +250,8 @@
             ? numbers.length + ' entered — this sets the quantity'
             : 'Leave blank to issue by quantity — the Mait records each number as they use it'
       );
+
+    $('#straw-count').text(numbers.length ? numbers.length + ' listed' : 'optional');
 
     // Listing numbers is the more specific instruction, so it wins and says so rather than
     // silently disagreeing with the box above it.
@@ -293,6 +344,19 @@
       return;
     }
     MaitAI.shell.mount();
+
+    // Arrived from the Stale indents card. The chip is switched on rather than the sort being
+    // applied invisibly, so the screen shows which filter it is under and the operator can
+    // turn it off from where they are standing.
+    if (MaitAI.shell.param('stale')) {
+      state.staleOnly = true;
+      $('#filter-stale').addClass('is-active').attr('aria-pressed', 'true');
+    }
+    const status = MaitAI.shell.param('status');
+    if (status) {
+      $('#filter-status').val(status);
+    }
+
     load();
 
     let debounce = null;

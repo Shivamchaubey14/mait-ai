@@ -135,6 +135,44 @@ class TestReading:
         assert old.id in ids
         assert fresh.id not in ids
 
+    def test_stale_finds_a_request_nobody_has_approved(self, admin_client, mait):
+        """
+        The case the filter used to miss.
+
+        The admin dashboard counted these as stale and the list did not, so a count of four
+        opened onto an empty table. Whether the office has got as far as approving it is not
+        the Mait's problem — either way they asked for straws days ago and none are coming.
+        """
+        fresh = IndentRequest.objects.create(
+            mait=mait, product_type=ProductType.STRAW, breed="GIR", qty_requested=10
+        )
+        forgotten = IndentRequest.objects.create(
+            mait=mait, product_type=ProductType.STRAW, breed="MURRAH", qty_requested=10
+        )
+        IndentRequest.objects.filter(pk=forgotten.pk).update(
+            requested_at=timezone.now() - timedelta(days=5)
+        )
+
+        ids = [row["id"] for row in admin_client.get(f"{BASE}/?stale=true").json()["results"]]
+        assert forgotten.id in ids
+        assert fresh.id not in ids
+
+    def test_stale_leaves_out_the_ones_already_settled(self, admin_client, mait):
+        """Issued and rejected are finished. Age does not make a closed request stale."""
+        for state in (IndentRequest.Status.ISSUED, IndentRequest.Status.REJECTED):
+            settled = IndentRequest.objects.create(
+                mait=mait,
+                product_type=ProductType.STRAW,
+                breed="GIR",
+                qty_requested=10,
+                status=state,
+            )
+            IndentRequest.objects.filter(pk=settled.pk).update(
+                requested_at=timezone.now() - timedelta(days=30)
+            )
+
+        assert admin_client.get(f"{BASE}/?stale=true").json()["count"] == 0
+
     def test_stale_also_finds_one_that_never_reached_indent_easy(self, admin_client, mait):
         """Synced and approved are different failures, and both leave a Mait waiting."""
         never_pushed = IndentRequest.objects.create(

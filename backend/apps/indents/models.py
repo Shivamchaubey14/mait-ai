@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.db import models
+from django.db.models import Q
+from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
 from apps.inventory.models import ProductType
+
+# An open indent nobody has moved for this long is a Mait waiting on stock that is not coming.
+#
+# One number, because there used to be two: the Indents screen called an indent stale after
+# seven days and only if it had been approved, while the dashboard's exception queue counted
+# anything open after three. The queue therefore counted rows the screen it links to would not
+# show — an admin clicked a count of four and landed on an empty table.
+STALE_AFTER_DAYS = 3
 
 
 class IndentRequest(TimeStampedModel):
@@ -104,12 +116,36 @@ class IndentRequest(TimeStampedModel):
 
     @property
     def is_stale(self) -> bool:
-        """Requested but never issued — surfaced in the admin exception view (SRS §6.7.6)."""
+        """
+        One row's answer to the question ``stale_indent_q`` asks of a queryset.
+
+        Kept beside it deliberately: the two used to disagree, and a row the admin's stale
+        filter returned could arrive at a screen that did not think it was stale.
+        """
         from django.utils import timezone
 
+        if self.sync_status == self.SyncStatus.FAILED:
+            return True
         if self.status in (self.Status.ISSUED, self.Status.REJECTED):
             return False
-        return (timezone.now() - self.requested_at).days >= 3
+        return (timezone.now() - self.requested_at).days >= STALE_AFTER_DAYS
+
+
+def stale_indent_q(now=None) -> Q:
+    """
+    The definition of a stale indent, as something the database can answer.
+
+    Open and untouched past the cutoff, or never pushed to Indent Easy at all. Both mean the
+    same thing at the other end: a Mait asked for stock and nobody is bringing it. Whether the
+    office has got as far as approving it is the office's business, not the Mait's — which is
+    why an unapproved request counts here, and why the admin's queue and the Indents screen's
+    own filter are the same query rather than two that nearly agree.
+    """
+    cutoff = (now or timezone.now()) - timedelta(days=STALE_AFTER_DAYS)
+    open_and_unmoved = ~Q(
+        status__in=[IndentRequest.Status.ISSUED, IndentRequest.Status.REJECTED]
+    ) & Q(requested_at__lt=cutoff)
+    return open_and_unmoved | Q(sync_status=IndentRequest.SyncStatus.FAILED)
 
 
 class IndentEasyWebhookEvent(TimeStampedModel):

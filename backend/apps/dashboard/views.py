@@ -23,7 +23,7 @@ from rest_framework.response import Response
 from apps.ai_events.models import AIEvent
 from apps.core.permissions import IsAdmin
 from apps.core.timeframe import end_of_day, local_day, start_of_day
-from apps.indents.models import IndentRequest
+from apps.indents.models import STALE_AFTER_DAYS, IndentRequest, stale_indent_q
 from apps.inventory.models import MaitInventory, ProductType
 from apps.masterdata.models import Mait
 from apps.payments.models import OTPLog, Payment
@@ -176,19 +176,19 @@ def _exceptions() -> dict:
             }
         )
 
-    stale_cutoff = timezone.now() - timedelta(days=3)
-    stale = IndentRequest.objects.filter(
-        requested_at__lt=stale_cutoff,
-        status__in=[IndentRequest.Status.REQUESTED, IndentRequest.Status.APPROVED],
-    )
+    # `stale_indent_q` rather than a cutoff spelled out here: this queue links to the Indents
+    # screen filtered by the same query, and when the two were written separately the count
+    # and the screen disagreed — four stale indents opened onto an empty table.
+    stale = IndentRequest.objects.filter(stale_indent_q())
     approved_not_issued = stale.filter(status=IndentRequest.Status.APPROVED).count()
     awaiting = stale.filter(status=IndentRequest.Status.REQUESTED).count()
+    never_pushed = stale.filter(sync_status=IndentRequest.SyncStatus.FAILED).count()
     stale_rows = []
     if approved_not_issued:
         stale_rows.append(
             {
                 "label": "Approved, not issued",
-                "meta": f"{approved_not_issued} older than 3 days",
+                "meta": f"{approved_not_issued} older than {STALE_AFTER_DAYS} days",
                 "severity": "warning",
             }
         )
@@ -196,8 +196,19 @@ def _exceptions() -> dict:
         stale_rows.append(
             {
                 "label": "Awaiting approval",
-                "meta": f"{awaiting} older than 3 days",
+                "meta": f"{awaiting} older than {STALE_AFTER_DAYS} days",
                 "severity": "warning",
+            }
+        )
+    # A different failure from the two above, and the only one where the request never left
+    # this platform at all. It counted towards the total already; without a row of its own the
+    # total could exceed everything the card lists and look like an arithmetic bug.
+    if never_pushed:
+        stale_rows.append(
+            {
+                "label": "Never reached Indent Easy",
+                "meta": f"{never_pushed} push failed",
+                "severity": "error",
             }
         )
 

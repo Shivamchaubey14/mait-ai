@@ -30,7 +30,7 @@ from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin, IsMait
 from apps.core.services import record_audit
 
-from .models import IndentRequest
+from .models import IndentRequest, stale_indent_q
 from .serializers import (
     IndentCreateSerializer,
     IndentIssueSerializer,
@@ -38,9 +38,6 @@ from .serializers import (
     IndentSerializer,
 )
 from .services import approve_indent, confirm_collection, issue_indent, reject_indent
-
-# An approved indent that has not been issued after this long is not moving on its own.
-STALE_AFTER_DAYS = 7
 
 
 class IndentFilter(django_filters.FilterSet):
@@ -64,18 +61,12 @@ class IndentFilter(django_filters.FilterSet):
 
     def filter_stale(self, queryset, name, value):
         """
-        Approved but never issued, or never pushed to Indent Easy at all.
-
-        Both mean a Mait is waiting on stock that nobody is actually bringing, which is the
-        one thing about indents an admin has to notice without being told.
+        The ones nobody is moving — `stale_indent_q`, which the dashboard's exception queue
+        counts with too, so a count there opens onto exactly the rows it counted.
         """
         if not value:
             return queryset
-        cutoff = timezone.now() - timezone.timedelta(days=STALE_AFTER_DAYS)
-        return queryset.filter(
-            Q(status=IndentRequest.Status.APPROVED, requested_at__lt=cutoff)
-            | Q(sync_status=IndentRequest.SyncStatus.FAILED)
-        )
+        return queryset.filter(stale_indent_q())
 
 
 @extend_schema(tags=["indents"])
