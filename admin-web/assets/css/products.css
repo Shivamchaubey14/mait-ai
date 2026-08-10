@@ -1,0 +1,98 @@
+/**
+ * Products (W14) — the catalogue an indent is named from.
+ *
+ * The editor is the screen's only real interaction, and it does two different jobs from one
+ * panel: bringing something new onto the list, and correcting something already on it. It says
+ * which by its colour, because "Add" and "Edit SHEATH" in the same white box are two words
+ * apart and an operator who mis-reads that edits the wrong thing.
+ */
+
+@import url('forms.css');
+
+.product-editor {
+  border-color: var(--ink-100);
+  background: var(--color-info-wash);
+}
+
+/* Adding is a different act from correcting: it puts a new name in front of every Mait in the
+   network. Green, like every other "this brings something into being" on the portal. */
+.product-editor--adding {
+  background: var(--color-primary-wash);
+  border-color: var(--green-200);
+}
+
+.product-editor__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.product-editor__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-info);
+  background: var(--color-surface);
+}
+
+.product-editor--adding .product-editor__mark {
+  color: var(--color-primary-dark);
+}
+
+.product-editor__mark svg {
+  width: 19px;
+  height: 19px;
+}
+
+/* The row being edited, so the panel names its subject rather than leaving it in the table
+   behind. Empty while adding — there is nothing to name yet. */
+.product-editor__subject {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+}
+
+.product-editor--adding .product-editor__subject {
+  color: var(--color-primary-dark);
+}
+
+/* --- one tint per field ---------------------------------------------------------------------
+   Eight controls, and the two that cannot be taken back — the code and the animal — are the
+   ones an operator should notice before typing. They are the only ones that carry ink. */
+.field__icon--code {
+  color: var(--color-ink);
+  background: var(--ink-50);
+}
+
+.field__icon--label {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+}
+
+.field__icon--kind {
+  color: var(--color-info);
+  background: var(--color-info-wash);
+}
+
+.field__icon--measure {
+  color: var(--color-text-muted);
+  background: var(--color-background);
+}
+
+.field__icon--rate {
+  color: var(--color-secondary-pressed);
+  background: var(--color-secondary-wash);
+}
+
+/* A field that cannot be changed after the first save should look like it. */
+.field__control[readonly],
+.field__control[disabled] {
+  color: var(--color-text-muted);
+  background: var(--ink-50);
+  cursor: not-allowed;
+}

@@ -6,7 +6,8 @@
     <title>Products · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="assets/css/forms.css" />
+    <!-- products.css pulls in forms.css, which imports portal.css. -->
+    <link rel="stylesheet" href="assets/css/products.css" />
   </head>
 
   <body>
@@ -46,18 +47,45 @@
           </button>
         </section>
 
-        <section class="panel" id="editor" aria-label="Product details" hidden>
-          <div class="panel__head">
-            <h2 class="panel__title" id="editor-title">Add</h2>
-            <p class="panel__count" id="editor-meta">
-              This is the name a Mait picks from, and the name the depot packs against.
-            </p>
+        <section class="panel product-editor" id="editor" aria-labelledby="editor-title" hidden>
+          <div class="product-editor__head">
+            <span class="product-editor__mark" id="editor-mark" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M4 6h16M4 12h16M4 18h10M18 16v5M15.5 18.5h5" />
+              </svg>
+            </span>
+            <div>
+              <h2 class="panel__title" id="editor-title">Add</h2>
+              <p class="field__hint" id="editor-meta">
+                This is the name a Mait picks from, and the name the depot packs against.
+              </p>
+            </div>
           </div>
 
           <!-- Not a <form>: saving, retiring and deleting are three different decisions. -->
           <div class="form-grid">
-            <div class="field">
-              <label class="field__label" for="code">Code</label>
+            <div class="field field--iconed">
+              <label class="field__label" for="code">
+                <span class="field__icon field__icon--code" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M9 4L7 20M17 4l-2 16M4 9h16M3 15h16" /></svg
+                ></span>
+                Code
+              </label>
               <input
                 class="input field__control"
                 id="code"
@@ -69,8 +97,21 @@
               <p class="field__hint" id="code-hint">Set once and never changed</p>
             </div>
 
-            <div class="field">
-              <label class="field__label" for="name">Name</label>
+            <div class="field field--iconed">
+              <label class="field__label" for="name">
+                <span class="field__icon field__icon--label" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 6h16M4 12h11M4 18h7" /></svg
+                ></span>
+                Name
+              </label>
               <input
                 class="input field__control"
                 id="name"
@@ -81,14 +122,40 @@
               <p class="field__hint">What the Mait and the depot both see</p>
             </div>
 
-            <div class="field" id="field-name-hi" hidden>
-              <label class="field__label" for="name-hi">Name in Hindi</label>
+            <div class="field field--iconed" id="field-name-hi" hidden>
+              <label class="field__label" for="name-hi">
+                <span class="field__icon field__icon--label" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M5 8h9M9 8v9M15 5l4 14M13.5 14h5" /></svg
+                ></span>
+                Name in Hindi
+              </label>
               <input class="input field__control" id="name-hi" type="text" maxlength="60" />
               <p class="field__hint">Shown when the Mait switches the app to Hindi</p>
             </div>
 
-            <div class="field" id="field-animal" hidden>
-              <label class="field__label" for="animal-type">Animal</label>
+            <div class="field field--iconed" id="field-animal" hidden>
+              <label class="field__label" for="animal-type">
+                <span class="field__icon field__icon--kind" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 5c0 4 2 7 8 7s8-3 8-7M4 5v3M20 5v3M8 12l-1 7M16 12l1 7" /></svg
+                ></span>
+                Animal
+              </label>
               <select class="select field__control" id="animal-type">
                 <option value="COW">Cow</option>
                 <option value="BUFF">Buffalo</option>
@@ -96,8 +163,21 @@
               <p class="field__hint">Set once — straws and animals both key on it</p>
             </div>
 
-            <div class="field" id="field-category">
-              <label class="field__label" for="category">Kind</label>
+            <div class="field field--iconed" id="field-category">
+              <label class="field__label" for="category">
+                <span class="field__icon field__icon--kind" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5" /></svg
+                ></span>
+                Kind
+              </label>
               <select class="select field__control" id="category">
                 <option value="consumable">Consumable — used up and reordered</option>
                 <option value="asset">Equipment — issued once and kept</option>
@@ -105,8 +185,21 @@
               <p class="field__hint">Five boxes of gloves is a Tuesday; five AI guns is not</p>
             </div>
 
-            <div class="field" id="field-unit">
-              <label class="field__label" for="unit">Unit</label>
+            <div class="field field--iconed" id="field-unit">
+              <label class="field__label" for="unit">
+                <span class="field__icon field__icon--measure" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 8h18v8H3zM7 8v4M11 8v4M15 8v4M19 8v4" /></svg
+                ></span>
+                Unit
+              </label>
               <input
                 class="input field__control"
                 id="unit"
@@ -117,8 +210,21 @@
               <p class="field__hint">piece, pair, box, litre</p>
             </div>
 
-            <div class="field">
-              <label class="field__label" for="rate">Rate (₹ per unit)</label>
+            <div class="field field--iconed">
+              <label class="field__label" for="rate">
+                <span class="field__icon field__icon--rate" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M6 4h11M6 9h11M6 14h3M9 14c5.5 0 5.5-10 0-10M6 14l7 6" /></svg
+                ></span>
+                Rate (₹ per unit)
+              </label>
               <input
                 class="input field__control"
                 id="rate"
@@ -130,8 +236,21 @@
               <p class="field__hint">Leave at 0 if it is not priced yet</p>
             </div>
 
-            <div class="field">
-              <label class="field__label" for="display-order">Order</label>
+            <div class="field field--iconed">
+              <label class="field__label" for="display-order">
+                <span class="field__icon field__icon--measure" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M7 4v16m0 0-3-3m3 3 3-3M13 6h7M13 12h5M13 18h3" /></svg
+                ></span>
+                Order
+              </label>
               <input
                 class="input field__control"
                 id="display-order"
@@ -142,11 +261,70 @@
               <p class="field__hint">Lower shows first on the request form</p>
             </div>
 
+            <!-- Four different decisions, so four different weights. Save is the screen's one
+                 green; retiring takes something off the request form without losing what points
+                 at it; deleting only works while nothing does. -->
             <div class="form-actions">
-              <button class="btn btn--primary" id="save" type="button">Save</button>
-              <button class="btn" id="retire" type="button" hidden>Retire</button>
-              <button class="btn" id="restore" type="button" hidden>Bring back</button>
-              <button class="btn" id="remove" type="button" hidden>Delete</button>
+              <button class="btn btn--primary" id="save" type="button">
+                <svg
+                  class="btn__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12.5l4.5 4.5L19 7.5" />
+                </svg>
+                Save
+              </button>
+              <button class="btn btn--warn-outline" id="retire" type="button" hidden>
+                <svg
+                  class="btn__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 4h12l-1 16H7zM10 9v7M14 9v7" />
+                </svg>
+                Retire
+              </button>
+              <button class="btn btn--good-outline" id="restore" type="button" hidden>
+                <svg
+                  class="btn__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5" />
+                </svg>
+                Bring back
+              </button>
+              <button class="btn btn--danger-outline" id="remove" type="button" hidden>
+                <svg
+                  class="btn__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M5.6 5.6l12.8 12.8" />
+                </svg>
+                Delete
+              </button>
               <button class="btn" id="cancel" type="button">Cancel</button>
               <p class="field__hint" id="editor-hint">—</p>
             </div>

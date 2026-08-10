@@ -31,25 +31,9 @@
 }
 
 /* --- the row's one action ---------------------------------------------------------------------
-   Outlined, not filled. A table of fifteen solid red buttons reads as fifteen problems; the
-   colour belongs to what the button would do, not to the row it sits in. */
-.btn--deactivate {
-  color: var(--color-error);
-  border-color: var(--color-error);
-}
-
-.btn--deactivate:hover {
-  background: var(--color-error-wash);
-}
-
-.btn--reactivate {
-  color: var(--color-primary-dark);
-  border-color: var(--color-primary);
-}
-
-.btn--reactivate:hover {
-  background: var(--color-primary-wash);
-}
+   Outlined, not filled — `.btn--danger-outline` / `.btn--good-outline` in portal.css. A table of
+   fifteen solid red buttons reads as fifteen problems; the colour belongs to what the button
+   would do, not to the row it sits in. */
 
 /* Mid-flight. The row is about to change what it says about someone's access, so the button
    says it is working rather than looking ignored for the length of a round trip. */

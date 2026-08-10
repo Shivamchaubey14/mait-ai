@@ -64,7 +64,7 @@
   function actionCell(user) {
     return (
       '<button class="btn ' +
-      (user.is_active ? 'btn--deactivate' : 'btn--reactivate') +
+      (user.is_active ? 'btn--danger-outline' : 'btn--good-outline') +
       '" type="button" data-toggle="' +
       user.id +
       '" data-active="' +

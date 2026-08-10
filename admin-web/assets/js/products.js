@@ -92,9 +92,16 @@
     const adding = !item;
     const straw = straws();
 
-    $('#editor').prop('hidden', false);
-    $('#editor-title').text(
-      adding ? (straw ? 'Add a breed' : 'Add a product') : 'Edit ' + item.code
+    // Two jobs from one panel, so it says which by its colour. "Add" and "Edit SHEATH" in the
+    // same white box are two words apart, and an operator who mis-reads that edits the wrong
+    // row — green brings something new onto the list, blue corrects what is already on it.
+    $('#editor').prop('hidden', false).toggleClass('product-editor--adding', adding);
+    $('#editor-title').html(
+      adding
+        ? straw
+          ? 'Add a breed'
+          : 'Add a product'
+        : 'Edit <span class="product-editor__subject">' + ui.escapeHtml(item.code) + '</span>'
     );
 
     $('#code')

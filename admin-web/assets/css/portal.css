@@ -252,6 +252,37 @@ a:hover {
   border-color: var(--color-error-pressed);
 }
 
+/* Outlined rather than filled, for a destructive or restoring action that sits in a row or in a
+   group of other buttons. `--danger` is the filled red, for the one action a screen is warning
+   about; a table of fifteen filled red buttons reads as fifteen problems, and so does a form
+   with Delete shouting next to Save. */
+.btn--danger-outline {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.btn--danger-outline:hover {
+  background: var(--color-error-wash);
+}
+
+.btn--good-outline {
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+
+.btn--good-outline:hover {
+  background: var(--color-primary-wash);
+}
+
+.btn--warn-outline {
+  color: var(--yolk-800);
+  border-color: var(--color-secondary);
+}
+
+.btn--warn-outline:hover {
+  background: var(--color-secondary-wash);
+}
+
 /* `.btn` is already an inline-flex row with a gap, so a glyph only needs a size. */
 .btn__icon {
   width: 16px;
