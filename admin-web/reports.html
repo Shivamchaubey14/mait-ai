@@ -6,8 +6,8 @@
     <title>Reports &amp; export · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="assets/css/portal.css" />
-    <link rel="stylesheet" href="assets/css/forms.css" />
+    <!-- reports.css pulls in forms.css, which imports portal.css. -->
+    <link rel="stylesheet" href="assets/css/reports.css" />
   </head>
 
   <body>
@@ -19,45 +19,151 @@
             <p class="topbar__meta">Build a query, preview it, export it</p>
           </div>
           <div class="topbar__actions">
-            <button class="btn btn--primary" id="export" type="button">Export CSV →</button>
+            <button class="btn btn--dark" id="export" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+              </svg>
+              Export CSV
+            </button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
         </header>
 
         <div id="alert-region" role="alert" aria-live="polite"></div>
 
-        <section class="panel" aria-label="Query">
+        <!-- The builder is the screen: everything below is the answer to what was asked here.
+             Each field carries a glyph so the six controls group into what is being reported,
+             when, where and which rows, rather than reading as six identical boxes. -->
+        <section class="panel query" aria-labelledby="query-title">
+          <div class="query__head">
+            <span class="query__mark" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+              </svg>
+            </span>
+            <div>
+              <h2 class="panel__title" id="query-title">Build a query</h2>
+              <p class="field__hint">Preview it on this screen before you download it</p>
+            </div>
+          </div>
+
           <form id="query-form" class="form-grid" novalidate>
-            <div class="field">
-              <label class="field__label" for="report">Report</label>
+            <div class="field field--iconed">
+              <label class="field__label" for="report">
+                <span class="field__icon field__icon--report" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M6 3h9l5 5v13H6zM14 3v6h6M9 14h7M9 18h5" />
+                  </svg>
+                </span>
+                Report
+              </label>
               <select class="select field__control" id="report">
                 <option value="ai-events">AI events</option>
               </select>
               <p class="field__hint">Payment and indent reports follow their phases</p>
             </div>
 
-            <div class="field">
-              <label class="field__label" for="date-from">From</label>
+            <div class="field field--iconed">
+              <label class="field__label" for="date-from">
+                <span class="field__icon field__icon--date" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M8 14h5" />
+                  </svg>
+                </span>
+                From
+              </label>
               <input class="input field__control" id="date-from" type="date" />
               <p class="field__hint">Leave both blank for everything</p>
             </div>
 
-            <div class="field">
-              <label class="field__label" for="date-to">To</label>
+            <div class="field field--iconed">
+              <label class="field__label" for="date-to">
+                <span class="field__icon field__icon--date" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M11 14h5" />
+                  </svg>
+                </span>
+                To
+              </label>
               <input class="input field__control" id="date-to" type="date" />
               <p class="field__hint">By capture date</p>
             </div>
 
-            <div class="field">
-              <label class="field__label" for="filter-mpp">MPP</label>
+            <div class="field field--iconed">
+              <label class="field__label" for="filter-mpp">
+                <span class="field__icon field__icon--place" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6" />
+                  </svg>
+                </span>
+                MPP
+              </label>
               <select class="select field__control" id="filter-mpp">
                 <option value="">All MPPs</option>
               </select>
               <p class="field__hint">One MPP, or all of them</p>
             </div>
 
-            <div class="field">
-              <label class="field__label" for="search">Search</label>
+            <div class="field field--iconed">
+              <label class="field__label" for="search">
+                <span class="field__icon field__icon--find" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4.3-4.3" />
+                  </svg>
+                </span>
+                Search
+              </label>
               <input
                 class="input field__control"
                 id="search"
@@ -70,8 +176,22 @@
               <p class="field__hint">Narrows the preview and the download alike</p>
             </div>
 
-            <div class="field">
-              <label class="field__label" for="filter-status">Status</label>
+            <div class="field field--iconed">
+              <label class="field__label" for="filter-status">
+                <span class="field__icon field__icon--status" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M8 12.5l2.5 2.5L16 9.5" />
+                  </svg>
+                </span>
+                Status
+              </label>
               <select class="select field__control" id="filter-status">
                 <option value="">All statuses</option>
                 <option value="completed">Completed</option>
@@ -83,8 +203,36 @@
             </div>
 
             <div class="form-actions">
-              <button class="btn btn--primary" type="submit">Run query</button>
-              <button class="btn" type="reset" id="clear">Clear</button>
+              <button class="btn btn--primary" type="submit">
+                <svg
+                  class="btn__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4.3-4.3" />
+                </svg>
+                Run query
+              </button>
+              <button class="btn" type="reset" id="clear">
+                <svg
+                  class="btn__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5" />
+                </svg>
+                Clear
+              </button>
               <p class="field__hint">Personal data is excluded from every export</p>
             </div>
           </form>

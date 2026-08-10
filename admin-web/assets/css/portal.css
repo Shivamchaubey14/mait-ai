@@ -283,6 +283,51 @@ a:hover {
   outline-offset: -1px;
 }
 
+/* The browser's own select is drawn by the OS: on Windows it comes back a squared-off box with
+   a grey arrow, ignoring the 12px radius every other control on the screen has, so a filter bar
+   read as a row of native widgets dropped onto the page. `appearance: none` hands the drawing
+   back to us — and takes the arrow with it, so one is put back below.
+   The chevron is a sibling laid over the control rather than a background image, for the same
+   reason as the search magnifier: a background image means an SVG with a colour spelled out in
+   this file, and the palette lives in tokens.css. shell.js builds the wrapper, so no page has
+   to remember it. */
+.select {
+  appearance: none;
+  padding-right: calc(var(--space-3) * 2 + 12px);
+}
+
+.select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Never intercepts the click that was meant for the control behind it. */
+.select-wrap__chevron {
+  position: absolute;
+  right: var(--space-3);
+  width: 12px;
+  height: 12px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.select-wrap:hover .select-wrap__chevron {
+  color: var(--color-ink);
+}
+
+/* A select stretched by its container — the query builder's grid, the filter bar's flex — has
+   to take the wrapper with it, or the control shrinks to its content and the chevron lands in
+   the middle of the row. */
+.select-wrap--block {
+  display: flex;
+  width: 100%;
+}
+
+.select-wrap--block .select {
+  width: 100%;
+}
+
 /* --- filter bar --------------------------------------------------------------------------
    Directly above the table it governs. In the topbar it would look like it filtered the
    whole portal. */

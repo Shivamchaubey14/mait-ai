@@ -49,6 +49,65 @@
   color: var(--color-error);
 }
 
+/* --- iconed fields ------------------------------------------------------------------------
+   A glyph on a tinted chip beside the label, so a form of six identical boxes is told apart by
+   shape before a word of it is read. The chip carries the tone and the glyph carries the
+   colour — the same way round as a notice, a stat tile and a queue card. */
+.field--iconed .field__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.field--wide {
+  grid-column: 1 / -1;
+}
+
+.field__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: var(--color-background);
+}
+
+.field__icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.field__count {
+  padding: 0 var(--space-2);
+  margin-left: auto;
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+  border-radius: var(--radius-pill);
+}
+
+/* --- date fields ---------------------------------------------------------------------------
+   The browser draws the calendar button itself and will not take a colour from CSS, so it is
+   sized and given room to breathe rather than fought with. Full opacity because a date range is
+   the first control an operator reaches for on this screen: at the browser default it is a grey
+   smudge at the edge of the box, and people click the box and wonder why nothing opens. */
+.input[type='date']::-webkit-calendar-picker-indicator {
+  padding: 2px;
+  margin-left: var(--space-1);
+  border-radius: var(--radius-sm);
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.input[type='date']::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background: var(--color-primary-wash);
+}
+
 .form-actions {
   display: flex;
   align-items: center;

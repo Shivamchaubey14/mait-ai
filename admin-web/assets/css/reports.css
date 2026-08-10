@@ -1,0 +1,75 @@
+/**
+ * Reports & export (W17).
+ *
+ * The query builder is the screen. Everything else here — the preview table, the notice about
+ * personal data — is the answer to what the builder was asked, so the builder is the thing that
+ * has to look like a control panel rather than like six boxes on a white sheet.
+ */
+
+@import url('forms.css');
+
+/* Tinted, and titled. A form is a question being composed, and a card that opens with a heading
+   and a glyph says which question — where a bare white panel left the first field's label
+   ("Report") doing that job and doing it badly, since it is also the name of one of the six
+   controls under it. */
+.query {
+  background: var(--color-info-wash);
+  border-color: var(--ink-100);
+}
+
+/* The controls already come up white from portal.css, which is the point: the card carries the
+   tone and the thing being filled in stays paper, the same way round as the stage tiles on a
+   running import. */
+.query__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.query__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-info);
+  background: var(--color-surface);
+}
+
+.query__mark svg {
+  width: 19px;
+  height: 19px;
+}
+
+/* --- one tint per field -------------------------------------------------------------------
+   Six controls that all look alike are six controls an operator reads left to right every time
+   they build a query. The glyphs group them: what is being reported, when, where, and which
+   rows — so the eye goes to the pair it needs instead of to the top of the form. */
+.field__icon--report {
+  color: var(--color-info);
+  background: var(--color-info-wash);
+}
+
+/* From and To are one control in two boxes and are tinted as one. */
+.field__icon--date {
+  color: var(--color-secondary-pressed);
+  background: var(--color-secondary-wash);
+}
+
+.field__icon--place {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+}
+
+.field__icon--find {
+  color: var(--color-ink);
+  background: var(--ink-50);
+}
+
+.field__icon--status {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+}
