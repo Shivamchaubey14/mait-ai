@@ -32,7 +32,9 @@
               >
                 <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
               </svg>
-              Export CSV
+              <!-- The label is its own element so "Preparing…" can replace the words without
+                   taking the glyph beside them with it. -->
+              <span id="export-label">Export CSV</span>
             </button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
@@ -251,9 +253,25 @@
           </div>
         </div>
 
-        <section class="panel panel--flush" aria-label="Preview">
-          <div class="panel__head form-panel__head">
-            <h2 class="panel__title">Preview</h2>
+        <section class="panel panel--flush preview" id="preview" aria-label="Preview">
+          <div class="panel__head form-panel__head preview__head">
+            <h2 class="panel__title">
+              <span class="panel__icon preview__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6"
+                  />
+                </svg>
+              </span>
+              Preview
+            </h2>
             <span class="panel__count" id="preview-count">—</span>
           </div>
           <div class="table-wrap">

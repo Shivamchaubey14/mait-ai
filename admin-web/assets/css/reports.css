@@ -65,6 +65,50 @@
   height: 19px;
 }
 
+/* --- preview -------------------------------------------------------------------------------
+   The answer to the query, so its head is banded like the table head below it rather than left
+   as white-on-white with a word floating in it. */
+.preview__head {
+  padding-bottom: var(--space-4);
+  background: var(--ink-50);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.preview__icon {
+  color: var(--color-primary-dark);
+  background: var(--color-surface);
+}
+
+/* Nothing has been asked yet, so the table holds a worked example rather than an empty box —
+   six columns of nothing tells an operator nothing about what they are about to get. It is
+   labelled, greyed and struck from the tab order, and the first real query replaces it. */
+.preview--sample .preview__icon {
+  color: var(--color-text-muted);
+}
+
+.preview--sample .table tbody {
+  opacity: 0.6;
+}
+
+.preview--sample .table tbody tr {
+  /* Not a row anyone should try to open. */
+  cursor: default;
+  user-select: none;
+}
+
+.preview__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--yolk-800);
+  background: var(--color-secondary-wash);
+  border-radius: var(--radius-pill);
+}
+
 /* --- one tint per field -------------------------------------------------------------------
    Six controls that all look alike are six controls an operator reads left to right every time
    they build a query. The glyphs group them: what is being reported, when, where, and which

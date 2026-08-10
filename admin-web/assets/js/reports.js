@@ -79,6 +79,93 @@
     );
   }
 
+  /**
+   * A worked example, shown until the first query runs.
+   *
+   * Six empty columns and "Run a query to preview it" says nothing about what an operator is
+   * about to get, and on a fresh install — where no AI event exists yet — running the query
+   * says the same nothing. So the table opens with a filled-in shape of the answer.
+   *
+   * It is unmistakably not data: the head carries a Sample badge, the rows are greyed, the
+   * event codes are not links, and the first real query replaces the lot. Nothing here is ever
+   * exported — the download is streamed from the API, which has never heard of these.
+   */
+  const SAMPLE = [
+    {
+      code: 'AI-100482',
+      when: '12 Aug 2026, 08:14',
+      mpp: ['BARWALA', 'MPP000412'],
+      mait: ['SUNITA DEVI', '5500000054'],
+      amount: '₹ 300',
+      status: ['Completed', 'good'],
+    },
+    {
+      code: 'AI-100481',
+      when: '12 Aug 2026, 07:52',
+      mpp: ['KHERI JAT', 'MPP000188'],
+      mait: ['RAMESH KUMAR', '5500000091'],
+      amount: '₹ 300',
+      status: ['Completed', 'good'],
+    },
+    {
+      code: 'AI-100479',
+      when: '11 Aug 2026, 17:30',
+      mpp: ['BARWALA', 'MPP000412'],
+      mait: ['SUNITA DEVI', '5500000054'],
+      amount: '₹ 300',
+      status: ['Payment pending', 'warn'],
+    },
+    {
+      code: 'AI-100476',
+      when: '11 Aug 2026, 16:05',
+      mpp: ['DHANANA', 'MPP000233'],
+      mait: ['ANIL SINGH', '5500000117'],
+      amount: '—',
+      status: ['Straw verified', 'info'],
+    },
+    {
+      code: 'AI-100470',
+      when: '11 Aug 2026, 09:41',
+      mpp: ['KHERI JAT', 'MPP000188'],
+      mait: ['RAMESH KUMAR', '5500000091'],
+      amount: '—',
+      status: ['Cancelled', 'bad'],
+    },
+  ];
+
+  function sampleRow(item) {
+    return (
+      '<tr>' +
+      '<td><span class="table__code">' +
+      ui.escapeHtml(item.code) +
+      '</span></td>' +
+      '<td>' +
+      ui.escapeHtml(item.when) +
+      '</td>' +
+      '<td>' +
+      ui.identity(item.mpp[0], item.mpp[1]) +
+      '</td>' +
+      '<td>' +
+      ui.identity(item.mait[0], item.mait[1]) +
+      '</td>' +
+      '<td class="table__num">' +
+      ui.escapeHtml(item.amount) +
+      '</td>' +
+      '<td>' +
+      ui.pill(item.status[0], item.status[1]) +
+      '</td>' +
+      '</tr>'
+    );
+  }
+
+  function showSample() {
+    $('#preview').addClass('preview--sample');
+    $('#preview-count').html(
+      '<span class="preview__badge">Sample — run a query for real rows</span>'
+    );
+    $('#rows').html(SAMPLE.map(sampleRow).join(''));
+  }
+
   function runQuery() {
     MaitAI.shell.clearAlert();
     const params = $.extend({ limit: PREVIEW_ROWS, offset: 0 }, filters());
@@ -86,6 +173,9 @@
     MaitAI.api
       .aiEvents(params)
       .done(function (page) {
+        // Off for good the moment a real answer arrives, even an empty one — "no rows match"
+        // is a result, and leaving the example under it would read as the result.
+        $('#preview').removeClass('preview--sample');
         $('#preview-count').text(
           ui.number(page.count) +
             ' rows match · showing the first ' +
@@ -110,7 +200,8 @@
     const query = $.param(filters());
     const token = MaitAI.api.tokens.get().access;
 
-    $('#export').prop('disabled', true).text('Preparing…');
+    $('#export').prop('disabled', true);
+    $('#export-label').text('Preparing…');
 
     fetch(MaitAI.api.baseUrl() + '/reports/export/' + (query ? '?' + query : ''), {
       headers: { Authorization: 'Bearer ' + token },
@@ -134,7 +225,8 @@
         MaitAI.shell.alert('The export could not be produced. Try a narrower date range.');
       })
       .finally(function () {
-        $('#export').prop('disabled', false).text('Export CSV →');
+        $('#export').prop('disabled', false);
+        $('#export-label').text('Export CSV');
       });
   }
 
@@ -143,6 +235,7 @@
       return;
     }
     MaitAI.shell.mount();
+    showSample();
 
     MaitAI.api.mpps({ limit: 200 }).done(function (page) {
       $('#filter-mpp').append(

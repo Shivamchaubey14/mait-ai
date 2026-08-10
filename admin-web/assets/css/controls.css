@@ -173,8 +173,14 @@
 /* --- the calendar ---------------------------------------------------------------------------
    A month at a time, because a date range on this portal is picked inside the month someone is
    already thinking about. Typing still works — the field is a text input underneath. */
+/* Fills the panel, and the panel is at least as wide as the control it drops from. A fixed width
+   here left a band of empty card down the right of every calendar wider than 272px — which is
+   every date field in the query builder, where the control is a third of the card. The minimum
+   keeps a calendar usable under a narrow filter-bar control, where the panel would otherwise
+   shrink to something no month fits in. */
 .cal {
-  width: 17rem;
+  width: 100%;
+  min-width: 15.5rem;
 }
 
 .cal__head {
@@ -230,8 +236,10 @@
   text-align: center;
 }
 
+/* A fixed height rather than a square cell. Now that the grid stretches to the control, square
+   cells would make a wide date field open a calendar half the height of the screen. */
 .cal__day {
-  aspect-ratio: 1;
+  height: 34px;
   font-family: var(--font-body);
   font-size: var(--text-label);
   color: var(--color-text);
