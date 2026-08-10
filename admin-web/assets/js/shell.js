@@ -37,10 +37,8 @@ window.MaitAI = window.MaitAI || {};
     reports: 'M6 3h9l5 5v13H6zM14 3v6h6M9 14h7M9 18h7',
     users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M2 20a7 7 0 0 1 14 0M18 8v6M15 11h6',
 
-    /* Not sidebar sections: the filter bar's magnifier, the select's own arrow, and the four
-       notice tones. */
+    /* Not sidebar sections: the filter bar's magnifier and the four notice tones. */
     search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4.3-4.3',
-    chevron: 'M6 9l6 6 6-6',
     info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 11v5.5M12 7.5v.5',
     warn: 'M12 3 2 20h20zM12 9v5M12 17.5v.5',
     bad: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M9 9l6 6M15 9l-6 6',
@@ -142,22 +140,12 @@ window.MaitAI = window.MaitAI || {};
       $input.wrap('<div class="search"></div>').before(icon('search', 'search__icon'));
     });
 
-    // `appearance: none` in portal.css takes the browser's own arrow off the select along with
-    // its squared-off OS styling, so one is put back in our own palette. Done here rather than
-    // in seventeen HTML files for the same reason as the magnifier above.
-    $('.select').each(function () {
-      const $select = $(this);
-      if ($select.parent().hasClass('select-wrap')) {
-        return;
-      }
-      // A select that fills its column keeps doing so: an inline-flex wrapper around a
-      // full-width control would collapse to its content and strand the chevron mid-row.
-      // `.field__control` is what marks a control as full-width — see forms.css.
-      const block = $select.hasClass('field__control');
-      $select
-        .wrap('<div class="select-wrap' + (block ? ' select-wrap--block' : '') + '"></div>')
-        .after(icon('chevron', 'select-wrap__chevron'));
-    });
+    // Selects and date fields are replaced outright — see controls.js. Styling the closed box
+    // never reached the menu or the calendar that drops out of it, because the browser draws
+    // those outside the page.
+    if (MaitAI.controls) {
+      MaitAI.controls.mount();
+    }
   }
 
   /**

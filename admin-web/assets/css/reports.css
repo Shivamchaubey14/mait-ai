@@ -20,6 +20,27 @@
 /* The controls already come up white from portal.css, which is the point: the card carries the
    tone and the thing being filled in stays paper, the same way round as the stage tiles on a
    running import. */
+/* Three and three, not whatever `auto-fit` lands on.
+   The shared grid packs as many 240px columns as fit, which on a wide screen put five of the six
+   controls on one line and left Status stranded on a line of its own — a form that looks like it
+   ran out of room rather than one that was laid out. Three apiece also matches how the query
+   reads: what is being reported and over what dates, then where, which rows, and in what state. */
+.query .form-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 1100px) {
+  .query .form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .query .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .query__head {
   display: flex;
   align-items: center;

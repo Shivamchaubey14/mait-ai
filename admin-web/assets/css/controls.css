@@ -1,0 +1,302 @@
+/**
+ * The two controls the browser insists on drawing itself.
+ *
+ * A `<select>`'s option list and a `<input type="date">`'s calendar are OS widgets. They are
+ * not in the page, so no radius, colour or font in this stylesheet reaches them: the portal's
+ * filter bars opened square grey Windows menus, and the query builder opened a square grey
+ * Windows calendar. `appearance: none` fixes the closed control and does nothing at all for the
+ * thing that drops out of it.
+ *
+ * So both are rebuilt here as real elements. The native control stays in the DOM, hidden and
+ * authoritative — every screen still reads `$('#filter-status').val()` and every form reset
+ * still works, because the thing being reset is still a `<select>`. This only replaces what the
+ * operator sees and clicks.
+ */
+
+/* --- the shared shell of both ------------------------------------------------------------- */
+.pick {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+}
+
+/* In a filter bar the control sizes to its content the way the native one did; in a form grid
+   it fills its column. `.field__control` is what marks the difference — see forms.css. */
+.pick--auto {
+  width: auto;
+}
+
+/* The native control is kept for its value, not for its behaviour.
+   `.visually-hidden` alone is not enough here. It sets `width: 1px`, but `.field__control` sets
+   `width: 100%` from forms.css, which is loaded after portal.css and wins on equal specificity —
+   so the hidden select stayed a full-width 38px box, absolutely positioned directly over the
+   button that replaced it. Clipped, so invisible; still there, so its corner opened the OS menu
+   we had just replaced. Sized and disarmed explicitly rather than left to that race. */
+.pick > select,
+.pick > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Wears `.input`, so it is the same box as every text field on the screen — same height, same
+   border, same 12px radius. Only the content differs. */
+.pick__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick__button:hover {
+  border-color: var(--ink-100);
+}
+
+.pick__button[aria-expanded='true'] {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -1px;
+}
+
+.pick__value {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Nothing chosen yet. The same grey a placeholder would be, so an empty date reads as empty
+   rather than as a value someone picked. */
+.pick__value--empty {
+  color: var(--color-text-muted);
+}
+
+.pick__chevron {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--color-text-muted);
+  transition: transform 120ms ease;
+}
+
+.pick__button[aria-expanded='true'] .pick__chevron {
+  transform: rotate(180deg);
+  color: var(--color-primary-dark);
+}
+
+.pick__lead {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+/* --- the panel that drops out of it -------------------------------------------------------
+   The part that could not be styled before. Rounded to the same scale as the card it sits on,
+   lifted off the page by a shadow rather than a border, and clipped so the first and last
+   options take the corner radius with them. */
+.pick__panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 30;
+  min-width: 100%;
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 28px rgb(37 61 78 / 14%);
+}
+
+/* Near the right edge of the viewport a left-anchored panel runs off the screen. */
+.pick__panel--right {
+  left: auto;
+  right: 0;
+}
+
+/* --- the option list ----------------------------------------------------------------------- */
+.pick__menu {
+  max-height: 17rem;
+  overflow-y: auto;
+}
+
+.pick__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  color: var(--color-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* Hover and keyboard land on the same state, so arrowing through the list looks like what
+   pointing at it looks like. */
+.pick__option:hover,
+.pick__option.is-active {
+  background: var(--ink-50);
+}
+
+.pick__option[aria-selected='true'] {
+  color: var(--color-primary-dark);
+  font-weight: 600;
+  background: var(--color-primary-wash);
+}
+
+/* The tick is what says "this is the one", so the colour is not carrying it alone. */
+.pick__tick {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-left: auto;
+  opacity: 0;
+}
+
+.pick__option[aria-selected='true'] .pick__tick {
+  opacity: 1;
+}
+
+/* --- the calendar ---------------------------------------------------------------------------
+   A month at a time, because a date range on this portal is picked inside the month someone is
+   already thinking about. Typing still works — the field is a text input underneath. */
+.cal {
+  width: 17rem;
+}
+
+.cal__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-2);
+}
+
+.cal__title {
+  flex: 1;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-label);
+  color: var(--color-ink);
+  text-align: center;
+}
+
+.cal__step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.cal__step:hover {
+  color: var(--color-ink);
+  background: var(--ink-50);
+}
+
+.cal__step svg {
+  width: 14px;
+  height: 14px;
+}
+
+.cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.cal__dow {
+  padding: var(--space-1) 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.cal__day {
+  aspect-ratio: 1;
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  color: var(--color-text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.cal__day:hover {
+  background: var(--ink-50);
+}
+
+/* Days either side of the month are shown rather than left blank, so the grid keeps its shape
+   and the weeks line up — but they are clearly not this month. */
+.cal__day--outside {
+  color: var(--color-text-disabled);
+}
+
+/* Today is a fact about the calendar; the selection is a fact about the field. They have to be
+   distinguishable when they are the same day, so one is an outline and the other is filled. */
+.cal__day--today {
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+  font-weight: 600;
+}
+
+.cal__day.is-selected,
+.cal__day.is-selected:hover {
+  color: var(--color-surface);
+  background: var(--color-primary);
+  font-weight: 600;
+}
+
+.cal__foot {
+  display: flex;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  margin-top: var(--space-1);
+  border-top: 1px solid var(--color-border);
+}
+
+.cal__action {
+  flex: 1;
+  min-height: 30px;
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.cal__action:hover {
+  background: var(--color-primary-wash);
+}
+
+/* Clearing a date is how "everything" is asked for on the reports screen, so it is a button
+   rather than something to be discovered by selecting the text and deleting it. */
+.cal__action--clear {
+  color: var(--color-text-muted);
+}
+
+.cal__action--clear:hover {
+  color: var(--color-error);
+  background: var(--color-error-wash);
+}

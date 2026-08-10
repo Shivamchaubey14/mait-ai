@@ -91,10 +91,10 @@
 }
 
 /* --- date fields ---------------------------------------------------------------------------
-   The browser draws the calendar button itself and will not take a colour from CSS, so it is
-   sized and given room to breathe rather than fought with. Full opacity because a date range is
-   the first control an operator reaches for on this screen: at the browser default it is a grey
-   smudge at the edge of the box, and people click the box and wonder why nothing opens. */
+   Only reached if controls.js has not run, which replaces the field outright — the browser's
+   calendar is drawn outside the page and cannot be styled at all. This is the fallback: the
+   native picker button given room and full opacity, because at the default it is a grey smudge
+   at the edge of the box and people click the box and wonder why nothing opens. */
 .input[type='date']::-webkit-calendar-picker-indicator {
   padding: 2px;
   margin-left: var(--space-1);
