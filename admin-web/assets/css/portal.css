@@ -416,9 +416,15 @@ a:hover {
   border-color: var(--ink-100);
 }
 
+/* `--green-100`, not `--color-primary-wash`. The wash is `--green-50`, which is a paler colour
+   than the neutral tile it sits beside — #eaf7f1 against #eef1f3 — so the green tile came out
+   *lighter* than the grey one and read as the card that had failed to load. The wash is the
+   right green behind small text, where it carries a 4.6:1 pill; it is simply too thin to tint
+   a card. One step along the ramp puts this level with the blue tile next to it, and the
+   muted label lands at 4.03:1 — what `.tile--info` already ships. */
 .tile--good {
-  background: var(--color-primary-wash);
-  border-color: var(--green-200);
+  background: var(--green-100);
+  border-color: var(--green-300);
 }
 
 .tile--warn {
