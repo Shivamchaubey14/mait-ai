@@ -116,15 +116,43 @@
 
         <!-- Opened by clicking a row. Above the table rather than in a dialog: an admin is
              usually reading it down the phone and wants the list still in view. -->
-        <section class="panel" id="holding" aria-label="Mait stock" hidden>
-          <div class="panel__head">
-            <h2 class="panel__title" id="holding-title">—</h2>
-            <span class="panel__count" id="holding-count">—</span>
+        <section class="panel" id="holding" aria-labelledby="holding-title" hidden>
+          <!-- Banded in ink, because the panel opens over a table of other Maits and the first
+               thing it has to answer is which one is being looked at. -->
+          <div class="holding__banner">
+            <span class="holding__mark" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M5 21a7 7 0 0 1 14 0" />
+              </svg>
+            </span>
+            <div class="holding__who">
+              <h2 class="holding__name-line" id="holding-title">—</h2>
+              <p class="holding__meta" id="holding-count">—</p>
+            </div>
+            <button class="btn holding__close" id="holding-close" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+              Close
+            </button>
           </div>
           <div class="holding" id="holding-body"></div>
-          <div class="form-actions">
-            <button class="btn btn--danger" id="holding-close" type="button">Close</button>
-          </div>
         </section>
 
         <section class="panel panel--flush" aria-label="Stock by Mait">

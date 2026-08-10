@@ -174,6 +174,10 @@
       ui.escapeHtml(foot) +
       '</p>' +
       '</div>' +
+      // How many lines are behind that total, on the head rather than left to be counted.
+      '<span class="holding__lines">' +
+      (rows.length ? ui.number(rows.length) : '0') +
+      '</span>' +
       '</div>' +
       '<div class="holding__rows">' +
       body +
