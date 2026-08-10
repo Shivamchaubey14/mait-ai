@@ -22,8 +22,12 @@
 
 /* In a filter bar the control sizes to its content the way the native one did; in a form grid
    it fills its column. `.field__control` is what marks the difference — see forms.css. */
+/* Sized to its content, but not below a width a filter reads at. "Role: all" is six characters,
+   and a control shrunk to six characters drops a menu the same width — which then wrapped
+   "Super admin" onto two lines and left the panel looking like a scrap rather than a list. */
 .pick--auto {
   width: auto;
+  min-width: 11rem;
 }
 
 /* The native control is kept for its value, not for its behaviour.
@@ -127,12 +131,16 @@
   overflow-y: auto;
 }
 
+/* One option, one line. The panel is absolutely positioned, so it takes its width from its
+   widest option and then stretches to cover the control — which means letting the text refuse
+   to wrap is what makes the list size itself, rather than folding a two-word role in half. */
 .pick__option {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
   min-height: 36px;
+  white-space: nowrap;
   padding: 0 var(--space-3);
   font-family: var(--font-body);
   font-size: var(--text-label);
