@@ -27,12 +27,14 @@
     const up = percent >= 0;
     return {
       text: (up ? '+' : '−') + Math.abs(percent).toFixed(0) + '% ' + comparedTo,
-      className: up ? 'kpi__foot--up' : 'kpi__foot--down',
+      // The tile's own foot tones (portal.css), not a pair of names only this page knows:
+      // the cards are the shared stat tile, so the colour on them is the shared one.
+      className: up ? 'tile__foot--good' : 'tile__foot--bad',
     };
   }
 
   function setFoot(selector, value) {
-    const $el = $('[data-kpi="' + selector + '"]').removeClass('kpi__foot--up kpi__foot--down');
+    const $el = $('[data-kpi="' + selector + '"]').removeClass('tile__foot--good tile__foot--bad');
     if (!value) {
       $el.text('');
     } else if (typeof value === 'string') {
@@ -116,6 +118,7 @@
 
   function renderException(key, payload) {
     $('[data-count="' + key + '"]').text(count(payload.count));
+    MaitAI.ui.queueLink(key, payload.count);
 
     const $rows = $('[data-rows="' + key + '"]').empty();
     if (!payload.rows || !payload.rows.length) {

@@ -293,7 +293,9 @@ a:hover {
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   margin-bottom: var(--space-4);
-  background: var(--color-surface);
+  /* Tinted like the table head it governs, so the bar reads as the table's controls rather
+     than as a white strip above a white panel with nothing to say it is either. */
+  background: var(--ink-50);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
@@ -515,6 +517,19 @@ a:hover {
   margin-bottom: var(--space-4);
 }
 
+/* Panel tones. They lived in dashboard.css, which only the dashboard and Exceptions load —
+   so the Assignment screen's own `panel--error`, the one listing the rows a sheet upload
+   rejected, was rendering as a plain white panel. A modifier belongs with its component. */
+.panel--warning {
+  background: var(--color-secondary-wash);
+  border-color: var(--yolk-200);
+}
+
+.panel--error {
+  background: var(--color-error-wash);
+  border-color: var(--color-error);
+}
+
 /* A head inside `.panel--flush`, which has no padding of its own so the table can meet the
    panel's edges. */
 .panel__head--flush {
@@ -531,10 +546,102 @@ a:hover {
   color: var(--color-ink);
 }
 
+/* The tone chip in a panel head — the same white-chip-on-wash construction as `.notice__icon`,
+   and drawn in `currentColor` so a tone sets one property. A `.dot` states the tone a second
+   time on a card that is already yellow or red, and says nothing about which queue it is; the
+   glyph is the part that tells pending payments from low stock at a glance. */
+.panel__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-info);
+  background: var(--color-surface);
+}
+
+.panel__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.panel--warning .panel__icon {
+  color: var(--color-secondary-pressed);
+}
+
+.panel--error .panel__icon {
+  color: var(--color-error);
+}
+
 .panel__count {
   font-family: var(--font-heading);
   font-weight: 700;
   color: var(--color-text-muted);
+}
+
+/* --- a card that opens somewhere ---------------------------------------------------------
+   A queue card states a count and lists five of it. On its own that is a number an operator
+   can read and not act on: the rows are a sample, the names are truncated, and the screen that
+   can actually fix any of it is somewhere in the sidebar. The whole card is the link to it.
+
+   `::after` stretches one anchor over the card rather than wrapping the card in an `<a>`: the
+   heading stays a heading, the count stays a count, and there is still exactly one link in the
+   tab order carrying one accessible name. */
+.panel--linked {
+  position: relative;
+}
+
+/* The head holds three things here, not two, and `space-between` would strand the count in the
+   middle of the card. Title left, count and link together on the right. */
+.panel--linked .panel__title {
+  margin-right: auto;
+}
+
+.panel__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.panel__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+}
+
+.panel__link svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Hover and keyboard focus are the same state — an operator tabbing the queues should see the
+   card they are on, not only the six words in its head. */
+.panel--linked:hover,
+.panel--linked:focus-within {
+  border-color: var(--color-primary);
+}
+
+.panel--linked:hover .panel__link,
+.panel__link:focus-visible {
+  color: var(--color-primary-dark);
+  text-decoration: none;
+}
+
+/* The stretched anchor is the whole card, so the ring belongs on the card. */
+.panel__link:focus-visible {
+  outline: none;
+}
+
+.panel--linked:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* --- table -------------------------------------------------------------------------------
@@ -734,12 +841,14 @@ a:hover {
 }
 
 /* --- progress ----------------------------------------------------------------------------- */
-/* `ui.bar()` emits spans, and an inline element ignores height and width outright — the bars
-   in the coverage and leaderboard tables were drawing as nothing at all, leaving the pill
-   beside them to float against a number with no rule under it. */
+/* `ui.bar()` emits spans, and an inline element ignores height and width outright — the bars in
+   the coverage and leaderboard tables were drawing as nothing at all, leaving the pill beside
+   them to float against a number with no rule under it.
+   Block rather than inline-block: inline-block shrinks to its content, and the content of an
+   empty bar is nothing, so the import card's bar collapsed to its 90px minimum and sat as a
+   stub at the left instead of spanning the card. Inside `.meter` it is a flex item either way. */
 .bar {
-  display: inline-block;
-  vertical-align: middle;
+  display: block;
   height: 6px;
   min-width: 90px;
   border-radius: var(--radius-pill);

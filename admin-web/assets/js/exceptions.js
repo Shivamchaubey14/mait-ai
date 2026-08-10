@@ -57,6 +57,10 @@
       searching ? rows.length + ' of ' + ui.number(queue.count || 0) : ui.number(queue.count || 0)
     );
 
+    // Follows the queue's own count, not the search. A term that matches none of the five
+    // sampled rows does not mean the queue behind the card is empty.
+    ui.queueLink(name, queue.count);
+
     if (!rows.length) {
       // Named rather than blank: an empty queue is good news and should read as good news.
       $('[data-rows="' + name + '"]').html(

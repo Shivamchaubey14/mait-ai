@@ -120,6 +120,23 @@ window.MaitAI = window.MaitAI || {};
       );
     },
 
+    /**
+     * A queue card's "Open" link, on or off.
+     *
+     * Both the dashboard and Exceptions render the same four cards, so the rule that decides
+     * whether one is clickable lives once. An empty queue has nothing to open, and a link that
+     * lands on a filtered list of nothing teaches an operator that the link is a dead end —
+     * after which they stop using it on the day the queue is not empty. The count is still
+     * shown either way: zero is an answer.
+     */
+    queueLink: function (name, count) {
+      const open = (count || 0) > 0;
+      $('[data-link="' + name + '"]')
+        .prop('hidden', !open)
+        .closest('.panel')
+        .toggleClass('panel--linked', open);
+    },
+
     /** Identity cell: the name, with its code beneath in muted type. */
     identity: function (name, code) {
       return (

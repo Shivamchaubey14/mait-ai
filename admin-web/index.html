@@ -25,34 +25,110 @@
               <option value="7">Last 7 days</option>
               <option value="90">Last 90 days</option>
             </select>
-            <button class="btn btn--primary" id="export" type="button">Export →</button>
+            <button class="btn btn--primary" id="export" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M6 3h9l5 5v13H6zM14 3v6h6M9 14h7M9 18h7" />
+              </svg>
+              Export
+            </button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
         </header>
 
         <div id="alert-region" role="alert" aria-live="polite"></div>
 
-        <!-- SRS §6.7.1–6.7.2 -->
-        <section class="kpis" aria-label="Summary">
-          <article class="kpi">
-            <p class="kpi__label">AI events today</p>
-            <p class="kpi__value" data-kpi="today">—</p>
-            <p class="kpi__foot" data-kpi="today-foot"></p>
+        <!-- SRS §6.7.1–6.7.2. The shared stat tile, same as Inventory and Coverage: four white
+             cards in a row are four figures an operator has to read before knowing which one
+             the page is about. Tinted in descending emphasis — today is the number the product
+             exists to produce, lifetime is context — and the foot line still carries the
+             good/bad colour on top of the tone. -->
+        <section class="tiles" aria-label="Summary">
+          <article class="tile tile--good">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M8 3h8v4H8zM5 7h14v14H5zM9 12h6M9 16h4" />
+                </svg>
+              </span>
+              AI events today
+            </p>
+            <p class="tile__value" data-kpi="today">—</p>
+            <p class="tile__foot" data-kpi="today-foot"></p>
           </article>
-          <article class="kpi">
-            <p class="kpi__label">This week</p>
-            <p class="kpi__value" data-kpi="week">—</p>
-            <p class="kpi__foot" data-kpi="week-foot"></p>
+          <article class="tile tile--info">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M8 14h8" />
+                </svg>
+              </span>
+              This week
+            </p>
+            <p class="tile__value" data-kpi="week">—</p>
+            <p class="tile__foot" data-kpi="week-foot"></p>
           </article>
-          <article class="kpi">
-            <p class="kpi__label">This month</p>
-            <p class="kpi__value" data-kpi="month">—</p>
-            <p class="kpi__foot" data-kpi="month-foot"></p>
+          <article class="tile tile--info">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01"
+                  />
+                </svg>
+              </span>
+              This month
+            </p>
+            <p class="tile__value" data-kpi="month">—</p>
+            <p class="tile__foot" data-kpi="month-foot"></p>
           </article>
-          <article class="kpi">
-            <p class="kpi__label">Lifetime</p>
-            <p class="kpi__value" data-kpi="lifetime">—</p>
-            <p class="kpi__foot" data-kpi="lifetime-foot"></p>
+          <article class="tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7.5V12l3.5 2" />
+                </svg>
+              </span>
+              Lifetime
+            </p>
+            <p class="tile__value" data-kpi="lifetime">—</p>
+            <p class="tile__foot" data-kpi="lifetime-foot"></p>
           </article>
         </section>
 
@@ -68,45 +144,171 @@
           <div class="chart" id="chart"></div>
         </section>
 
-        <!-- SRS §6.7.6 -->
+        <!-- SRS §6.7.6. Yellow is waiting, red is blocked work — the same rule the app uses,
+             and the same rule Exceptions states out loud. The glyph names the queue; the wash
+             says how urgent it is. -->
         <section class="exceptions" aria-label="Needs attention">
-          <article class="panel panel--warning">
+          <article class="panel panel--warning panel--linked">
             <div class="panel__head">
               <h2 class="panel__title">
-                <span class="dot dot--warning" aria-hidden="true"></span> Pending payments
+                <span class="panel__icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M6 4h12M6 9h12M6 14h3M9 14c6 0 6-10 0-10M6 14l8 7" />
+                  </svg>
+                </span>
+                Pending payments
               </h2>
               <span class="panel__count" data-count="pending-payments">—</span>
+              <a
+                class="panel__link"
+                data-link="pending-payments"
+                href="ai-events.html?status=payment_pending"
+                aria-label="Open the pending payments queue in AI events"
+              >
+                Open
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </a>
             </div>
             <div data-rows="pending-payments"></div>
           </article>
 
-          <article class="panel panel--error">
+          <article class="panel panel--error panel--linked">
             <div class="panel__head">
               <h2 class="panel__title">
-                <span class="dot dot--error" aria-hidden="true"></span> Failed OTPs
+                <span class="panel__icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 4h16v12H8l-4 4zM10 8l4 4M14 8l-4 4" />
+                  </svg>
+                </span>
+                Failed OTPs
               </h2>
               <span class="panel__count" data-count="failed-otps">—</span>
+              <a
+                class="panel__link"
+                data-link="failed-otps"
+                href="maits.html?filter=not-activated"
+                aria-label="Open the Maits who have not activated"
+              >
+                Open
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </a>
             </div>
             <div data-rows="failed-otps"></div>
           </article>
 
-          <article class="panel panel--error">
+          <article class="panel panel--error panel--linked">
             <div class="panel__head">
               <h2 class="panel__title">
-                <span class="dot dot--error" aria-hidden="true"></span> Low stock
+                <span class="panel__icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10" />
+                  </svg>
+                </span>
+                Low stock
               </h2>
               <span class="panel__count" data-count="low-stock">—</span>
+              <a
+                class="panel__link"
+                data-link="low-stock"
+                href="inventory.html"
+                aria-label="Open inventory, lowest stock first"
+              >
+                Open
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </a>
             </div>
             <div data-rows="low-stock"></div>
           </article>
         </section>
 
-        <section class="panel panel--warning" aria-labelledby="stale-title">
+        <section class="panel panel--warning panel--linked" aria-labelledby="stale-title">
           <div class="panel__head">
             <h2 class="panel__title" id="stale-title">
-              <span class="dot dot--warning" aria-hidden="true"></span> Stale indents
+              <span class="panel__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M6 3h9l5 5v13H6zM14 3v6h6M9 13h7M9 17h5" />
+                </svg>
+              </span>
+              Stale indents
             </h2>
             <span class="panel__count" data-count="stale-indents">—</span>
+            <a
+              class="panel__link"
+              data-link="stale-indents"
+              href="indents.html?stale=1"
+              aria-label="Open the indents waiting longest"
+            >
+              Open
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </a>
           </div>
           <div data-rows="stale-indents"></div>
         </section>
