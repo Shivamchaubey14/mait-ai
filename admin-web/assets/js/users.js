@@ -27,9 +27,60 @@
     return ui.number(user.assigned_mpp_count) + ' MPPs';
   }
 
+  /* Role decides what an account can reach, so it is a pill rather than one more word in a
+     column of words. */
+  const ROLE_PILL = { super_admin: 'pill--super', admin: 'pill--admin' };
+
+  function rolePill(user) {
+    const cls = ROLE_PILL[user.role];
+    return (
+      '<span class="pill' +
+      (cls ? ' ' + cls : '') +
+      '">' +
+      ui.escapeHtml(user.role_display) +
+      '</span>'
+    );
+  }
+
+  function glyph(path) {
+    return (
+      '<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="' +
+      path +
+      '"/></svg>'
+    );
+  }
+
+  const BLOCK = 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M5.6 5.6l12.8 12.8';
+  const RESTORE = 'M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5';
+
+  /**
+   * The one thing an admin does to an account, in its own column.
+   *
+   * Named for what it will do, not for what the account currently is — "Deactivate" beside a
+   * green Active pill reads as an instruction; "Active" twice reads as a broken table.
+   */
+  function actionCell(user) {
+    return (
+      '<button class="btn ' +
+      (user.is_active ? 'btn--deactivate' : 'btn--reactivate') +
+      '" type="button" data-toggle="' +
+      user.id +
+      '" data-active="' +
+      user.is_active +
+      '">' +
+      glyph(user.is_active ? BLOCK : RESTORE) +
+      (user.is_active ? 'Deactivate' : 'Reactivate') +
+      '</button>'
+    );
+  }
+
   function row(user) {
     return (
-      '<tr' +
+      '<tr data-user="' +
+      user.id +
+      '"' +
       (user.is_active ? '' : ' class="is-blocked"') +
       '>' +
       '<td>' +
@@ -39,7 +90,7 @@
       ui.escapeHtml(user.username) +
       '</span></td>' +
       '<td>' +
-      ui.escapeHtml(user.role_display) +
+      rolePill(user) +
       '</td>' +
       '<td>' +
       scopeCell(user) +
@@ -51,15 +102,25 @@
       '</td>' +
       '<td>' +
       (user.is_active ? ui.pill('Active', 'good') : ui.pill('Deactivated', 'bad')) +
-      ' <button class="btn" type="button" data-toggle="' +
-      user.id +
-      '" data-active="' +
-      user.is_active +
-      '">' +
-      (user.is_active ? 'Deactivate' : 'Reactivate') +
-      '</button>' +
+      '</td>' +
+      '<td class="user-action">' +
+      actionCell(user) +
       '</td>' +
       '</tr>'
+    );
+  }
+
+  /**
+   * How the page in front of the operator splits, in the panel head.
+   *
+   * Of this page, not of the network: the list is paged, and a head that counted every account
+   * in the database would disagree with the rows under it the moment there were two pages.
+   */
+  function countActive() {
+    const total = $('#rows tr[data-user]').length;
+    const off = $('#rows tr.is-blocked').length;
+    $('#active-count').text(
+      total ? total - off + ' active' + (off ? ' · ' + off + ' deactivated' : '') : ''
     );
   }
 
@@ -95,8 +156,9 @@
           ($('#search').val() || '').trim() || $('#filter-role').val()
             ? 'No account matches those filters.'
             : 'No portal accounts yet.',
-          6
+          7
         );
+        countActive();
         ui.pager(
           $('#pager'),
           { count: page.count, limit: LIMIT, offset: state.offset },
@@ -108,7 +170,8 @@
       })
       .fail(function (problem) {
         MaitAI.shell.alert(problem.detail);
-        ui.rows($('#rows'), [], row, 'Could not load accounts.', 6);
+        ui.rows($('#rows'), [], row, 'Could not load accounts.', 7);
+        countActive();
       });
   }
 
@@ -168,15 +231,36 @@
         });
     });
 
+    /**
+     * Flip one account, and repaint only its row.
+     *
+     * Reloading the whole page of accounts to change one word threw away the operator's place
+     * in the list and made a one-field write look like a slow screen. The response is the
+     * updated user, so the row it came from is rewritten from it — status pill, row tint and
+     * the button's own label all move together.
+     */
     $('#rows').on('click', '[data-toggle]', function () {
       const $button = $(this);
       const id = $button.data('toggle');
       const nowActive = String($button.data('active')) !== 'true';
+      const label = $button.text().trim();
+
+      $button.prop('disabled', true).addClass('is-working');
 
       MaitAI.api
         .updateUser(id, { is_active: nowActive })
-        .done(load)
+        .done(function (user) {
+          // A response without the user is not enough to rebuild the row — name, username and
+          // scope all live in it — so that falls back to a reload rather than to a stub.
+          if (!user || !user.id) {
+            load();
+            return;
+          }
+          $('[data-user="' + id + '"]').replaceWith(row(user));
+          countActive();
+        })
         .fail(function (problem) {
+          $button.prop('disabled', false).removeClass('is-working').text(label);
           MaitAI.shell.alert(problem.detail);
         });
     });

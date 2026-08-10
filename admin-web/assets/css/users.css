@@ -1,0 +1,115 @@
+/**
+ * Users & roles (W11).
+ *
+ * A short screen with one table on it, so what matters is that a row can be read across: who
+ * they are, what they can reach, whether they can still sign in, and the one thing an admin
+ * ever does about it.
+ */
+
+@import url('forms.css');
+
+/* The search grew to fill the bar, which on a two-control filter row left the Role select
+   nowhere to go but the next line — and a filter bar that wraps to two rows makes the card
+   below it look like it lost its heading. Capped rather than fixed, so it still gives way on a
+   narrow window instead of forcing the wrap it was causing. */
+.users__filters .search {
+  flex: 0 1 26rem;
+}
+
+/* --- role ------------------------------------------------------------------------------------
+   Role is the only thing on this screen that decides what someone can reach, so it is a pill
+   rather than a word in a column of words. Super admin is the ink pill: there are two or three
+   of them in the network and they are the accounts that can make more of themselves. */
+.pill--super {
+  color: var(--color-surface);
+  background: var(--color-ink);
+}
+
+.pill--admin {
+  color: var(--color-info);
+  background: var(--color-info-wash);
+}
+
+/* --- the row's one action ---------------------------------------------------------------------
+   Outlined, not filled. A table of fifteen solid red buttons reads as fifteen problems; the
+   colour belongs to what the button would do, not to the row it sits in. */
+.btn--deactivate {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.btn--deactivate:hover {
+  background: var(--color-error-wash);
+}
+
+.btn--reactivate {
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+
+.btn--reactivate:hover {
+  background: var(--color-primary-wash);
+}
+
+/* Mid-flight. The row is about to change what it says about someone's access, so the button
+   says it is working rather than looking ignored for the length of a round trip. */
+.btn.is-working {
+  color: var(--color-text-disabled);
+  border-color: var(--color-border);
+  cursor: progress;
+}
+
+.user-action {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* --- create panel ------------------------------------------------------------------------------
+   Five inputs and two buttons were laid out with the filter bar's own class, so they flowed
+   like filter chips: a ragged two-and-a-half rows that never lined up. It is a form, so it
+   takes the form grid. */
+.create__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.create__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-primary-dark);
+  background: var(--color-surface);
+}
+
+.create__mark svg {
+  width: 19px;
+  height: 19px;
+}
+
+.create {
+  background: var(--color-primary-wash);
+  border-color: var(--green-200);
+}
+
+/* One tint per field, the same grouping the query builder uses: who they are, then what they
+   are allowed to do, then the secret that lets them in. */
+.field__icon--user {
+  color: var(--color-primary-dark);
+  background: var(--color-surface);
+}
+
+.field__icon--role {
+  color: var(--color-info);
+  background: var(--color-info-wash);
+}
+
+.field__icon--secret {
+  color: var(--color-secondary-pressed);
+  background: var(--color-secondary-wash);
+}

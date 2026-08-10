@@ -6,7 +6,8 @@
     <title>Users &amp; roles · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="assets/css/portal.css" />
+    <!-- users.css pulls in forms.css, which imports portal.css. -->
+    <link rel="stylesheet" href="assets/css/users.css" />
   </head>
 
   <body>
@@ -18,14 +19,30 @@
             <p class="topbar__meta"><span id="user-count">—</span> portal accounts</p>
           </div>
           <div class="topbar__actions">
-            <button class="btn btn--primary" id="create" type="button">Create user →</button>
+            <button class="btn btn--primary" id="create" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M2 20a7 7 0 0 1 14 0M18 8v6M15 11h6"
+                />
+              </svg>
+              Create user
+            </button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
         </header>
 
         <div id="alert-region" role="alert" aria-live="polite"></div>
 
-        <section class="filters" aria-label="Filters">
+        <section class="filters users__filters" aria-label="Filters">
           <input
             class="input filters__search"
             id="search"
@@ -43,52 +60,164 @@
 
         <!-- SRS §9.10. Hidden behind a dialog until asked for: this screen is read far more
              often than it is written to. -->
-        <section class="panel" id="create-panel" hidden aria-label="Create an office account">
-          <div class="panel__head">
-            <h2 class="panel__title">New office account</h2>
+        <section class="panel create" id="create-panel" hidden aria-labelledby="create-title">
+          <div class="create__head">
+            <span class="create__mark" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M2 20a7 7 0 0 1 14 0M18 8v6M15 11h6"
+                />
+              </svg>
+            </span>
+            <div>
+              <h2 class="panel__title" id="create-title">New office account</h2>
+              <p class="field__hint">
+                Admin or Super Admin only — a Mait is activated, not created
+              </p>
+            </div>
           </div>
-          <form id="create-form" class="filters" novalidate>
-            <input
-              class="input"
-              id="new-username"
-              type="text"
-              placeholder="Username"
-              aria-label="Username"
-              required
-            />
-            <input
-              class="input"
-              id="new-full-name"
-              type="text"
-              placeholder="Full name"
-              aria-label="Full name"
-              required
-            />
-            <input
-              class="input"
-              id="new-email"
-              type="email"
-              placeholder="Email"
-              aria-label="Email"
-            />
-            <select class="select" id="new-role" aria-label="Role">
-              <option value="admin">Admin</option>
-              <option value="super_admin">Super Admin</option>
-            </select>
-            <input
-              class="input"
-              id="new-password"
-              type="password"
-              placeholder="Temporary password"
-              aria-label="Temporary password"
-              required
-            />
-            <button class="btn btn--primary" type="submit">Create</button>
-            <button class="btn" type="button" id="create-cancel">Cancel</button>
+
+          <!-- A form, laid out as one. It was using the filter bar's own class, so five inputs
+               and two buttons flowed like filter chips into a ragged two-and-a-half rows. -->
+          <form id="create-form" class="form-grid" novalidate>
+            <div class="field field--iconed">
+              <label class="field__label" for="new-username">
+                <span class="field__icon field__icon--user" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M5 21a7 7 0 0 1 14 0" />
+                  </svg>
+                </span>
+                Username
+              </label>
+              <input class="input field__control" id="new-username" type="text" required />
+              <p class="field__hint">What they type to sign in</p>
+            </div>
+
+            <div class="field field--iconed">
+              <label class="field__label" for="new-full-name">
+                <span class="field__icon field__icon--name" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M6 3h9l5 5v13H6zM14 3v6h6M9 14h7M9 18h5" />
+                  </svg>
+                </span>
+                Full name
+              </label>
+              <input class="input field__control" id="new-full-name" type="text" required />
+              <p class="field__hint">Shown against everything they do</p>
+            </div>
+
+            <div class="field field--iconed">
+              <label class="field__label" for="new-email">
+                <span class="field__icon field__icon--mobile" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 6h18v12H3zM3 7l9 6 9-6" />
+                  </svg>
+                </span>
+                Email
+              </label>
+              <input class="input field__control" id="new-email" type="email" />
+              <p class="field__hint">Optional</p>
+            </div>
+
+            <div class="field field--iconed">
+              <label class="field__label" for="new-role">
+                <span class="field__icon field__icon--role" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 3l8 4v5c0 5-3.4 8.3-8 9.5C7.4 20.3 4 17 4 12V7z" />
+                  </svg>
+                </span>
+                Role
+              </label>
+              <select class="select field__control" id="new-role">
+                <option value="admin">Admin</option>
+                <option value="super_admin">Super Admin</option>
+              </select>
+              <p class="field__hint">Super Admin can create more accounts</p>
+            </div>
+
+            <div class="field field--iconed">
+              <label class="field__label" for="new-password">
+                <span class="field__icon field__icon--secret" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M6 10V7a6 6 0 1 1 12 0v3M5 10h14v11H5z" />
+                  </svg>
+                </span>
+                Temporary password
+              </label>
+              <input class="input field__control" id="new-password" type="password" required />
+              <p class="field__hint">They are asked to change it on first sign-in</p>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn--primary" type="submit">Create account</button>
+              <button class="btn" type="button" id="create-cancel">Cancel</button>
+            </div>
           </form>
         </section>
 
-        <section class="panel panel--flush" aria-label="Portal accounts">
+        <section class="panel panel--flush" aria-labelledby="roster-title">
+          <div class="panel__head panel__head--flush">
+            <h2 class="panel__title" id="roster-title">
+              <span class="panel__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M3 20a6 6 0 0 1 12 0M17 11a3 3 0 1 0 0-6M21 20a6 6 0 0 0-4-5.6"
+                  />
+                </svg>
+              </span>
+              Portal accounts
+            </h2>
+            <span class="panel__count" id="active-count">—</span>
+          </div>
           <div class="table-wrap">
             <table class="table">
               <thead>
@@ -99,11 +228,15 @@
                   <th scope="col">Scope</th>
                   <th scope="col">Last sign-in</th>
                   <th scope="col">Status</th>
+                  <!-- Its own column. Sharing the status cell put the thing that describes an
+                       account and the thing that changes it in one place, so the eye had to
+                       separate them on every row. -->
+                  <th scope="col">Action</th>
                 </tr>
               </thead>
               <tbody id="rows">
                 <tr>
-                  <td class="table__empty" colspan="6">Loading…</td>
+                  <td class="table__empty" colspan="7">Loading…</td>
                 </tr>
               </tbody>
             </table>
