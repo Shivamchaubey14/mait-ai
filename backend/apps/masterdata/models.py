@@ -230,6 +230,13 @@ class NonMember(TimeStampedModel):
         return f"{self.name} ({self.mobile_no})"
 
 
+# How many rejected rows one upload keeps, so a file where every row fails cannot grow the JSON
+# column without bound. Lives here rather than with the importer because it is a property of the
+# field: anything reading `error_report` without loading it — the history list does exactly that
+# — needs the same number to say how long the report is.
+MAX_ERRORS_STORED = 5000
+
+
 class DataUploadLog(TimeStampedModel):
     """History of every SAP upload (SRS §6.1.5, §8.2 `data_upload_log`)."""
 
@@ -266,7 +273,9 @@ class DataUploadLog(TimeStampedModel):
     error_report = models.JSONField(
         default=list,
         blank=True,
-        help_text="Row-level failures, downloadable as a report (SRS §6.1.4).",
+        help_text="Row-level failures, downloadable as a report (SRS §6.1.4). One entry per "
+        "rejected row up to MAX_ERRORS_STORED — except a whole-file failure, which stores a "
+        "single explanation and rejects no rows.",
     )
     celery_task_id = models.CharField(max_length=64, blank=True, db_index=True)
     started_at = models.DateTimeField(null=True, blank=True)

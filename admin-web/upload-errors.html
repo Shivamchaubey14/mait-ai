@@ -43,8 +43,11 @@
         <section class="panel panel--flush" aria-label="Rejected rows">
           <div class="table-wrap">
             <table class="table">
+              <!-- The identifying columns sit between the row number and the problem, and are
+                   written by JS: which cells identify a row depends on which master was
+                   uploaded, and this one screen reports all four. -->
               <thead>
-                <tr>
+                <tr id="head">
                   <th class="table__num" scope="col">Row</th>
                   <th scope="col">Problem</th>
                 </tr>

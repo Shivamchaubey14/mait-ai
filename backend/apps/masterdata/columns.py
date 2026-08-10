@@ -198,3 +198,59 @@ ASSIGNMENT = {
     "name": ("mait name", "sahayak name", "name"),
     "mobile_no": ("mobile no", "mait mobile no", "sahayak mobile no", "mobile"),
 }
+
+
+# ----------------------------------------------------------------------------------------
+# What a rejected row shows in the error report (SRS §6.1.4)
+# ----------------------------------------------------------------------------------------
+# A row number and "Member code is blank." names the cell but not the record: on a 105k-row
+# export an operator cannot tell whether row 12228 is a real member missing a code or a
+# subtotal line SAP left in, and the two need opposite responses. So a failure carries the few
+# columns that identify what the row was about — enough to recognise it, and enough to see at a
+# glance that the blank ones are blank.
+#
+# Deliberately no mobile or Aadhaar. This report is read to find a row in a spreadsheet, which
+# a name and a code already do; carrying identity numbers into it would put them on a screen
+# that exists for a different purpose (SRS §16).
+IDENTITY = {
+    "member": (
+        ("Member code", MEMBER["member_code"]),
+        ("Member name", MEMBER["member_name"]),
+        ("MPP", MEMBER["mpp_code"]),
+        ("Father / husband", MEMBER["father_husband_name"]),
+    ),
+    "mpp": (
+        ("MPP code", MPP["mpp_code"]),
+        ("MPP name", MPP["mpp_name"]),
+        ("Village", MPP["village_code"]),
+        ("Sahayak", SAHAYAK["sahayak_vendor_code"]),
+    ),
+    "mait": (
+        ("Vendor code", VENDOR["sahayak_vendor_code"]),
+        ("Name", VENDOR["name"]),
+    ),
+    "assignment": (
+        ("MPP code", ASSIGNMENT["mpp_code"]),
+        ("Mait vendor", ASSIGNMENT["sahayak_vendor_code"]),
+        ("Mait name", ASSIGNMENT["name"]),
+    ),
+}
+
+
+def identity_labels(upload_type: str) -> list[str]:
+    """The column headings the error report shows for this kind of file."""
+    return [label for label, _ in IDENTITY.get(upload_type, ())]
+
+
+def identity_of(row: dict, upload_type: str) -> dict[str, str]:
+    """
+    The identifying cells of one row, as they were read.
+
+    Blank stays blank rather than becoming a dash: on the report the empty cell under "Member
+    code" beside a filled-in name is the whole explanation for why the row was rejected.
+    """
+    values = {}
+    for label, aliases in IDENTITY.get(upload_type, ()):
+        value = pick(row, *aliases)
+        values[label] = "" if value is None else str(value).strip()[:80]
+    return values

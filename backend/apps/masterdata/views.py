@@ -17,10 +17,12 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.accounts.admin_serializers import MPPAssignmentSerializer
+from apps.core.dispatch import run_in_background
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait
 from apps.core.services import record_audit
 
+from . import columns as cols
 from .models import MPP, DataUploadLog, Member, NonMember
 from .serializers import (
     DataUploadLogSerializer,
@@ -50,6 +52,25 @@ class MasterUploadViewSet(
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["upload_type", "status"]
 
+    def get_queryset(self):
+        """
+        Keep the error reports out of the history list.
+
+        `error_report` holds up to 5,000 rejected rows, and the list is ordered by
+        `-created_at`: MySQL drags every selected column through the sort buffer, so a page of
+        fifteen uploads that includes one large report is sorted with a megabyte of JSON in
+        tow. That is an "Out of sort memory" 500 on the screen an operator opens to find out
+        what went wrong — worst exactly when a file has just gone badly.
+
+        Counting them in SQL does not help — `JSON_LENGTH(error_report)` in the select list
+        makes MySQL carry the column through the sort to evaluate it, which is the same
+        megabyte by another route. The serializer derives the count from `failed_rows`
+        instead, so nothing on this path reads the reports at all. They stay where they
+        belong, behind `/errors/`.
+        """
+        queryset = super().get_queryset()
+        return queryset.defer("error_report") if self.action == "list" else queryset
+
     def _accept(self, request, upload_type: str) -> Response:
         """
         Validate, store and queue one workbook.
@@ -77,7 +98,10 @@ class MasterUploadViewSet(
             meta={"upload_type": upload_type, "file_name": uploaded.name, "size": uploaded.size},
         )
 
-        process_master_upload.delay(upload.id)
+        # Not `.delay()` directly: with CELERY_TASK_ALWAYS_EAGER, which is how this runs without
+        # a broker, `.delay()` imports the whole workbook inline and this 202 arrives minutes
+        # late — after the import it is announcing has already finished.
+        run_in_background(process_master_upload, upload.id)
 
         return Response(DataUploadLogSerializer(upload).data, status=status.HTTP_202_ACCEPTED)
 
@@ -167,8 +191,13 @@ class MasterUploadViewSet(
             {
                 "upload_id": upload.id,
                 "file_name": upload.file_name,
+                "upload_type": upload.upload_type,
                 "failed_rows": upload.failed_rows,
                 "truncated": len(upload.error_report or []) < upload.failed_rows,
+                # Which identifying columns this file's rows carry. Sent rather than hardcoded
+                # in the page: a Member rejection and an assignment rejection are identified by
+                # different cells, and the report is one screen for all four.
+                "columns": cols.identity_labels(upload.upload_type),
                 "results": upload.error_report or [],
             }
         )

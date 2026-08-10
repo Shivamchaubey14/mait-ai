@@ -33,7 +33,7 @@ from django.utils import timezone
 from openpyxl import load_workbook
 
 from . import columns as cols
-from .models import MPP, DataUploadLog, Mait, Member
+from .models import MAX_ERRORS_STORED, MPP, DataUploadLog, Mait, Member
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,6 @@ CHUNK_SIZE = 1000
 # transaction decision and one write per thousand rows is not a progress bar.
 PROGRESS_EVERY = 100
 HEADER_SEARCH_ROWS = 15  # Member.xlsx puts its header on row 6
-MAX_ERRORS_STORED = 5000  # bounded so one bad file cannot blow up the JSON column
 
 REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
     DataUploadLog.UploadType.MEMBER: cols.REQUIRED_MEMBER,
@@ -95,9 +94,12 @@ class ImportContext:
     silent data loss into a reported row (SRS §6.1.4).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, upload_type: str = "") -> None:
         self.mpp_ids: dict[str, int] = {}
         self.seen_keys: set[str] = set()
+        # Carried so a rejected row can be reported with the cells that identify it, which
+        # differ per file — see `columns.IDENTITY`.
+        self.upload_type = upload_type
 
     def load_mpp_map(self) -> None:
         self.mpp_ids = dict(MPP.objects.values_list("mpp_code", "id"))
@@ -116,7 +118,7 @@ def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
         DataUploadLog.UploadType.ASSIGNMENT: _upsert_assignment,
     }[upload.upload_type]
 
-    context = ImportContext()
+    context = ImportContext(upload.upload_type)
     if upload.upload_type == DataUploadLog.UploadType.MEMBER:
         context.load_mpp_map()
 
@@ -231,7 +233,16 @@ def _commit_batch(batch, handler, errors, context: ImportContext) -> tuple[int, 
         except Exception as exc:
             bad += 1
             if len(errors) < MAX_ERRORS_STORED:
-                errors.append({"row": item["row_number"], "error": str(exc)[:300]})
+                errors.append(
+                    {
+                        "row": item["row_number"],
+                        "error": str(exc)[:300],
+                        # Read off the row that failed, not looked up afterwards: the record
+                        # was rejected, so there is nothing in the database to look up. This is
+                        # the only place the operator's own values still exist.
+                        "fields": cols.identity_of(item["data"], context.upload_type),
+                    }
+                )
     return ok, bad
 
 

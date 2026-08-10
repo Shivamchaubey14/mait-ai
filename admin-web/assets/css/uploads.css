@@ -19,9 +19,26 @@
   border-radius: var(--radius-md);
 }
 
-/* A glyph and a colour per master, so an operator picking one of three near-identical cards
-   has something to aim at other than the title. The tile carries the wash; the icon is drawn
-   in `currentColor`, so a card's colour is set once here rather than twice. */
+/* A colour per master, carried by the whole card. Picking the wrong one imports 105,000
+   members as Maits, so the three cards should be three distinct objects at a glance rather
+   than three identical white rectangles distinguished only by a line of text. */
+.drop--member {
+  background: var(--color-primary-wash);
+  border-color: var(--green-200);
+}
+
+.drop--mait {
+  background: var(--color-info-wash);
+  border-color: var(--ink-100);
+}
+
+.drop--mpp {
+  background: var(--color-secondary-wash);
+  border-color: var(--yolk-200);
+}
+
+/* The glyph sits on a white chip and the card carries the wash — the same way round as a
+   notice, a stat tile and an assignment step, so all four read as one family. */
 .drop__icon {
   display: inline-flex;
   align-items: center;
@@ -29,6 +46,7 @@
   width: 44px;
   height: 44px;
   margin-bottom: var(--space-3);
+  background: var(--color-surface);
   border-radius: var(--radius-sm);
 }
 
@@ -38,17 +56,14 @@
 }
 
 .drop__icon--member {
-  background: var(--color-primary-wash);
   color: var(--color-primary-dark);
 }
 
 .drop__icon--mait {
-  background: var(--color-info-wash);
   color: var(--color-info);
 }
 
 .drop__icon--mpp {
-  background: var(--color-secondary-wash);
   color: var(--color-secondary-pressed);
 }
 
@@ -70,15 +85,101 @@
   cursor: pointer;
 }
 
-/* --- running import --------------------------------------------------------------------- */
+/* Holds one card per import in flight. Stacked rather than laid out in a grid: the three
+   masters are very different sizes, and cards forced to a shared row height would make the
+   Member import look like it had stalled next to a Mait file that finished in seconds. The
+   cards carry their own bottom margin from `.panel`. */
+.runs:not(:empty) {
+  margin-bottom: var(--space-4);
+}
+
+/* --- running import ---------------------------------------------------------------------
+   The one card an operator is asked to sit and watch, on both this screen and Assignment. It
+   has to look alive: a still white panel asking someone not to close the tab, with a figure
+   that does not change, is indistinguishable from a page that has hung. */
+/* `.panel.running`, not `.running`. The Assignment screen reaches portal.css twice — once
+   through this file and again through editor.css → forms.css — so the second copy lands after
+   this one and a single-class modifier loses to `.panel` on that screen and wins on this one.
+   The card then looked like two different cards for the same job. */
+.panel.running {
+  border-color: var(--ink-100);
+  background: var(--color-info-wash);
+}
+
+.running__spinner {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--color-info);
+  animation: running-spin 900ms linear infinite;
+}
+
+@keyframes running-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Motion is the signal here, not decoration, so it is reduced rather than removed: the ring
+   stops turning and the bar stops sliding, and both still say the same thing. */
+@media (prefers-reduced-motion: reduce) {
+  .running__spinner {
+    animation: none;
+  }
+
+  .running__fill {
+    transition: none;
+  }
+
+  .running__bar.is-indeterminate .running__fill {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+}
+
+/* Two classes for the same reason as `.panel.running` above — it overrides `.panel__count`. */
+.panel__count.running__percent {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h2);
+  color: var(--color-info);
+}
+
 .running__bar {
   height: 10px;
   margin: var(--space-3) 0;
+  background: var(--color-surface);
 }
 
-/* Starts empty; the width is set from the poll response as the import advances. */
+/* Starts empty; the width is set from the poll response as the import advances. The width is
+   what moves, so it is the width that is eased — a bar that jumps between polls reads as a
+   redraw rather than as progress. */
 .running__fill {
   width: 0;
+  background: var(--color-info);
+  transition: width 400ms ease;
+}
+
+/* While the file is still going up there is nothing to be a fraction of yet: the rows have not
+   been counted, and the transfer's own percentage is a different quantity entirely. Showing it
+   on this bar is what made the fill run to the far end and then jump back to 22% — it was
+   answering two questions with one line. A stripe that travels says "working, length unknown"
+   and never has to go backwards. */
+.running__bar.is-indeterminate .running__fill {
+  width: 30%;
+  transition: none;
+  animation: running-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes running-slide {
+  from {
+    transform: translateX(-110%);
+  }
+
+  to {
+    transform: translateX(370%);
+  }
 }
 
 .stages {
@@ -87,14 +188,46 @@
   gap: var(--space-3);
 }
 
-/* Centred to match the stat tile, whose label class this borrows: centring the label and
-   leaving the value at the left edge would put the two halves of one fact in two places. */
+/* White on the tinted card, and centred to match the stat tile whose label class this
+   borrows: centring the label and leaving the value at the left edge would put the two halves
+   of one fact in two places. */
 .stage {
   padding: var(--space-3);
   text-align: center;
-  background: var(--color-background);
+  background: var(--color-surface);
   border-radius: var(--radius-sm);
   font-size: var(--text-label);
+}
+
+.stage__icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.stage.is-done .stage__icon {
+  color: var(--color-primary-dark);
+}
+
+.stage.is-live .stage__icon {
+  color: var(--color-info);
+}
+
+.stage__value {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+/* A stage that has happened says so in the colour of its own figure. Set from the poll, so an
+   operator can see which of the four the import is actually inside. */
+.stage.is-done .stage__value {
+  color: var(--color-primary-dark);
+}
+
+.stage.is-live .stage__value {
+  color: var(--color-info);
 }
 
 /* --- error report (W4) -------------------------------------------------------------------- */
@@ -105,4 +238,12 @@
 
 .error-row__problem {
   color: var(--color-error);
+}
+
+/* The cell the row was rejected for is usually the empty one, so it says so in words. Left
+   truly blank it reads as a column the report failed to fill rather than as the finding. */
+.error-row__blank {
+  font-size: var(--text-caption);
+  font-style: italic;
+  color: var(--color-text-muted);
 }

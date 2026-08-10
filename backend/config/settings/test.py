@@ -20,6 +20,11 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 
+# Eager, and inline with it. `run_in_background` puts eager tasks on a thread so a dev server
+# can answer 202 while an import runs — correct for a browser, useless for a test, which would
+# then assert against a database the import has not reached yet.
+BACKGROUND_TASKS_INLINE = True
+
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
 SMS_GATEWAY = {"PROVIDER": "dummy", "API_KEY": "", "SENDER_ID": "TEST"}

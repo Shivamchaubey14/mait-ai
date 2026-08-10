@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from apps.animals.serializers import AnimalSerializer
 
-from .models import MPP, DataUploadLog, Mait, Member, NonMember
+from .models import MAX_ERRORS_STORED, MPP, DataUploadLog, Mait, Member, NonMember
 
 # openpyxl only reads the OOXML format. Rejecting other types up front gives a clear error
 # instead of an unhandled parser exception inside a Celery worker.
@@ -75,7 +75,19 @@ class DataUploadLogSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_error_count(self, obj) -> int:
-        return len(obj.error_report or [])
+        """
+        How many rows the report holds, without loading the report to find out.
+
+        The history list defers `error_report` — see `MasterUploadViewSet.get_queryset` — so
+        touching it here would fetch a megabyte of JSON per row, one query at a time. The
+        length is derivable instead: one entry per rejected row up to the cap, and a whole-file
+        failure stores a single explanation having rejected no rows at all.
+        """
+        if "error_report" not in obj.get_deferred_fields():
+            return len(obj.error_report or [])
+        if obj.status == DataUploadLog.Status.FAILED:
+            return 1
+        return min(obj.failed_rows, MAX_ERRORS_STORED)
 
 
 class UploadErrorRowSerializer(serializers.Serializer):
@@ -83,6 +95,10 @@ class UploadErrorRowSerializer(serializers.Serializer):
 
     row = serializers.IntegerField(allow_null=True)
     error = serializers.CharField()
+    # The identifying cells as they were read, keyed by the labels the same response sends in
+    # `columns`. Absent on reports written before this was captured, and on a whole-file
+    # failure, which has no row to identify.
+    fields = serializers.DictField(child=serializers.CharField(allow_blank=True), required=False)
 
 
 class MaitSerializer(serializers.ModelSerializer):
