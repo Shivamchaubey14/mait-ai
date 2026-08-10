@@ -19,7 +19,21 @@
             <p class="topbar__meta">Member, Mait and MPP master data</p>
           </div>
           <div class="topbar__actions">
-            <button class="btn" id="templates" type="button">Download templates</button>
+            <button class="btn btn--dark" id="templates" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+              </svg>
+              Download templates
+            </button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
         </header>
@@ -30,7 +44,7 @@
              type dropdown: picking the wrong type imports 105,000 members as Maits, and the
              only signal would have been a select the operator did not look at. -->
         <section class="drops" aria-label="Choose a master file">
-          <article class="drop">
+          <article class="drop drop--member">
             <span class="drop__icon drop__icon--member" aria-hidden="true">
               <svg
                 viewBox="0 0 24 24"
@@ -53,7 +67,7 @@
             </label>
           </article>
 
-          <article class="drop">
+          <article class="drop drop--mait">
             <span class="drop__icon drop__icon--mait" aria-hidden="true">
               <svg
                 viewBox="0 0 24 24"
@@ -74,7 +88,7 @@
             </label>
           </article>
 
-          <article class="drop">
+          <article class="drop drop--mpp">
             <span class="drop__icon drop__icon--mpp" aria-hidden="true">
               <svg
                 viewBox="0 0 24 24"
@@ -96,37 +110,14 @@
           </article>
         </section>
 
-        <!-- Shown only while an import is running. SRS §6.1.6: the Member master is 105k+
-             rows and is parsed asynchronously, so the page has to say what is happening or
-             the operator closes the tab and assumes it failed. -->
-        <section class="panel running" id="running" hidden aria-live="polite">
-          <div class="panel__head">
-            <h2 class="panel__title" id="running-title">Importing…</h2>
-            <span class="panel__count" id="running-percent">0%</span>
-          </div>
-          <p class="topbar__meta" id="running-meta">—</p>
-          <div class="bar running__bar">
-            <span class="bar__fill running__fill" id="running-bar"></span>
-          </div>
-          <div class="stages">
-            <div class="stage">
-              <p class="tile__label">Uploaded</p>
-              <p id="stage-uploaded">—</p>
-            </div>
-            <div class="stage">
-              <p class="tile__label">Validated</p>
-              <p id="stage-validated">—</p>
-            </div>
-            <div class="stage">
-              <p class="tile__label">Written</p>
-              <p id="stage-written">—</p>
-            </div>
-            <div class="stage">
-              <p class="tile__label">Report</p>
-              <p id="stage-report">—</p>
-            </div>
-          </div>
-        </section>
+        <!-- One card per import in flight, written by uploads.js. SRS §6.1.6: the Member
+             master is 105k+ rows and is parsed asynchronously, so the page has to say what is
+             happening or the operator closes the tab and assumes it failed.
+
+             A container rather than one card, because all three masters can be sent at once
+             and they finish at very different times. A single card showed whichever upload
+             wrote to it last and left the other two invisible but still running. -->
+        <div class="runs" id="runs"></div>
 
         <section class="panel panel--flush" aria-label="Upload history">
           <div class="panel__head panel__head--flush">
