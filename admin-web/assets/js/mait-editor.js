@@ -18,7 +18,15 @@ window.MaitAI = window.MaitAI || {};
 (function (MaitAI, $) {
   'use strict';
 
-  const state = { $root: null, mait: null, codes: [], onSaved: null };
+  const state = {
+    $root: null,
+    mait: null,
+    codes: [],
+    onSaved: null,
+    suggestions: [],
+    suggestAt: -1,
+    suggestSeq: 0,
+  };
 
   function ui() {
     return MaitAI.ui;
@@ -126,8 +134,16 @@ window.MaitAI = window.MaitAI || {};
       '<div class="chip-box">',
       '<div class="chip-box__chips" id="me-chips"></div>',
       '<div class="chip-box__add">',
+      // The input is wrapped so the suggestion list can hang off it. A code on its own says
+      // nothing about which village it is, and an operator assigning coverage from a phone call
+      // is working from a village name, not from a six-digit number.
+      '<div class="suggest-wrap">',
       '<input class="input chip-box__input" id="me-add" type="text" spellcheck="false" ',
-      'autocomplete="off" placeholder="Type or paste codes — 001302, 001308" />',
+      'autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" ',
+      'aria-controls="me-suggest" ',
+      'placeholder="Type a code or a village name — 001302, or BAROLI" />',
+      '<div class="suggest" id="me-suggest" role="listbox" hidden></div>',
+      '</div>',
       '<button class="btn btn--good-outline" id="me-add-go" type="button">',
       icon('M12 5v14M5 12h14', 'btn__icon'),
       'Add</button>',
@@ -213,6 +229,121 @@ window.MaitAI = window.MaitAI || {};
       );
   }
 
+  /* --- suggestions ---------------------------------------------------------------------
+   * A code is six digits and says nothing about which village it is. An operator assigning
+   * coverage is usually on the phone working from a name, and the one thing they cannot see
+   * from the code alone is the thing that matters most: an MPP already covered by someone else
+   * does not get added here, it gets *moved*, and the other Mait stops seeing those members.
+   * So each row says who has it now.
+   */
+
+  const SUGGEST_LIMIT = 8;
+
+  /** Which Mait holds this MPP today, as a pill — the reason to read the row. */
+  function heldBy(mpp) {
+    if (state.codes.indexOf(mpp.mpp_code) >= 0) {
+      return ui().pill('Already added', 'info');
+    }
+    if (!mpp.mait_code) {
+      return ui().pill('Unassigned', 'warn');
+    }
+    if (state.mait && mpp.mait_code === state.mait.sahayak_vendor_code) {
+      return ui().pill('Theirs already', 'good');
+    }
+    // The one that costs something. Adding it here takes it off the Mait named.
+    return ui().pill('Moves from ' + mpp.mait_name, 'bad');
+  }
+
+  function suggestRow(mpp, index) {
+    const taken = state.codes.indexOf(mpp.mpp_code) >= 0;
+    const where = [mpp.village_code, mpp.tehsil_code].filter(Boolean).join(' · ');
+    return (
+      '<button class="suggest__row" type="button" role="option" aria-selected="' +
+      (index === state.suggestAt) +
+      '" data-code="' +
+      ui().escapeHtml(mpp.mpp_code) +
+      '"' +
+      (taken ? ' disabled' : '') +
+      '>' +
+      '<span class="suggest__code">' +
+      ui().escapeHtml(mpp.mpp_code) +
+      '</span>' +
+      '<span class="suggest__body">' +
+      '<span class="suggest__name">' +
+      ui().escapeHtml(mpp.mpp_name || '—') +
+      (mpp.is_active ? '' : ' <span class="suggest__retired">retired</span>') +
+      '</span>' +
+      '<span class="suggest__meta">' +
+      (where ? ui().escapeHtml(where) + ' · ' : '') +
+      ui().number(mpp.member_count || 0) +
+      ' members</span>' +
+      '</span>' +
+      heldBy(mpp) +
+      '</button>'
+    );
+  }
+
+  function closeSuggest() {
+    state.suggestions = [];
+    state.suggestAt = -1;
+    $('#me-suggest').prop('hidden', true).empty();
+    $('#me-add').attr('aria-expanded', 'false');
+  }
+
+  function renderSuggest() {
+    const $box = $('#me-suggest');
+    if (!state.suggestions.length) {
+      $box.prop('hidden', false).html('<p class="suggest__none">No MPP matches that.</p>');
+      $('#me-add').attr('aria-expanded', 'true');
+      return;
+    }
+    $box.prop('hidden', false).html(state.suggestions.map(suggestRow).join(''));
+    $('#me-add').attr('aria-expanded', 'true');
+  }
+
+  function moveSuggest(step) {
+    if (!state.suggestions.length) {
+      return;
+    }
+    const last = state.suggestions.length - 1;
+    state.suggestAt = Math.min(last, Math.max(0, state.suggestAt + step));
+    renderSuggest();
+    const row = $('#me-suggest .suggest__row')[state.suggestAt];
+    if (row) {
+      row.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  /**
+   * Ask the server what matches.
+   *
+   * `seq` guards against a slow answer for "00" landing after a fast one for "001302" and
+   * replacing a good list with a stale one.
+   */
+  function suggest(term) {
+    const text = (term || '').trim();
+    if (text.length < 2) {
+      closeSuggest();
+      return;
+    }
+
+    const mine = (state.suggestSeq = (state.suggestSeq || 0) + 1);
+    MaitAI.api
+      .mpps({ search: text, limit: SUGGEST_LIMIT })
+      .done(function (page) {
+        if (mine !== state.suggestSeq || !state.mait) {
+          return;
+        }
+        state.suggestions = page.results || [];
+        state.suggestAt = state.suggestions.length ? 0 : -1;
+        renderSuggest();
+      })
+      .fail(function () {
+        // A failed lookup is not a failed edit — the codes can still be typed straight in.
+        closeSuggest();
+      });
+  }
+
   /** Accepts one code or a whole column pasted out of the sheet. */
   function addCodes(text) {
     const fresh = parseCodes(text).filter(function (code) {
@@ -228,6 +359,7 @@ window.MaitAI = window.MaitAI || {};
   function close() {
     state.mait = null;
     state.codes = [];
+    closeSuggest();
     $('#mait-editor-panel').prop('hidden', true);
   }
 
@@ -247,6 +379,7 @@ window.MaitAI = window.MaitAI || {};
     $('#me-input-mobile').val(mait.mobile_no || '');
     $('#me-add').val('');
     $('#me-status').text('');
+    closeSuggest();
     renderCodes();
 
     $('#mait-editor-panel')[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -308,23 +441,71 @@ window.MaitAI = window.MaitAI || {};
       $('#me-add-go').on('click', function () {
         addCodes($('#me-add').val());
         $('#me-add').val('').trigger('focus');
+        closeSuggest();
       });
 
-      // Enter adds without reaching for the button, which is how a list gets typed.
+      // Typing asks what matches. Debounced, because this is one request per keystroke
+      // otherwise against a table of 1,776 collection points.
+      let lookup = null;
+      $('#me-add').on('input', function () {
+        const text = $(this).val();
+        window.clearTimeout(lookup);
+        lookup = window.setTimeout(function () {
+          suggest(text);
+        }, 220);
+      });
+
       $('#me-add').on('keydown', function (event) {
+        const open = state.suggestions.length > 0 && !$('#me-suggest').prop('hidden');
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          if (open) {
+            event.preventDefault();
+            moveSuggest(event.key === 'ArrowDown' ? 1 : -1);
+          }
+          return;
+        }
+
+        if (event.key === 'Escape' && open) {
+          event.preventDefault();
+          closeSuggest();
+          return;
+        }
+
+        // Enter takes the highlighted suggestion when there is one, and otherwise adds
+        // whatever was typed — which is how a pasted list of codes still gets in.
         if (event.key === 'Enter') {
           event.preventDefault();
-          addCodes($(this).val());
+          window.clearTimeout(lookup);
+          const picked = open && state.suggestAt >= 0 && state.suggestions[state.suggestAt];
+          addCodes(picked ? picked.mpp_code : $(this).val());
           $(this).val('');
+          closeSuggest();
+        }
+      });
+
+      $('#me-suggest').on('click', '[data-code]', function () {
+        addCodes(String($(this).data('code')));
+        $('#me-add').val('').trigger('focus');
+        closeSuggest();
+      });
+
+      // Clicking anywhere else puts the list away, the same way the portal's own menus behave.
+      $(document).on('mousedown.maiteditor', function (event) {
+        if (!$(event.target).closest('.suggest-wrap').length) {
+          closeSuggest();
         }
       });
 
       // A pasted column lands as chips immediately rather than sitting as uncommitted text.
+      // No lookup for this path: a paste is a list someone already has, not a search.
       $('#me-add').on('paste', function () {
         const $input = $(this);
         window.setTimeout(function () {
+          window.clearTimeout(lookup);
           addCodes($input.val());
           $input.val('');
+          closeSuggest();
         }, 0);
       });
 

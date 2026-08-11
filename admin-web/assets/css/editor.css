@@ -200,6 +200,107 @@
   gap: var(--space-2);
 }
 
+/* --- the suggestion list -------------------------------------------------------------------
+   A code is six digits. An operator assigning coverage is on the phone working from a village
+   name, and the one fact they cannot get from the code is the one that costs something: an MPP
+   already covered by another Mait is not added here, it is moved, and that Mait stops seeing
+   those members. So the row carries the name, where it is, how many members, and who holds it.
+
+   Built like the portal's own menus — same radius, same lift, same hover — because it is one. */
+.suggest-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.suggest {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 17rem;
+  padding: var(--space-1);
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 28px rgb(37 61 78 / 14%);
+}
+
+.suggest__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-body);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* Hover and keyboard land on the same state, so arrowing through looks like pointing. */
+.suggest__row:hover,
+.suggest__row[aria-selected='true'] {
+  background: var(--ink-50);
+}
+
+/* Already on the list. Shown rather than hidden — an operator who types a code they have
+   already added should be told that, not left wondering why nothing matched. */
+.suggest__row[disabled] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.suggest__code {
+  flex: none;
+  width: 5.5rem;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--text-label);
+  color: var(--color-primary-dark);
+}
+
+.suggest__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.suggest__name {
+  display: block;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.suggest__meta {
+  display: block;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.suggest__retired {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-error);
+}
+
+.suggest__row .pill {
+  flex: none;
+}
+
+.suggest__none {
+  padding: var(--space-3);
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+}
+
 .chip-box__input {
   flex: 1;
   min-width: 0;
