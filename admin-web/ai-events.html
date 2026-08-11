@@ -6,7 +6,8 @@
     <title>AI events · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="assets/css/portal.css" />
+    <!-- ai-events.css imports portal.css. -->
+    <link rel="stylesheet" href="assets/css/ai-events.css" />
   </head>
 
   <body>
@@ -19,7 +20,21 @@
             <p class="topbar__meta"><span id="event-count">—</span></p>
           </div>
           <div class="topbar__actions">
-            <button class="btn btn--primary" id="export" type="button">Export CSV →</button>
+            <button class="btn btn--primary" id="export" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+              </svg>
+              <span id="export-label">Export CSV</span>
+            </button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
         </header>
@@ -47,11 +62,45 @@
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
-          <input class="input" id="filter-from" type="date" aria-label="From date" />
-          <input class="input" id="filter-to" type="date" aria-label="To date" />
+          <!-- One filter in two boxes, so they are boxed together. Loose in the bar they read
+               as two unrelated dates. -->
+          <div class="range">
+            <input class="input" id="filter-from" type="date" aria-label="From date" />
+            <svg
+              class="range__arrow"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+            <input class="input" id="filter-to" type="date" aria-label="To date" />
+          </div>
         </section>
 
-        <section class="panel panel--flush" aria-label="AI events">
+        <section class="panel panel--flush events" id="events" aria-labelledby="events-title">
+          <div class="panel__head panel__head--flush events__head">
+            <h2 class="panel__title" id="events-title">
+              <span class="panel__icon events__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M8 3h8v4H8zM5 7h14v14H5zM9 12h6M9 16h4" />
+                </svg>
+              </span>
+              Inseminations
+            </h2>
+            <span class="panel__count" id="events-note">—</span>
+          </div>
           <div class="table-wrap">
             <table class="table">
               <thead>

@@ -258,11 +258,16 @@ window.MaitAI = window.MaitAI || {};
       return;
     }
 
+    // Same sizing rule as a select: fills its column in a form, sizes to itself in a filter
+    // bar. Without it every date control was `width: 100%`, so the two on the AI events filter
+    // bar each claimed a full line and the pair stacked underneath everything else.
+    const block = $input.hasClass('field__control');
+
     // Held as text so the value survives with the same YYYY-MM-DD shape every screen already
     // sends to the API, without the browser attaching its own calendar to it again.
     $input
       .attr('type', 'text')
-      .wrap('<div class="pick pick--date"></div>')
+      .wrap('<div class="pick pick--date' + (block ? '' : ' pick--auto') + '"></div>')
       .addClass('visually-hidden')
       .attr({ tabindex: -1, 'aria-hidden': 'true' })
       .before(

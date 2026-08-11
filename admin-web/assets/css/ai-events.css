@@ -1,0 +1,86 @@
+/**
+ * AI events (W5) — the table that answers "what happened in the field today".
+ *
+ * One row is one insemination. The screen is read far more than it is acted on, so the work is
+ * in making a screenful triageable without opening anything: the period reads as a period, the
+ * card says what it holds, and the rows carry their state in colour.
+ */
+
+@import url('portal.css');
+
+/* --- the period ------------------------------------------------------------------------------
+   From and To are one filter in two boxes, so they are boxed together with an arrow between
+   them. Loose in the bar they read as two unrelated dates, and — before the sizing bug behind
+   this was fixed — they were also the two controls most likely to be pushed onto a line of
+   their own, which is exactly how they were reported. */
+.range {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* The boxes inside lose their own frames — the group carries one. */
+.range .pick__button {
+  border-color: transparent;
+  background: transparent;
+}
+
+.range .pick__button:hover {
+  border-color: var(--color-border);
+}
+
+.range__arrow {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--color-text-muted);
+}
+
+/* --- the table card --------------------------------------------------------------------------
+   Banded like the head of the table under it, so the card names what it holds instead of
+   opening straight onto a row of column labels. */
+.events__head {
+  padding-bottom: var(--space-4);
+  background: var(--ink-50);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.events__icon {
+  color: var(--color-primary-dark);
+  background: var(--color-surface);
+}
+
+/* --- the empty state -------------------------------------------------------------------------
+   Nothing has been recorded yet — which is true of a fresh install, and was true of this one.
+   Seven empty columns describe nothing, so the table shows a worked example of what a day's
+   work looks like. Unmistakably not data: labelled in the head, greyed, and the codes are not
+   links. The first real row replaces the lot. */
+.events--sample .events__icon {
+  color: var(--color-text-muted);
+}
+
+.events--sample tbody {
+  opacity: 0.6;
+}
+
+.events--sample tbody tr {
+  cursor: default;
+  user-select: none;
+}
+
+.events__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--yolk-800);
+  background: var(--color-secondary-wash);
+  border-radius: var(--radius-pill);
+}

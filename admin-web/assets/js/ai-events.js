@@ -93,6 +93,134 @@
     );
   }
 
+  /**
+   * A worked example, shown only when there is genuinely nothing and nothing is filtered.
+   *
+   * Seven empty columns describe nothing. On a fresh install — which this screen has to survive,
+   * because no AI event can complete until payments land — "No events match these filters" is
+   * both true and useless, so the table shows what a day's work looks like instead.
+   *
+   * Unmistakably not data: the head says Sample, the rows are greyed, and the event codes are
+   * not links. The moment one real row exists it replaces the lot, and it never appears while a
+   * filter is set, because there "nothing matches" is the answer.
+   */
+  const SAMPLE = [
+    [
+      'AI-100482',
+      'KAVITA DEVI',
+      'MPP000412',
+      'SUNITA DEVI',
+      '5500000054',
+      'Cow · GIR',
+      '₹ 300 upi',
+      '12 Aug 2026, 08:14',
+      'Completed',
+      'good',
+      '',
+    ],
+    [
+      'AI-100481',
+      'RADHA SINGH',
+      'MPP000188',
+      'RAMESH KUMAR',
+      '5500000091',
+      'Buffalo · MURRAH',
+      '₹ 300 cash',
+      '12 Aug 2026, 07:52',
+      'Completed',
+      'good',
+      '',
+    ],
+    [
+      'AI-100479',
+      'MEENA KUMARI',
+      'MPP000412',
+      'SUNITA DEVI',
+      '5500000054',
+      'Cow · HF CROSS',
+      '₹ 300 upi',
+      '11 Aug 2026, 17:30',
+      'Payment pending',
+      'warn',
+      ' class="is-waiting"',
+    ],
+    [
+      'AI-100476',
+      'SHANTI DEVI',
+      'Non-member',
+      'ANIL SINGH',
+      '5500000117',
+      'Cow · GIR',
+      'Not yet taken',
+      '11 Aug 2026, 16:05',
+      'Straw verified',
+      'info',
+      '',
+    ],
+    [
+      'AI-100470',
+      'PUSHPA DEVI',
+      'MPP000188',
+      'RAMESH KUMAR',
+      '5500000091',
+      'Buffalo · MURRAH',
+      'Not yet taken',
+      '11 Aug 2026, 09:41',
+      'Cancelled',
+      'bad',
+      ' class="is-blocked"',
+    ],
+  ];
+
+  function sampleRow(r) {
+    const money =
+      r[6].indexOf('Not yet') === 0 ? '<span class="table__sub">' + r[6] + '</span>' : r[6];
+    return (
+      '<tr' +
+      r[10] +
+      '>' +
+      '<td><span class="table__code">' +
+      ui.escapeHtml(r[0]) +
+      '</span></td>' +
+      '<td>' +
+      ui.identity(r[1], r[2]) +
+      '</td>' +
+      '<td>' +
+      ui.identity(r[3], r[4]) +
+      '</td>' +
+      '<td>' +
+      ui.escapeHtml(r[5]) +
+      '</td>' +
+      '<td>' +
+      money +
+      '</td>' +
+      '<td>' +
+      ui.escapeHtml(r[7]) +
+      '</td>' +
+      '<td>' +
+      ui.pill(r[8], r[9]) +
+      '</td>' +
+      '</tr>'
+    );
+  }
+
+  /** True when nothing is narrowing the list, so "nothing here" means nothing exists. */
+  function unfiltered() {
+    return (
+      !($('#search').val() || '').trim() &&
+      !$('#filter-status').val() &&
+      !$('#filter-mpp').val() &&
+      !$('#filter-from').val() &&
+      !$('#filter-to').val()
+    );
+  }
+
+  function showSample() {
+    $('#events').addClass('events--sample');
+    $('#events-note').html('<span class="events__badge">Sample — no events recorded yet</span>');
+    $('#rows').html(SAMPLE.map(sampleRow).join(''));
+  }
+
   function query() {
     const params = { limit: LIMIT, offset: state.offset };
     const status = $('#filter-status').val();
@@ -126,6 +254,19 @@
       .done(function (page) {
         state.count = page.count;
         $('#event-count').text(ui.number(page.count) + ' events');
+
+        // An empty unfiltered list is a screen nobody can read. Anything else — including a
+        // filter that matches nothing — is a result, and gets said plainly.
+        if (!page.count && unfiltered()) {
+          showSample();
+          $('#pager').empty();
+          return;
+        }
+
+        $('#events').removeClass('events--sample');
+        $('#events-note').text(
+          ui.number(page.count) + ' matching · showing ' + (page.results || []).length
+        );
         ui.rows($('#rows'), page.results, row, 'No events match these filters.', 7);
         ui.pager(
           $('#pager'),
