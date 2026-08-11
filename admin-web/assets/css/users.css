@@ -8,13 +8,10 @@
 
 @import url('forms.css');
 
-/* The search grew to fill the bar, which on a two-control filter row left the Role select
-   nowhere to go but the next line — and a filter bar that wraps to two rows makes the card
-   below it look like it lost its heading. Capped rather than fixed, so it still gives way on a
-   narrow window instead of forcing the wrap it was causing. */
-.users__filters .search {
-  flex: 0 1 26rem;
-}
+/* The search keeps the full width it has on every other screen. It was capped here when the
+   Role select was still the browser's own, whose intrinsic width was what pushed it onto a
+   second line; the select is now `.pick--auto` with a width this stylesheet decides, so the
+   two fit side by side without taking anything off the search. */
 
 /* --- role ------------------------------------------------------------------------------------
    Role is the only thing on this screen that decides what someone can reach, so it is a pill
