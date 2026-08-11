@@ -441,6 +441,11 @@ window.MaitAI = window.MaitAI || {};
       return request({ path: '/mpp/', query: query });
     },
 
+    /** Every plant with its name and MPP count — the directory's own filter list. */
+    plants: function () {
+      return request({ path: '/mpp/plants/' });
+    },
+
     members: function (query) {
       return request({ path: '/members/', query: query });
     },

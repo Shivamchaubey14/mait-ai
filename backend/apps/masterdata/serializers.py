@@ -160,6 +160,10 @@ class MPPListSerializer(serializers.ModelSerializer):
             "id",
             "mpp_code",
             "mpp_name",
+            # The plant is the dairy this collection point reports into, and unlike the geo
+            # codes beside it, it has a name. It is what an admin narrows the directory by.
+            "plant_code",
+            "plant_name",
             "district_code",
             "tehsil_code",
             "village_code",

@@ -58,7 +58,9 @@
       ui.escapeHtml(mpp.mpp_code) +
       '</span></td>' +
       '<td>' +
-      ui.escapeHtml(mpp.district_code || '—') +
+      // Name over code, like every other identity cell in the portal. A plant number on its
+      // own tells an admin as little as the district number it replaced.
+      ui.identity(mpp.plant_name || '—', mpp.plant_code) +
       '</td>' +
       '<td>' +
       assignmentCell(mpp) +
@@ -73,13 +75,13 @@
   function query() {
     const params = { limit: LIMIT, offset: state.offset };
     const search = ($('#search').val() || '').trim();
-    const district = $('#filter-district').val();
+    const plant = $('#filter-plant').val();
 
     if (search) {
       params.search = search;
     }
-    if (district) {
-      params.district_code = district;
+    if (plant) {
+      params.plant_code = plant;
     }
     if (state.unassignedOnly) {
       // django-filter renders a null FK filter as an empty value on the FK field.
@@ -111,21 +113,22 @@
   }
 
   function loadDistricts() {
-    // Derived from the first page rather than a lookup endpoint: districts are a SAP code
-    // with no master of their own, and the list is short enough to be useful this way.
-    MaitAI.api.mpps({ limit: 200 }).done(function (page) {
-      const seen = {};
-      (page.results || []).forEach(function (mpp) {
-        if (mpp.district_code) {
-          seen[mpp.district_code] = true;
-        }
-      });
-      $('#filter-district').append(
-        Object.keys(seen)
-          .sort()
-          .map(function (code) {
+    // Asked for, rather than derived from whichever page of the directory loaded first.
+    // Districts used to be scraped out of the first 200 rows, which quietly omitted any that
+    // happened to sort later; there are 19 plants and the endpoint returns all of them with
+    // their names and how many MPPs report into each.
+    MaitAI.api.plants().done(function (data) {
+      $('#filter-plant').append(
+        (data.results || [])
+          .map(function (plant) {
             return (
-              '<option value="' + ui.escapeHtml(code) + '">' + ui.escapeHtml(code) + '</option>'
+              '<option value="' +
+              ui.escapeHtml(plant.plant_code) +
+              '">' +
+              ui.escapeHtml(plant.plant_code + ' · ' + (plant.plant_name || '—')) +
+              ' (' +
+              ui.number(plant.mpp_count) +
+              ')</option>'
             );
           })
           .join('')
@@ -150,7 +153,7 @@
       }, 350);
     });
 
-    $('#filter-district').on('change', function () {
+    $('#filter-plant').on('change', function () {
       state.offset = 0;
       load();
     });

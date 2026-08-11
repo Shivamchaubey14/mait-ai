@@ -210,7 +210,7 @@ class MPPViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
     permission_classes = [IsAdminOrMaitReadOnly]
     lookup_field = "mpp_code"
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["district_code", "tehsil_code", "mait", "is_active"]
+    filterset_fields = ["plant_code", "district_code", "tehsil_code", "mait", "is_active"]
     search_fields = ["mpp_code", "mpp_name"]
 
     def get_queryset(self):
@@ -231,6 +231,30 @@ class MPPViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
         if self.action == "assign_mait":
             return MPPAssignmentSerializer
         return MPPDetailSerializer if self.action == "retrieve" else MPPListSerializer
+
+    @extend_schema(
+        summary="The plants, for the directory's filter",
+        description=(
+            "Every distinct plant with its name and how many MPPs report into it.\n\n"
+            "A plant is the dairy a collection point reports into. There is no plant master "
+            "to read from — the code and the name arrive on each MPP row in the SAP export — "
+            "so they are grouped here rather than derived in the browser from whatever page "
+            "of the directory happened to load."
+        ),
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"], url_path="plants")
+    def plants(self, request):
+        # `get_queryset` is used rather than the model, so a Mait asking sees only the plants
+        # their own MPPs report into — the same scoping the directory itself is under.
+        rows = (
+            self.get_queryset()
+            .exclude(plant_code="")
+            .values("plant_code", "plant_name")
+            .annotate(mpp_count=Count("id"))
+            .order_by("plant_code")
+        )
+        return Response({"results": list(rows)})
 
     @extend_schema(
         summary="Reassign this MPP to a different Mait",

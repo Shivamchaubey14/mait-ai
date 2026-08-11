@@ -49,8 +49,11 @@
             placeholder="Search MPP name or code"
             aria-label="Search MPP name or code"
           />
-          <select class="select" id="filter-district" aria-label="District">
-            <option value="">All districts</option>
+          <!-- Plant, not district. A district is a bare SAP number with no master and no
+               name; a plant is the dairy a collection point reports into, it arrives named on
+               every MPP row, and it is the unit an admin actually works a region by. -->
+          <select class="select" id="filter-plant" aria-label="Plant">
+            <option value="">All plants</option>
           </select>
           <button class="chip" id="filter-unassigned" type="button" aria-pressed="false">
             Unassigned only
@@ -64,7 +67,7 @@
                 <tr>
                   <th scope="col">MPP</th>
                   <th scope="col">Code</th>
-                  <th scope="col">District</th>
+                  <th scope="col">Plant</th>
                   <th scope="col">Assigned Mait</th>
                   <th scope="col">Status</th>
                 </tr>
