@@ -60,10 +60,15 @@ window.MaitAI = window.MaitAI || {};
       .filter(Boolean);
   }
 
-  function icon(path) {
+  /* `className` is optional — a field's glyph is sized by its chip, a button's by `.btn__icon`,
+     which also stops it being squeezed by a long label. */
+  function icon(path, className) {
     return (
-      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
-      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="' +
+      '<svg class="' +
+      (className || '') +
+      '" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="' +
       path +
       '" /></svg>'
     );
@@ -123,15 +128,23 @@ window.MaitAI = window.MaitAI || {};
       '<div class="chip-box__add">',
       '<input class="input chip-box__input" id="me-add" type="text" spellcheck="false" ',
       'autocomplete="off" placeholder="Type or paste codes — 001302, 001308" />',
-      '<button class="btn btn--primary" id="me-add-go" type="button">Add</button>',
+      '<button class="btn btn--good-outline" id="me-add-go" type="button">',
+      icon('M12 5v14M5 12h14', 'btn__icon'),
+      'Add</button>',
       '</div></div>',
       '<p class="field__hint" id="me-hint">',
       'This is the complete list — anything removed here is unassigned.</p>',
       '</div>',
 
+      // Cancel was wearing `btn--danger`, the solid red this portal keeps for logging out and
+      // for rejecting an indent. Walking away from an edit is neither.
       '<div class="form-actions">',
-      '<button class="btn btn--primary" id="me-save" type="button">Save changes</button>',
-      '<button class="btn btn--danger" id="me-cancel" type="button">Cancel</button>',
+      '<button class="btn btn--primary" id="me-save" type="button">',
+      icon('M5 12.5l4.5 4.5L19 7.5', 'btn__icon'),
+      'Save changes</button>',
+      '<button class="btn" id="me-cancel" type="button">',
+      icon('M6 6l12 12M18 6L6 18', 'btn__icon'),
+      'Cancel</button>',
       '<p class="field__hint" id="me-status">—</p>',
       '</div>',
 

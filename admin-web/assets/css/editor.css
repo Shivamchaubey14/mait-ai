@@ -13,23 +13,28 @@
 @import url('forms.css');
 
 /* --- editor ------------------------------------------------------------------------------ */
-/* A green edge, so the open editor reads as the thing being worked on rather than as another
-   panel in the stack. */
+/* Toned, like every other panel on this portal that is open on one record. It used to be a
+   white card with a 3px green stripe down its left edge — which was doing the work of saying
+   "this is the thing being worked on" with a detail nobody reads as meaning that, and which
+   read as a stray shadow beside a card the same colour as the page. The wash says it instead,
+   and the controls stay paper on top of it. */
 .editor {
-  border-left: 3px solid var(--color-primary);
+  background: var(--color-info-wash);
+  border-color: var(--ink-100);
 }
 
+/* The tint separates the head from the fields, so the rule under it is one line too many. */
 .editor__head {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding-bottom: var(--space-4);
   margin-bottom: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--ink-100);
 }
 
 /* Initials rather than a photo: there are none, and a grey circle says less than two
-   letters do. */
+   letters do. White on the wash, the same way round as every other mark on the portal. */
 .editor__avatar {
   display: flex;
   flex-shrink: 0;
@@ -41,7 +46,7 @@
   font-size: var(--text-body);
   font-weight: 700;
   color: var(--color-primary-dark);
-  background: var(--color-primary-wash);
+  background: var(--color-surface);
   border-radius: 50%;
 }
 
@@ -69,20 +74,22 @@
 /* --- iconed fields -------------------------------------------------------------------------
    The structure moved to forms.css: an iconed field is a form component, not an editor one,
    and the query builder on Reports needs it without dragging in an editor panel it has no use
-   for. What stays here is the tints for this panel's own three fields. */
+   for. What stays here is the tints for this panel's own three fields — a white chip with a
+   coloured glyph, because the card carries the wash now and a chip tinted the same colour as
+   the card behind it would disappear into it. */
 .field__icon--name {
   color: var(--color-ink);
-  background: var(--color-background);
+  background: var(--color-surface);
 }
 
 .field__icon--mobile {
   color: var(--color-info);
-  background: var(--color-info-wash);
+  background: var(--color-surface);
 }
 
 .field__icon--mpps {
   color: var(--color-primary-dark);
-  background: var(--color-primary-wash);
+  background: var(--color-surface);
 }
 
 .field__count {
@@ -90,18 +97,22 @@
   margin-left: auto;
   font-family: var(--font-heading);
   font-size: var(--text-caption);
+  font-weight: 600;
   color: var(--color-primary-dark);
-  background: var(--color-primary-wash);
+  background: var(--color-surface);
   border-radius: var(--radius-pill);
 }
 
 /* --- the MPP chip box ---------------------------------------------------------------------
    Chips rather than a textarea. Removing one village from a paragraph of comma-separated
    codes means finding it and deleting the right comma; removing a chip is one click, and the
-   count beside the label keeps saying what the total is. */
+   count beside the label keeps saying what the total is.
+
+   Paper, like every other control on the panel. Grey was fine on a white card; on the tinted
+   one it read as a disabled field rather than as a box to type into. */
 .chip-box {
   padding: var(--space-3);
-  background: var(--color-background);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }

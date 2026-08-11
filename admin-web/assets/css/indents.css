@@ -35,9 +35,11 @@
   margin-bottom: var(--space-4);
 }
 
+/* White on the panel's wash, like every other thing sitting on a toned card. Grey on grey was
+   invisible; grey on the tint the editor now carries would be worse. */
 .fact {
   padding: var(--space-3);
-  background: var(--color-background);
+  background: var(--color-surface);
   border-radius: var(--radius-sm);
 }
 
