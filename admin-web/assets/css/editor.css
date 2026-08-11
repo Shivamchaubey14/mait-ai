@@ -207,10 +207,19 @@
    those members. So the row carries the name, where it is, how many members, and who holds it.
 
    Built like the portal's own menus — same radius, same lift, same hover — because it is one. */
+/* The wrapper takes the row, and the input fills the wrapper.
+   `.chip-box__input` carries `flex: 1`, which worked while the input was a direct child of the
+   flex row. Putting it in here for the suggestion list to hang off left that declaration with
+   no flex parent to act on, so the input fell back to its intrinsic size — about twenty
+   characters — and sat with a band of empty card between it and the Add button. */
 .suggest-wrap {
   position: relative;
   flex: 1;
   min-width: 0;
+}
+
+.suggest-wrap .chip-box__input {
+  width: 100%;
 }
 
 .suggest {
