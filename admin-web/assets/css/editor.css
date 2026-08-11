@@ -23,6 +23,21 @@
   border-color: var(--ink-100);
 }
 
+/* Two columns, not "as many 240px columns as fit".
+   The shared grid is written for the six-field query builder; this panel has two short fields
+   and one wide one, so on a full-width card `auto-fit` made four columns, put Name and Mobile
+   in the first two and left the right half of the card empty — a form that looks like it lost
+   half its contents. Two columns split the row evenly, and coverage spans both underneath. */
+.editor .form-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 760px) {
+  .editor .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* The tint separates the head from the fields, so the rule under it is one line too many. */
 .editor__head {
   display: flex;
@@ -117,14 +132,22 @@
   border-radius: var(--radius-md);
 }
 
+/* A Mait can cover dozens of villages, and the real rosters do. Left to grow, forty chips push
+   the Add box off the bottom of the screen and the operator loses the control they came for —
+   so the chips scroll and the box that adds them stays put. Roughly four rows before it does,
+   which is more coverage than most Maits have. */
 .chip-box__chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+  max-height: 9.5rem;
+  overflow-y: auto;
 }
 
 .chip-box__chips:not(:empty) {
+  padding-bottom: var(--space-3);
   margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .chip-box__empty {
