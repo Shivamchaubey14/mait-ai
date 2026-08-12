@@ -27,10 +27,13 @@ import { Banner, Screen } from '@/components';
 import BottomNav, { Tab } from '@/components/BottomNav';
 import AddNonMemberScreen from '@/features/aiFlow/AddNonMemberScreen';
 import CapturePhotoScreen from '@/features/aiFlow/CapturePhotoScreen';
+import ConfirmMemberScreen from '@/features/aiFlow/ConfirmMemberScreen';
 import ScanStrawScreen from '@/features/aiFlow/ScanStrawScreen';
 import SelectAnimalScreen from '@/features/aiFlow/SelectAnimalScreen';
+import SelectBreedScreen from '@/features/aiFlow/SelectBreedScreen';
 import SelectFarmerScreen from '@/features/aiFlow/SelectFarmerScreen';
 import SelectMppScreen from '@/features/aiFlow/SelectMppScreen';
+import OwnerTypeScreen, { OwnerType } from '@/features/aiFlow/OwnerTypeScreen';
 import LoginScreen from '@/features/auth/LoginScreen';
 import HistoryScreen from '@/features/history/HistoryScreen';
 import HomeScreen from '@/features/home/HomeScreen';
@@ -44,10 +47,13 @@ import { colors, spacing, typography } from '@theme/tokens';
 
 /** Where the capture flow has got to. `null` means it is not running. */
 type CaptureStep =
+  | 'ownerType'
   | 'selectMpp'
   | 'selectFarmer'
+  | 'confirmMember'
   | 'addNonMember'
   | 'selectAnimal'
+  | 'selectBreed'
   | 'scanStraw'
   | 'capturePhoto'
   | 'done';
@@ -74,9 +80,13 @@ export default function RootNavigator(): React.JSX.Element {
   const [indentView, setIndentView] = useState<number | null>(null);
 
   const [clientUuid, setClientUuid] = useState(newClientUuid);
+  /** Answered at step 1, and it decides where step 3 goes. */
+  const [ownerType, setOwnerType] = useState<OwnerType>('member');
   const [mpp, setMpp] = useState<MPP | null>(null);
   const [farmer, setFarmer] = useState<Farmer | null>(null);
   const [animal, setAnimal] = useState<Animal | null>(null);
+  /** The breed of straw the Mait said they would use, chosen before the number is entered. */
+  const [semenBreed, setSemenBreed] = useState<string | null>(null);
   const [event, setEvent] = useState<AIEvent | null>(null);
 
   const [uploading, setUploading] = useState(false);
@@ -132,8 +142,9 @@ export default function RootNavigator(): React.JSX.Element {
     setFarmer(null);
     setAnimal(null);
     setEvent(null);
+    setOwnerType('member');
     setClientUuid(newClientUuid());
-    setStep('selectMpp');
+    setStep('ownerType');
   };
 
   const leaveCapture = () => {
@@ -141,9 +152,30 @@ export default function RootNavigator(): React.JSX.Element {
     setTab('home');
   };
 
+  /**
+   * Pick a half-finished capture back up.
+   *
+   * Only ever called with an event whose straw is verified and whose photo never arrived, so
+   * the photo step is where it resumes. The event's own `client_uuid` is restored with it —
+   * minting a new one here would make the retry a second insemination as far as the server is
+   * concerned (ADR 0003).
+   */
+  const resumeCapture = (unfinished: AIEvent) => {
+    setEvent(unfinished);
+    setClientUuid(unfinished.client_uuid);
+    setStep('capturePhoto');
+  };
+
+  /**
+   * A member is chosen, then read back before the flow acts on it.
+   *
+   * The roster is searched by a sixteen-digit code as often as by name, and a wrong one does
+   * not fail — it succeeds against somebody else. The confirmation screen is where that is
+   * caught, so selection lands there rather than at the animal.
+   */
   const chooseMember = (selected: Member) => {
     setFarmer({ kind: 'member', name: selected.member_name, memberCode: selected.member_code });
-    setStep('selectAnimal');
+    setStep('confirmMember');
   };
 
   const chooseNonMember = (selected: NonMember) => {
@@ -151,44 +183,91 @@ export default function RootNavigator(): React.JSX.Element {
     setStep('selectAnimal');
   };
 
-  // -- the capture flow, over the tabs ---------------------------------------------------
-  if (step === 'selectMpp') {
-    return (
-      <SelectMppScreen
-        // Back from step 1 leaves the flow. Without it the capture is a one-way door: the tab
-        // bar is hidden here, so this arrow is the only way home.
-        onBack={leaveCapture}
-        onSelect={selected => {
-          setMpp(selected);
-          setStep('selectFarmer');
+  /**
+   * The tab bar rides along until something has been committed.
+   *
+   * Owner type, MPP, farmer and animal are all still just choices — walking away from them
+   * costs a Mait four taps, not a record. From the straw scan on it is gone, because that is
+   * the step that creates the AI event on the server, and a tab bar under a half-captured
+   * insemination is an invitation to strand one: an animal served, a straw spent, nothing
+   * recorded.
+   */
+  const withTabs = (screen: React.JSX.Element) => (
+    <View style={styles.flex}>
+      <View style={styles.flex}>{screen}</View>
+      <BottomNav
+        active="home"
+        pending={pending}
+        onChange={next => {
+          setStep(null);
+          setTab(next);
         }}
       />
+    </View>
+  );
+
+  // -- the capture flow, over the tabs ---------------------------------------------------
+  if (step === 'ownerType') {
+    return withTabs(
+      <OwnerTypeScreen
+        onBack={leaveCapture}
+        onContinue={choice => {
+          setOwnerType(choice);
+          setStep('selectMpp');
+        }}
+      />,
+    );
+  }
+
+  if (step === 'selectMpp') {
+    return withTabs(
+      <SelectMppScreen
+        onBack={() => setStep('ownerType')}
+        onSelect={selected => {
+          setMpp(selected);
+          // The fork answered at step 1 decides which of the two farmer screens this is.
+          // A non-member is not in any roster, so searching one would be a dead end.
+          setStep(ownerType === 'member' ? 'selectFarmer' : 'addNonMember');
+        }}
+      />,
     );
   }
 
   if (step === 'selectFarmer' && mpp) {
-    return (
+    return withTabs(
       <SelectFarmerScreen
         mpp={mpp}
         onSelectMember={chooseMember}
         onAddNonMember={() => setStep('addNonMember')}
         onBack={() => setStep('selectMpp')}
-      />
+      />,
+    );
+  }
+
+  if (step === 'confirmMember' && farmer?.kind === 'member') {
+    return withTabs(
+      <ConfirmMemberScreen
+        memberCode={farmer.memberCode}
+        onConfirm={() => setStep('selectAnimal')}
+        onSearchAgain={() => setStep('selectFarmer')}
+      />,
     );
   }
 
   if (step === 'addNonMember' && mpp) {
-    return (
+    return withTabs(
       <AddNonMemberScreen
         mpp={mpp}
         onCreated={chooseNonMember}
-        onCancel={() => setStep('selectFarmer')}
-      />
+        // Back to wherever this was reached from: the roster, if the Mait went looking for a
+        // member first, or the MPP picker if they said non-member at the fork.
+        onCancel={() => setStep(ownerType === 'member' ? 'selectFarmer' : 'selectMpp')}
+      />,
     );
   }
 
   if (step === 'selectAnimal' && farmer) {
-    return (
+    return withTabs(
       <SelectAnimalScreen
         owner={{
           name: farmer.name,
@@ -198,10 +277,26 @@ export default function RootNavigator(): React.JSX.Element {
         animals={animals}
         onSelect={selected => {
           setAnimal(selected);
+          setStep('selectBreed');
+        }}
+        // A non-member has already been created by the time this screen is reached, so back
+        // goes past that form rather than into it — re-submitting it would add the same
+        // person twice. A member goes back to the card that was just confirmed.
+        onBack={() => setStep(ownerType === 'member' ? 'confirmMember' : 'selectMpp')}
+      />,
+    );
+  }
+
+  if (step === 'selectBreed' && animal) {
+    return withTabs(
+      <SelectBreedScreen
+        animalType={animal.animal_type}
+        onSelect={breed => {
+          setSemenBreed(breed.code);
           setStep('scanStraw');
         }}
-        onBack={() => setStep('selectFarmer')}
-      />
+        onBack={() => setStep('selectAnimal')}
+      />,
     );
   }
 
@@ -214,12 +309,15 @@ export default function RootNavigator(): React.JSX.Element {
           memberCode: farmer.kind === 'member' ? farmer.memberCode : undefined,
           nonMemberId: farmer.kind === 'nonMember' ? farmer.nonMemberId : undefined,
           animalId: animal.id,
+          // Chosen at the previous step, and sent with the check: it is what tells an
+          // unnumbered straw apart when the Mait is carrying two breeds of them.
+          semenBreed,
         }}
         onCreated={created => {
           setEvent(created);
           setStep('capturePhoto');
         }}
-        onBack={() => setStep('selectAnimal')}
+        onBack={() => setStep('selectBreed')}
       />
     );
   }
@@ -283,6 +381,8 @@ export default function RootNavigator(): React.JSX.Element {
         {!requestingStock && tab === 'home' && (
           <HomeScreen
             onOpenStock={() => setTab('stock')}
+            onStartCapture={startCapture}
+            onResume={resumeCapture}
             online={online}
             pending={pending}
             onSync={sync}
@@ -290,7 +390,13 @@ export default function RootNavigator(): React.JSX.Element {
           />
         )}
         {!requestingStock && tab === 'stock' && indentView === null && (
-          <StockScreen onOpenIndents={() => setIndentView(0)} />
+          <StockScreen
+            onOpenIndents={() => setIndentView(0)}
+            onRequestStock={() => {
+              setIndentView(null);
+              setRequestingStock(true);
+            }}
+          />
         )}
         {!requestingStock && tab === 'stock' && indentView === 0 && (
           <IndentsScreen
@@ -307,9 +413,9 @@ export default function RootNavigator(): React.JSX.Element {
         )}
       </View>
 
-      {/* The action follows the screen: ask for stock from Stock, start a capture from Home
-          and History, nothing from Settings or the indent screens. One control, always in the
-          same place, saying what it will do. */}
+      {/* Destinations only. Each screen's own action lives at the foot of that screen's
+          content — "Start new AI" on Home, "Request stock" on Inventory — where it is next to
+          the thing it acts on rather than in the furniture. */}
       <BottomNav
         active={tab}
         pending={pending}
@@ -320,24 +426,6 @@ export default function RootNavigator(): React.JSX.Element {
           setIndentView(null);
           setTab(next);
         }}
-        action={
-          // Settings has no action of its own, and starting a capture from it is a jump
-          // sideways out of what the Mait came here to do. Neither do the indent screens:
-          // they are somewhere a Mait reads what they already asked for, and "Request stock"
-          // sitting under a list of requests invites a duplicate of the one they are reading.
-          requestingStock || tab === 'settings' || indentView !== null
-            ? undefined
-            : tab === 'stock'
-              ? {
-                  label: t('requestStock.action'),
-                  onPress: () => {
-                    setIndentView(null);
-                    setRequestingStock(true);
-                  },
-                  testID: 'bar-request-stock',
-                }
-              : { label: t('home.startNewAi'), onPress: startCapture, testID: 'bar-start-ai' }
-        }
       />
     </View>
   );
