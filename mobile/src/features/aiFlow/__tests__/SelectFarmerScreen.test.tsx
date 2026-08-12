@@ -24,6 +24,7 @@ const MPP_FIXTURE: MPP = {
   is_active: true,
   mait: 3,
   mait_name: 'SHIVKUMAR',
+  member_count: 412,
 };
 
 const withMobile = {
@@ -117,6 +118,27 @@ describe('SelectFarmerScreen', () => {
 
     expect(onSelectMember).not.toHaveBeenCalled();
     expect(screen.getByText(/No mobile number on record/i)).toBeTruthy();
+    // And what to do about it, once, under the list rather than on every blocked row.
+    expect(screen.getByTestId('member-blocked-note')).toBeTruthy();
+  });
+
+  it('says nothing about mobile numbers when every member has one', async () => {
+    mockMembers([withMobile]);
+    renderScreen();
+
+    await waitFor(() => screen.getByText('REETA DEVI'));
+
+    expect(screen.queryByTestId('member-blocked-note')).toBeNull();
+  });
+
+  it('identifies a member by initials, code and a mobile grouped as it is spoken', async () => {
+    mockMembers([withMobile]);
+    renderScreen();
+
+    await waitFor(() => screen.getByText('REETA DEVI'));
+
+    expect(screen.getByText('RD')).toBeTruthy();
+    expect(screen.getByText(`${withMobile.member_code} · 70818 20448`)).toBeTruthy();
   });
 
   it('offers non-member registration', async () => {
