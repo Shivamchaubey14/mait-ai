@@ -95,6 +95,13 @@ behind icons. Ink 300 `#8897A3` is the disabled foreground; Ink 100 `#D4DBE0` a 
 
 **Minimum touch target: 48×48dp.** Cold, wet or gloved hands, often in sunlight.
 
+**Buttons are rounded rectangles — 12px radius, 56dp tall, full width, no border, no shadow.**
+Every primary action in the app wears that one shape: `Send code`, `Sign in`, `Start new AI`,
+`Request stock`, `Continue`, `Try again`. Pills (`radius.pill`) are for things that carry a
+word rather than a tap — status chips, counts, the `Low` badge, the language toggle, progress
+tracks. A pill-shaped button and a pill-shaped label are the same object to someone who has
+used the app twice.
+
 ## 4. Language
 
 The app **defaults to English** for now, with a Hindi toggle on the login hero. Both
@@ -113,28 +120,70 @@ exactly its English label. Please show both languages for any screen with tight 
 
 Status: ✅ built · 🟡 partly built · ⬜ not started
 
+**The bottom bar carries destinations only** — Home, Inventory, AI events, Profile — flat and
+full width against the bottom edge, the selected one a filled glyph and a green label. The
+unsent count badges *AI events*, which is where those records are. Each screen's own action
+sits at the foot of that screen's content instead of floating in the bar: a control that
+changes its job depending on the open tab, while living in the furniture that never changes,
+is the one thing on screen that cannot be learned once.
+
 ## Auth
 
 | # | Screen | Status | Contents |
 | --- | --- | --- | --- |
-| M1 | **Login — mobile number** | ✅ · designed | Green hero card with the MAIT AI mark, EN/हिं pill, `+91` field, "Send OTP" enabling at ten digits, yellow no-password notice, two help rows, legal line. |
-| M2 | **Login — OTP** | ✅ | 6-digit entry, countdown, resend, back. Distinct errors for wrong / expired / out-of-attempts. |
-| M3 | **Splash** | 🟡 · designed | Full Nest Green field, white **MAIT AI** brand pill (English only — the product name is never transliterated), one-line English tagline, three capability chips, determinate progress bar, version line. |
+| M1 | **Login — mobile number** | ✅ · designed | Ink hero with the MAIT AI wordmark and an English / हिन्दी pill, the heading "What is your mobile number?", a `+91` field with a filled prefix block, one yellow no-password notice, "Send code" pinned to the bottom and enabling at ten digits. |
+| M2 | **Login — OTP** | ✅ · designed | Ink hero carrying the number with a round back button beside it, "Enter the code we sent". Six cells over one hidden input, a `Resend in 0:24` countdown opposite "Send again", a blue card saying this is the one step that needs a signal, "Sign in" pinned to the bottom. Three refusals replace the blue card when they fire, each shaped like the action it wants next: **wrong** — red cell outlines and an inline line under them, corrected in place; **expired** — a yellow card and the button becomes "Send a new code"; **out of attempts** — a red card, a "Call IT Department" link, and a button that holds `Locked · 14:52` until the countdown runs out and then becomes "Send a new code" (never back to "Sign in": the code being typed died long before the lock lifted). The minutes in that copy are interpolated from `OTP_EXPIRY_SECONDS` and `OTP_LOCK_MINUTES`, never written into the sentence. |
+| M3 | **Splash** | ✅ · designed | Full Ink field, bare white **MAIT AI** wordmark (English only — the product name is never transliterated), one-line tagline "Record an insemination in six steps", determinate progress bar with a green fill, `v{version}`. One centred stack, nothing else. The capability chips are gone from here and from M1 — the app demonstrates all three within a minute of being used. |
 
 ## The 6-step AI capture flow
 
 This is the heart of the product (SRS §6.3). A persistent progress indicator spans all six
 steps. Camera-first — the gallery picker is deliberately disabled.
 
+**Every step is the same three bands: a fixed Ink hero, a scrolling body, a fixed footer.**
+The hero carries the step number, the progress and the question, and it stays put while the
+body moves under it — a Mait scrolling a long roster should never lose sight of what they are
+choosing. Both bands are opaque, so the list passes behind them rather than through them, and
+the CTA never has to be scrolled back to. Steps that read a list off the server carry
+pull-to-refresh.
+
+The six counted steps are **owner type → MPP → farmer → animal → breed → straw**. They are the
+six questions with an answer to pick. The proof photo follows them under its own name rather
+than a seventh number — it is not a choice, it is a thing done — and the screens past it
+(payment, done) are named for the same reason. Payment is also Phase 4 and does not exist yet;
+counting a screen that never arrives made the indicator promise a step that was really the
+last. Restore `collectPayment` to `AI_FLOW_STEPS` when payments land — the bar reads that
+list's length, so nothing else moves.
+
 | # | Screen | Status | Contents |
 | --- | --- | --- | --- |
-| M4 | **Step 1 — Select MPP** | ✅ | Searchable list; auto-skips when the Mait covers only one. |
-| M5 | **Step 2 — Select farmer** | ✅ | Member search by name/code/mobile. A member with no mobile is shown but **not selectable**, with the reason on the row. Route to non-member capture. |
-| M6 | **Step 2b — Add non-member** | ✅ | Name, mobile, address, explicit consent checkbox. |
-| M7 | **Step 3 — Select animal** | ⬜ | Cow/Buffalo toggle → breed (config-driven) → optional ear tag. Add-new and pick-existing. |
-| M8 | **Step 4 — Scan straw** | ⬜ | Camera barcode scan + manual entry fallback. Must show two distinct rejections: "not in your stock" and "already used". |
-| M9 | **Step 5 — Capture photo** | ⬜ | Full-bleed camera, no gallery button. GPS + timestamp overlay. Retake. |
-| M10 | **Step 6 — Payment mode** | ⬜ | Online vs Cash. Amount. |
+| C1 | **Step 1 — Owner type** | ✅ · designed | *Is she a member?* Two option cards — Member "Sells milk to the cooperative", Non-member "You collect ₹ n today" — defaulting to Member, with a note that everything after depends on the answer. The only step that keeps the tab bar: nothing is committed yet, so leaving costs a tap rather than a record. The fee is named only when `extra.nonMemberFee` is configured. |
+| M4 | **Step 2 — Select MPP** | ✅ · designed | *Which collection point?* Search by name or code, then rows carrying a two-letter initials tile, `MPP0004120 · 412 members`, and a `Last used` pill on wherever the previous event was recorded. Tap selects, Continue commits. Auto-skips when the Mait covers only one. **Not "Nearest"** — the MPP master has no coordinates, so no row can honestly claim distance; that pill needs lat/long on the master plus a location read. |
+| C3 | **Step 3 — Which member** | ✅ · designed | *Which member?* A pinned search box over the MPP's roster — by code, name or mobile. Rows carry a round initials avatar in pale green, the name, and `MEM00000412 · 98765 43210`, the mobile grouped the way it is read back to her. A member with no mobile is shown but **not selectable**: greyed avatar, the reason in red where the code would be, a `Blocked` pill, and one blue line under the list saying where the fix is — *No mobile, no record — she must add it at the collection point.* The way out is a green text link, **She is not a member**, never a card in the list. Reached only when C1 said Member. |
+| C4 | **Step 3, second half — Is this her?** | ✅ · designed | *Is this her?* — *A wrong code here puts the record on another woman's animal.* One card, read back before the flow acts: a round initials avatar, her name, the code that was typed in green, then **MPP · Mobile · Father/husband · Animals** in a two-by-two grid. Her village is deliberately not among them — it is not on the member master, and the collection point is what the record is keyed to and what catches the commonest mis-tap, the right name at the wrong MPP. Under it a green statement, *Nothing to collect — ₹ n comes out of her milk payment*, then **No — search again** over **Yes, continue**. It re-uses step 3's number and draws no second progress bar: this is the same question's second half, and the height buys the card its place on one unscrolled screen. |
+| M6 | **Step 3b — Add non-member** | ✅ · designed | *Who is she?* Labelled boxes, each with a tinted icon — her name, father/husband name, mobile (`10 digits`), village, **Aadhaar (mandatory, 12 digits)** — over a consent checkbox naming the brand in the sentence. Reached straight from the MPP step when C1 said Non-member. |
+
+**The Aadhaar check is a fraud control, not a form field.** This is the one screen in the
+product that ends with a Mait asking a farmer for cash, and a member recorded as a non-member
+is a farmer paying twice for a service her milk payment already covered — she has no reason to
+query it, she was asked and she paid. So the server matches the Aadhaar against the membership
+roll before creating anything, and names the member it found: *"Radha Singh is already a member
+at Barsana MPP (M-9001). Record this as a member — she pays nothing today."*
+
+The match runs on `aadhar_hash`, a keyed HMAC-SHA256 kept alongside the encrypted number on
+both `member` and `non_member`. Fernet ciphertext differs per row and cannot be indexed or
+matched, and a *plain* hash of a twelve-digit number is brute-forced in minutes — so the key is
+derived from `FIELD_ENCRYPTION_KEY` with a domain label, giving a column that is searchable to
+the application and useless to anyone holding a copy of the database. Migration `0006`
+backfills the roll; members whose SAP row carried no Aadhaar are not checkable by this route,
+which is a data gap to close upstream. The number itself is stored encrypted, read back masked
+(SRS §16), and **the card is never photographed** — SRS §7 asks for data minimisation, and
+storing card images carries UIDAI obligations a masked number does not.
+| C6 | **Step 4 — Select animal** | ✅ · designed | *Which animal?* A Cow/Buffalo segmented control over the farmer's animals, each row carrying a handle (`C1`, `C2`), her tag or `no tag`, and *Last AI 14 Mar 2026 · HF Cross* — because two untagged cows are told apart by when they were last served and by nothing else the app holds. A dashed **Add an animal** card ends the list: a place for a record rather than another record. |
+| C7 | **Step 5 — Which breed** | ✅ · designed | *Which breed?* The straw's breed, asked before its number, so a Mait carrying unnumbered stock in two breeds is asked a question instead of refused one. Rows carry `18 straws with you`, a `Low` pill under five, and every configured breed the flask is empty of shown **blocked** with `None in your stock` — never hidden. Most-carried first. |
+| M8 | **Step 6 — Scan straw** | ⬜ | Camera barcode scan + manual entry fallback. Must show two distinct rejections: "not in your stock" and "already used". |
+| M9 | **Proof photo** | ⬜ | Full-bleed camera, no gallery button. GPS + timestamp overlay. Retake. Named, not numbered. |
+| M10 | **Payment mode** | ⬜ | Online vs Cash. Amount. Phase 4 — not counted in the six until it exists. |
 | M11 | **Payment — OTP entry** | ⬜ | Member authorisation OTP. |
 | M12 | **Payment — online proof** | ⬜ | UTR field + screenshot capture. |
 | M13 | **Payment — COD confirm** | ⬜ | Second confirmation OTP. |
@@ -144,7 +193,7 @@ steps. Camera-first — the gallery picker is deliberately disabled.
 
 | # | Screen | Status | Contents |
 | --- | --- | --- | --- |
-| M15 | **Home / dashboard** | ⬜ | Today's count, straws remaining, resume drafts, start new AI. |
+| M15 | **Home / dashboard** | ✅ · designed | Ink hero: the Mait's name, `MAIT {id} · n MPPs`, a compact EN/हिं pill and an initials avatar. A squared Ink strip under it while offline. Then two tiles — Today (green) and Waiting (yellow, tapping it syncs) — a **Straws with you** card listing every breed held with a `Low` badge at two or fewer, a yellow **Unfinished — {name}** row that resumes the capture, and **Start new AI** at the foot of the content. At zero straws that button becomes "See stock" rather than starting a flow that would stop dead at the scan step. |
 | M16 | **My inventory** | ⬜ | Straw balance by breed, consumables, low-stock warning. |
 | M17 | **Stock ledger** | ⬜ | Movement history — issued, consumed, returned. |
 | M18 | **Request stock (indent)** | ⬜ | Product/breed, quantity, submit. |
