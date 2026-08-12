@@ -7,11 +7,10 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { colors, green, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, fonts, green, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
 // --------------------------------------------------------------------------------------
 // Brand mark
@@ -36,36 +35,20 @@ export function BrandMark({ size = 'large' }: { size?: 'large' | 'small' }) {
   );
 }
 
-// --------------------------------------------------------------------------------------
-// Capability chips
-// --------------------------------------------------------------------------------------
-const CAPABILITIES = [
-  { key: 'worksOffline', icon: 'cloud-offline-outline' },
-  { key: 'cameraCapture', icon: 'camera-outline' },
-  { key: 'strawStock', icon: 'layers-outline' },
-] as const;
-
 /**
- * The three promises, shown before sign-in.
+ * The bare white wordmark, for dark surfaces.
  *
- * They answer the question a Mait actually has standing in a field with one bar of signal:
- * will this work out here. Stated up front rather than discovered.
+ * The splash and the sign-in hero are the two places the mark is not on a white card: it sits
+ * directly on Ink, where a card would be a box drawn around the only thing in the room. The
+ * `FIELD CAPTURE` line goes with it — both screens spend their second line on a sentence that
+ * says more than a sub-label would.
+ *
+ * Same rule as `BrandMark`: English at every language setting.
  */
-export function CapabilityChips({ style }: { style?: ViewStyle }) {
+export function BrandWordmark({ size = 'large' }: { size?: 'large' | 'small' }) {
   const { t } = useTranslation();
   return (
-    <View style={[styles.chipRow, style]}>
-      {CAPABILITIES.map(({ key, icon }) => (
-        <View key={key} style={styles.chip}>
-          <View style={styles.chipIcon}>
-            <Ionicons name={icon} size={16} color={colors.surface} />
-          </View>
-          <Text style={styles.chipLabel} numberOfLines={2}>
-            {t(`capability.${key}`)}
-          </Text>
-        </View>
-      ))}
-    </View>
+    <Text style={size === 'small' ? styles.wordmarkSmall : styles.wordmark}>{t('brand.name')}</Text>
   );
 }
 
@@ -73,35 +56,76 @@ export function CapabilityChips({ style }: { style?: ViewStyle }) {
 // Language toggle
 // --------------------------------------------------------------------------------------
 /**
- * EN / हिं switch.
+ * Language switch.
  *
- * Lives in the green hero on both screens that carry it — sign-in and Settings. The styling
- * is white-on-green and only legible there: on a white card the unselected option and the
- * track both vanish into the background, leaving the language already in use as the only
- * one that can be seen, which is the one option nobody needs to tap.
+ * Lives in the dark hero on the screens that carry it — sign-in and Settings. The styling is
+ * white-on-dark and only legible there: on a white card the unselected option and the track
+ * both vanish into the background, leaving the language already in use as the only one that
+ * can be seen, which is the one option nobody needs to tap.
+ *
+ * Two shapes of the same control. `segmented` fills the selected option, for the tight
+ * headers where the labels have to shrink to `EN` / `हिं`. `inline` spells both languages out
+ * and separates the selected one by weight and opacity alone — it is the first control on the
+ * sign-in screen, where a user who cannot read the interface has to find their own language
+ * written in their own script, not a two-letter abbreviation of it.
  */
-export function LanguageToggle() {
+export function LanguageToggle({
+  variant = 'segmented',
+}: {
+  variant?: 'segmented' | 'inline' | 'compact';
+}) {
   const { i18n } = useTranslation();
   const current = i18n.language.startsWith('hi') ? 'hi' : 'en';
+  const inline = variant === 'inline';
+
+  // One pill showing the language in use, for the headers that also carry an avatar and have
+  // no room for both options. The label names the language being switched *to*, so a screen
+  // reader announces the action rather than the state.
+  if (variant === 'compact') {
+    const next = current === 'en' ? 'hi' : 'en';
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={next === 'en' ? 'English' : 'हिन्दी'}
+        onPress={() => i18n.changeLanguage(next)}
+        style={({ pressed }) => [styles.compact, pressed && styles.compactPressed]}
+        testID="language-compact"
+      >
+        <Text style={styles.toggleLabel}>{current === 'en' ? 'EN' : 'हिं'}</Text>
+      </Pressable>
+    );
+  }
 
   return (
-    <View style={styles.toggle}>
-      {(['en', 'hi'] as const).map(code => {
+    <View style={[styles.toggle, inline && styles.toggleInline]}>
+      {(['en', 'hi'] as const).map((code, index) => {
         const active = current === code;
         return (
-          <Pressable
-            key={code}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={code === 'en' ? 'English' : 'हिन्दी'}
-            onPress={() => i18n.changeLanguage(code)}
-            style={[styles.toggleOption, active && styles.toggleOptionActive]}
-            testID={`language-${code}`}
-          >
-            <Text style={[styles.toggleLabel, active && styles.toggleLabelActive]}>
-              {code === 'en' ? 'EN' : 'हिं'}
-            </Text>
-          </Pressable>
+          <React.Fragment key={code}>
+            {inline && index > 0 && <Text style={styles.toggleSeparator}>/</Text>}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={code === 'en' ? 'English' : 'हिन्दी'}
+              onPress={() => i18n.changeLanguage(code)}
+              style={[
+                styles.toggleOption,
+                inline && styles.toggleOptionInline,
+                active && !inline && styles.toggleOptionActive,
+              ]}
+              testID={`language-${code}`}
+            >
+              <Text
+                style={[
+                  styles.toggleLabel,
+                  active && (inline ? styles.toggleLabelSelected : styles.toggleLabelActive),
+                  inline && !active && styles.toggleLabelInactive,
+                ]}
+              >
+                {inline ? (code === 'en' ? 'English' : 'हिन्दी') : code === 'en' ? 'EN' : 'हिं'}
+              </Text>
+            </Pressable>
+          </React.Fragment>
         );
       })}
     </View>
@@ -160,31 +184,17 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
   },
 
-  chipRow: {
-    flexDirection: 'row',
-    gap: spacing[2],
-  },
-  chip: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: radius.md,
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[2],
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  chipIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipLabel: {
-    ...typography.caption,
+  wordmark: {
+    ...typography.display,
     color: colors.surface,
+    letterSpacing: 2,
     textAlign: 'center',
+  },
+  wordmarkSmall: {
+    ...typography.h3,
+    fontFamily: fonts.headingBold,
+    color: colors.surface,
+    letterSpacing: 1,
   },
 
   toggle: {
@@ -192,6 +202,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.22)',
     borderRadius: radius.pill,
     padding: 3,
+  },
+  compact: {
+    minHeight: MIN_TOUCH_TARGET - 16,
+    paddingHorizontal: spacing[3],
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
+
+  toggleInline: {
+    alignItems: 'center',
+    paddingHorizontal: spacing[1],
   },
   toggleOption: {
     minWidth: 40,
@@ -201,9 +225,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  toggleOptionInline: { minWidth: 0, paddingHorizontal: spacing[2] },
   toggleOptionActive: { backgroundColor: colors.surface },
   toggleLabel: { ...typography.label, color: colors.surface },
   toggleLabelActive: { color: colors.ink },
+  /** Selected, in the inline shape: weight rather than a fill, so the pill stays one object. */
+  toggleLabelSelected: { fontFamily: fonts.headingBold },
+  toggleLabelInactive: { opacity: 0.6 },
+  toggleSeparator: { ...typography.label, color: colors.surface, opacity: 0.4 },
 
   decoration: {
     position: 'absolute',

@@ -279,10 +279,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'stretch',
-    minHeight: MIN_TOUCH_TARGET + 4,
+    minHeight: 56,
     marginTop: spacing[5],
     paddingHorizontal: spacing[5],
-    borderRadius: radius.pill,
+    // A rounded rectangle, like every other primary button in the app. Pills are for labels
+    // that carry a word — a status, a count — never for something to press.
+    borderRadius: radius.md,
     backgroundColor: colors.primary,
   },
   centredCtaPressed: { backgroundColor: colors.primaryPressed },
