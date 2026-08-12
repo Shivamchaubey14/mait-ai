@@ -17,6 +17,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.accounts.admin_serializers import MPPAssignmentSerializer
+from apps.animals.queries import animals_with_history
 from apps.core.dispatch import run_in_background
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait
@@ -315,7 +316,7 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
         if self.action == "retrieve":
             # Only on detail: the list serializer has no animals, and prefetching for a
             # 105k-row search would cost a second query per page for nothing.
-            queryset = queryset.prefetch_related("animals")
+            queryset = queryset.prefetch_related(animals_with_history())
         user = self.request.user
         mait = getattr(user, "mait_profile", None)
         if mait is not None and not user.is_admin:
@@ -359,7 +360,7 @@ class NonMemberViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, views
             return NonMember.objects.none()
         queryset = NonMember.objects.filter(created_by_mait=mait)
         if self.action == "retrieve":
-            queryset = queryset.prefetch_related("animals")
+            queryset = queryset.prefetch_related(animals_with_history())
         return queryset
 
     def get_serializer_class(self):

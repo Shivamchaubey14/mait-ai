@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, status, viewsets
@@ -14,6 +13,7 @@ from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait
 from apps.core.services import record_audit
 
 from .models import Animal, BreedConfig
+from .queries import with_ai_history
 from .serializers import (
     AnimalCreateSerializer,
     AnimalSerializer,
@@ -119,13 +119,11 @@ class AnimalViewSet(
         mait = getattr(self.request.user, "mait_profile", None)
         if mait is None:
             return Animal.objects.none()
-        return (
+        return with_ai_history(
             (
                 Animal.objects.filter(member__mpp__mait=mait)
                 | Animal.objects.filter(non_member__mpp__mait=mait)
-            )
-            .select_related("member", "non_member")
-            .annotate(ai_event_count=Count("ai_events"))
+            ).select_related("member", "non_member")
         )
 
     def get_serializer_class(self):
