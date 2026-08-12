@@ -1,8 +1,8 @@
-/**
- * Step 1 of the AI capture flow — choose the MPP (SRS §6.3 step 1, M4).
+﻿/**
+ * Step 1 of the AI capture flow â€” choose the MPP (SRS Â§6.3 step 1, M4).
  *
  * The list is whatever the server returns, which is already restricted to this Mait's
- * assigned MPPs (SRS §6.2.3). The app sends no "which Mait am I" filter, because a filter
+ * assigned MPPs (SRS Â§6.2.3). The app sends no "which Mait am I" filter, because a filter
  * the client supplies is a filter the client can omit.
  *
  * A Mait covering a single MPP is the common case, so that one is selected outright rather
@@ -10,17 +10,18 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
-import { useListMppsQuery } from '@api/endpoints';
+import { useListAiEventsQuery, useListMppsQuery } from '@api/endpoints';
 import type { MPP } from '@api/types';
+import { colors, spacing, typography } from '@theme/tokens';
 
-import { FieldCard, FlowNotice, FlowScreen, FlowSpacer, OptionCard } from './components';
+import { FlowNotice, FlowScreen, FlowSpacer, OptionCard, SearchField } from './components';
 
 interface Props {
   onSelect: (mpp: MPP) => void;
-  /** Leaves the capture flow. The tab bar is hidden here, so this is the only way out. */
   onBack?: () => void;
 }
 
@@ -29,13 +30,20 @@ export default function SelectMppScreen({ onSelect, onBack }: Props): React.JSX.
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
-  const { data, isLoading, isError, refetch } = useListMppsQuery(
+  const { data, isLoading, isError, isFetching, refetch } = useListMppsQuery(
     search.length >= 2 ? { search } : undefined,
   );
 
-  // Memoised because it is an effect dependency below. A fresh `[]` on every render would
+  // Sorted by code, which is the order the same list appears in on every printed roster and
+  // in the portal. A list whose order changes between the paper and the phone is a list a
+  // Mait has to read twice.
+  //
+  // Memoised because it is an effect dependency below. A fresh array on every render would
   // re-run the auto-select effect continuously.
-  const results = useMemo(() => data?.results ?? [], [data]);
+  const results = useMemo(
+    () => [...(data?.results ?? [])].sort((a, b) => a.mpp_code.localeCompare(b.mpp_code)),
+    [data],
+  );
 
   // Skip the picker when there is nothing to pick between.
   useEffect(() => {
@@ -46,12 +54,45 @@ export default function SelectMppScreen({ onSelect, onBack }: Props): React.JSX.
 
   const chosen = results.find(mpp => mpp.mpp_code === selected) ?? null;
 
+  // The MPP the last event was recorded at, marked on its row. Not "nearest" — the MPP
+  // master carries no coordinates, so nothing here can honestly claim distance. Where a Mait
+  // worked last is the next best guess at where they are standing, and it is true.
+  const events = useListAiEventsQuery();
+  const lastUsed = events.data?.results?.[0]?.mpp_code ?? null;
+
   return (
     <FlowScreen
-      step={0}
+      step={1}
       title={t('aiFlow.whichMpp')}
       subtitle={t('aiFlow.whichMppSubtitle')}
       onBack={onBack}
+      refresh={{ refreshing: isFetching && !isLoading, onRefresh: refetch }}
+      // Pinned under the hero rather than scrolling with the list. The control that filters
+      // the list has to stay reachable while the list moves.
+      stickyTop={
+        (data?.count ?? 0) > 1 ? (
+          <SearchField
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t('aiFlow.searchMppHint')}
+            autoCorrect={false}
+            testID="mpp-search"
+          />
+        ) : undefined
+      }
+      // The chosen row can easily be scrolled off screen by the time a Mait reaches the
+      // button, so the button says what it is about to act on. A tick they cannot see is not
+      // a confirmation.
+      footerNote={
+        chosen ? (
+          <View style={styles.chosen} testID="mpp-chosen">
+            <Ionicons name="checkmark-circle" size={18} color={colors.primaryDark} />
+            <Text style={styles.chosenLabel} numberOfLines={1}>
+              {t('aiFlow.mppChosen', { name: chosen.mpp_name })}
+            </Text>
+          </View>
+        ) : undefined
+      }
       cta={{
         label: t('common.continue'),
         onPress: () => chosen && onSelect(chosen),
@@ -59,19 +100,6 @@ export default function SelectMppScreen({ onSelect, onBack }: Props): React.JSX.
         testID: 'mpp-continue',
       }}
     >
-      {/* Searching only matters for a Mait covering several MPPs; below two characters the
-          query is not worth a round trip on a rural connection. */}
-      {(data?.count ?? 0) > 5 && (
-        <FieldCard
-          label={t('common.search')}
-          value={search}
-          onChangeText={setSearch}
-          placeholder={t('aiFlow.searchMppHint')}
-          autoCorrect={false}
-          testID="mpp-search"
-        />
-      )}
-
       {isError && (
         <View>
           <FlowNotice tone="error" title={t('errors.generic')} testID="mpp-error" />
@@ -89,8 +117,13 @@ export default function SelectMppScreen({ onSelect, onBack }: Props): React.JSX.
         <OptionCard
           key={mpp.mpp_code}
           title={mpp.mpp_name}
-          subtitle={mpp.mpp_code}
+          // The code identifies it, the member count sizes it — together they tell a Mait
+          // covering several which of two similarly named villages this is.
+          subtitle={`${mpp.mpp_code} · ${t('aiFlow.mppMembers', { count: mpp.member_count })}`}
+          icon="storefront-outline"
+          pill={mpp.mpp_code === lastUsed ? t('aiFlow.lastUsed') : undefined}
           selected={selected === mpp.mpp_code}
+          radio
           onPress={() => setSelected(mpp.mpp_code)}
           testID={`mpp-${mpp.mpp_code}`}
         />
@@ -100,3 +133,13 @@ export default function SelectMppScreen({ onSelect, onBack }: Props): React.JSX.
     </FlowScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  chosen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingBottom: spacing[3],
+  },
+  chosenLabel: { ...typography.label, color: colors.primaryDark, flex: 1 },
+});
