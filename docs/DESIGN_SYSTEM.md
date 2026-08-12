@@ -156,13 +156,16 @@ never colour alone.
 **The 6-step AI flow** — a persistent progress indicator across the top showing all six steps
 with the current one highlighted. Camera-first capture, no gallery picker, per SRS §6.3.
 
-## Capture-flow screen pattern (M4–M14)
+## Capture-flow screen pattern (C1–C12)
 
 Every screen in the six-step flow is built from the same three bands, so a Mait learns the
 shape once and it never moves. Screens are specified in
 [`SCREEN_INVENTORY.md`](SCREEN_INVENTORY.md); this is how they are put together.
 
-**1 · Green hero.** Full-bleed `--color-primary`, rounded bottom corners. In order:
+**1 · Ink hero.** A card, not a band: `--color-ink`, rounded on all four corners, inset from
+the screen edges so the page's grey shows above and beside it. The six steps then read as one
+card being dealt and replaced, and the status bar sits on the page's own colour rather than on
+Ink. In order:
 
 - a circular translucent back button, and beside it the step label — `Step 3 of 6`, or a
   plain name where the screen is not a numbered step (`Authorisation`, `Proof of payment`,
@@ -174,12 +177,26 @@ shape once and it never moves. Screens are specified in
 - one line of subtitle explaining the consequence, not the mechanics — "Skipped
   automatically when you cover only one", "A second OTP records that you received it".
 
-**2 · Body**, on white, `--space-5` gutters. Built from four repeating pieces:
+**2 · Body**, on the page grey, `--space-5` gutters. Built from six repeating pieces:
 
-- **Selectable row** — a card with a leading rounded swatch, title, one subtitle line, and
-  an optional right-hand pill (`Nearest`). Chosen: green border, pale green fill. Blocked:
-  greyed with the reason in place of the subtitle and a `Blocked` pill — shown, never
-  hidden, so the Mait knows the record exists and why it cannot be used.
+- **Selectable row** — a shadowed white card, title, one subtitle line, and an optional
+  right-hand pill (`Nearest`, `Low`). Chosen: green border, pale green fill, and a filled
+  green tick at the right. Blocked: greyed with the reason in place of the subtitle and a
+  `Blocked` pill — shown, never hidden, so the Mait knows the record exists and why it cannot
+  be used. The leading swatch is optional: it carries a glyph, or a short handle for rows that
+  are otherwise identical (`C1`, `C2` on two untagged cows), and it is dropped entirely on a
+  list whose rows are pure text, where a column of blank chips would be colour that means
+  nothing.
+- **Segmented control** — a rounded-rectangle track, the chosen half filled green in the same
+  shape. **Never a pill:** every other surface in the flow is a rounded rectangle — the cards,
+  the button, the hero — and a capsule would be the one shape on the screen that belongs to
+  nothing else. The track's radius is the segment's plus its padding, so the filled half sits
+  concentric inside it. For a question whose answer narrows everything under it (cow or
+  buffalo). It always carries a value, so it reads as a thing already answered rather than a
+  thing to decide.
+- **Add card** — the same card, dashed and unfilled, ending a list: a place where a record
+  could be, rather than another record. Its plus is neutral, never green — the green on a
+  picking screen belongs to the row already chosen and to the button that acts on it.
 - **Field card** — label above the value, the same card shape as a row. Never a bare input
   in the flow.
 - **Info tile** — grey card, small label over a large value (`₹ 300`), pale pill on the
