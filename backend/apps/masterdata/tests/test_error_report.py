@@ -37,9 +37,7 @@ def uploader(db):
 @pytest.fixture
 def admin_client(uploader):
     client = APIClient()
-    client.credentials(
-        HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(uploader).access_token}"
-    )
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(uploader).access_token}")
     return client
 
 

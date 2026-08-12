@@ -12,7 +12,7 @@ from __future__ import annotations
 from django.db import models
 
 from apps.accounts.models import mobile_validator
-from apps.core.fields import EncryptedCharField, mask
+from apps.core.fields import EncryptedCharField, mask, pii_lookup_hash
 from apps.core.models import TimeStampedModel
 
 
@@ -158,6 +158,10 @@ class Member(TimeStampedModel):
         help_text="Payment authorisation OTPs are sent here (SRS §6.5).",
     )
     aadhar_no = EncryptedCharField(max_length=20, blank=True)
+    # Keyed fingerprint of the Aadhaar, kept only so a non-member registration can be checked
+    # against the membership roll (SRS §6.3 step 2). Ciphertext cannot be searched; this can,
+    # and it reveals nothing without the key.
+    aadhar_hash = models.CharField(max_length=64, blank=True, db_index=True)
     cattle_holding = models.PositiveSmallIntegerField(null=True, blank=True)
 
     bank_ac_no = EncryptedCharField(max_length=30, blank=True)
@@ -183,6 +187,12 @@ class Member(TimeStampedModel):
     def __str__(self) -> str:
         return f"{self.member_name} [{self.member_code}]"
 
+    def save(self, *args, **kwargs):
+        # Kept in step with the number here rather than at the call sites, so the SAP importer
+        # — which is where almost every member comes from — cannot forget it.
+        self.aadhar_hash = pii_lookup_hash(self.aadhar_no)
+        return super().save(*args, **kwargs)
+
     @property
     def masked_aadhar(self) -> str:
         return mask(self.aadhar_no)
@@ -197,8 +207,22 @@ class NonMember(TimeStampedModel):
     """
 
     name = models.CharField(max_length=150, db_index=True)
+    # Two women in one village share a first name more often than not, and the roster a Mait
+    # reads on the second visit has to tell them apart. Members carry the same field from SAP.
+    father_husband_name = models.CharField(max_length=150, blank=True)
     mobile_no = models.CharField(max_length=15, validators=[mobile_validator], db_index=True)
     address = models.CharField(max_length=255, blank=True)
+
+    # PII — encrypted at rest, masked in API responses (SRS §16), same treatment members and
+    # Maits get. The card itself is never photographed or stored; SRS §7 asks for data
+    # minimisation, and a masked number satisfies it.
+    #
+    # Required, unlike everywhere else this field appears. It is what proves this farmer is
+    # not already on the membership roll — a member recorded as a non-member is one a Mait can
+    # charge in cash for a service the dairy has already paid for.
+    aadhar_no = EncryptedCharField(max_length=20, blank=True)
+    aadhar_hash = models.CharField(max_length=64, blank=True, db_index=True)
+
     mpp = models.ForeignKey(
         MPP,
         on_delete=models.PROTECT,
@@ -228,6 +252,14 @@ class NonMember(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.mobile_no})"
+
+    def save(self, *args, **kwargs):
+        self.aadhar_hash = pii_lookup_hash(self.aadhar_no)
+        return super().save(*args, **kwargs)
+
+    @property
+    def masked_aadhar(self) -> str:
+        return mask(self.aadhar_no)
 
 
 # How many rejected rows one upload keeps, so a file where every row fails cannot grow the JSON

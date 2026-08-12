@@ -8,12 +8,14 @@ or an Aadhaar number leaving the API in the clear, are the failures with real co
 from __future__ import annotations
 
 import io
+import json
 
 import pytest
+from django.db import connection
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
-from apps.masterdata.models import DataUploadLog, Member
+from apps.masterdata.models import DataUploadLog, Member, NonMember
 
 pytestmark = pytest.mark.django_db
 
@@ -223,7 +225,13 @@ class TestNonMemberRegistration:
     def test_mait_registers_a_non_member(self, api_client, mait_user, mpp):
         response = auth(api_client, mait_user).post(
             f"{BASE}/non-members/",
-            {"name": "Ramesh", "mobile_no": "9876543210", "mpp": mpp.id, "address": "Village"},
+            {
+                "name": "Ramesh",
+                "mobile_no": "9876543210",
+                "mpp": mpp.id,
+                "address": "Village",
+                "aadhar_no": "111122223333",
+            },
             format="json",
         )
         assert response.status_code == 201, response.json()
@@ -233,7 +241,7 @@ class TestNonMemberRegistration:
         """The number is the only OTP channel, so a bad one must not be stored."""
         response = auth(api_client, mait_user).post(
             f"{BASE}/non-members/",
-            {"name": "Ramesh", "mobile_no": "12345", "mpp": mpp.id},
+            {"name": "Ramesh", "mobile_no": "12345", "mpp": mpp.id, "aadhar_no": "111122223333"},
             format="json",
         )
         assert response.status_code == 400
@@ -243,7 +251,120 @@ class TestNonMemberRegistration:
         """Registration happens in the field, by the Mait who met the farmer."""
         response = auth(api_client, admin_user).post(
             f"{BASE}/non-members/",
-            {"name": "Ramesh", "mobile_no": "9876543210", "mpp": mpp.id},
+            {
+                "name": "Ramesh",
+                "mobile_no": "9876543210",
+                "mpp": mpp.id,
+                "aadhar_no": "111122223333",
+            },
             format="json",
         )
         assert response.status_code == 403
+
+    def test_aadhaar_is_stored_encrypted_and_never_returned(self, api_client, mait_user, mpp):
+        """
+        SRS §16 — the number goes up once and only ever comes back masked.
+
+        A handset in a field is the last place twelve unmasked digits belong, so the write
+        field and the read field are deliberately different fields.
+        """
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            {
+                "name": "Radha Singh",
+                "father_husband_name": "Mohan Singh",
+                "mobile_no": "9876543210",
+                "mpp": mpp.id,
+                "aadhar_no": "123456789012",
+            },
+            format="json",
+        )
+        assert response.status_code == 201, response.json()
+
+        body = response.json()
+        assert "123456789012" not in json.dumps(body)
+        assert body["masked_aadhar"].endswith("9012")
+        assert body["father_husband_name"] == "Mohan Singh"
+
+        stored = NonMember.objects.get(pk=body["id"])
+        assert stored.aadhar_no == "123456789012"
+
+        # Encrypted at rest, checked against the column itself rather than through the ORM —
+        # the field decrypts on read, so going through the model would pass either way.
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT aadhar_no FROM non_member WHERE id = %s", [stored.pk])
+            row = cursor.fetchone()
+        assert row is not None
+        assert "123456789012" not in str(row[0])
+
+    def test_a_half_typed_aadhaar_is_refused(self, api_client, mait_user, mpp):
+        """Six digits identify nobody, and cannot be corrected without asking her again."""
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            {"name": "Radha", "mobile_no": "9876543210", "mpp": mpp.id, "aadhar_no": "123456"},
+            format="json",
+        )
+        assert response.status_code == 400
+        assert "aadhar_no" in response.json()["errors"]
+
+    def test_aadhaar_is_required(self, api_client, mait_user, mpp):
+        """It is the only thing proving this farmer is not already on the roll."""
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            {"name": "Radha", "mobile_no": "9876543211", "mpp": mpp.id},
+            format="json",
+        )
+        assert response.status_code == 400
+        assert "aadhar_no" in response.json()["errors"]
+
+    def test_a_member_cannot_be_registered_as_a_non_member(self, api_client, mait_user, mpp):
+        """
+        The fraud this whole check exists for.
+
+        A member recorded as a non-member is a farmer the Mait can take cash from for a
+        service the dairy has already paid for out of her milk cheque. She has no reason to
+        query it — she was asked for money and she paid.
+        """
+        member = Member.objects.create(
+            mpp=mpp,
+            member_code="M-9001",
+            member_name="Radha Singh",
+            mobile_no="9876500001",
+            aadhar_no="123456789012",
+        )
+
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            {
+                "name": "Radha S",
+                "mobile_no": "9876543210",
+                "mpp": mpp.id,
+                "aadhar_no": "1234 5678 9012",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        message = " ".join(response.json()["errors"]["aadhar_no"])
+        # Named, because the Mait's next move is to find her in the roster — "this Aadhaar is
+        # registered" would leave them guessing at which farmer.
+        assert member.member_name in message
+        assert member.member_code in message
+        assert not NonMember.objects.filter(mobile_no="9876543210").exists()
+
+    def test_the_check_reads_the_fingerprint_not_the_number(self, api_client, mait_user, mpp):
+        """
+        Ciphertext differs per row, so an equality match on the encrypted column finds nothing
+        and the check silently passes everything. The hash column is what makes it work, and
+        the importer fills it through `save()` — this is the assertion that it did.
+        """
+        member = Member.objects.create(
+            mpp=mpp,
+            member_code="M-9002",
+            member_name="Sita Devi",
+            mobile_no="9876500002",
+            aadhar_no="999988887777",
+        )
+        assert member.aadhar_hash != ""
+        assert "999988887777" not in member.aadhar_hash
+        assert Member.objects.filter(aadhar_no="999988887777").first() is None

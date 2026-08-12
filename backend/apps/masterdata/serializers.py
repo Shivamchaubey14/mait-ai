@@ -5,6 +5,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.animals.serializers import AnimalSerializer
+from apps.core.fields import pii_lookup_hash
 
 from .models import MAX_ERRORS_STORED, MPP, DataUploadLog, Mait, Member, NonMember
 
@@ -282,19 +283,58 @@ class MemberDetailSerializer(serializers.ModelSerializer):
 class NonMemberSerializer(serializers.ModelSerializer):
     """Quick-capture registration by a Mait in the field (SRS §6.3 step 2)."""
 
+    # Written once, read back masked (SRS §16), the same treatment members and Maits get. The
+    # write field is separate from the read one so the number can never travel back to a
+    # handset that has already stored it — a phone in a field is the last place it belongs.
+    aadhar_no = serializers.CharField(write_only=True, max_length=20)
+    masked_aadhar = serializers.CharField(read_only=True)
+
     class Meta:
         model = NonMember
         fields = [
             "id",
             "name",
+            "father_husband_name",
             "mobile_no",
             "address",
+            "aadhar_no",
+            "masked_aadhar",
             "mpp",
             "created_by_mait",
             "consent_captured_at",
             "created_at",
         ]
         read_only_fields = ["id", "created_by_mait", "created_at"]
+
+    def validate_aadhar_no(self, value: str) -> str:
+        """
+        Twelve digits, and they must not already be on the membership roll.
+
+        This is the one check that stops the fraud the non-member path invites: a member
+        recorded as a non-member is a farmer the Mait can take cash from for a service the
+        dairy has already paid for out of her milk payment. She has no reason to query it —
+        she was asked for money and she paid it.
+
+        Matched on the keyed fingerprint, never on the number: the encrypted column cannot be
+        searched, and adding a searchable copy of an Aadhaar to solve that would be a worse
+        problem than the one being solved.
+        """
+        digits = "".join(c for c in value if c.isdigit())
+        if len(digits) != 12:
+            raise serializers.ValidationError("Aadhaar is 12 digits.")
+
+        member = (
+            Member.objects.filter(aadhar_hash=pii_lookup_hash(digits)).select_related("mpp").first()
+        )
+        if member is not None:
+            # Named, because the Mait's next action is to go back and find her in the roster,
+            # and "this Aadhaar is registered" would leave them guessing at which farmer.
+            raise serializers.ValidationError(
+                f"{member.member_name} is already a member at "
+                f"{member.mpp.mpp_name} ({member.member_code}). "
+                "Record this as a member — she pays nothing today."
+            )
+        return digits
 
     def validate_mobile_no(self, value: str) -> str:
         """
