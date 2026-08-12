@@ -22,6 +22,7 @@ import {
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
@@ -31,11 +32,11 @@ import {
   useSendLoginOtpMutation,
   useVerifyLoginOtpMutation,
 } from '@api/endpoints';
-import { BrandMark, CapabilityChips, HeroDecoration, LanguageToggle } from '@/components/brand';
+import { BrandWordmark, LanguageToggle } from '@/components/brand';
 import { Toast } from '@/components/toast';
-import { OTP_EXPIRY_SECONDS, OTP_MAX_ATTEMPTS } from '@/config/env';
+import { OTP_EXPIRY_SECONDS, OTP_LOCK_MINUTES, OTP_MAX_ATTEMPTS } from '@/config/env';
 import { useAppDispatch } from '@/store';
-import { colors, ink, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
 import { loggedIn } from './authSlice';
 import OtpVerifyScreen, { OtpFailure } from './OtpVerifyScreen';
@@ -60,20 +61,16 @@ function Hero(): React.JSX.Element {
     // measurement is unreliable — which is how this header ended up drawn under the clock,
     // the signal bars and the battery.
     <View style={[styles.hero, { paddingTop: insets.top + spacing[3] }]}>
-      <HeroDecoration size={240} top={-100} right={-80} />
       <View style={styles.heroTop}>
-        <BrandMark size="small" />
-        <LanguageToggle />
+        <BrandWordmark size="small" />
+        <LanguageToggle variant="inline" />
       </View>
 
-      <Text style={styles.heroTitle}>
-        {t('auth.welcomeBack')}
-        {'\n'}
-        {t('auth.welcomeRole')}
-      </Text>
+      {/* The screen asks one question, so the question is the heading. "Sign in" as a title
+          describes the screen to someone who already knows what it is for; this tells a
+          first-time user what to do with the only field on it. */}
+      <Text style={styles.heroTitle}>{t('auth.mobileQuestion')}</Text>
       <Text style={styles.heroSubtitle}>{t('auth.heroSubtitle')}</Text>
-
-      <CapabilityChips style={styles.heroChips} />
     </View>
   );
 }
@@ -82,35 +79,25 @@ function Hero(): React.JSX.Element {
 // Notice rows
 // --------------------------------------------------------------------------------------
 /**
- * A card carrying one thing the Mait needs to know before signing in.
+ * The one thing a Mait needs to know before signing in: there is no password.
  *
- * Each is a card rather than a run of text because they answer three separate questions,
- * and a paragraph of small print gets skipped by exactly the users who most need it.
+ * A card in the Cream Yolk wash rather than a line of small print, because it exists for the
+ * user who is looking for a password field, and that user is scanning the screen rather than
+ * reading it. Yolk is the accent for a notice everywhere in the product, and the text on it
+ * is Ink — never the yellow itself, which fails contrast.
  */
 function Notice({
-  tone,
   icon,
   title,
   body,
-  emphasis = false,
 }: {
-  tone: 'warning' | 'success' | 'info';
   icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
   body: string;
-  emphasis?: boolean;
 }): React.JSX.Element {
-  const { wash, tint } = {
-    warning: { wash: colors.secondaryWash, tint: colors.secondaryPressed },
-    success: { wash: colors.successWash, tint: colors.primaryDark },
-    info: { wash: colors.infoWash, tint: colors.info },
-  }[tone];
-
   return (
-    <View style={[styles.notice, emphasis && { borderColor: colors.secondary }]}>
-      <View style={[styles.noticeIcon, { backgroundColor: wash }]}>
-        <Ionicons name={icon} size={18} color={tint} />
-      </View>
+    <View style={styles.notice}>
+      <Ionicons name={icon} size={20} color={colors.secondaryPressed} style={styles.noticeIcon} />
       <View style={styles.noticeBody}>
         <Text style={styles.noticeTitle}>{title}</Text>
         <Text style={styles.noticeText}>{body}</Text>
@@ -129,6 +116,7 @@ export default function LoginScreen(): React.JSX.Element {
 
   const [step, setStep] = useState<Step>('mobile');
   const [mobileNo, setMobileNo] = useState('');
+  const [focused, setFocused] = useState(false);
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -163,12 +151,10 @@ export default function LoginScreen(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [lockedFor]);
 
-  useEffect(() => {
-    if (failure === 'locked' && lockedFor === 0) {
-      setFailure(null);
-      setAttemptsUsed(0);
-    }
-  }, [failure, lockedFor]);
+  // The lock is deliberately *not* cleared when the countdown runs out. Dropping back to
+  // "Sign in" would offer a code that died fifteen minutes ago; the screen keeps the locked
+  // state, and its button turns into "Send a new code" instead. Pressing that clears
+  // everything, because a fresh code is a fresh start.
 
   const isValidMobile = /^[6-9]\d{9}$/.test(mobileNo);
 
@@ -227,7 +213,7 @@ export default function LoginScreen(): React.JSX.Element {
           break;
         case ErrorCode.OTP_ATTEMPTS_EXCEEDED:
           setFailure('locked');
-          setLockedFor(15 * 60);
+          setLockedFor(OTP_LOCK_MINUTES * 60);
           setSecondsLeft(0);
           break;
         case ErrorCode.OTP_INVALID: {
@@ -237,7 +223,7 @@ export default function LoginScreen(): React.JSX.Element {
           // the screen does not offer a retry that is already spent.
           if (used >= OTP_MAX_ATTEMPTS) {
             setFailure('locked');
-            setLockedFor(15 * 60);
+            setLockedFor(OTP_LOCK_MINUTES * 60);
           } else {
             setFailure('wrong');
           }
@@ -290,6 +276,11 @@ export default function LoginScreen(): React.JSX.Element {
 
   return (
     <View style={styles.root}>
+      {/* The hero runs to the top edge, so the bar sits on Ink here rather than on the green
+          the rest of the app opens with. Unmounts with this step and hands back to the
+          app-wide bar on the OTP screen. */}
+      <StatusBar style="light" backgroundColor={colors.ink} />
+
       {/* Above the hero rather than inside the form: a failed send is about the request, not
           about the number in the box below it. */}
       <Toast message={error} onDismiss={() => setError(null)} testID="login-error" />
@@ -306,7 +297,7 @@ export default function LoginScreen(): React.JSX.Element {
           <Hero />
 
           {/* Safe area on the sides and bottom: on a notched handset in landscape the
-              sheet would otherwise run under the cutout, and the legal text under the home
+              sheet would otherwise run under the cutout, and the CTA under the home
               indicator. The hero handles the top edge itself. */}
           <View
             style={[
@@ -318,17 +309,19 @@ export default function LoginScreen(): React.JSX.Element {
               },
             ]}
           >
-            <Text style={styles.title}>{t('auth.signIn')}</Text>
-            <Text style={styles.subtitle}>{t('auth.enterMobileToContinue')}</Text>
-
             <Text style={styles.label}>{t('auth.mobileNumber')}</Text>
-            <View style={styles.phoneField}>
-              <Text style={styles.prefix}>+91</Text>
-              <View style={styles.prefixDivider} />
+            <View style={[styles.phoneField, focused && styles.phoneFieldFocused]}>
+              {/* The country code is a fixed block, not something to be typed past. Filling
+                  it separates it from the ten digits that are the user's to change. */}
+              <View style={styles.prefixBlock}>
+                <Text style={styles.prefix}>+91</Text>
+              </View>
               <TextInput
                 style={styles.phoneInput}
                 value={formatMobile(mobileNo)}
                 onChangeText={text => setMobileNo(text.replace(/\D/g, '').slice(0, 10))}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
                 placeholder={t('auth.mobilePlaceholder')}
                 placeholderTextColor={colors.textDisabled}
                 keyboardType="number-pad"
@@ -339,7 +332,17 @@ export default function LoginScreen(): React.JSX.Element {
                 testID="login-mobile"
               />
             </View>
-            <Text style={styles.helper}>{t('auth.otpHelper')}</Text>
+
+            <Notice
+              icon="information-circle-outline"
+              title={t('auth.noPasswordTitle')}
+              body={t('auth.noPasswordBody')}
+            />
+
+            {/* The CTA sits at the bottom of the screen rather than under the field it
+                submits. On a one-field form the two are the same gesture, and the thumb
+                reaches the bottom edge without moving the hand. */}
+            <View style={styles.spacer} />
 
             <Pressable
               accessibilityRole="button"
@@ -362,37 +365,6 @@ export default function LoginScreen(): React.JSX.Element {
                 color={!canSubmit || busy ? colors.textDisabled : colors.surface}
               />
             </Pressable>
-
-            {/* The first carries a border because it changes how signing in works at all;
-                the other two are answers to questions, not surprises. */}
-            <Notice
-              tone="warning"
-              icon="shield-checkmark-outline"
-              emphasis
-              title={t('auth.noPasswordTitle')}
-              body={t('auth.noPasswordBody')}
-            />
-            <Notice
-              tone="success"
-              icon="checkmark-circle-outline"
-              title={t('auth.registeredOnlyTitle')}
-              body={t('auth.registeredOnlyBody')}
-            />
-            <Notice
-              tone="info"
-              icon="help-circle-outline"
-              title={t('auth.numberNotWorkingTitle')}
-              body={t('auth.numberNotWorkingBody')}
-            />
-
-            <View style={styles.legal}>
-              <Text style={styles.legalText}>{t('auth.legalPrefix')}</Text>
-              <Text style={styles.legalText}>
-                <Text style={styles.legalLink}>{t('auth.termsOfService')}</Text>
-                {` ${t('auth.and')} `}
-                <Text style={styles.legalLink}>{t('auth.privacyPolicy')}</Text>
-              </Text>
-            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -401,12 +373,12 @@ export default function LoginScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surface },
+  root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   scroll: { flexGrow: 1 },
 
   hero: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.ink,
     borderBottomLeftRadius: radius.xl,
     borderBottomRightRadius: radius.xl,
     paddingHorizontal: spacing[5],
@@ -419,54 +391,73 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing[5],
   },
-  heroTitle: { ...typography.h1, color: colors.surface },
+  heroTitle: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
   heroSubtitle: {
     ...typography.body,
     color: colors.surface,
-    opacity: 0.92,
+    // Muted enough to sit under the question rather than beside it, bright enough to survive
+    // a dimmed screen in daylight.
+    opacity: 0.72,
     marginTop: spacing[2],
   },
-  heroChips: { marginTop: spacing[5] },
 
-  sheet: { paddingTop: spacing[5] },
-  title: { ...typography.h1, color: colors.ink },
-  subtitle: { ...typography.body, color: colors.textMuted, marginTop: spacing[1] },
+  sheet: { flex: 1, paddingTop: spacing[5] },
   label: {
     ...typography.label,
-    color: colors.text,
-    marginTop: spacing[5],
+    color: colors.textMuted,
     marginBottom: spacing[2],
   },
 
   phoneField: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     minHeight: MIN_TOUCH_TARGET + 8,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
-    paddingHorizontal: spacing[4],
     backgroundColor: colors.surface,
+    // The prefix block is filled to the corner, so the container has to clip it back to the
+    // radius or it squares off the left-hand side.
+    overflow: 'hidden',
+  },
+  phoneFieldFocused: { borderColor: colors.primary },
+  prefixBlock: {
+    justifyContent: 'center',
+    paddingHorizontal: spacing[4],
+    backgroundColor: colors.primaryWash,
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
   },
   // The prefix and the digits use the heading face so the number block reads as data
   // rather than prose.
   prefix: { ...typography.h3, fontFamily: typography.h2.fontFamily, color: colors.ink },
-  prefixDivider: {
-    width: 1,
-    height: 22,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing[3],
-  },
   phoneInput: {
     flex: 1,
     ...typography.h3,
     fontFamily: typography.h2.fontFamily,
     color: colors.ink,
     letterSpacing: 0.5,
+    paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
   },
 
-  helper: { ...typography.caption, color: colors.textMuted, marginTop: spacing[2] },
+  notice: {
+    flexDirection: 'row',
+    gap: spacing[3],
+    backgroundColor: colors.secondaryWash,
+    borderWidth: 1,
+    borderColor: colors.secondary,
+    borderRadius: radius.md,
+    padding: spacing[4],
+    marginTop: spacing[4],
+  },
+  noticeIcon: { marginTop: 1 },
+  noticeBody: { flex: 1 },
+  noticeTitle: { ...typography.bodyStrong, color: colors.ink },
+  noticeText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+
+  /** Holds the CTA at the bottom when the content is short, and collapses when it is not. */
+  spacer: { flex: 1, minHeight: spacing[6] },
 
   cta: {
     flexDirection: 'row',
@@ -475,37 +466,10 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     minHeight: MIN_TOUCH_TARGET + 6,
     borderRadius: radius.md,
-    marginTop: spacing[5],
   },
   ctaEnabled: { backgroundColor: colors.primary },
   ctaDisabled: { backgroundColor: colors.disabledFill },
   ctaPressed: { backgroundColor: colors.primaryPressed },
   ctaLabel: { ...typography.bodyStrong, color: colors.surface },
   ctaLabelDisabled: { color: colors.textDisabled },
-
-  notice: {
-    flexDirection: 'row',
-    gap: spacing[3],
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing[3],
-    marginTop: spacing[3],
-  },
-  noticeIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noticeBody: { flex: 1 },
-  noticeTitle: { ...typography.bodyStrong, color: colors.ink },
-  noticeText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-
-  legal: { marginTop: spacing[6], alignItems: 'center', gap: 2 },
-  legalText: { ...typography.caption, color: ink[300], textAlign: 'center' },
-  legalLink: { color: colors.primaryDark },
 });

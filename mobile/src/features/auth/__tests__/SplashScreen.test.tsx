@@ -19,21 +19,11 @@ describe('SplashScreen', () => {
   });
 
   it('shows the brand mark and its tagline', () => {
-    renderWithStore(<SplashScreen />);
-    expect(screen.getByText('MAIT AI')).toBeTruthy();
-    expect(screen.getByText('FIELD CAPTURE')).toBeTruthy();
-  });
-
-  it('states the three capabilities before sign-in', () => {
-    // They answer the question a Mait actually has standing in a field with one bar of
-    // signal: will this work out here.
-    //
     // Resolved through i18n rather than hardcoded, so rewording the copy is a copy change
     // and not a broken test.
     renderWithStore(<SplashScreen />);
-    expect(screen.getByText(i18n.t('capability.worksOffline'))).toBeTruthy();
-    expect(screen.getByText(i18n.t('capability.cameraCapture'))).toBeTruthy();
-    expect(screen.getByText(i18n.t('capability.strawStock'))).toBeTruthy();
+    expect(screen.getByText('MAIT AI')).toBeTruthy();
+    expect(screen.getByText(i18n.t('splash.tagline'))).toBeTruthy();
   });
 
   it('keeps the product name in English in Hindi', async () => {
@@ -41,14 +31,20 @@ describe('SplashScreen', () => {
     renderWithStore(<SplashScreen />);
 
     expect(screen.getByText('MAIT AI')).toBeTruthy();
-    expect(screen.getByText('FIELD CAPTURE')).toBeTruthy();
     // The surrounding copy does translate.
-    expect(screen.getByText(i18n.t('capability.worksOffline'))).toBeTruthy();
-    expect(i18n.t('capability.worksOffline')).not.toBe('Works offline');
+    expect(screen.getByText(i18n.t('splash.tagline'))).toBeTruthy();
+    expect(i18n.t('splash.tagline')).not.toBe('Record an insemination in six steps');
   });
 
   it('shows a version line', () => {
     renderWithStore(<SplashScreen />);
-    expect(screen.getByText(/Shwetdhara/)).toBeTruthy();
+    expect(screen.getByText(/^v\d+\.\d+\.\d+$/)).toBeTruthy();
+  });
+
+  it('reports its progress to the accessibility layer', () => {
+    // The bar is the only moving thing on the screen, so it is the only thing a screen
+    // reader can say about how much longer this hold lasts.
+    renderWithStore(<SplashScreen progress={0.5} />);
+    expect(screen.getByRole('progressbar').props.accessibilityValue).toMatchObject({ now: 50 });
   });
 });

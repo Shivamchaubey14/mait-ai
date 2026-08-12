@@ -68,11 +68,11 @@ describe('LoginScreen', () => {
     fireEvent.changeText(screen.getByTestId('login-otp'), '000000');
     fireEvent.press(screen.getByTestId('login-verify'));
 
-    // Surfaced as the design's notice card rather than a generic banner, and it says how
-    // many attempts remain — the number is what decides whether to try again or resend.
+    // Surfaced inline under the cells rather than as a generic banner, and it says how many
+    // attempts remain — the number is what decides whether to try again or resend.
     await waitFor(() => expect(screen.getByTestId('otp-notice-wrong')).toBeTruthy());
     expect(screen.getByText(/That code is not right/i)).toBeTruthy();
-    expect(screen.getByText(/attempts left/i)).toBeTruthy();
+    expect(screen.getByText(/tries left/i)).toBeTruthy();
   });
 
   it('distinguishes an expired code from a wrong one', async () => {
@@ -196,14 +196,12 @@ describe('LoginScreen', () => {
     expect(screen.getByText(i18n.t('auth.noPasswordTitle'))).toBeTruthy();
   });
 
-  it('explains what to do when a number does not work', () => {
-    // 93% of Maits arrive from SAP with no mobile number at all, so this is the most
-    // likely first experience, not an edge case.
+  it('asks for the number as a question rather than titling the screen', () => {
+    // The screen has one field. A user arriving for the first time needs to be told what to
+    // put in it, not what the screen is called.
     renderWithStore(<LoginScreen />);
-    expect(screen.getByText(i18n.t('auth.numberNotWorkingTitle'))).toBeTruthy();
-    expect(screen.getByText(i18n.t('auth.numberNotWorkingBody'))).toBeTruthy();
-    // The IT department is who to call — there is no MPP Operator role.
-    expect(i18n.t('auth.numberNotWorkingBody')).toMatch(/IT department/i);
+    expect(screen.getByText(i18n.t('auth.mobileQuestion'))).toBeTruthy();
+    expect(screen.getByText(i18n.t('auth.heroSubtitle'))).toBeTruthy();
   });
 
   it('offers a language toggle on the screen itself', async () => {
@@ -215,8 +213,16 @@ describe('LoginScreen', () => {
     fireEvent.press(screen.getByTestId('language-hi'));
     // The hero subtitle is unique on the screen; the heading text also appears as an
     // accessibility label and would match twice.
-    await waitFor(() => expect(screen.getByText(/छह चरणों में/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/कोड भेजा जाएगा/)).toBeTruthy());
     await i18n.changeLanguage('en');
+  });
+
+  it('spells both languages out in their own script', async () => {
+    // Two-letter codes are the one thing a user who cannot read the interface still cannot
+    // read. This control is the first thing on the screen for that user.
+    renderWithStore(<LoginScreen />);
+    expect(screen.getByText('English')).toBeTruthy();
+    expect(screen.getByText('हिन्दी')).toBeTruthy();
   });
 
   it('does not reveal whether a number is registered', async () => {

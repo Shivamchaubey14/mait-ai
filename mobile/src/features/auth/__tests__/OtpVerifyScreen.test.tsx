@@ -11,6 +11,7 @@ import React from 'react';
 import { fireEvent, screen } from '@testing-library/react-native';
 
 import OtpVerifyScreen from '../OtpVerifyScreen';
+import { OTP_EXPIRY_SECONDS, OTP_LOCK_MINUTES } from '@/config/env';
 import i18n from '@/i18n';
 import { renderWithStore } from '@/test-utils';
 
@@ -77,7 +78,7 @@ describe('OtpVerifyScreen', () => {
 
       expect(screen.getByTestId('otp-notice-wrong')).toBeTruthy();
       expect(screen.getByText(/That code is not right/i)).toBeTruthy();
-      expect(screen.getByText(/2 attempts left/i)).toBeTruthy();
+      expect(screen.getByText(/2 tries left/i)).toBeTruthy();
     });
 
     it('offers a retry rather than a resend', () => {
@@ -91,16 +92,26 @@ describe('OtpVerifyScreen', () => {
 
     it('uses the singular on the last attempt', () => {
       render({ otp: '492715', failure: 'wrong', attemptsUsed: 2 });
-      expect(screen.getByText(/One attempt left/i)).toBeTruthy();
+      expect(screen.getByText(/One try left/i)).toBeTruthy();
+    });
+
+    it('keeps the cells readable while refusing them', () => {
+      // The next thing the user does is read their own digits back against the SMS, so the
+      // refusal is carried by the outline and never by dimming or filling the digits.
+      render({ otp: '492715', failure: 'wrong', attemptsUsed: 1 });
+      expect(screen.getByText('4')).toBeTruthy();
+      expect(screen.getByText('5')).toBeTruthy();
     });
   });
 
   describe('expired code', () => {
-    it('explains the five-minute lifetime', () => {
+    it('states the lifetime the server actually enforces', () => {
+      // Interpolated from OTP_EXPIRY_SECONDS rather than written into the copy, so the
+      // sentence cannot drift away from the setting it describes.
       render({ otp: '492715', failure: 'expired' });
 
       expect(screen.getByTestId('otp-notice-expired')).toBeTruthy();
-      expect(screen.getByText(/five minutes/i)).toBeTruthy();
+      expect(screen.getByText(`Codes last ${OTP_EXPIRY_SECONDS / 60} minutes.`)).toBeTruthy();
     });
 
     it('offers a new code, since retrying a dead one is a dead end', () => {
@@ -123,18 +134,35 @@ describe('OtpVerifyScreen', () => {
   });
 
   describe('locked out', () => {
-    it('says how long, and who to call', () => {
-      render({ failure: 'locked', attemptsUsed: 3, lockedFor: 15 * 60 });
+    it('says how long the wait is, in the same minutes the app enforces', () => {
+      render({ failure: 'locked', attemptsUsed: 3, lockedFor: OTP_LOCK_MINUTES * 60 });
 
       expect(screen.getByTestId('otp-notice-locked')).toBeTruthy();
-      expect(screen.getByText(i18n.t('auth.lockedBody'))).toBeTruthy();
-      expect(i18n.t('auth.lockedBody')).toMatch(/IT department/i);
+      expect(screen.getByText(`Try again in ${OTP_LOCK_MINUTES} minutes.`)).toBeTruthy();
+    });
+
+    it('hides the call link when no support number is configured', () => {
+      // A call button that dials nothing is worse than no call button. The number comes from
+      // app.json, and this build has none.
+      render({ failure: 'locked', attemptsUsed: 3, lockedFor: 600 });
+      expect(screen.queryByTestId('otp-call-it')).toBeNull();
     });
 
     it('counts the lock down on the button', () => {
       render({ failure: 'locked', attemptsUsed: 3, lockedFor: 892 });
       // 14:52 — a number that is visibly moving beats a flat "try later".
       expect(screen.getByText(/14:52/)).toBeTruthy();
+    });
+
+    it('turns the button into a way out once the countdown reaches zero', () => {
+      // Not back to "Sign in" — the code that was being typed died long before the lock
+      // lifted, so the only move left is a fresh one.
+      const onResend = jest.fn();
+      render({ failure: 'locked', attemptsUsed: 3, lockedFor: 0, onResend });
+
+      expect(screen.getByText(i18n.t('auth.lockedLiftedBody'))).toBeTruthy();
+      fireEvent.press(screen.getByTestId('login-verify'));
+      expect(onResend).toHaveBeenCalled();
     });
 
     it('does nothing when the locked button is pressed', () => {
@@ -158,7 +186,7 @@ describe('OtpVerifyScreen', () => {
       const onResend = jest.fn();
       render({ resendIn: 24, onResend });
 
-      expect(screen.getByText(/00:24/)).toBeTruthy();
+      expect(screen.getByText(/0:24/)).toBeTruthy();
       fireEvent.press(screen.getByTestId('login-resend'));
       expect(onResend).not.toHaveBeenCalled();
     });
@@ -173,17 +201,29 @@ describe('OtpVerifyScreen', () => {
   });
 
   describe('changing the number', () => {
-    it('offers a way back from the header, the card and the link', () => {
-      // A wrong number is the most likely reason no code arrives, so the way out is not
-      // hidden behind a single small control.
+    it('puts the way back next to the number it goes back to', () => {
+      // A wrong number is the most likely reason no code arrives, so the digits to check and
+      // the control that fixes them sit in the same row.
       const onEditNumber = jest.fn();
       render({ onEditNumber });
 
+      expect(screen.getByText('+91 98765 43210')).toBeTruthy();
       fireEvent.press(screen.getByTestId('otp-back'));
-      fireEvent.press(screen.getByTestId('otp-edit-number'));
-      fireEvent.press(screen.getByTestId('otp-different-number'));
+      expect(onEditNumber).toHaveBeenCalledTimes(1);
+    });
+  });
 
-      expect(onEditNumber).toHaveBeenCalledTimes(3);
+  describe('the signal card', () => {
+    it('says the network is needed once, here, and not again', () => {
+      render();
+      expect(screen.getByText(i18n.t('auth.needsSignalTitle'))).toBeTruthy();
+    });
+
+    it('gives way to the failure notice, rather than stacking with it', () => {
+      // Someone who has just been told their code was rejected does not need a second card
+      // about network coverage competing for the same glance.
+      render({ otp: '492715', failure: 'wrong', attemptsUsed: 1 });
+      expect(screen.queryByText(i18n.t('auth.needsSignalTitle'))).toBeNull();
     });
   });
 });

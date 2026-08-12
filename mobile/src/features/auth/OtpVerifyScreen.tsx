@@ -7,11 +7,10 @@
  * autofill, paste and assistive tech working, while the user simply types and watches the
  * cells fill.
  *
- * Layout follows what the user does, in order: the hero says which number the code went to
- * and offers the way to change it, the sheet carries the one job — type the code — and the
- * "didn't get it" card is pinned to the bottom of the screen. That card answers a question
- * that only arises after waiting, so it has no business sitting between the keypad and the
- * button.
+ * Layout follows what the user does, in order: the hero carries the number the code went to
+ * with the way back to it, then the six cells, then the countdown, then the button at the
+ * foot of the screen. The number is stated once — it used to be repeated in a card below,
+ * which asked the user to read the same ten digits twice.
  *
  * Three failures are kept distinct because each needs a different action from a Mait
  * standing in a village: the code is wrong (type it again), the code is stale (fetch a new
@@ -21,6 +20,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -30,13 +30,19 @@ import {
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { BrandMark, HeroDecoration } from '@/components/brand';
 import { Toast } from '@/components/toast';
-import { OTP_LENGTH, OTP_MAX_ATTEMPTS } from '@/config/env';
-import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
+import {
+  IT_SUPPORT_PHONE,
+  OTP_EXPIRY_SECONDS,
+  OTP_LENGTH,
+  OTP_LOCK_MINUTES,
+  OTP_MAX_ATTEMPTS,
+} from '@/config/env';
+import { colors, ink, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
 /** What went wrong last, which decides the notice, the cell colour and the button. */
 export type OtpFailure = 'wrong' | 'expired' | 'locked' | null;
@@ -60,11 +66,12 @@ interface Props {
   onDismissError?: () => void;
 }
 
+/** `0:24`, `14:52`. The minutes are not padded — a clock does not write 00:24 either. */
 function mmss(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
   const m = Math.floor(safe / 60);
   const s = safe % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 // --------------------------------------------------------------------------------------
@@ -125,50 +132,67 @@ function DigitCells({
 // --------------------------------------------------------------------------------------
 // Notice
 // --------------------------------------------------------------------------------------
+/**
+ * The three refusals, each shaped like the action it wants next.
+ *
+ * A wrong code is corrected in place, so it stays a line under the cells the user is still
+ * typing into — a card would push those cells up the screen mid-correction. An expired code
+ * and a lock both end the current attempt, so those are cards: the flow has stopped, and
+ * something is being explained rather than nudged.
+ */
 function FailureNotice({
   failure,
   attemptsLeft,
+  lockLifted = false,
 }: {
   failure: Exclude<OtpFailure, null>;
   attemptsLeft: number;
+  /** The lock has run out. The card stops counting a wait that is already over. */
+  lockLifted?: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
 
-  const config = {
-    wrong: {
-      tint: colors.error,
-      wash: colors.errorWash,
-      icon: 'close-circle' as const,
-      title: t('auth.wrongCodeTitle'),
-      body: t('auth.wrongCodeBody', { count: attemptsLeft }),
-    },
-    expired: {
-      tint: colors.warning,
-      wash: colors.warningWash,
-      icon: 'time-outline' as const,
-      title: t('auth.expiredTitle'),
-      body: t('auth.expiredBody'),
-    },
-    locked: {
-      tint: colors.error,
-      wash: colors.errorWash,
-      icon: 'lock-closed' as const,
-      title: t('auth.lockedTitle'),
-      body: t('auth.lockedBody'),
-    },
-  }[failure];
+  if (failure === 'wrong') {
+    return (
+      <View style={styles.inlineError} accessibilityRole="alert" testID="otp-notice-wrong">
+        {/* A glyph as well as a colour — colour alone excludes colour-blind users, and the
+            wrong/expired pair is exactly the distinction they would lose. */}
+        <Ionicons name="alert-circle" size={15} color={colors.error} />
+        <Text style={styles.inlineErrorText}>
+          {`${t('auth.wrongCodeTitle')}. ${t('auth.wrongCodeBody', { count: attemptsLeft })}`}
+        </Text>
+      </View>
+    );
+  }
+
+  const config =
+    failure === 'expired'
+      ? {
+          tint: colors.secondaryPressed,
+          wash: colors.secondaryWash,
+          border: colors.secondary,
+          icon: 'time-outline' as const,
+          title: t('auth.expiredTitle'),
+          body: t('auth.expiredBody', { minutes: OTP_EXPIRY_SECONDS / 60 }),
+        }
+      : {
+          tint: colors.error,
+          wash: colors.errorWash,
+          border: colors.error,
+          icon: 'warning-outline' as const,
+          title: t('auth.lockedTitle'),
+          body: lockLifted
+            ? t('auth.lockedLiftedBody')
+            : t('auth.lockedBody', { minutes: OTP_LOCK_MINUTES }),
+        };
 
   return (
     <View
-      style={[styles.notice, { backgroundColor: config.wash, borderLeftColor: config.tint }]}
+      style={[styles.notice, { backgroundColor: config.wash, borderColor: config.border }]}
       accessibilityRole="alert"
       testID={`otp-notice-${failure}`}
     >
-      {/* A glyph as well as a colour — colour alone excludes colour-blind users, and the
-          wrong/expired pair is exactly the distinction they would lose. */}
-      <View style={[styles.noticeIcon, { backgroundColor: config.tint }]}>
-        <Ionicons name={config.icon} size={16} color={colors.surface} />
-      </View>
+      <Ionicons name={config.icon} size={20} color={config.tint} style={styles.noticeIcon} />
       <View style={styles.noticeBody}>
         <Text style={styles.noticeTitle}>{config.title}</Text>
         <Text style={styles.noticeText}>{config.body}</Text>
@@ -207,14 +231,13 @@ export default function OtpVerifyScreen({
     [mobileNo],
   );
 
-  // The number is set in strong type inside the sentence, so it can be checked against the
-  // handset without reading the whole line.
-  const [before, after] = useMemo(() => {
-    const [head, ...rest] = t('auth.verifySubtitle', { mobile: displayMobile }).split(
-      displayMobile,
-    );
-    return [head, rest.join(displayMobile)];
-  }, [displayMobile, t]);
+  // The countdown is split around its own value so the seconds can carry the weight — that
+  // number is the only part of the line that changes, and the only part worth looking at.
+  const countdown = mmss(resendIn);
+  const [beforeTime, afterTime] = useMemo(() => {
+    const [head, ...rest] = t('auth.resendCodeIn', { time: countdown }).split(countdown);
+    return [head, rest.join(countdown)];
+  }, [countdown, t]);
 
   // Focus on mount so the keyboard is already up — one less tap for someone holding a
   // phone in one hand and a flask in the other.
@@ -225,13 +248,24 @@ export default function OtpVerifyScreen({
     }
   }, [locked]);
 
+  /** True once there is nothing left to verify and the only move is to fetch a fresh code. */
+  const lockLifted = locked && lockedFor <= 0;
+  const resendMode = failure === 'expired' || lockLifted;
+
   /**
    * The button changes job with the failure, because after an expiry or a lock there is
    * nothing useful left to verify — offering "Verify" there would be a dead end.
+   *
+   * While the lock runs it holds the countdown and does nothing: the Mait can watch the wait
+   * shrink instead of pressing a button that silently refuses. The moment it reaches zero the
+   * same button becomes the way out — by then the original code is long dead, so a fresh one
+   * is the only thing worth offering.
    */
   const primary = (() => {
     if (locked) {
-      return { label: t('auth.lockedCta', { time: mmss(lockedFor) }), action: undefined };
+      return lockLifted
+        ? { label: t('auth.sendNewCode'), action: onResend }
+        : { label: t('auth.lockedCta', { time: mmss(lockedFor) }), action: undefined };
     }
     if (failure === 'expired') {
       return { label: t('auth.sendNewCode'), action: onResend };
@@ -239,15 +273,18 @@ export default function OtpVerifyScreen({
     if (failure === 'wrong') {
       return { label: t('auth.tryAgain'), action: onSubmit };
     }
-    return { label: t('auth.verifyAndContinue'), action: onSubmit };
+    return { label: t('auth.signIn'), action: onSubmit };
   })();
 
-  const canPress =
-    !!primary.action && !busy && (failure === 'expired' || otp.length === OTP_LENGTH);
+  const canPress = !!primary.action && !busy && (resendMode || otp.length === OTP_LENGTH);
   const canResend = resendIn <= 0 && !busy;
 
   return (
     <View style={styles.root}>
+      {/* The hero runs to the top edge, so the bar sits on Ink rather than on the green the
+          rest of the app opens with. */}
+      <StatusBar style="light" backgroundColor={colors.ink} />
+
       <Toast message={error} onDismiss={onDismissError} testID="otp-error" />
 
       <KeyboardAvoidingView
@@ -264,41 +301,24 @@ export default function OtpVerifyScreen({
               ScrollView that measurement is unreliable — which is how the header ended up
               drawn under the clock and the battery. */}
           <View style={[styles.hero, { paddingTop: insets.top + spacing[3] }]}>
-            <HeroDecoration size={220} top={-90} right={-70} />
-
+            {/* The number sits next to the way back to it. A wrong number is the most likely
+                reason no code arrives, so the thing to check and the thing to press are one
+                glance apart. */}
             <View style={styles.heroTop}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('common.back')}
                 onPress={onEditNumber}
-                style={styles.backButton}
+                style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
                 testID="otp-back"
               >
                 <Ionicons name="arrow-back" size={20} color={colors.surface} />
               </Pressable>
-              <BrandMark size="small" />
+              <Text style={styles.heroNumber}>{displayMobile}</Text>
             </View>
 
             <Text style={styles.heroTitle}>{t('auth.verifyTitle')}</Text>
-            {/* The number lives here and nowhere else. It used to be repeated in a card
-                below, which asked the user to read the same ten digits twice.
-                Split around the number rather than put on its own line: the sentence is
-                translated, and Hindi leads with the number where English trails it. */}
-            <Text style={styles.heroSubtitle}>
-              {before}
-              <Text style={styles.heroNumber}>{displayMobile}</Text>
-              {after}
-            </Text>
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={onEditNumber}
-              style={({ pressed }) => [styles.editPill, pressed && styles.editPillPressed]}
-              testID="otp-edit-number"
-            >
-              <Ionicons name="create-outline" size={14} color={colors.surface} />
-              <Text style={styles.editPillLabel}>{t('auth.edit')}</Text>
-            </Pressable>
+            <Text style={styles.heroSubtitle}>{t('auth.verifySubtitle')}</Text>
           </View>
 
           <View
@@ -335,18 +355,21 @@ export default function OtpVerifyScreen({
               />
             </View>
 
+            {/* Directly under the cells, because that is where the eye already is and where
+                the correction gets typed. */}
+            {failure === 'wrong' && <FailureNotice failure="wrong" attemptsLeft={attemptsLeft} />}
+
             {/* Hidden once the code has expired: the primary button has already become
                 "Send a new code", and offering the same action twice makes the Mait wonder
                 whether the two do different things. */}
             {!locked && failure !== 'expired' && (
               <View style={styles.resendRow}>
                 {resendIn > 0 ? (
-                  <View style={styles.timerChip}>
-                    <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-                    <Text style={styles.timerLabel}>
-                      {t('auth.resendCodeIn', { time: mmss(resendIn) })}
-                    </Text>
-                  </View>
+                  <Text style={styles.timerLabel}>
+                    {beforeTime}
+                    <Text style={styles.timerValue}>{countdown}</Text>
+                    {afterTime}
+                  </Text>
                 ) : (
                   <View style={styles.flex} />
                 )}
@@ -356,18 +379,9 @@ export default function OtpVerifyScreen({
                   accessibilityState={{ disabled: !canResend }}
                   onPress={onResend}
                   disabled={!canResend}
-                  style={({ pressed }) => [
-                    styles.resendButton,
-                    canResend && styles.resendButtonReady,
-                    pressed && canResend && styles.resendButtonPressed,
-                  ]}
+                  style={styles.resendButton}
                   testID="login-resend"
                 >
-                  <Ionicons
-                    name="refresh"
-                    size={15}
-                    color={canResend ? colors.primaryDark : colors.textDisabled}
-                  />
                   <Text style={[styles.resendLabel, !canResend && styles.resendLabelDisabled]}>
                     {t('auth.resend')}
                   </Text>
@@ -375,7 +389,29 @@ export default function OtpVerifyScreen({
               </View>
             )}
 
-            {!!failure && <FailureNotice failure={failure} attemptsLeft={attemptsLeft} />}
+            {failure === 'expired' || failure === 'locked' ? (
+              <FailureNotice
+                failure={failure}
+                attemptsLeft={attemptsLeft}
+                lockLifted={lockLifted}
+              />
+            ) : failure ? null : (
+              // Only while nothing has gone wrong. A Mait who has just been told their code
+              // was rejected does not need a second card explaining network coverage.
+              <View style={styles.help}>
+                <View style={styles.helpIcon}>
+                  <Ionicons name="cellular-outline" size={18} color={colors.info} />
+                </View>
+                <View style={styles.helpBody}>
+                  <Text style={styles.noticeTitle}>{t('auth.needsSignalTitle')}</Text>
+                  <Text style={styles.noticeText}>{t('auth.needsSignalBody')}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Drops the button to the foot of the screen. The code arrives by SMS, so the
+                hand is already holding the phone at the bottom edge when it is typed. */}
+            <View style={styles.spacer} />
 
             <Pressable
               accessibilityRole="button"
@@ -392,39 +428,21 @@ export default function OtpVerifyScreen({
               <Text style={[styles.ctaLabel, !canPress && styles.ctaLabelDisabled]}>
                 {primary.label}
               </Text>
-              {!failure && (
-                <Ionicons
-                  name="arrow-forward"
-                  size={18}
-                  color={canPress ? colors.surface : colors.textDisabled}
-                />
-              )}
             </Pressable>
 
-            {!locked && (
+            {/* A lock is the one state with nothing left to press, so it gets the way out
+                rather than a dead end. Rendered only when there is a number to dial — a call
+                button that dials nothing is worse than no call button. */}
+            {locked && IT_SUPPORT_PHONE && (
               <Pressable
                 accessibilityRole="button"
-                onPress={onEditNumber}
-                style={styles.differentNumber}
-                testID="otp-different-number"
+                onPress={() => Linking.openURL(`tel:${IT_SUPPORT_PHONE}`)}
+                style={styles.callIt}
+                testID="otp-call-it"
               >
-                <Text style={styles.differentNumberLabel}>{t('auth.useDifferentNumber')}</Text>
+                <Text style={styles.callItLabel}>{t('auth.callIt')}</Text>
               </Pressable>
             )}
-
-            {/* Takes up whatever is left, which drops the help card to the foot of the
-                screen instead of leaving it wedged under the button. */}
-            <View style={styles.spacer} />
-
-            <View style={styles.help}>
-              <View style={styles.helpIcon}>
-                <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.info} />
-              </View>
-              <View style={styles.helpBody}>
-                <Text style={styles.noticeTitle}>{t('auth.didntGetCodeTitle')}</Text>
-                <Text style={styles.noticeText}>{t('auth.didntGetCodeBody')}</Text>
-              </View>
-            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -433,12 +451,12 @@ export default function OtpVerifyScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surface },
+  root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   scroll: { flexGrow: 1 },
 
   hero: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.ink,
     borderBottomLeftRadius: radius.xl,
     borderBottomRightRadius: radius.xl,
     paddingHorizontal: spacing[5],
@@ -455,32 +473,19 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroTitle: { ...typography.h1, color: colors.surface },
+  backButtonPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
+  heroTitle: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
   heroSubtitle: {
     ...typography.body,
     color: colors.surface,
-    opacity: 0.92,
+    opacity: 0.72,
     marginTop: spacing[2],
   },
   heroNumber: { ...typography.bodyStrong, color: colors.surface },
-
-  editPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: spacing[2],
-    minHeight: MIN_TOUCH_TARGET - 12,
-    paddingHorizontal: spacing[3],
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    marginTop: spacing[3],
-  },
-  editPillPressed: { backgroundColor: 'rgba(255,255,255,0.34)' },
-  editPillLabel: { ...typography.label, color: colors.surface },
 
   // flexGrow rather than flex: the sheet fills whatever the hero leaves over, but keeps its
   // natural height when the notice pushes the content past the fold and the screen scrolls.
@@ -496,20 +501,19 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderColor: colors.border,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // A typed digit is a small commitment, so the cell lifts off the page to say so.
-  cellFilled: {
-    borderColor: colors.ink,
-    backgroundColor: colors.surface,
-    ...shadows.card,
-  },
+  // A typed digit firms the outline up. Only the outline — a fill or a shadow here would
+  // make the six cells read as two groups, when the point is that they are one code.
+  cellFilled: { borderColor: ink[200] },
   cellNext: { borderColor: colors.primary, borderWidth: 2, backgroundColor: colors.surface },
-  cellWrong: { borderColor: colors.error, backgroundColor: colors.errorWash },
-  cellExpired: { borderColor: colors.warning, backgroundColor: colors.warningWash },
-  cellLocked: { borderColor: colors.error, backgroundColor: colors.errorWash },
+  // The outline carries the refusal, not a fill. The digits stay Ink and fully legible,
+  // because the next thing the user does is read them back against the SMS.
+  cellWrong: { borderColor: colors.error },
+  cellExpired: { borderColor: colors.warning },
+  cellLocked: { borderColor: colors.error },
   cellDigit: { ...typography.h2, fontSize: 24, lineHeight: 30, color: colors.ink },
   caret: { width: 2, height: 24, borderRadius: radius.pill, backgroundColor: colors.primary },
 
@@ -533,49 +537,38 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     marginTop: spacing[4],
   },
-  timerChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: radius.pill,
-    backgroundColor: colors.background,
-  },
-  timerLabel: { ...typography.caption, color: colors.textMuted },
+  timerLabel: { ...typography.label, color: colors.textMuted },
+  /** The seconds, in Ink — the one part of the line that moves. */
+  timerValue: { ...typography.label, fontFamily: typography.h2.fontFamily, color: colors.ink },
   resendButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
+    justifyContent: 'center',
     minHeight: MIN_TOUCH_TARGET - 12,
-    paddingHorizontal: spacing[4],
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingLeft: spacing[4],
   },
-  // Only once it can actually do something does it look like a button worth pressing.
-  resendButtonReady: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
-  resendButtonPressed: { backgroundColor: colors.primaryWash, opacity: 0.7 },
+  // Green only once it can actually do something. Before that it is grey, which is the
+  // honest signal that pressing it now achieves nothing.
   resendLabel: { ...typography.label, color: colors.primaryDark },
-  resendLabelDisabled: { color: colors.textDisabled },
+  resendLabelDisabled: { color: colors.textMuted },
 
   // -- notice ---------------------------------------------------------------------------
+  /** Sits directly under the cells, where the correction is being typed. */
+  inlineError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginTop: spacing[3],
+  },
+  inlineErrorText: { ...typography.caption, color: colors.error, flex: 1 },
   notice: {
     flexDirection: 'row',
     gap: spacing[3],
     alignItems: 'flex-start',
     borderRadius: radius.md,
-    borderLeftWidth: 3,
-    padding: spacing[3],
+    borderWidth: 1,
+    padding: spacing[4],
     marginTop: spacing[4],
   },
-  noticeIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  noticeIcon: { marginTop: 1 },
   noticeBody: { flex: 1 },
   noticeTitle: { ...typography.bodyStrong, color: colors.ink },
   noticeText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
@@ -588,7 +581,6 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     minHeight: MIN_TOUCH_TARGET + 6,
     borderRadius: radius.md,
-    marginTop: spacing[5],
   },
   ctaEnabled: { backgroundColor: colors.primary },
   ctaDisabled: { backgroundColor: colors.disabledFill },
@@ -596,29 +588,32 @@ const styles = StyleSheet.create({
   ctaLabel: { ...typography.bodyStrong, color: colors.surface },
   ctaLabelDisabled: { color: colors.textDisabled },
 
-  differentNumber: {
+  callIt: {
     minHeight: MIN_TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing[2],
   },
-  differentNumberLabel: { ...typography.bodyStrong, color: colors.primaryDark },
+  callItLabel: { ...typography.bodyStrong, color: colors.primaryDark },
 
-  // -- help, pinned to the foot ---------------------------------------------------------
+  /** Holds the CTA at the bottom when the content is short, and collapses when it is not. */
   spacer: { flexGrow: 1, minHeight: spacing[6] },
+
+  // -- signal card ----------------------------------------------------------------------
   help: {
     flexDirection: 'row',
     gap: spacing[3],
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.infoWash,
     borderRadius: radius.md,
     padding: spacing[3],
+    marginTop: spacing[4],
   },
   helpIcon: {
     width: 36,
     height: 36,
     borderRadius: radius.sm,
-    backgroundColor: colors.infoWash,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
