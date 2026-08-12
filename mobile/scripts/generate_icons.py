@@ -107,7 +107,9 @@ def draw_mark(size: int, *, with_ground: bool, ground_radius_ratio: float = 0.22
 
 
 def make_splash(width: int, height: int) -> Image.Image:
-    image = Image.new("RGBA", (width, height), GREEN)
+    # Ink, not green — this image is the frame or two before the JS splash paints, and the
+    # two have to be the same colour or the launch reads as a flash.
+    image = Image.new("RGBA", (width, height), INK)
     mark = draw_mark(int(min(width, height) * 0.34), with_ground=False)
     image.alpha_composite(
         mark, ((width - mark.width) // 2, (height - mark.height) // 2 - int(height * 0.04))

@@ -29,7 +29,15 @@ import { colors } from '@theme/tokens';
  */
 function Shell({ fontsLoaded }: { fontsLoaded: boolean }): React.JSX.Element {
   const restored = useAppSelector(state => state.auth.restored);
-  return fontsLoaded && restored ? <RootNavigator /> : <SplashScreen />;
+  if (fontsLoaded && restored) {
+    return <RootNavigator />;
+  }
+
+  // Two things are being waited on, so the bar can report which of them have landed rather
+  // than sitting at a made-up fraction. It starts at a fifth so there is something to see on
+  // the first frame — an empty track reads as a bar that is not working.
+  const done = (fontsLoaded ? 1 : 0) + (restored ? 1 : 0);
+  return <SplashScreen progress={0.2 + done * 0.4} />;
 }
 
 export default function App(): React.JSX.Element {
@@ -68,8 +76,8 @@ export default function App(): React.JSX.Element {
       <SafeAreaProvider>
         <StatusBar style="light" backgroundColor={colors.primary} />
         {/* The splash renders in the system font for the moment before the real ones
-            arrive. That is deliberate — a blank green field would look like a hang, and the
-            brand mark is a card of type either way. */}
+            arrive. That is deliberate — a blank Ink field would look like a hang, and the
+            wordmark is type either way. */}
         <Shell fontsLoaded={fontsLoaded} />
       </SafeAreaProvider>
     </Provider>

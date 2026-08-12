@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#3BB77E"
+      "backgroundColor": "#253D4E"
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
@@ -47,7 +47,9 @@
       ]
     ],
     "extra": {
-      "apiUrl": "http://127.0.0.1:8000/api/v1"
+      "apiUrl": "http://127.0.0.1:8000/api/v1",
+      "itSupportPhone": "",
+      "nonMemberFee": null
     }
   }
 }
