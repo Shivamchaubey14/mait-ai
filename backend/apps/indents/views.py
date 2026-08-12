@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import django_filters
 from django.db.models import Q
-from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
