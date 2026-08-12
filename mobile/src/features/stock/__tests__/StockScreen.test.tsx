@@ -45,6 +45,7 @@ function mockApi(summary: InventorySummary) {
 
 describe('StockScreen insight', () => {
   const onOpenIndents = jest.fn();
+  const onRequestStock = jest.fn();
 
   beforeEach(() => {
     global.fetch = jest.fn() as jest.Mock;
@@ -52,7 +53,8 @@ describe('StockScreen insight', () => {
 
   afterEach(() => jest.resetAllMocks());
 
-  const renderScreen = () => renderWithStore(<StockScreen onOpenIndents={onOpenIndents} />);
+  const renderScreen = () =>
+    renderWithStore(<StockScreen onOpenIndents={onOpenIndents} onRequestStock={onRequestStock} />);
 
   it('sums straws, consumable units and equipment into one total', async () => {
     mockApi(SUMMARY);

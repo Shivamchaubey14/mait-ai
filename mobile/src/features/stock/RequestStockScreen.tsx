@@ -206,7 +206,6 @@ export default function RequestStockScreen({
       title={t('requestStock.title')}
       subtitle={t('requestStock.subtitle')}
       onBack={onBack}
-      stickyHero
       footerNote={
         <View style={styles.footerNote}>
           <Text style={styles.footerCount}>
@@ -582,10 +581,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
-    minHeight: MIN_TOUCH_TARGET + 4,
+    minHeight: 56,
     marginTop: spacing[3],
     paddingHorizontal: spacing[5],
-    borderRadius: radius.pill,
+    borderRadius: radius.md,
     backgroundColor: colors.primary,
   },
   confirmPressed: { backgroundColor: colors.primaryPressed },

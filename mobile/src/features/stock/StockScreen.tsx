@@ -49,8 +49,10 @@ const FALLBACK_ICON: React.ComponentProps<typeof Ionicons>['name'] = 'cube-outli
 
 export default function StockScreen({
   onOpenIndents,
+  onRequestStock,
 }: {
   onOpenIndents: () => void;
+  onRequestStock: () => void;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const stock = useGetInventorySummaryQuery();
@@ -372,6 +374,18 @@ export default function StockScreen({
             )}
           </View>
         )}
+
+        {/* This screen's one action, at the foot of its own content. It used to float in the
+            tab bar, where it changed job depending on which tab was open. */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={onRequestStock}
+          style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+          testID="stock-request"
+        >
+          <Ionicons name="add" size={20} color={colors.surface} />
+          <Text style={styles.actionLabel}>{t('requestStock.action')}</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -380,6 +394,19 @@ export default function StockScreen({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   body: { padding: spacing[5] },
+
+  action: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    minHeight: 56,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    marginTop: spacing[5],
+  },
+  actionPressed: { backgroundColor: colors.primaryPressed },
+  actionLabel: { ...typography.bodyStrong, color: colors.surface },
 
   summary: {
     padding: spacing[4],
