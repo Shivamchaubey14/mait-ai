@@ -1,8 +1,8 @@
-/**
- * Step 4 of the AI capture flow — the straw (SRS §6.3 step 4, M8).
+﻿/**
+ * Step 4 of the AI capture flow â€” the straw (SRS Â§6.3 step 4, M8).
  *
  * This is the gate the whole platform exists for: a Mait holding ten straws can complete
- * exactly ten AI events. The check happens here, and the deduction happens at completion —
+ * exactly ten AI events. The check happens here, and the deduction happens at completion â€”
  * so a Mait who scans and then walks away from a difficult animal loses nothing, which is
  * right, because no insemination happened.
  *
@@ -29,13 +29,15 @@ import type { AIEvent, StrawValidation } from '@api/types';
 import { FieldCard, FlowNotice, FlowScreen, FlowSpacer, InfoTile, OptionCard } from './components';
 
 interface Props {
-  /** Everything the event needs, gathered by the previous three steps. */
+  /** Everything the event needs, gathered by the previous four steps. */
   capture: {
     clientUuid: string;
     mppCode: string;
     memberCode?: string;
     nonMemberId?: number;
     animalId: number;
+    /** The breed chosen at step 5, sent with the check and with the event. */
+    semenBreed?: string | null;
   };
   onCreated: (event: AIEvent) => void;
   onBack: () => void;
@@ -48,7 +50,9 @@ export default function ScanStrawScreen({ capture, onCreated, onBack }: Props): 
   const [strawNo, setStrawNo] = useState('');
   const [checked, setChecked] = useState<StrawValidation | null>(null);
   const [rejection, setRejection] = useState<Rejection>(null);
-  const [breed, setBreed] = useState<string | null>(null);
+  // Already answered at step 5. The picker below stays for the case the server still cannot
+  // place the number — a straw from a bundle the app does not know the Mait is holding.
+  const [breed, setBreed] = useState<string | null>(capture.semenBreed ?? null);
   const [breedChoices, setBreedChoices] = useState<string[]>([]);
 
   const { data: stock } = useGetInventorySummaryQuery();
@@ -91,8 +95,8 @@ export default function ScanStrawScreen({ capture, onCreated, onBack }: Props): 
       onCreated(event);
     } catch (err) {
       // The server re-checks the straw inside the transaction that creates the event. It can
-      // legitimately disagree with the check above — another event may have consumed the
-      // straw in between — and the server is the authority.
+      // legitimately disagree with the check above â€” another event may have consumed the
+      // straw in between â€” and the server is the authority.
       switch (errorCodeOf(err)) {
         case ErrorCode.INSUFFICIENT_STOCK:
           setRejection('not_in_stock');
@@ -128,7 +132,7 @@ export default function ScanStrawScreen({ capture, onCreated, onBack }: Props): 
 
   return (
     <FlowScreen
-      step={3}
+      step={5}
       title={t('aiFlow.whichStraw')}
       subtitle={t('aiFlow.whichStrawSubtitle')}
       onBack={onBack}
@@ -142,7 +146,7 @@ export default function ScanStrawScreen({ capture, onCreated, onBack }: Props): 
     >
       <InfoTile
         label={t('aiFlow.strawsInStock')}
-        value={String(stock?.total_straws ?? '—')}
+        value={String(stock?.total_straws ?? 'â€”')}
         pill={stock?.is_low_stock ? t('aiFlow.lowStock') : undefined}
         testID="straw-stock"
       />
@@ -167,7 +171,7 @@ export default function ScanStrawScreen({ capture, onCreated, onBack }: Props): 
         <View>
           <OptionCard
             title={t('aiFlow.strawVerified')}
-            subtitle={`${checked.straw.breed} · ${checked.straw.unique_straw_no}`}
+            subtitle={`${checked.straw.breed} Â· ${checked.straw.unique_straw_no}`}
             pill={t('aiFlow.inStock')}
             selected
             testID="straw-verified"

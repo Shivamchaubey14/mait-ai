@@ -1,5 +1,5 @@
-/**
- * Step 5 of the AI capture flow — the proof photo (SRS §6.3 step 5, M9).
+﻿/**
+ * Step 5 of the AI capture flow â€” the proof photo (SRS Â§6.3 step 5, M9).
  *
  * Camera only. There is deliberately no gallery picker: a photo chosen from the roll proves
  * nothing about this animal at this time, and the entire point of this step is that the
@@ -99,7 +99,12 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
   // -- permission gate -------------------------------------------------------------------
   if (!permission) {
     return (
-      <FlowScreen step={4} title={t('aiFlow.takePhoto')} onBack={onBack}>
+      <FlowScreen
+        step={5}
+        stepLabel={t('aiFlow.proofPhoto')}
+        title={t('aiFlow.takePhoto')}
+        onBack={onBack}
+      >
         <ActivityIndicator color={colors.primary} />
       </FlowScreen>
     );
@@ -108,7 +113,8 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
   if (!permission.granted) {
     return (
       <FlowScreen
-        step={4}
+        step={5}
+        stepLabel={t('aiFlow.proofPhoto')}
         title={t('aiFlow.takePhoto')}
         subtitle={t('aiFlow.cameraNeededSubtitle')}
         onBack={onBack}
@@ -131,7 +137,8 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
   if (shot) {
     return (
       <FlowScreen
-        step={4}
+        step={5}
+        stepLabel={t('aiFlow.proofPhoto')}
         title={t('aiFlow.photoTaken')}
         subtitle={t('aiFlow.photoTakenSubtitle')}
         onBack={() => setShot(null)}
@@ -213,7 +220,7 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
           {taking ? <ActivityIndicator color={colors.ink} /> : <View style={styles.shutterInner} />}
         </Pressable>
 
-        {/* No gallery button, on purpose (SRS §6.3 step 5). */}
+        {/* No gallery button, on purpose (SRS Â§6.3 step 5). */}
         <Text style={styles.cameraOnly}>{t('aiFlow.cameraOnly')}</Text>
       </View>
     </View>
