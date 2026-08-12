@@ -47,6 +47,8 @@ export interface MPP {
   is_active: boolean;
   mait: number | null;
   mait_name: string | null;
+  /** Annotated by the list endpoint. Members registered at this collection point. */
+  member_count: number;
 }
 
 export interface Member {
@@ -83,8 +85,11 @@ export interface MemberDetail extends Member {
 export interface NonMember {
   id: number;
   name: string;
+  father_husband_name: string;
   mobile_no: string;
   address: string;
+  /** Read-only and masked (SRS §16). The raw number never comes back to the handset. */
+  masked_aadhar: string;
   mpp: number;
   created_by_mait: number;
   created_at: string;
@@ -92,8 +97,11 @@ export interface NonMember {
 
 export interface NonMemberDraft {
   name: string;
+  father_husband_name?: string;
   mobile_no: string;
   address?: string;
+  /** Twelve digits, or omitted. Write-only — the server stores it encrypted. */
+  aadhar_no?: string;
   mpp: number;
 }
 
@@ -130,6 +138,8 @@ export interface Animal {
   breed: string;
   ear_tag_no: string | null;
   ai_event_count: number;
+  /** When this animal was last served. Null until she has been. */
+  last_ai_at: string | null;
   created_at: string;
 }
 
@@ -137,7 +147,12 @@ export interface AnimalDraft {
   member_code?: string;
   non_member_id?: number;
   animal_type: AnimalTypeCode;
-  breed: string;
+  /**
+   * Her own breed, not the straw's — and optional, because the capture flow does not ask for
+   * it. A Mait registering a cow in a yard often cannot say what she is, and a required field
+   * there would collect guesses. The portal and `PATCH /animals/{id}/` can fill it in later.
+   */
+  breed?: string;
   ear_tag_no?: string;
 }
 
