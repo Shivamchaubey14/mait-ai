@@ -14,6 +14,8 @@ keyed hash column alongside and search that.
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
@@ -79,6 +81,34 @@ class EncryptedCharField(EncryptedFieldMixin, models.CharField):
         name, path, args, kwargs = super().deconstruct()
         kwargs["max_length"] = self.plaintext_max_length
         return name, path, args, kwargs
+
+
+def pii_lookup_hash(value: str | None) -> str:
+    """
+    A keyed, deterministic fingerprint of a PII value, for the one thing ciphertext cannot do:
+    being looked up.
+
+    Used to answer "does this Aadhaar already belong to a member?" without ever holding a
+    searchable copy of the number. Same input always gives the same digest, so it can carry a
+    database index; a different key gives a different digest, so the table is useless on its
+    own.
+
+    Keyed rather than a plain SHA-256 on purpose. An Aadhaar is twelve digits — a bare hash of
+    one is brute-forced in minutes on a laptop, which would make the "fingerprint" column a
+    plaintext column with extra steps. The key is derived from ``FIELD_ENCRYPTION_KEY`` with a
+    domain label, so it is a distinct secret from the one that encrypts the value itself
+    without needing a second entry in the secret store.
+    """
+    if not value:
+        return ""
+
+    key = getattr(settings, "FIELD_ENCRYPTION_KEY", "")
+    if not key:
+        raise ImproperlyConfigured("FIELD_ENCRYPTION_KEY is not set — PII cannot be fingerprinted.")
+
+    root = key.encode() if isinstance(key, str) else key
+    derived = hmac.new(root, b"pii-lookup-v1", hashlib.sha256).digest()
+    return hmac.new(derived, str(value).encode(), hashlib.sha256).hexdigest()
 
 
 def mask(value: str | None, visible: int = 4) -> str:
