@@ -71,7 +71,11 @@ class AnimalSerializer(serializers.ModelSerializer):
 
     animal_type_display = serializers.CharField(source="get_animal_type_display", read_only=True)
     owner_name = serializers.SerializerMethodField()
+    # Both are annotations (apps.animals.queries), not columns. The defaults cover the one
+    # caller that has neither: the freshly created animal echoed back from POST /animals/,
+    # which by definition has no history yet.
     ai_event_count = serializers.IntegerField(read_only=True, default=0)
+    last_ai_at = serializers.DateTimeField(read_only=True, default=None)
 
     class Meta:
         model = Animal
@@ -86,6 +90,7 @@ class AnimalSerializer(serializers.ModelSerializer):
             "breed",
             "ear_tag_no",
             "ai_event_count",
+            "last_ai_at",
             "created_at",
         ]
         read_only_fields = fields
@@ -107,7 +112,12 @@ class AnimalCreateSerializer(serializers.Serializer):
     member_code = serializers.CharField(required=False, allow_blank=True)
     non_member_id = serializers.IntegerField(required=False, allow_null=True)
     animal_type = serializers.ChoiceField(choices=AnimalType.choices)
-    breed = serializers.CharField(max_length=30)
+    # Optional: step 4 of the capture flow registers the animal in front of the Mait from what
+    # they can see — cow or buffalo, and the tag if she carries one. Her breed is a judgement
+    # they often cannot make, and asking anyway would fill the column with guesses. The breed
+    # asked for later in the flow is the straw's, which is a different fact about a different
+    # thing.
+    breed = serializers.CharField(max_length=30, required=False, allow_blank=True)
     ear_tag_no = serializers.CharField(
         max_length=20, required=False, allow_blank=True, allow_null=True
     )
@@ -148,12 +158,15 @@ class AnimalCreateSerializer(serializers.Serializer):
 
     def validate_breed(self, value: str) -> str:
         """
-        The breed must be one the admin has configured.
+        Blank, or one the admin has configured.
 
         Free text here would make the dashboard's breed breakdown meaningless within a
-        month — "Gir", "gir" and "GIR" would all be different breeds.
+        month — "Gir", "gir" and "GIR" would all be different breeds. Blank is not free text:
+        it is the honest record of a breed nobody established.
         """
-        code = value.strip().upper()
+        code = (value or "").strip().upper()
+        if not code:
+            return ""
         if not BreedConfig.objects.filter(code__iexact=code, is_active=True).exists():
             raise serializers.ValidationError("Unknown breed. Use a code from /config/breeds/.")
         return code
@@ -183,7 +196,7 @@ class AnimalCreateSerializer(serializers.Serializer):
             member=owner if owner_type == Animal.OwnerType.MEMBER else None,
             non_member=owner if owner_type == Animal.OwnerType.NON_MEMBER else None,
             animal_type=validated_data["animal_type"],
-            breed=validated_data["breed"],
+            breed=validated_data.get("breed", ""),
             ear_tag_no=validated_data.get("ear_tag_no"),
         )
 

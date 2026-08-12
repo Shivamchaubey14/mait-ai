@@ -81,7 +81,17 @@ class Animal(TimeStampedModel):
     )
 
     animal_type = models.CharField(max_length=4, choices=AnimalType.choices, db_index=True)
-    breed = models.CharField(max_length=30, help_text="BreedConfig.code at time of capture.")
+    breed = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        help_text=(
+            "BreedConfig.code, and the animal's own breed — not the semen's. Optional, "
+            "because a Mait registering a cow in a yard often cannot say what she is, and a "
+            "flow that insists would collect guesses. Fill it in later from the portal or "
+            "the animal endpoint."
+        ),
+    )
     ear_tag_no = models.CharField(
         max_length=20,
         null=True,

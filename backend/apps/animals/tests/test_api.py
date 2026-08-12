@@ -134,6 +134,33 @@ class TestAnimalCreation:
         assert response.status_code == 201
         assert Animal.objects.get().breed == "GIR"
 
+    def test_breed_is_optional(self, mait_client, breeds, member):
+        """
+        Step 4 of the capture flow registers what a Mait can see: cow or buffalo, and the tag
+        if she carries one. Her breed is a judgement they often cannot make, and requiring it
+        would fill the column with guesses — so it is recorded blank and can be corrected
+        later. The breed asked for further down the flow is the straw's, not hers.
+        """
+        response = mait_client.post(
+            f"{BASE}/animals/",
+            {"member_code": member.member_code, "animal_type": AnimalType.COW},
+            format="json",
+        )
+
+        assert response.status_code == 201
+        assert Animal.objects.get().breed == ""
+
+    def test_a_breed_that_is_given_is_still_checked(self, mait_client, breeds, member):
+        """Optional is not free text: a breed supplied has to be one the admin configured."""
+        response = mait_client.post(
+            f"{BASE}/animals/",
+            {"member_code": member.member_code, "animal_type": AnimalType.COW, "breed": "Jersey"},
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert not Animal.objects.exists()
+
     def test_ear_tag_is_optional(self, mait_client, breeds, member):
         response = mait_client.post(
             f"{BASE}/animals/",
