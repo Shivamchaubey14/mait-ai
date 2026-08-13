@@ -12,7 +12,14 @@ request — CI fails on schema drift.
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import MasterUploadViewSet, MemberViewSet, MPPViewSet, NonMemberViewSet
+from .views import (
+    FarmerOTPSendView,
+    FarmerOTPVerifyView,
+    MasterUploadViewSet,
+    MemberViewSet,
+    MPPViewSet,
+    NonMemberViewSet,
+)
 
 app_name = "masterdata"
 
@@ -23,5 +30,9 @@ router.register("members", MemberViewSet, basename="member")
 router.register("non-members", NonMemberViewSet, basename="non-member")
 
 urlpatterns = [
+    # Verification of the farmer, not of a payment: it comes before the capture proceeds and
+    # charges nothing, so it lives with the people rather than with the money.
+    path("farmers/otp/send/", FarmerOTPSendView.as_view(), name="farmer-otp-send"),
+    path("farmers/otp/verify/", FarmerOTPVerifyView.as_view(), name="farmer-otp-verify"),
     path("", include(router.urls)),
 ]

@@ -107,6 +107,11 @@ class OTPLog(models.Model):
 
     class Purpose(models.TextChoices):
         LOGIN = "login", "Mait login"
+        # Sent to the farmer before the capture proceeds, to establish that the person the
+        # Mait says they are standing with is reachable on the number the record carries.
+        # It is not a payment: nothing is charged and nothing moves. It is the answer to
+        # "is this her", asked of her phone rather than of the Mait.
+        FARMER_VERIFY = "farmer_verify", "Farmer identity verification"
         PAYMENT_ONLINE = "payment_online", "Online payment authorisation"
         PAYMENT_COD = "payment_cod", "COD confirmation"
 

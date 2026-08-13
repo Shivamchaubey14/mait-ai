@@ -8,6 +8,7 @@ time out at the proxy long before it finished (SRS §6.1.6).
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -15,6 +16,7 @@ from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.accounts.admin_serializers import MPPAssignmentSerializer
 from apps.animals.queries import animals_with_history
@@ -22,6 +24,8 @@ from apps.core.dispatch import run_in_background
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait
 from apps.core.services import record_audit
+from apps.payments.models import OTPLog
+from apps.payments.services import issue_otp, verify_otp
 
 from . import columns as cols
 from .models import MPP, DataUploadLog, Member, NonMember
@@ -38,6 +42,12 @@ from .serializers import (
 )
 from .tasks import process_master_upload
 from .templates_xlsx import assignment_template_response
+from .verification import (
+    FarmerKeySerializer,
+    FarmerOTPVerifySerializer,
+    mask_mobile,
+    resolve_farmer,
+)
 
 
 @extend_schema(tags=["master-data"])
@@ -384,3 +394,93 @@ class NonMemberViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, views
             request=self.request,
             meta={"mpp_id": non_member.mpp_id},
         )
+
+
+@extend_schema(tags=["master-data"])
+class FarmerOTPSendView(APIView):
+    """Send a verification code to a farmer's own number (SRS §6.5)."""
+
+    permission_classes = [IsMait]
+    throttle_scope = "otp_send"
+
+    @extend_schema(
+        summary="Send a farmer verification code",
+        description=(
+            "The code goes to the number on the farmer's record, never to a number in the "
+            "request. A Mait who could nominate the destination could nominate their own "
+            "phone, and a verification a Mait can satisfy alone verifies nothing.\n\n"
+            "A farmer whose record carries no mobile number cannot be verified at all, and "
+            "is refused here rather than at the end of the capture."
+        ),
+        request=FarmerKeySerializer,
+        responses={200: dict},
+    )
+    def post(self, request):
+        serializer = FarmerKeySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        mait = getattr(request.user, "mait_profile", None)
+        farmer, mobile_no = resolve_farmer(mait=mait, **serializer.validated_data)
+        if farmer is None:
+            return Response(
+                {"detail": "No such farmer at your MPPs."}, status=status.HTTP_404_NOT_FOUND
+            )
+        if not mobile_no:
+            return Response(
+                {"detail": "No mobile number on record — she must add it at the collection point."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        issue_otp(mobile_no=mobile_no, purpose=OTPLog.Purpose.FARMER_VERIFY)
+        return Response(
+            {
+                "mobile_no": mask_mobile(mobile_no),
+                "expires_in_seconds": settings.OTP_EXPIRY_SECONDS,
+            }
+        )
+
+
+@extend_schema(tags=["master-data"])
+class FarmerOTPVerifyView(APIView):
+    """Check the code the farmer read out (SRS §6.5.1)."""
+
+    permission_classes = [IsMait]
+    throttle_scope = "otp_verify"
+
+    @extend_schema(
+        summary="Verify a farmer verification code",
+        description=(
+            "Expires after five minutes; three wrong attempts force a resend. Expired, "
+            "wrong and out-of-attempts are distinct problem types, because each needs a "
+            "different action from a Mait standing in a yard."
+        ),
+        request=FarmerOTPVerifySerializer,
+        responses={200: dict},
+    )
+    def post(self, request):
+        serializer = FarmerOTPVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        mait = getattr(request.user, "mait_profile", None)
+        farmer, mobile_no = resolve_farmer(
+            mait=mait,
+            member_code=data["member_code"],
+            non_member_id=data.get("non_member_id"),
+        )
+        if farmer is None or not mobile_no:
+            return Response(
+                {"detail": "No such farmer at your MPPs."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Raises OTPInvalid / OTPExpired / OTPAttemptsExceeded, each its own problem type.
+        verify_otp(mobile_no=mobile_no, purpose=OTPLog.Purpose.FARMER_VERIFY, code=data["otp"])
+
+        record_audit(
+            action=AuditLog.Action.UPDATE,
+            entity_type="member" if data["member_code"] else "non_member",
+            entity_id=farmer.id,
+            request=request,
+            meta={"farmer_verified": True},
+        )
+        return Response({"verified": True, "mobile_no": mask_mobile(mobile_no)})
