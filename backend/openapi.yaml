@@ -1780,6 +1780,68 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/farmers/otp/send/:
+    post:
+      operationId: farmers_otp_send_create
+      description: |-
+        The code goes to the number on the farmer's record, never to a number in the request. A Mait who could nominate the destination could nominate their own phone, and a verification a Mait can satisfy alone verifies nothing.
+
+        A farmer whose record carries no mobile number cannot be verified at all, and is refused here rather than at the end of the capture.
+      summary: Send a farmer verification code
+      tags:
+      - master-data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FarmerKeyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FarmerKeyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FarmerKeyRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/farmers/otp/verify/:
+    post:
+      operationId: farmers_otp_verify_create
+      description: Expires after five minutes; three wrong attempts force a resend.
+        Expired, wrong and out-of-attempts are distinct problem types, because each
+        needs a different action from a Mait standing in a yard.
+      summary: Verify a farmer verification code
+      tags:
+      - master-data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FarmerOTPVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FarmerOTPVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FarmerOTPVerifyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/health/:
     get:
       operationId: health_retrieve
@@ -2684,8 +2746,16 @@ components:
         one cannot be de-duplicated afterwards, and by then the damage is a double insemination
         record.
 
-        ``straw_unique_no`` is optional. Supplied, the event is validated against stock and lands
-        in ``straw_verified``; omitted, it stays a ``draft`` the Mait can come back to.
+        The straw is named by **breed**, not by number. Reading a number means lifting the goblet
+        out of the liquid nitrogen, which warms every straw in it — the app would be asking a Mait
+        to damage the semen in order to record it. So ``semen_breed`` opens the capture and holds
+        one straw of that breed from the Mait's stock, and the gate becomes a count: ten straws of
+        a breed complete ten inseminations of it.
+
+        ``straw_unique_no`` remains accepted for the cases where a number is genuinely known
+        without opening anything — a depot scan, an admin correction, a barcode on the goblet.
+        Supplied, it is validated against stock as before and wins over the breed. With neither,
+        the event stays a ``draft`` the Mait can come back to.
       properties:
         client_uuid:
           type: string
@@ -2707,9 +2777,9 @@ components:
           maxLength: 30
         semen_breed:
           type: string
-          description: Breed of the straw used. Needed only when the number is not
-            on record yet and the Mait is carrying unnumbered stock in more than one
-            breed — the number alone cannot say which bundle it came from.
+          description: 'Breed of the straw used. This is how the capture flow names
+            a straw: one of that breed is held from the Mait''s stock and deducted
+            at completion, with no number read and no goblet lifted out of the nitrogen.'
           maxLength: 30
       required:
       - animal_id
@@ -3404,6 +3474,30 @@ components:
         * `completed` - Completed
         * `completed_with_errors` - Completed with errors
         * `failed` - Failed
+    FarmerKeyRequest:
+      type: object
+      description: Exactly one of the two ways to name a farmer.
+      properties:
+        member_code:
+          type: string
+        non_member_id:
+          type: integer
+          nullable: true
+    FarmerOTPVerifyRequest:
+      type: object
+      description: Exactly one of the two ways to name a farmer.
+      properties:
+        member_code:
+          type: string
+        non_member_id:
+          type: integer
+          nullable: true
+        otp:
+          type: string
+          minLength: 1
+          maxLength: 10
+      required:
+      - otp
     Indent:
       type: object
       description: |-
