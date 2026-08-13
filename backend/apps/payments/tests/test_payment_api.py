@@ -268,3 +268,38 @@ class TestScoping:
 
         assert response.status_code == 404
         assert not Payment.objects.exists()
+
+
+class TestPricingAcrossSpecies:
+    def test_a_buffalo_straw_used_on_a_cow_is_still_priced(
+        self, mait_client, mpp, member, animal, stocked_mait, db
+    ):
+        """
+        The rate belongs to the semen, not to the animal it goes into.
+
+        Keying it on the animal's species left a MURRAH straw used on a cow unpriced — there is
+        no COW/MURRAH row to find — and the app told the Mait the breed had no rate when the
+        dairy had priced it perfectly well.
+        """
+        BreedConfig.objects.create(
+            animal_type=AnimalType.BUFFALO, code="GIR", name="Gir", rate=275, non_member_rate=400
+        )
+        stocked_mait(1)
+        event_id = open_event(mait_client, mpp, animal, member=member)
+
+        response = mait_client.get(f"{BASE}/payments/{event_id}/amount/")
+
+        assert response.json()["amount_due"] == "275.00"
+
+    def test_the_animal_s_own_species_still_wins_where_both_exist(
+        self, mait_client, mpp, member, animal, stocked_mait, priced_breed, db
+    ):
+        BreedConfig.objects.create(
+            animal_type=AnimalType.BUFFALO, code="GIR", name="Gir", rate=999, non_member_rate=999
+        )
+        stocked_mait(1)
+        event_id = open_event(mait_client, mpp, animal, member=member)
+
+        response = mait_client.get(f"{BASE}/payments/{event_id}/amount/")
+
+        assert response.json()["amount_due"] == "300.00"

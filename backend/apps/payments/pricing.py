@@ -26,10 +26,14 @@ def price_for(*, breed: str, animal_type: str, owner_type: str) -> Decimal | Non
     as "free" — the app says the service is chargeable without naming a figure, and the
     dairy's back office is the one that has to fill the gap.
     """
+    # Keyed on the straw's breed, and only *preferring* the animal's species — the rate belongs
+    # to the semen, not to the cow it goes into. Keying on the animal's species left a buffalo
+    # straw used on a cow with no price at all: there is no COW/MURRAH row to find, and the
+    # screen told a Mait the breed was unpriced when the dairy had priced it perfectly well.
+    candidates = BreedConfig.objects.filter(code=(breed or "").strip().upper())
     config = (
-        BreedConfig.objects.filter(code=(breed or "").strip().upper(), animal_type=animal_type)
-        .order_by("-is_active")
-        .first()
+        candidates.filter(animal_type=animal_type).order_by("-is_active").first()
+        or candidates.order_by("-is_active").first()
     )
     if config is None:
         return None
