@@ -1392,6 +1392,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/Animal'
           description: ''
+  /api/v1/animals/{id}/photo/:
+    patch:
+      operationId: animals_photo_partial_update
+      description: |-
+        Multipart: `photo`. Taken when the animal is registered, so the Mait recognises her on the next visit — most animals here carry no ear tag.
+
+        Separate from registration rather than part of it: the animal must exist even if the upload fails, because the capture flow is standing on her id and a village connection is the least reliable thing in it.
+      summary: Attach her portrait
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this animal.
+        required: true
+      tags:
+      - animals
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAnimalPhotoRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAnimalPhotoRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Animal'
+          description: ''
   /api/v1/auth/login/:
     post:
       operationId: auth_login_create
@@ -2880,6 +2914,12 @@ components:
           nullable: true
           description: Optional, but unique across the platform when present (SRS
             §6.3 step 3).
+        photo_url:
+          type: string
+          readOnly: true
+          description: A portrait taken when she was registered, so the Mait recognises
+            her on the next visit. Most animals here carry no ear tag, and 'the black
+            one' is not a record.
         ai_event_count:
           type: integer
           readOnly: true
@@ -2905,6 +2945,7 @@ components:
       - non_member
       - owner_name
       - owner_type
+      - photo_url
     AnimalCreateRequest:
       type: object
       description: |-
@@ -4606,6 +4647,18 @@ components:
           type: string
           writeOnly: true
           minLength: 10
+    PatchedAnimalPhotoRequest:
+      type: object
+      description: |-
+        Her portrait, taken at registration.
+
+        No GPS and no timestamp, unlike a proof photo: this is not evidence of anything that
+        happened, it is how a Mait recognises the animal on the next visit. Most animals in this
+        data carry no ear tag, and "the black one at the back" is not a record.
+      properties:
+        photo:
+          type: string
+          format: binary
     PatchedAnimalUpdateRequest:
       type: object
       description: Correct a breed or add an ear tag later (SRS §9.4).
