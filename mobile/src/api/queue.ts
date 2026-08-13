@@ -25,7 +25,27 @@ import { IDEMPOTENCY_TTL_HOURS } from '@/config/env';
 const STORAGE_KEY = 'maitai.queue.v1';
 
 /** What the job asks the server to do. One per write in the capture flow. */
-export type QueuedKind = 'createEvent' | 'attachPhoto' | 'completeEvent';
+export type QueuedKind = 'createEvent' | 'attachPhoto' | 'completeEvent' | 'verifyPayment';
+
+/**
+ * Enough of the capture to name it on a screen the Mait comes back to.
+ *
+ * Held on the job rather than fetched: the whole point of a queue is that the server cannot be
+ * reached, so a list that had to ask the server who these people were would be blank exactly
+ * when it is needed.
+ */
+export interface QueuedLabel {
+  /** Whose insemination it was. */
+  farmer: string;
+  kind: 'member' | 'nonMember';
+  /** What was collected, where anything was. Members hand over nothing. */
+  amount?: string | null;
+  mode?: 'COD' | 'ONLINE';
+  /** The device clock when the capture happened — "9:20" on the row. */
+  at: string;
+  /** The event this job belongs to, for the screens that need to reopen it. */
+  eventId?: number;
+}
 
 export interface QueuedJob {
   /** Unique per job. The capture's uuid is in `clientUuid`, and several jobs share it. */
@@ -39,6 +59,7 @@ export interface QueuedJob {
   queuedAt: number;
   attempts: number;
   lastError?: string;
+  label?: QueuedLabel;
 }
 
 function newJobId(): string {
@@ -70,6 +91,7 @@ export async function enqueue(
   kind: QueuedKind,
   clientUuid: string,
   payload: Record<string, unknown>,
+  label?: QueuedLabel,
 ): Promise<QueuedJob> {
   const job: QueuedJob = {
     id: newJobId(),
@@ -78,6 +100,7 @@ export async function enqueue(
     payload,
     queuedAt: Date.now(),
     attempts: 0,
+    ...(label ? { label } : {}),
   };
   const jobs = await readQueue();
   jobs.push(job);

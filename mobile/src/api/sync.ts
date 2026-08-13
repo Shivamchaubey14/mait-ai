@@ -39,6 +39,21 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
     });
   }
 
+  /**
+   * A payment recorded in a village, with the farmer's code still to be checked.
+   *
+   * It is queued rather than dropped because the cash is already in the Mait's hand: the
+   * event exists and the money moved, and the only thing missing is her confirmation. Sent
+   * on its own so a code typed later needs no second trip through the capture.
+   */
+  if (job.kind === 'verifyPayment') {
+    return fetch(`${API_BASE_URL}/payments/${job.payload.eventId}/initiate/`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: job.payload.mode }),
+    });
+  }
+
   if (job.kind === 'completeEvent') {
     return fetch(`${API_BASE_URL}/ai-events/${job.payload.eventId}/complete/`, {
       method: 'POST',
