@@ -35,8 +35,14 @@ def generate_code(mobile_no: str = "") -> str:
     Cryptographically random numeric OTP. ``secrets``, never ``random``.
 
     Numbers listed in ``DEV_FIXED_OTP_NUMBERS`` get a known code instead, so the app can be
-    demonstrated without a live SMS gateway. That list is empty everywhere but development,
-    and ``config/settings/production.py`` refuses to start if it is not.
+    demonstrated without a live SMS gateway. ``*`` in that list means every number, which is
+    what makes the farmer-verification step demonstrable at all: a Mait testing the flow works
+    through a 105,000-row member master, and the code is sent to whichever farmer they picked,
+    on a phone nobody in the room is holding.
+
+    That list is empty everywhere but development, and ``config/settings/production.py``
+    refuses to start if it is set to anything — the wildcard included, since the guard tests
+    the list rather than its contents.
 
     The substitution happens *here*, at generation, on purpose. Verification, expiry, the
     attempt limit and the audit log all behave exactly as they do for a real code — there is
@@ -44,7 +50,7 @@ def generate_code(mobile_no: str = "") -> str:
     that could be left enabled by accident.
     """
     fixed_numbers = getattr(settings, "DEV_FIXED_OTP_NUMBERS", [])
-    if mobile_no and mobile_no in fixed_numbers:
+    if mobile_no and ("*" in fixed_numbers or mobile_no in fixed_numbers):
         logger.warning(
             "Issuing the fixed development OTP — this number is not secured",
             extra={"mobile_no": mobile_no},
@@ -231,7 +237,10 @@ def send_sms(*, mobile_no: str, code: str, purpose: str) -> str | None:
         # ASCII only. A Windows console runs on a legacy codepage that cannot encode
         # characters like "→", and the UnicodeEncodeError surfaces as a 500 on the OTP
         # endpoint — a long way from anything that looks like a printing problem.
-        print(f"[SMS to {mobile_no}] Mait AI OTP for {purpose}: {code}")
+        # Flushed, because stdout is block-buffered whenever the server is not attached to a
+        # terminal — which is how it runs under a task runner or a supervisor. Unflushed, the
+        # one thing this provider exists to do never appears.
+        print(f"[SMS to {mobile_no}] Mait AI OTP for {purpose}: {code}", flush=True)
         return "console"
 
     raise NotImplementedError(

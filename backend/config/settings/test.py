@@ -29,6 +29,13 @@ CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"
 
 SMS_GATEWAY = {"PROVIDER": "dummy", "API_KEY": "", "SENDER_ID": "TEST"}
 
+# Off, whatever a developer keeps in their own .env. It is read from the environment in
+# `base`, so a machine set up to demo the app with a fixed code was quietly running a
+# different suite from CI: every OTP the same six digits, and the tests that prove a resend
+# invalidates the previous code passing or failing by accident of local configuration.
+# The tests that need a known code set it themselves, per test.
+DEV_FIXED_OTP_NUMBERS: list[str] = []
+
 # Throttling off by default; the throttle tests re-enable it explicitly.
 REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     k: None for k in REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]

@@ -13,6 +13,7 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
+from apps.core.exceptions import OTPInvalid
 from apps.payments.models import OTPLog
 from apps.payments.services import generate_code, issue_otp, verify_otp
 
@@ -28,6 +29,30 @@ def fixed_otp_enabled(settings):
     settings.DEV_FIXED_OTP_NUMBERS = [TEST_NUMBER]
     settings.DEV_FIXED_OTP_CODE = "123456"
     return settings
+
+
+class TestWildcard:
+    """
+    ``*`` means every number, and exists so the farmer-verification step can be demonstrated
+    at all: the code goes to whichever of 105,000 members the Mait picked, on a phone nobody
+    testing the app is holding.
+    """
+
+    def test_the_wildcard_covers_any_number(self, settings):
+        settings.DEV_FIXED_OTP_NUMBERS = ["*"]
+        settings.DEV_FIXED_OTP_CODE = "123456"
+
+        assert generate_code(OTHER_NUMBER) == "123456"
+        assert generate_code("7081820448") == "123456"
+
+    def test_a_wrong_code_is_still_rejected_under_the_wildcard(self, settings, db):
+        """Every number gets a *known* code, not a free pass: the wrong one still fails."""
+        settings.DEV_FIXED_OTP_NUMBERS = ["*"]
+        settings.DEV_FIXED_OTP_CODE = "123456"
+        issue_otp(mobile_no=OTHER_NUMBER, purpose=OTPLog.Purpose.FARMER_VERIFY)
+
+        with pytest.raises(OTPInvalid):
+            verify_otp(mobile_no=OTHER_NUMBER, purpose=OTPLog.Purpose.FARMER_VERIFY, code="000000")
 
 
 @pytest.mark.usefixtures("fixed_otp_enabled")
