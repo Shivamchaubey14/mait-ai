@@ -12,8 +12,22 @@ request — CI fails on schema drift.
 
 from django.urls import path
 
+from .views import (
+    PaymentAmountView,
+    PaymentDetailView,
+    PaymentInitiateView,
+    PaymentOTPVerifyView,
+    PaymentProofView,
+)
+
 app_name = "payments"
 
-urlpatterns: list[path] = [
-    # Populated in Phase 4, Days 15-17.
+# Keyed by the AI event, not by a payment id: that is what the app has in its hand, and one
+# event has exactly one payment. A Mait never sees a payment id.
+urlpatterns = [
+    path("<int:ai_event_id>/", PaymentDetailView.as_view(), name="detail"),
+    path("<int:ai_event_id>/amount/", PaymentAmountView.as_view(), name="amount"),
+    path("<int:ai_event_id>/initiate/", PaymentInitiateView.as_view(), name="initiate"),
+    path("<int:ai_event_id>/otp/verify/", PaymentOTPVerifyView.as_view(), name="otp-verify"),
+    path("<int:ai_event_id>/proof/", PaymentProofView.as_view(), name="proof"),
 ]

@@ -26,6 +26,12 @@ class Payment(TimeStampedModel):
     class Mode(models.TextChoices):
         ONLINE = "ONLINE", "Online"
         COD = "COD", "Cash on delivery"
+        # A member hands over nothing. The dairy takes the charge out of her milk payment at
+        # the next payout, so the row exists to be reconciled against that payout rather than
+        # to record a collection — and it needs no authorisation, because nobody is being
+        # asked for money. The two check constraints below only bite on ONLINE and COD, so
+        # this mode can be verified on its own.
+        DEDUCTION = "DEDUCT", "Deducted from milk payment"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -90,6 +96,11 @@ class Payment(TimeStampedModel):
     @property
     def requirements_met(self) -> bool:
         """Whether everything this mode needs has been collected (SRS §6.5)."""
+        # A deduction asks nothing of anybody. Nothing changed hands in the yard, so there is
+        # no authorisation to collect and no proof to upload — the dairy settles it against a
+        # milk payment it already owes her, and this row is what it settles against.
+        if self.mode == self.Mode.DEDUCTION:
+            return True
         if not self.member_otp_verified:
             return False
         if self.mode == self.Mode.ONLINE:

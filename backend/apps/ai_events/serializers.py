@@ -18,6 +18,7 @@ from rest_framework import serializers
 from apps.animals.models import Animal
 from apps.masterdata.models import MPP, Member, NonMember
 from apps.payments.models import Payment
+from apps.payments.pricing import price_for
 
 from .models import AIEvent, AIEventTimeline
 
@@ -71,6 +72,8 @@ class AIEventSerializer(serializers.ModelSerializer):
     animal_type = serializers.CharField(source="animal.animal_type", read_only=True)
     breed = serializers.CharField(source="animal.breed", read_only=True)
     ear_tag_no = serializers.CharField(source="animal.ear_tag_no", read_only=True)
+    semen_breed = serializers.CharField(source="semen_batch.breed", read_only=True, default="")
+    amount_due = serializers.SerializerMethodField()
 
     class Meta:
         model = AIEvent
@@ -94,6 +97,8 @@ class AIEventSerializer(serializers.ModelSerializer):
             "animal_type",
             "breed",
             "ear_tag_no",
+            "semen_breed",
+            "amount_due",
             "straw_unique_no",
             "ai_photo_url",
             "gps_lat",
@@ -104,6 +109,25 @@ class AIEventSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_amount_due(self, obj) -> str | None:
+        """
+        What this insemination costs, decided by the server and never by the handset.
+
+        A member and a non-member are charged different rates for the same service, and both
+        are the administrator's to set — so the app displays this figure rather than
+        computing one. Null where nobody has priced the breed yet: the app then says the
+        service is chargeable without naming a number, because a figure the system cannot
+        stand behind is heard by the farmer as final.
+        """
+        breed = getattr(obj.semen_batch, "breed", "") if obj.semen_batch_id else ""
+        amount = price_for(
+            breed=breed,
+            animal_type=obj.animal.animal_type,
+            owner_type=obj.owner_type,
+        )
+        return None if amount is None else f"{amount:.2f}"
 
     def get_owner_name(self, obj) -> str:
         owner = obj.owner
