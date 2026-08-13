@@ -147,20 +147,36 @@ choosing. Both bands are opaque, so the list passes behind them rather than thro
 the CTA never has to be scrolled back to. Steps that read a list off the server carry
 pull-to-refresh.
 
-The six counted steps are **owner type → MPP → farmer → animal → breed → straw**. They are the
-six questions with an answer to pick. The proof photo follows them under its own name rather
-than a seventh number — it is not a choice, it is a thing done — and the screens past it
-(payment, done) are named for the same reason. Payment is also Phase 4 and does not exist yet;
-counting a screen that never arrives made the indicator promise a step that was really the
-last. Restore `collectPayment` to `AI_FLOW_STEPS` when payments land — the bar reads that
-list's length, so nothing else moves.
+The six counted steps are **owner type → MPP → farmer → animal → straw → photo**.
+
+**Six steps, eight screens.** A step is a question, not a screen, and two of them are asked
+over two: the farmer is found (C3) and then read back to her own phone (C4), and the animal
+step (C6) can open a sheet to register one. Both halves carry the same number, because the bar
+measures how far through the work a Mait is rather than how many screens they have touched —
+and a bar that advanced on a confirmation would promise progress that had not happened.
+
+**There is no straw-number screen.** The number printed on a straw can only be read by lifting
+the goblet clear of the liquid nitrogen, which warms every straw in it — cumulatively and
+invisibly, so the cost is not the Mait's time but the viability of the semen they are about to
+use and of everything beside it. The app was asking a Mait to damage the semen in order to
+record it. Step 5 asks the **breed** and the platform holds one straw of it from their stock,
+so the gate becomes a count rather than an identity: ten straws of a breed still complete
+exactly ten inseminations, and the eleventh is still refused. The API still accepts a number
+where one is genuinely known — a depot scan, an admin correction — and traceability survives
+wherever stock was issued numbered, because the row the platform picks carries its own number.
+
+The photo is the sixth and last: it is the act the whole flow exists to evidence. The screens
+past it — payment, done — are named rather than numbered. Payment is Phase 4 and does not
+exist yet; counting a screen that never arrives made the indicator promise a step that was
+really the last. Restore `collectPayment` to `AI_FLOW_STEPS` when payments land — the bar
+reads that list's length, so nothing else moves.
 
 | # | Screen | Status | Contents |
 | --- | --- | --- | --- |
 | C1 | **Step 1 — Owner type** | ✅ · designed | *Is she a member?* Two option cards — Member "Sells milk to the cooperative", Non-member "You collect ₹ n today" — defaulting to Member, with a note that everything after depends on the answer. The only step that keeps the tab bar: nothing is committed yet, so leaving costs a tap rather than a record. The fee is named only when `extra.nonMemberFee` is configured. |
 | M4 | **Step 2 — Select MPP** | ✅ · designed | *Which collection point?* Search by name or code, then rows carrying a two-letter initials tile, `MPP0004120 · 412 members`, and a `Last used` pill on wherever the previous event was recorded. Tap selects, Continue commits. Auto-skips when the Mait covers only one. **Not "Nearest"** — the MPP master has no coordinates, so no row can honestly claim distance; that pill needs lat/long on the master plus a location read. |
 | C3 | **Step 3 — Which member** | ✅ · designed | *Which member?* A pinned search box over the MPP's roster — by code, name or mobile. Rows carry a round initials avatar in pale green, the name, and `MEM00000412 · 98765 43210`, the mobile grouped the way it is read back to her. A member with no mobile is shown but **not selectable**: greyed avatar, the reason in red where the code would be, a `Blocked` pill, and one blue line under the list saying where the fix is — *No mobile, no record — she must add it at the collection point.* The way out is a green text link, **She is not a member**, never a card in the list. Reached only when C1 said Member. |
-| C4 | **Step 3, second half — Is this her?** | ✅ · designed | *Is this her?* — *A wrong code here puts the record on another woman's animal.* One card, read back before the flow acts: a round initials avatar, her name, the code that was typed in green, then **MPP · Mobile · Father/husband · Animals** in a two-by-two grid. Her village is deliberately not among them — it is not on the member master, and the collection point is what the record is keyed to and what catches the commonest mis-tap, the right name at the wrong MPP. Under it a green statement, *Nothing to collect — ₹ n comes out of her milk payment*, then **No — search again** over **Yes, continue**. It re-uses step 3's number and draws no second progress bar: this is the same question's second half, and the height buys the card its place on one unscrolled screen. |
+| C4 | **Step 3, second half — Is this her?** | ✅ · designed | *Is this her?* — *A wrong code here puts the record on another woman's animal.* One card, read back before the flow acts: a round initials avatar, her name, the code that was typed in green, then **MPP · Mobile · Father/husband · Animals** in a two-by-two grid. **Then read back to her phone.** The button is one of three things in turn — *Verify her number*, *Check the code*, *Yes, continue* — and the flow cannot pass until she has answered on the number her record carries. Both kinds of farmer come through here: a member against the number SAP holds, a non-member against the one the Mait just typed, which is the number her receipt will go to. A farmer with no mobile cannot be verified at all, and the screen says so instead of failing later. Her village is deliberately not among them — it is not on the member master, and the collection point is what the record is keyed to and what catches the commonest mis-tap, the right name at the wrong MPP. Under it a green statement, *Nothing to collect — ₹ n comes out of her milk payment*, then **No — search again** over **Yes, continue**. It re-uses step 3's number and draws no second progress bar: this is the same question's second half, and the height buys the card its place on one unscrolled screen. |
 | M6 | **Step 3b — Add non-member** | ✅ · designed | *Who is she?* Labelled boxes, each with a tinted icon — her name, father/husband name, mobile (`10 digits`), village, **Aadhaar (mandatory, 12 digits)** — over a consent checkbox naming the brand in the sentence. Reached straight from the MPP step when C1 said Non-member. |
 
 **The Aadhaar check is a fraud control, not a form field.** This is the one screen in the
@@ -181,9 +197,8 @@ which is a data gap to close upstream. The number itself is stored encrypted, re
 storing card images carries UIDAI obligations a masked number does not.
 | C6 | **Step 4 — Select animal** | ✅ · designed | *Which animal?* A Cow/Buffalo segmented control over the farmer's animals, each row led by **her photograph** where there is one and by a handle (`C1`, `C2`) where there is not, then her tag or `no tag`, and *Last AI 14 Mar 2026 · HF Cross* — because two untagged cows are told apart by a face, by when they were last served, and by nothing else the app holds. A dashed **Add an animal** card ends the list: a place for a record rather than another record. |
 | C6b | **Add an animal** | ✅ · designed | A sheet over C6, not a screen — registering is a detour from the list, handed straight back to it, so the question stays legible behind and the tab bar is not covered. Named for the farmer it will register against (*For Kavita Devi · MEM00000412*). Asks four things in the order a Mait can answer them by looking at the animal: cow or buffalo, her breed from a **dropdown** (the one closed list in the flow — twenty breed cards would bury the two fields under them), her ear tag *— optional*, and **a photograph**. The photo is the point: most animals here carry no tag, and next visit the row shows her face. Registration and the upload are two calls, and only the photo is allowed to fail. |
-| C7 | **Step 5 — Which breed** | ✅ · designed | *Which breed?* The straw's breed, asked before its number, so a Mait carrying unnumbered stock in two breeds is asked a question instead of refused one. Rows carry `18 straws with you`, a `Low` pill under five, and every configured breed the flask is empty of shown **blocked** with `None in your stock` — never hidden. Most-carried first. |
-| M8 | **Step 6 — Scan straw** | ⬜ | Camera barcode scan + manual entry fallback. Must show two distinct rejections: "not in your stock" and "already used". |
-| M9 | **Proof photo** | ⬜ | Full-bleed camera, no gallery button. GPS + timestamp overlay. Retake. Named, not numbered. |
+| C7 | **Step 5 — Which breed** | ✅ · designed | *Which breed?* The straw's breed, asked before its number, so a Mait carrying unnumbered stock in two breeds is asked a question instead of refused one. **Opens already answered with the animal's own breed**, where the flask holds it — like to like is the ordinary case, so agreeing costs one tap and every other breed is still one tap away. Rows carry `18 straws with you`, a `Low` pill under five, and every configured breed the flask is empty of shown **blocked** with `None in your stock` — never hidden. Most-carried first. |
+| C9 | **Step 6 — Take the proof photo** | ✅ · designed | Ink screen, the step and the question on the page rather than in a card — the body is a live camera and it wants the room. The preview sits inside a **dashed frame**, a space to be filled, captioned *The animal and the Mait in frame*. Under it, the two facts that will be stamped on the record: the GPS pin and `11 Aug · 10:42`, shown **before** the shutter so a Mait knows what they are about to capture. Three controls: flip camera, a green-ringed shutter, and a **torch** — sheds are dark at the hours a Mait works, and a light that stays on lets them frame the shot first. Still no gallery button (SRS §6.3 step 5). |
 | M10 | **Payment mode** | ⬜ | Online vs Cash. Amount. Phase 4 — not counted in the six until it exists. |
 | M11 | **Payment — OTP entry** | ⬜ | Member authorisation OTP. |
 | M12 | **Payment — online proof** | ⬜ | UTR field + screenshot capture. |

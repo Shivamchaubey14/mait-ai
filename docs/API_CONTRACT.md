@@ -96,6 +96,19 @@ would lock a working Mait out of the app.
 | GET | `/members/{member_code}/` | Member detail incl. animals | JWT |
 | POST | `/non-members/` | Register a new non-member on the fly | Mait |
 | GET | `/non-members/{id}/` | Non-member detail | JWT |
+| POST | `/farmers/otp/send/` | Send a verification code to a farmer, before the capture proceeds | Mait |
+| POST | `/farmers/otp/verify/` | Check the code she read out | Mait |
+
+**The farmer's number is never in the request.** Both calls name her by `member_code` *or*
+`non_member_id`, and the server reads the destination off her record. A Mait who could
+nominate the number could nominate their own phone, and a verification a Mait can satisfy
+alone verifies nothing. The response carries the number masked — `••••• 43210` — which is
+enough to read out and not enough to copy off a screen being passed around a yard.
+
+Five-minute expiry, three attempts, `otp-invalid` / `otp-expired` / `otp-attempts-exceeded` as
+distinct problem types: the same mechanics as login and payment authorisation, because a
+second implementation would be a second thing to get wrong. A farmer with no mobile number on
+record is refused at `send` with 400 rather than at the end of the capture.
 
 ## 9.4 Animal
 
@@ -260,10 +273,12 @@ The sequence mobile implements. Every transition is validated server-side; none 
 skipped or backdated from the client.
 
 ```
-POST   /ai-events/                      { mpp, member|non_member, animal, straw_unique_no }
-       └─ 201 { id, status: "draft" }
-GET    /semen-batches/{no}/validate/    → 200 in_stock:true  |  400 not_in_stock / already_used
-       └─ status: "straw_verified"
+POST   /ai-events/                      { mpp, member|non_member, animal, semen_breed }
+       └─ 201 { id, status: "straw_verified" } — one straw of that breed is held from the
+          Mait's stock, and nothing is deducted until completion. No number is read: doing so
+          means lifting the goblet out of the liquid nitrogen and warming every straw in it.
+          `straw_unique_no` is still accepted where a number is known without opening a
+          flask, and wins over the breed when both are sent.
 PATCH  /ai-events/{id}/photo/           multipart: photo, gps_lat, gps_lng
        └─ status: "photo_captured"
 POST   /payments/{id}/initiate/         { mode: "COD" | "ONLINE", amount }
