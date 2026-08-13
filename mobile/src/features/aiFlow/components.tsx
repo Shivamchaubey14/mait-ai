@@ -11,9 +11,12 @@
  * a long list passes behind them rather than through them.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Dimensions,
+  Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -59,6 +62,45 @@ function ProgressSegments({ step }: { step: number }): React.JSX.Element {
       ))}
     </View>
   );
+}
+
+// --------------------------------------------------------------------------------------
+// Keyboard
+// --------------------------------------------------------------------------------------
+/**
+ * How much of the window the keyboard is covering, in points.
+ *
+ * `KeyboardAvoidingView` is no use to a sheet: it pads a view inside the layout, and a sheet
+ * is positioned absolutely over the top of one, so there is nothing for the padding to push.
+ * This measures the overlap directly — the window's bottom edge minus where the keyboard
+ * starts — which is the one number that is right under both of Android's soft-input modes and
+ * under iOS.
+ *
+ * Read fresh on each event rather than captured once: the window is a different height in
+ * landscape, and on a resizing Android window it is a different height with the keyboard up.
+ */
+export function useKeyboardOverlap(): number {
+  const [overlap, setOverlap] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      event => {
+        const windowHeight = Dimensions.get('window').height;
+        setOverlap(Math.max(0, windowHeight - event.endCoordinates.screenY));
+      },
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setOverlap(0),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  return overlap;
 }
 
 // --------------------------------------------------------------------------------------
@@ -623,6 +665,7 @@ export function FieldCard({
  */
 export function LabelledField({
   label,
+  optionalNote,
   tone = 'neutral',
   icon,
   hint,
@@ -630,6 +673,13 @@ export function LabelledField({
   ...inputProps
 }: {
   label: string;
+  /**
+   * Rendered after the label, in the accent — "— optional".
+   *
+   * Said on the label rather than in the placeholder, because the placeholder disappears the
+   * moment the Mait starts typing and takes the permission to leave it blank with it.
+   */
+  optionalNote?: string;
   tone?: Tone;
   /** Sits inside the box, left of the value, tinted to match the label. */
   icon?: React.ComponentProps<typeof Ionicons>['name'];
@@ -640,7 +690,10 @@ export function LabelledField({
 
   return (
     <View style={styles.fieldWrap}>
-      <Text style={[styles.labelledLabel, { color: SWATCH_TINT[tone] }]}>{label}</Text>
+      <Text style={[styles.labelledLabel, { color: SWATCH_TINT[tone] }]}>
+        {label}
+        {!!optionalNote && <Text style={styles.optionalNote}> {optionalNote}</Text>}
+      </Text>
       <View
         style={[
           styles.labelledBox,
@@ -660,9 +713,18 @@ export function LabelledField({
           style={styles.labelledInput}
           placeholderTextColor={colors.textDisabled}
           accessibilityLabel={label}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
           {...inputProps}
+          /* Composed, not overridden. A caller that wants to know about focus — to scroll the
+             field clear of the keyboard, say — must not silently cost the box its focus
+             ring, which is what spreading the caller's props last used to do. */
+          onFocus={event => {
+            setFocused(true);
+            inputProps.onFocus?.(event);
+          }}
+          onBlur={event => {
+            setFocused(false);
+            inputProps.onBlur?.(event);
+          }}
         />
       </View>
       {!!error && <Text style={styles.fieldError}>{error}</Text>}
@@ -701,6 +763,100 @@ export function CheckboxRow({
       </View>
       <View style={styles.cardBody}>{children}</View>
     </Pressable>
+  );
+}
+
+/**
+ * A closed list, opened on demand.
+ *
+ * The flow picks from cards everywhere else, and it should: a card list is one tap and it
+ * survives sunlight and cold hands. This is the exception, for a list that is long, dull and
+ * already familiar — the breeds a Mait registers animals against. Twenty cards would bury the
+ * two fields under it and turn a three-field form into a page of scrolling.
+ */
+export function Dropdown<T extends string>({
+  label,
+  optionalNote,
+  placeholder,
+  value,
+  options,
+  onChange,
+  testID,
+}: {
+  label: string;
+  /** Rendered after the label, in the accent — "— optional". */
+  optionalNote?: string;
+  placeholder: string;
+  value: T | null;
+  options: { value: T; label: string }[];
+  onChange: (next: T) => void;
+  testID?: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const chosen = options.find(option => option.value === value) ?? null;
+
+  return (
+    <View style={styles.fieldWrap}>
+      <Text style={styles.sheetLabel}>
+        {label}
+        {!!optionalNote && <Text style={styles.optionalNote}> {optionalNote}</Text>}
+      </Text>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen(true)}
+        style={[styles.labelledBox, !!chosen && styles.labelledBoxFocused]}
+        testID={testID}
+      >
+        <Text
+          style={[styles.dropdownValue, !chosen && styles.dropdownPlaceholder]}
+          numberOfLines={1}
+        >
+          {chosen?.label ?? placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
+      </Pressable>
+
+      {/* A sheet of its own rather than an inline expansion: an inline list would push the
+          fields under it off the screen exactly when the Mait is working down them. */}
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable
+          style={styles.scrim}
+          accessibilityLabel={t('common.close')}
+          onPress={() => setOpen(false)}
+        >
+          <Pressable style={styles.dropdownSheet} onPress={() => {}}>
+            <Text style={styles.dropdownHeading}>{label}</Text>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {options.map(option => {
+                const active = option.value === value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                    }}
+                    style={({ pressed }) => [styles.dropdownOption, pressed && styles.cardPressed]}
+                    testID={testID ? `${testID}-${option.value}` : undefined}
+                  >
+                    <Text style={[styles.dropdownOptionLabel, active && styles.dropdownOptionOn]}>
+                      {option.label}
+                    </Text>
+                    {active && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }
 
@@ -1037,6 +1193,41 @@ const styles = StyleSheet.create({
   segmentLabel: { ...typography.bodyStrong, color: colors.text },
   segmentLabelActive: { color: colors.surface, fontFamily: fonts.headingBold },
 
+  // A form label inside the sheet: green, because on white it has to separate itself from the
+  // value under it without shouting, and Ink at this size reads as another value.
+  sheetLabel: { ...typography.label, color: colors.primaryDark, marginBottom: spacing[2] },
+  // Yolk 800 — the only yellow safe as text on a pale surface (DESIGN_SYSTEM — Colour).
+  optionalNote: { color: yolk[800] },
+
+  dropdownValue: { flex: 1, ...typography.bodyStrong, fontSize: 16, color: colors.ink },
+  dropdownPlaceholder: { ...typography.body, color: colors.textDisabled },
+  scrim: {
+    flex: 1,
+    backgroundColor: 'rgba(21,35,45,0.45)',
+    justifyContent: 'flex-end',
+  },
+  dropdownSheet: {
+    maxHeight: '60%',
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[5],
+    paddingBottom: spacing[6],
+  },
+  dropdownHeading: { ...typography.h3, color: colors.ink, marginBottom: spacing[3] },
+  dropdownOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: MIN_TOUCH_TARGET,
+    paddingVertical: spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  dropdownOptionLabel: { ...typography.body, fontSize: 16, color: colors.ink },
+  dropdownOptionOn: { ...typography.bodyStrong, fontSize: 16, color: colors.primaryDark },
+
   labelledLabel: { ...typography.label, marginBottom: spacing[2] },
   labelledBox: {
     flexDirection: 'row',
@@ -1211,6 +1402,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  // Closes below as well as above. It carried a top margin only, which was invisible while a
+  // notice was the last thing on a screen and wrong the moment anything followed it — the
+  // empty line above the "add" card sat welded to it.
   notice: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1218,6 +1412,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing[3],
     marginTop: spacing[2],
+    marginBottom: spacing[3],
   },
   noticeSwatch: {
     width: 28,
