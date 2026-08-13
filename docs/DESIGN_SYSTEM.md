@@ -197,6 +197,16 @@ Ink. In order:
 - **Add card** — the same card, dashed and unfilled, ending a list: a place where a record
   could be, rather than another record. Its plus is neutral, never green — the green on a
   picking screen belongs to the row already chosen and to the button that acts on it.
+- **Dropdown** — a closed list, opened into a sheet of its own. The exception, not the rule:
+  the flow picks from cards everywhere else, because a card is one tap and survives sunlight
+  and cold hands. Reach for this only when the list is long, dull and already familiar, and
+  cards of it would bury the fields under them.
+- **Sheet** — a form that belongs to the screen behind it rather than to the flow. Rounded top
+  corners, a grabber, the page dimmed but legible behind, and the tab bar left uncovered when
+  nothing has been committed. It is named for what it will write against (*For Kavita Devi ·
+  MEM00000412*), and its labels are green with an accent *— optional* where a field can be
+  left blank — said on the label, never in the placeholder, which disappears exactly when the
+  permission to skip it is needed.
 - **Field card** — label above the value, the same card shape as a row. Never a bare input
   in the flow.
 - **Info tile** — grey card, small label over a large value (`₹ 300`), pale pill on the
