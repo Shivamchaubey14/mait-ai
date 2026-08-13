@@ -2519,6 +2519,155 @@ paths:
               schema:
                 $ref: '#/components/schemas/NonMemberDetail'
           description: ''
+  /api/v1/payments/{ai_event_id}/:
+    get:
+      operationId: payments_retrieve
+      description: Where a payment has got to, for a screen the Mait comes back to.
+      summary: Payment detail
+      parameters:
+      - in: path
+        name: ai_event_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+  /api/v1/payments/{ai_event_id}/amount/:
+    get:
+      operationId: payments_amount_retrieve
+      description: Read off the breed of the straw used, at the rate the administrator
+        set for this kind of farmer. Members and non-members are priced separately.
+      summary: The amount due for an AI event
+      parameters:
+      - in: path
+        name: ai_event_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIEvent'
+          description: ''
+  /api/v1/payments/{ai_event_id}/initiate/:
+    post:
+      operationId: payments_initiate_create
+      description: |-
+        A **member** pays nothing here: the charge is recorded as a deduction against her milk payment and verified immediately, because nobody is being asked for money and there is nothing to authorise.
+
+        A **non-member** pays the Mait, so `mode` is required — `COD` for cash or `ONLINE` for UPI — and an authorisation code goes to her own number.
+
+        The amount is the administrator's, read off the breed of the straw used. It is never taken from the request.
+      summary: Record the payment for an AI event
+      parameters:
+      - in: path
+        name: ai_event_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentInitiateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentInitiateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentInitiateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+  /api/v1/payments/{ai_event_id}/otp/verify/:
+    post:
+      operationId: payments_otp_verify_create
+      description: The farmer's authorisation code for a payment she is making (SRS
+        §6.5.1).
+      summary: Verify the payment authorisation code
+      parameters:
+      - in: path
+        name: ai_event_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentOTPRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentOTPRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentOTPRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+  /api/v1/payments/{ai_event_id}/proof/:
+    post:
+      operationId: payments_proof_create
+      description: The UTR and the screenshot behind an online payment (SRS §6.5.4).
+      summary: Attach proof of an online payment
+      parameters:
+      - in: path
+        name: ai_event_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - payments
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentProofRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentProofRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
   /api/v1/reports/export/:
     get:
       operationId: reports_export_retrieve
@@ -2668,6 +2817,14 @@ components:
         ear_tag_no:
           type: string
           readOnly: true
+        semen_breed:
+          type: string
+          readOnly: true
+          default: ''
+        amount_due:
+          type: string
+          nullable: true
+          readOnly: true
         straw_unique_no:
           type: string
           readOnly: true
@@ -2709,6 +2866,7 @@ components:
           readOnly: true
       required:
       - ai_photo_url
+      - amount_due
       - animal
       - animal_type
       - breed
@@ -2732,6 +2890,7 @@ components:
       - owner_type
       - payment
       - performed_at
+      - semen_breed
       - status
       - status_display
       - straw_unique_no
@@ -3076,9 +3235,19 @@ components:
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
           readOnly: true
-          description: Cost of one straw of this breed, in rupees. Zero means not
-            priced — the list is maintained by hand and a rate nobody has entered
-            must not read as free.
+          description: 'What a member is charged for one insemination of this breed,
+            in rupees. She hands over nothing: the dairy deducts it from her milk
+            payment at the next payout. Zero means not priced — the list is maintained
+            by hand and a rate nobody has entered must not read as free.'
+        non_member_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+          description: 'What a non-member pays the Mait on the spot, in rupees. Kept
+            apart from the member rate because the two are different prices for the
+            same service: one is settled against a milk payout the dairy already owes,
+            the other is cash in a yard.'
         display_order:
           type: integer
           readOnly: true
@@ -3088,6 +3257,7 @@ components:
       - display_order
       - name
       - name_hi
+      - non_member_rate
       - rate
     BreedConfigWrite:
       type: object
@@ -3117,9 +3287,18 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
-          description: Cost of one straw of this breed, in rupees. Zero means not
-            priced — the list is maintained by hand and a rate nobody has entered
-            must not read as free.
+          description: 'What a member is charged for one insemination of this breed,
+            in rupees. She hands over nothing: the dairy deducts it from her milk
+            payment at the next payout. Zero means not priced — the list is maintained
+            by hand and a rate nobody has entered must not read as free.'
+        non_member_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: 'What a non-member pays the Mait on the spot, in rupees. Kept
+            apart from the member rate because the two are different prices for the
+            same service: one is settled against a milk payout the dairy already owes,
+            the other is cash in a yard.'
         display_order:
           type: integer
           maximum: 65535
@@ -3158,9 +3337,18 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
-          description: Cost of one straw of this breed, in rupees. Zero means not
-            priced — the list is maintained by hand and a rate nobody has entered
-            must not read as free.
+          description: 'What a member is charged for one insemination of this breed,
+            in rupees. She hands over nothing: the dairy deducts it from her milk
+            payment at the next payout. Zero means not priced — the list is maintained
+            by hand and a rate nobody has entered must not read as free.'
+        non_member_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: 'What a non-member pays the Mait on the spot, in rupees. Kept
+            apart from the member rate because the two are different prices for the
+            same service: one is settled against a milk payout the dairy already owes,
+            the other is cash in a yard.'
         display_order:
           type: integer
           maximum: 65535
@@ -4231,14 +4419,16 @@ components:
       - member_name
       - mobile_no
       - mpp_code
-    ModeEnum:
+    ModeAe4Enum:
       enum:
       - ONLINE
       - COD
+      - DEDUCT
       type: string
       description: |-
         * `ONLINE` - Online
         * `COD` - Cash on delivery
+        * `DEDUCT` - Deducted from milk payment
     NonMember:
       type: object
       description: Quick-capture registration by a Mait in the field (SRS §6.3 step
@@ -4792,9 +4982,18 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
-          description: Cost of one straw of this breed, in rupees. Zero means not
-            priced — the list is maintained by hand and a rate nobody has entered
-            must not read as free.
+          description: 'What a member is charged for one insemination of this breed,
+            in rupees. She hands over nothing: the dairy deducts it from her milk
+            payment at the next payout. Zero means not priced — the list is maintained
+            by hand and a rate nobody has entered must not read as free.'
+        non_member_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: 'What a non-member pays the Mait on the spot, in rupees. Kept
+            apart from the member rate because the two are different prices for the
+            same service: one is settled against a milk payout the dairy already owes,
+            the other is cash in a yard.'
         display_order:
           type: integer
           maximum: 65535
@@ -4876,6 +5075,119 @@ components:
             maxLength: 15
           description: The complete set this Mait covers. An empty list clears their
             coverage.
+    Payment:
+      type: object
+      description: Read shape for one payment.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        ai_event:
+          type: integer
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        mode:
+          allOf:
+          - $ref: '#/components/schemas/ModeAe4Enum'
+          readOnly: true
+        mode_display:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusA39Enum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        is_verified:
+          type: boolean
+          readOnly: true
+        member_otp_verified:
+          type: boolean
+          readOnly: true
+        cod_otp_verified:
+          type: boolean
+          readOnly: true
+        utr_number:
+          type: string
+          readOnly: true
+        payment_screenshot_url:
+          type: string
+          readOnly: true
+        failure_reason:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ai_event
+      - amount
+      - cod_otp_verified
+      - created_at
+      - failure_reason
+      - id
+      - is_verified
+      - member_otp_verified
+      - mode
+      - mode_display
+      - payment_screenshot_url
+      - status
+      - status_display
+      - utr_number
+    PaymentInitiateModeEnum:
+      enum:
+      - COD
+      - ONLINE
+      type: string
+      description: |-
+        * `COD` - COD
+        * `ONLINE` - ONLINE
+    PaymentInitiateRequest:
+      type: object
+      description: |-
+        How she is paying.
+
+        The mode is the Mait's to choose only for a non-member, who is the only farmer who hands
+        anything over. A member's is decided by the server — the dairy takes it out of her milk
+        payment — and a request that tries to name one for her is ignored rather than refused,
+        because the answer was never the app's to give.
+      properties:
+        mode:
+          $ref: '#/components/schemas/PaymentInitiateModeEnum'
+    PaymentOTPRequest:
+      type: object
+      properties:
+        otp:
+          type: string
+          minLength: 1
+          maxLength: 10
+      required:
+      - otp
+    PaymentProofRequest:
+      type: object
+      description: |-
+        Proof of an online payment: the reference she read out, and the screen she paid on.
+
+        Both, not either. A UTR without a screenshot is a number a Mait could invent, and a
+        screenshot without a UTR is an image nobody can reconcile against a bank statement.
+      properties:
+        utr_number:
+          type: string
+          minLength: 1
+          maxLength: 40
+        screenshot:
+          type: string
+          format: binary
+      required:
+      - screenshot
+      - utr_number
     PaymentSummary:
       type: object
       description: Just enough payment to read an AI event row without opening it.
@@ -4887,14 +5199,14 @@ components:
           readOnly: true
         mode:
           allOf:
-          - $ref: '#/components/schemas/ModeEnum'
+          - $ref: '#/components/schemas/ModeAe4Enum'
           readOnly: true
         mode_display:
           type: string
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/PaymentSummaryStatusEnum'
+          - $ref: '#/components/schemas/StatusA39Enum'
           readOnly: true
         status_display:
           type: string
@@ -4909,16 +5221,6 @@ components:
       - mode_display
       - status
       - status_display
-    PaymentSummaryStatusEnum:
-      enum:
-      - pending
-      - verified
-      - failed
-      type: string
-      description: |-
-        * `pending` - Pending
-        * `verified` - Verified
-        * `failed` - Failed
     ProductTypeEnum:
       enum:
       - straw
@@ -4977,6 +5279,16 @@ components:
       - received_date
       - semen_station
       - unique_straw_no
+    StatusA39Enum:
+      enum:
+      - pending
+      - verified
+      - failed
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `verified` - Verified
+        * `failed` - Failed
     StrawValidation:
       type: object
       description: |-
