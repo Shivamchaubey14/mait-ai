@@ -100,6 +100,14 @@ class Animal(TimeStampedModel):
         db_index=True,
         help_text="Optional, but unique across the platform when present (SRS §6.3 step 3).",
     )
+    photo_url = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=(
+            "A portrait taken when she was registered, so the Mait recognises her on the next "
+            "visit. Most animals here carry no ear tag, and 'the black one' is not a record."
+        ),
+    )
 
     class Meta:
         db_table = "animal"

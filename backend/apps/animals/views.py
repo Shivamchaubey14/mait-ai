@@ -5,6 +5,8 @@ from __future__ import annotations
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.core.exceptions import RecordInUse
@@ -16,11 +18,13 @@ from .models import Animal, BreedConfig
 from .queries import with_ai_history
 from .serializers import (
     AnimalCreateSerializer,
+    AnimalPhotoSerializer,
     AnimalSerializer,
     AnimalUpdateSerializer,
     BreedConfigSerializer,
     BreedConfigWriteSerializer,
 )
+from .storage import store_animal_photo
 
 
 @extend_schema(tags=["animals"])
@@ -161,6 +165,38 @@ class AnimalViewSet(
             meta={"animal_type": animal.animal_type, "breed": animal.breed},
         )
         return Response(AnimalSerializer(animal).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        summary="Attach her portrait",
+        description=(
+            "Multipart: `photo`. Taken when the animal is registered, so the Mait recognises "
+            "her on the next visit — most animals here carry no ear tag.\n\n"
+            "Separate from registration rather than part of it: the animal must exist even "
+            "if the upload fails, because the capture flow is standing on her id and a "
+            "village connection is the least reliable thing in it."
+        ),
+        request=AnimalPhotoSerializer,
+        responses={200: AnimalSerializer},
+    )
+    @action(detail=True, methods=["patch"], parser_classes=[MultiPartParser, FormParser])
+    def photo(self, request, pk=None):
+        animal = self.get_object()
+
+        serializer = AnimalPhotoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Outside any transaction: the upload takes as long as the village connection takes.
+        animal.photo_url = store_animal_photo(animal, serializer.validated_data["photo"])
+        animal.save(update_fields=["photo_url", "updated_at"])
+
+        record_audit(
+            action=AuditLog.Action.UPDATE,
+            entity_type="animal",
+            entity_id=animal.id,
+            request=request,
+            meta={"photo": True},
+        )
+        return Response(AnimalSerializer(animal).data)
 
     @extend_schema(
         summary="Correct a breed or add an ear tag",

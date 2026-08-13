@@ -8,6 +8,10 @@ from apps.masterdata.models import Member, NonMember
 
 from .models import Animal, AnimalType, BreedConfig
 
+# The same ceiling a proof photo has. A handset camera writes two to four megabytes; anything
+# far past that is a phone misconfigured, not a picture of a cow.
+MAX_PHOTO_BYTES = 8 * 1024 * 1024
+
 
 class BreedConfigSerializer(serializers.ModelSerializer):
     """
@@ -89,6 +93,7 @@ class AnimalSerializer(serializers.ModelSerializer):
             "animal_type_display",
             "breed",
             "ear_tag_no",
+            "photo_url",
             "ai_event_count",
             "last_ai_at",
             "created_at",
@@ -199,6 +204,26 @@ class AnimalCreateSerializer(serializers.Serializer):
             breed=validated_data.get("breed", ""),
             ear_tag_no=validated_data.get("ear_tag_no"),
         )
+
+
+class AnimalPhotoSerializer(serializers.Serializer):
+    """
+    Her portrait, taken at registration.
+
+    No GPS and no timestamp, unlike a proof photo: this is not evidence of anything that
+    happened, it is how a Mait recognises the animal on the next visit. Most animals in this
+    data carry no ear tag, and "the black one at the back" is not a record.
+    """
+
+    photo = serializers.ImageField()
+
+    def validate_photo(self, value):
+        if value.size > MAX_PHOTO_BYTES:
+            raise serializers.ValidationError(
+                f"The photo is {value.size // 1024 // 1024} MB. "
+                f"Keep it under {MAX_PHOTO_BYTES // 1024 // 1024} MB."
+            )
+        return value
 
 
 class AnimalUpdateSerializer(serializers.Serializer):

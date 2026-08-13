@@ -7,7 +7,11 @@ else's member, or let the breed field turn into free text.
 
 from __future__ import annotations
 
+import io
+
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
@@ -24,6 +28,13 @@ def api_client():
     from rest_framework.test import APIClient
 
     return APIClient()
+
+
+def a_photo(name="animal.jpg", size=(40, 40)):
+    """A real JPEG — ImageField opens it, so a handful of bytes will not do."""
+    buffer = io.BytesIO()
+    Image.new("RGB", size, (90, 140, 110)).save(buffer, format="JPEG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/jpeg")
 
 
 @pytest.fixture
@@ -169,6 +180,38 @@ class TestAnimalCreation:
         )
         assert response.status_code == 201
         assert Animal.objects.get().ear_tag_no is None
+
+    def test_attaches_her_portrait(self, mait_client, breeds, member, animal):
+        """
+        Registration and the photo are two calls on purpose: the animal has to exist even if
+        the upload dies on a village connection, because the capture flow is already standing
+        on her id by then.
+        """
+        response = mait_client.patch(
+            f"{BASE}/animals/{animal.id}/photo/",
+            {"photo": a_photo()},
+            format="multipart",
+        )
+
+        assert response.status_code == 200, response.json()
+        assert response.json()["photo_url"]
+        animal.refresh_from_db()
+        assert animal.photo_url.startswith("/media/animal-photos/")
+
+    def test_will_not_take_a_photo_of_another_maits_animal(self, api_client, animal, db):
+        other = User.objects.create_user(username="other-mait", full_name="O", role=Role.MAIT)
+        Mait.objects.create(user=other, name="OTHER", sahayak_vendor_code="9999")
+        api_client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(other).access_token}"
+        )
+
+        response = api_client.patch(
+            f"{BASE}/animals/{animal.id}/photo/", {"photo": a_photo()}, format="multipart"
+        )
+
+        assert response.status_code == 404
+        animal.refresh_from_db()
+        assert animal.photo_url == ""
 
     def test_ear_tag_must_be_unique_when_given(self, mait_client, breeds, member, animal):
         animal.ear_tag_no = "IN999999"
