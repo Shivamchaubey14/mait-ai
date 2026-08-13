@@ -23,7 +23,15 @@ class BreedConfigSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BreedConfig
-        fields = ["code", "name", "name_hi", "animal_type", "rate", "display_order"]
+        fields = [
+            "code",
+            "name",
+            "name_hi",
+            "animal_type",
+            "rate",
+            "non_member_rate",
+            "display_order",
+        ]
         read_only_fields = fields
 
 
@@ -45,6 +53,7 @@ class BreedConfigWriteSerializer(serializers.ModelSerializer):
             "name_hi",
             "animal_type",
             "rate",
+            "non_member_rate",
             "display_order",
             "is_active",
         ]

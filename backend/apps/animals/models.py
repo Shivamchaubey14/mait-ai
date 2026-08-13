@@ -32,8 +32,18 @@ class BreedConfig(TimeStampedModel):
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text="Cost of one straw of this breed, in rupees. Zero means not priced — the "
-        "list is maintained by hand and a rate nobody has entered must not read as free.",
+        help_text="What a member is charged for one insemination of this breed, in rupees. "
+        "She hands over nothing: the dairy deducts it from her milk payment at the next "
+        "payout. Zero means not priced — the list is maintained by hand and a rate nobody "
+        "has entered must not read as free.",
+    )
+    non_member_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="What a non-member pays the Mait on the spot, in rupees. Kept apart from "
+        "the member rate because the two are different prices for the same service: one is "
+        "settled against a milk payout the dairy already owes, the other is cash in a yard.",
     )
     display_order = models.PositiveSmallIntegerField(default=100)
     is_active = models.BooleanField(default=True, db_index=True)
