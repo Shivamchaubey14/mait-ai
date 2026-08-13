@@ -481,5 +481,23 @@
     "todayWithQueue": "{{pending}} भेजना बाकी",
     "todayAllSynced": "सब भेज दिया गया",
     "startAnother": "+ नया शुरू करें"
+  },
+  "queue": {
+    "eyebrow": "भेजना बाकी",
+    "nothingIsLost": "यहाँ कुछ भी खोया नहीं",
+    "subtitle_one": "इस फ़ोन में एक रिकॉर्ड है।",
+    "subtitle_other": "इस फ़ोन में {{count}} रिकॉर्ड हैं।",
+    "sendingProgress": "{{total}} में से {{done}} भेजा जा रहा है…",
+    "needsAttention": "ध्यान चाहिए",
+    "syncing": "भेजा जा रहा है",
+    "synced": "भेज दिया",
+    "codeNeverEntered": "उनका भुगतान कोड दर्ज नहीं हुआ।",
+    "enterTheCode": "कोड दर्ज करें",
+    "tryAllAgain": "सभी दोबारा भेजें",
+    "unnamedCapture": "रिकॉर्ड",
+    "allSent": "सब भेज दिया गया",
+    "allSentBody": "इस फ़ोन में कुछ बाकी नहीं।",
+    "needsYou_one": "एक में आपकी ज़रूरत है।",
+    "needsYou_other": "{{count}} में आपकी ज़रूरत है।"
   }
 }

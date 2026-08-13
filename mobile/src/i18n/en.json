@@ -481,5 +481,23 @@
     "todayWithQueue": "{{pending}} waiting to sync",
     "todayAllSynced": "Everything sent",
     "startAnother": "+ Start another"
+  },
+  "queue": {
+    "eyebrow": "Waiting to sync",
+    "nothingIsLost": "Nothing here is lost",
+    "subtitle_one": "One record is on this phone.",
+    "subtitle_other": "{{count}} records are on this phone.",
+    "sendingProgress": "Sending {{done}} of {{total}}…",
+    "needsAttention": "Needs attention",
+    "syncing": "Syncing",
+    "synced": "Synced",
+    "codeNeverEntered": "Her payment code was never entered.",
+    "enterTheCode": "Enter the code",
+    "tryAllAgain": "Try all again",
+    "unnamedCapture": "Capture",
+    "allSent": "Everything has gone up",
+    "allSentBody": "Nothing is waiting on this phone.",
+    "needsYou_one": "One needs you.",
+    "needsYou_other": "{{count}} need you."
   }
 }

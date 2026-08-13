@@ -25,7 +25,8 @@ import {
   useInitiatePaymentMutation,
   useVerifyPaymentOtpMutation,
 } from '@api/endpoints';
-import { pendingCount } from '@api/queue';
+import { enqueue, pendingCount, readQueue } from '@api/queue';
+import type { QueuedJob } from '@api/queue';
 import { drainQueue } from '@api/sync';
 import type { AIEvent, Animal, Member, MPP, NonMember } from '@api/types';
 import BottomNav, { Tab } from '@/components/BottomNav';
@@ -43,6 +44,7 @@ import SelectMppScreen from '@/features/aiFlow/SelectMppScreen';
 import OwnerTypeScreen, { OwnerType } from '@/features/aiFlow/OwnerTypeScreen';
 import LoginScreen from '@/features/auth/LoginScreen';
 import HistoryScreen from '@/features/history/HistoryScreen';
+import SyncQueueScreen, { toCaptures } from '@/features/history/SyncQueueScreen';
 import HomeScreen from '@/features/home/HomeScreen';
 import SettingsScreen from '@/features/settings/SettingsScreen';
 import IndentDetailScreen from '@/features/stock/IndentDetailScreen';
@@ -86,6 +88,10 @@ export default function RootNavigator(): React.JSX.Element {
   const [requestingStock, setRequestingStock] = useState(false);
   /** null = not looking at indents, 0 = the list, n = that indent. */
   const [indentView, setIndentView] = useState<number | null>(null);
+  /** The waiting-to-sync screen, opened from Home's yellow tile. */
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [queueJobs, setQueueJobs] = useState<QueuedJob[]>([]);
+  const [draining, setDraining] = useState(false);
 
   const [clientUuid, setClientUuid] = useState(newClientUuid);
   /** Answered at step 1, and it decides where step 3 goes. */
@@ -122,12 +128,22 @@ export default function RootNavigator(): React.JSX.Element {
   );
 
   const sync = useCallback(async () => {
+    setDraining(true);
     const result = await drainQueue(accessToken);
     setPending(result.remaining);
+    setQueueJobs(await readQueue());
+    setDraining(false);
     if (result.sent > 0) {
       setLastSyncAt(clockTime());
     }
   }, [accessToken]);
+
+  /** Read the queue for the screen that lists it, without sending anything. */
+  const refreshQueue = useCallback(async () => {
+    const jobs = await readQueue();
+    setQueueJobs(jobs);
+    setPending(jobs.length);
+  }, []);
 
   /**
    * Drain when the connection returns, and once on mount.
@@ -201,12 +217,35 @@ export default function RootNavigator(): React.JSX.Element {
     try {
       await initiatePayment({ eventId: event.id, ...(mode ? { mode } : {}) }).unwrap();
     } catch (err) {
-      // Shown rather than swallowed. The commonest refusal by far is a breed the administrator
-      // has not priced, and the server says so in a sentence a Mait can act on — where
-      // "something went wrong" leaves them tapping a button that will never work.
-      setPayFailed((err as { data?: { detail?: string } })?.data?.detail ?? t('errors.generic'));
-      setPayBusy(false);
-      return;
+      const problem = err as { status?: number | string; data?: { detail?: string } };
+      const unreachable =
+        !online || problem.status === 'FETCH_ERROR' || problem.status === 'TIMEOUT_ERROR';
+
+      if (unreachable) {
+        // No network is not a refusal. The insemination happened and the cash is already in
+        // the Mait's hand; holding them here until a village finds signal would strand a
+        // finished round. The payment is queued, and the waiting list carries it from here.
+        await enqueue(
+          'verifyPayment',
+          clientUuid,
+          { eventId: event.id, mode: mode ?? 'COD' },
+          {
+            farmer: farmer?.name ?? '',
+            kind: farmer?.kind === 'member' ? 'member' : 'nonMember',
+            amount: event.amount_due,
+            mode: mode ?? 'COD',
+            at: clockTime(),
+            eventId: event.id,
+          },
+        );
+      } else {
+        // A real refusal, shown rather than swallowed. The commonest by far is a breed the
+        // administrator has not priced, and the server says so in a sentence a Mait can act
+        // on — where "something went wrong" leaves them tapping a button that never works.
+        setPayFailed(problem.data?.detail ?? t('errors.generic'));
+        setPayBusy(false);
+        return;
+      }
     }
 
     const outcome = await completeEvent(event.id, clientUuid, accessToken);
@@ -486,6 +525,34 @@ export default function RootNavigator(): React.JSX.Element {
     );
   }
 
+  if (queueOpen) {
+    const captures = toCaptures(queueJobs);
+    return withTabs(
+      <SyncQueueScreen
+        captures={captures}
+        synced={[]}
+        progress={draining && captures.length ? { done: 0, total: captures.length } : null}
+        onRetryAll={sync}
+        onEnterCode={capture => {
+          // Back into the payment step for that capture, where the code is asked for again.
+          const job = queueJobs.find(item => item.clientUuid === capture.clientUuid);
+          setQueueOpen(false);
+          setPayMode((job?.payload.mode as PaymentMode) ?? 'COD');
+          setCodeSentTo(null);
+          setPayCode('');
+          setEvent({ id: capture.eventId, amount_due: capture.amount } as AIEvent);
+          setFarmer({
+            kind: capture.kind === 'member' ? 'member' : 'nonMember',
+            name: capture.farmer,
+            ...(capture.kind === 'member' ? { memberCode: '' } : { nonMemberId: 0 }),
+          } as Farmer);
+          setStep('recordPayment');
+        }}
+        onBack={() => setQueueOpen(false)}
+      />,
+    );
+  }
+
   if (step === 'done') {
     return (
       <CaptureDoneScreen
@@ -524,7 +591,14 @@ export default function RootNavigator(): React.JSX.Element {
             onResume={resumeCapture}
             online={online}
             pending={pending}
-            onSync={sync}
+            // The tile answers for itself now: it opens the list of what is waiting, and
+            // pushes at the same time. A number that only kicks an invisible drain leaves a
+            // Mait unable to tell a bad network from a lost day's work.
+            onSync={() => {
+              setQueueOpen(true);
+              refreshQueue();
+              sync();
+            }}
             lastSyncAt={lastSyncAt}
           />
         )}
