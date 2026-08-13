@@ -5,23 +5,29 @@
  * on record, or register the one standing in front of you. Splitting them across two screens
  * would make the Mait guess which they need before they have looked at the list.
  *
- * Cow or buffalo sits above both jobs as a segmented control rather than inside either. It
- * filters the list and it is the species of anything added from it — one question, asked
- * once, whichever of the two things the Mait came here to do.
+ * Cow or buffalo sits above the list as a segmented control, filtering it. Registering happens
+ * in a sheet over the top (AddAnimalSheet) rather than by replacing the screen: it is a detour
+ * from the list, handed straight back to it, and the question stays legible behind.
  *
- * Registering one asks for that and an optional ear tag, and nothing else. Her own breed is
- * not asked: it is a judgement a Mait standing in a yard often cannot make, and a required
- * field there would collect guesses. The breed at the next step is the straw's.
+ * Rows lead with her photograph where there is one. Most animals in this data carry no ear
+ * tag, so a face is the difference between "the black one" and a record.
  */
 
 import React, { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { useCreateAnimalMutation, useListBreedsQuery } from '@api/endpoints';
+import {
+  useCreateAnimalMutation,
+  useListBreedsQuery,
+  useUploadAnimalPhotoMutation,
+} from '@api/endpoints';
 import type { Animal, AnimalTypeCode, ProblemDetails } from '@api/types';
+import { mediaUrl } from '@/config/env';
+import { radius } from '@theme/tokens';
 
-import { AddCard, FieldCard, FlowNotice, FlowScreen, OptionCard, Segmented } from './components';
+import AddAnimalSheet, { AnimalDraftInput } from './AddAnimalSheet';
+import { AddCard, FlowNotice, FlowScreen, OptionCard, Segmented } from './components';
 
 interface Props {
   /** Who the animal belongs to. One of the two codes is always present. */
@@ -68,14 +74,14 @@ export default function SelectAnimalScreen({
   // Opens on the species the farmer actually keeps, so a buffalo household does not land on
   // an empty Cow list and conclude their animals are missing.
   const [animalType, setAnimalType] = useState<AnimalTypeCode>(animals[0]?.animal_type ?? 'COW');
-  const [earTag, setEarTag] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [failed, setFailed] = useState(false);
 
-  // Read only to put a name to the breed codes already on the farmer's animals. The straw's
-  // breed is asked at the next step, and an animal's own breed is not asked at all.
+  // Read only to put a name to the breed codes already on the farmer's animals; the sheet asks
+  // for its own list when it opens.
   const { data: breeds = [] } = useListBreedsQuery(animalType);
   const [createAnimal, { isLoading: saving }] = useCreateAnimalMutation();
+  const [uploadPhoto] = useUploadAnimalPhotoMutation();
 
   const hindi = i18n.language.startsWith('hi');
   const breedName = useMemo(
@@ -90,7 +96,7 @@ export default function SelectAnimalScreen({
   );
 
   /**
-   * C1, C2, B1 — a handle for an animal that has no tag.
+   * C1, C2, B1 — a handle for an animal with no photograph and no tag.
    *
    * Numbered across the farmer's whole record rather than the filtered list, so a cow keeps
    * the same handle whichever half of the toggle is showing.
@@ -124,9 +130,8 @@ export default function SelectAnimalScreen({
   /**
    * When she was last served, and what she is — the two things that tell one cow from another.
    *
-   * Her breed is often blank, because the flow does not ask for it: it is a judgement a Mait
-   * standing in a yard cannot reliably make. The line then carries the date alone rather than
-   * a dangling separator.
+   * Her breed can be blank on older records, and the line then carries the date alone rather
+   * than a dangling separator.
    */
   const describe = (animal: Animal) => {
     const when = animal.last_ai_at ? longDate(animal.last_ai_at) : null;
@@ -142,7 +147,14 @@ export default function SelectAnimalScreen({
       : t('aiFlow.neverServedOnly');
   };
 
-  const handleAdd = async () => {
+  /**
+   * Register her, then send her portrait.
+   *
+   * Two calls, and the photo is the one allowed to fail: the flow is standing on the new
+   * animal's id by the time it is sent, and a Mait with a farmer waiting should not be sent
+   * back to the start of the step because a village connection dropped a JPEG.
+   */
+  const handleSave = async (draft: AnimalDraftInput) => {
     setFieldErrors({});
     setFailed(false);
     try {
@@ -150,13 +162,25 @@ export default function SelectAnimalScreen({
         ...(owner.memberCode
           ? { member_code: owner.memberCode }
           : { non_member_id: owner.nonMemberId }),
-        animal_type: animalType,
-        ...(earTag.trim() ? { ear_tag_no: earTag.trim() } : {}),
+        animal_type: draft.animalType,
+        ...(draft.breed ? { breed: draft.breed } : {}),
+        ...(draft.earTag.trim() ? { ear_tag_no: draft.earTag.trim() } : {}),
       }).unwrap();
+
+      if (draft.photoUri) {
+        try {
+          await uploadPhoto({ id: created.id, uri: draft.photoUri }).unwrap();
+        } catch {
+          // Deliberately swallowed. She is registered and the flow can go on; the photo can
+          // be taken again from her record later.
+        }
+      }
+
+      setAdding(false);
       onSelect(created);
     } catch (err) {
-      // The server is the authority on the ear tag being free; surface its per-field message
-      // so the Mait knows which box to fix.
+      // The server is the authority on the ear tag being free and the breed being real;
+      // surface its per-field message so the Mait knows which box to fix.
       const problem = (err as { data?: ProblemDetails })?.data;
       if (problem?.errors) {
         setFieldErrors(problem.errors);
@@ -168,115 +192,94 @@ export default function SelectAnimalScreen({
 
   const chosen = animals.find(animal => animal.id === selectedId) ?? null;
 
-  const cta = adding
-    ? {
-        label: t('aiFlow.saveAndContinue'),
-        onPress: handleAdd,
-        // Nothing left to satisfy: the species always has a value and the tag is optional.
-        busy: saving,
-        testID: 'animal-save',
-      }
-    : {
-        label: t('common.continue'),
-        onPress: () => chosen && onSelect(chosen),
-        disabled: !chosen,
-        testID: 'animal-continue',
-      };
-
-  const typeToggle = (
-    <Segmented
-      options={ANIMAL_TYPES.map(code => ({ value: code, label: t(`aiFlow.animalType.${code}`) }))}
-      value={animalType}
-      onChange={chooseType}
-      testID="animal-type"
-    />
-  );
-
   return (
-    <FlowScreen
-      step={3}
-      title={t('aiFlow.whichAnimal')}
-      subtitle={
-        adding
-          ? t('aiFlow.addAnimalSubtitle', { name: owner.name })
-          : animals.length === 0
+    <View style={styles.root}>
+      <FlowScreen
+        step={3}
+        title={t('aiFlow.whichAnimal')}
+        subtitle={
+          animals.length === 0
             ? t('aiFlow.nothingOnRecord', { name: owner.name })
             : t('aiFlow.onRecordCount', { name: owner.name, count: animals.length })
-      }
-      onBack={adding ? () => setAdding(false) : onBack}
-      cta={cta}
-      link={
-        adding
-          ? {
-              label: t('aiFlow.pickExistingAnimal'),
-              onPress: () => setAdding(false),
-              testID: 'animal-pick-existing',
+        }
+        onBack={onBack}
+        cta={{
+          label: t('common.continue'),
+          onPress: () => chosen && onSelect(chosen),
+          disabled: !chosen,
+          testID: 'animal-continue',
+        }}
+      >
+        <Segmented
+          options={ANIMAL_TYPES.map(code => ({
+            value: code,
+            label: t(`aiFlow.animalType.${code}`),
+          }))}
+          value={animalType}
+          onChange={chooseType}
+          testID="animal-type"
+        />
+
+        {onRecord.length === 0 && (
+          <FlowNotice
+            tone="info"
+            title={t(`aiFlow.noneOfType.${animalType}`)}
+            body={t('aiFlow.noneOfTypeBody')}
+            testID="animal-none-of-type"
+          />
+        )}
+
+        {onRecord.map(animal => (
+          <OptionCard
+            key={animal.id}
+            swatchLabel={animal.photo_url ? undefined : tokens[animal.id]}
+            iconNode={
+              animal.photo_url ? (
+                <Image
+                  source={{ uri: mediaUrl(animal.photo_url) }}
+                  style={styles.portrait}
+                  resizeMode="cover"
+                  accessibilityIgnoresInvertColors
+                />
+              ) : undefined
             }
-          : undefined
-      }
-    >
-      {adding ? (
-        <View>
-          {/* No label over it. The two words in the control are the question, and a heading
-              that repeats them is a line of furniture on a form of two fields. */}
-          {typeToggle}
-
-          <FieldCard
-            label={t('aiFlow.earTagOptional')}
-            hint={t('aiFlow.earTagHint')}
-            error={fieldErrors.ear_tag_no?.[0]}
-            value={earTag}
-            onChangeText={setEarTag}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            testID="animal-ear-tag"
+            title={title(animal)}
+            subtitle={describe(animal)}
+            tone="neutral"
+            check
+            selected={selectedId === animal.id}
+            onPress={() => setSelectedId(animal.id)}
+            testID={`animal-${animal.id}`}
           />
+        ))}
 
-          {failed && (
-            <FlowNotice
-              tone="error"
-              title={t('errors.generic')}
-              body={t('aiFlow.tryAgainInAMoment')}
-              testID="animal-error"
-            />
-          )}
-        </View>
-      ) : (
-        <View>
-          {typeToggle}
+        {/* Dashed, under the list: a place for an animal rather than another animal. */}
+        <AddCard
+          title={t('aiFlow.addAnimal')}
+          subtitle={t('aiFlow.earTagOptionalHint')}
+          onPress={() => setAdding(true)}
+          testID="animal-add-card"
+        />
+      </FlowScreen>
 
-          {onRecord.length === 0 && (
-            <FlowNotice
-              tone="info"
-              title={t('aiFlow.noneOfType', { type: t(`aiFlow.animalType.${animalType}`) })}
-              body={t('aiFlow.noneOfTypeBody')}
-              testID="animal-none-of-type"
-            />
-          )}
-
-          {onRecord.map(animal => (
-            <OptionCard
-              key={animal.id}
-              swatchLabel={tokens[animal.id]}
-              title={title(animal)}
-              subtitle={describe(animal)}
-              tone="neutral"
-              check
-              selected={selectedId === animal.id}
-              onPress={() => setSelectedId(animal.id)}
-              testID={`animal-${animal.id}`}
-            />
-          ))}
-
-          {/* Dashed, under the list: a place for an animal rather than another animal. */}
-          <AddCard
-            title={t('aiFlow.addAnimal')}
-            subtitle={t('aiFlow.earTagOptionalHint')}
-            onPress={() => setAdding(true)}
-            testID="animal-add-card"
-          />
-        </View>
+      {adding && (
+        <AddAnimalSheet
+          owner={{ name: owner.name, code: owner.memberCode }}
+          initialType={animalType}
+          saving={saving}
+          fieldErrors={fieldErrors}
+          failed={failed}
+          onSave={handleSave}
+          onClose={() => setAdding(false)}
+        />
       )}
-    </FlowScreen>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  // Fills the swatch the token would have used, so a list of photographed and unphotographed
+  // animals still reads as one column.
+  portrait: { width: 40, height: 40, borderRadius: radius.sm },
+});

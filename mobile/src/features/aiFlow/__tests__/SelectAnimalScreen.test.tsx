@@ -7,6 +7,7 @@
  */
 
 import React from 'react';
+import { Image } from 'react-native';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import SelectAnimalScreen from '../SelectAnimalScreen';
@@ -25,6 +26,7 @@ function animal(over: Partial<Animal> & { id: number }): Animal {
     animal_type_display: 'Cow',
     breed: 'HF_CROSS',
     ear_tag_no: null,
+    photo_url: '',
     ai_event_count: 0,
     last_ai_at: null,
     created_at: '2026-01-02T05:00:00Z',
@@ -85,6 +87,18 @@ describe('SelectAnimalScreen', () => {
     expect(screen.getByText('Last AI 2 Jan 2026 · Sahiwal')).toBeTruthy();
   });
 
+  it('leads the row with her photograph, resolved to something a handset can fetch', () => {
+    const photographed = animal({ id: 4, photo_url: '/media/animal-photos/2026/08/4/a.jpg' });
+    renderScreen([photographed]);
+
+    const row = screen.getByTestId(`animal-${photographed.id}`);
+    const image = row.findByType(Image);
+
+    expect(image.props.source.uri).toMatch(/^https?:\/\/.+\/media\/animal-photos\//);
+    // Her face replaces the handle rather than sitting beside it.
+    expect(screen.queryByText('C1')).toBeNull();
+  });
+
   it('gives an untagged animal a handle of its own', () => {
     renderScreen([TAGGED, UNTAGGED]);
 
@@ -137,6 +151,18 @@ describe('SelectAnimalScreen', () => {
 
     expect(screen.getByTestId('animal-none-of-type')).toBeTruthy();
     expect(screen.getByTestId('animal-add-card')).toBeTruthy();
+    // Named by species, and asserted as text: this line is keyed per species rather than
+    // interpolated, and asking i18next for the parent key hands back the object instead.
+    expect(screen.getByText('No cows on record yet')).toBeTruthy();
+    expect(screen.getByText('Add the one standing in front of you.')).toBeTruthy();
+  });
+
+  it('names the buffalo half of the empty state too', () => {
+    renderScreen([TAGGED]);
+
+    fireEvent.press(screen.getByTestId('animal-type-BUFF'));
+
+    expect(screen.getByText('No buffaloes on record yet')).toBeTruthy();
   });
 
   it('shows the empty list and its add card, never a form the Mait did not ask for', () => {
@@ -148,36 +174,68 @@ describe('SelectAnimalScreen', () => {
     expect(screen.queryByTestId('animal-ear-tag')).toBeNull();
   });
 
-  it('asks only what a Mait can see — species and tag, no breed', () => {
+  it('opens registration as a sheet, naming whose animal it will be', () => {
     renderScreen([TAGGED]);
 
     fireEvent.press(screen.getByTestId('animal-add-card'));
 
+    expect(screen.getByText(`For ${OWNER.name} · ${OWNER.memberCode}`)).toBeTruthy();
     expect(screen.getByTestId('animal-ear-tag')).toBeTruthy();
-    expect(screen.getByTestId('animal-type-COW')).toBeTruthy();
-    // The breed asked for later in the flow is the straw's, and it is a different screen.
-    expect(screen.queryByTestId('breed-HF_CROSS')).toBeNull();
+    expect(screen.getByTestId('animal-photo')).toBeTruthy();
+    // The list is still behind it, not replaced by it.
+    expect(screen.getByText('Cow · tag 4821')).toBeTruthy();
   });
 
-  it('registers a new animal with the species the toggle is on', async () => {
+  it('will not save an animal with no breed against her', () => {
     renderScreen([TAGGED]);
 
     fireEvent.press(screen.getByTestId('animal-add-card'));
-    fireEvent.press(screen.getByTestId('animal-type-BUFF'));
+    fireEvent.press(screen.getByTestId('animal-save'));
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('closes without registering anything', () => {
+    renderScreen([TAGGED]);
+
+    fireEvent.press(screen.getByTestId('animal-add-card'));
+    fireEvent.press(screen.getByTestId('add-animal-close'));
+
+    expect(screen.queryByTestId('animal-ear-tag')).toBeNull();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('registers a new animal with the species and breed chosen in the sheet', async () => {
+    renderScreen([TAGGED]);
+
+    fireEvent.press(screen.getByTestId('animal-add-card'));
+    // The sheet has a switch of its own, over the list's — the species of the animal being
+    // registered, not the species the list is filtered to.
+    fireEvent.press(screen.getByTestId('sheet-animal-type-BUFF'));
+
+    // The breed is a closed list, opened on demand.
+    fireEvent.press(screen.getByTestId('animal-breed'));
+    await waitFor(() => expect(screen.getByTestId('animal-breed-HF_CROSS')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('animal-breed-HF_CROSS'));
 
     created = jsonResponse(animal({ id: 9, animal_type: 'BUFF' }), 201);
     fireEvent.press(screen.getByTestId('animal-save'));
 
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 9 })));
-    const body = await createBody();
-    expect(body).toMatchObject({ member_code: OWNER.memberCode, animal_type: 'BUFF' });
-    expect(body.breed).toBeUndefined();
+    expect(await createBody()).toMatchObject({
+      member_code: OWNER.memberCode,
+      animal_type: 'BUFF',
+      breed: 'HF_CROSS',
+    });
   });
 
   it('says which box to fix when the server rejects the ear tag', async () => {
     renderScreen([]);
 
     fireEvent.press(screen.getByTestId('animal-add-card'));
+    fireEvent.press(screen.getByTestId('animal-breed'));
+    await waitFor(() => expect(screen.getByTestId('animal-breed-HF_CROSS')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('animal-breed-HF_CROSS'));
     fireEvent.changeText(screen.getByTestId('animal-ear-tag'), '4821');
 
     created = jsonResponse(
