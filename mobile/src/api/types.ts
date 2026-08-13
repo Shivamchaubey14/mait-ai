@@ -95,6 +95,15 @@ export interface NonMember {
   created_at: string;
 }
 
+/** Exactly one of the two ways to name a farmer to the API. */
+export type FarmerKey = { member_code: string } | { non_member_id: number };
+
+export interface FarmerOtpSent {
+  /** Masked — `••••• 20448`. Enough to read out, not enough to copy off the screen. */
+  mobile_no: string;
+  expires_in_seconds: number;
+}
+
 export interface NonMemberDraft {
   name: string;
   father_husband_name?: string;

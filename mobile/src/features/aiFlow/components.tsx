@@ -64,6 +64,9 @@ function ProgressSegments({ step }: { step: number }): React.JSX.Element {
   );
 }
 
+/** The footer arrow, and the width the label is balanced against on the other side. */
+const ARROW_SIZE = 18;
+
 // --------------------------------------------------------------------------------------
 // Keyboard
 // --------------------------------------------------------------------------------------
@@ -301,15 +304,22 @@ export function FlowScreen({
                 ]}
                 testID={cta.testID}
               >
+                {/* Balances the arrow, so the label sits on the button's centre line rather
+                    than on the centre of the label-and-arrow pair — which reads as a label
+                    nudged to the left, and the longer the label the more it shows. */}
+                {!cta.disabled && !cta.busy && <View style={styles.ctaBalance} />}
+
                 <Text
                   style={[styles.ctaLabel, (cta.disabled || cta.busy) && styles.ctaLabelDisabled]}
+                  numberOfLines={1}
                 >
                   {cta.label}
                 </Text>
+
                 {/* The arrow is a promise that tapping moves you on. An inert button makes
                     no such promise, so it does not draw one. */}
                 {!cta.disabled && !cta.busy && (
-                  <Ionicons name="arrow-forward" size={18} color={colors.surface} />
+                  <Ionicons name="arrow-forward" size={ARROW_SIZE} color={colors.surface} />
                 )}
               </Pressable>
             )}
@@ -1449,9 +1459,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     borderRadius: radius.lg,
   },
+  ctaBalance: { width: ARROW_SIZE },
   ctaEnabled: { backgroundColor: colors.primary },
   ctaDisabled: { backgroundColor: colors.disabledFill },
   ctaPressed: { backgroundColor: colors.primaryPressed },
-  ctaLabel: { ...typography.bodyStrong, color: colors.surface },
+  // `includeFontPadding` off, or Android hangs the font's own ascent and descent inside the
+  // line box and the label sits a pixel or two above the arrow it is meant to sit level with.
+  ctaLabel: {
+    ...typography.bodyStrong,
+    fontSize: 16,
+    lineHeight: 22,
+    color: colors.surface,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    flexShrink: 1,
+  },
   ctaLabelDisabled: { color: colors.textDisabled },
 });

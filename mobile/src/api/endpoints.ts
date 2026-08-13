@@ -14,6 +14,8 @@ import type {
   AnimalTypeCode,
   BreedConfig,
   CurrentUser,
+  FarmerKey,
+  FarmerOtpSent,
   InventorySummary,
   Member,
   MemberDetail,
@@ -115,6 +117,21 @@ export const maitaiApi = api.injectEndpoints({
         params: animalType ? { animal_type: animalType } : undefined,
       }),
       providesTags: ['Animal'],
+    }),
+
+    /**
+     * Send the farmer a code, to her own number.
+     *
+     * The app never says where it should go: the server reads that off her record. A Mait who
+     * could nominate the destination could nominate their own phone, and a verification a
+     * Mait can satisfy alone verifies nothing.
+     */
+    sendFarmerOtp: builder.mutation<FarmerOtpSent, FarmerKey>({
+      query: body => ({ url: '/farmers/otp/send/', method: 'POST', body }),
+    }),
+
+    verifyFarmerOtp: builder.mutation<{ verified: boolean }, FarmerKey & { otp: string }>({
+      query: body => ({ url: '/farmers/otp/verify/', method: 'POST', body }),
     }),
 
     createAnimal: builder.mutation<Animal, AnimalDraft>({
@@ -247,6 +264,8 @@ export const {
   useListBreedsQuery,
   useCreateAnimalMutation,
   useUploadAnimalPhotoMutation,
+  useSendFarmerOtpMutation,
+  useVerifyFarmerOtpMutation,
   useGetInventorySummaryQuery,
   useListProductsQuery,
   useLazyValidateStrawQuery,
