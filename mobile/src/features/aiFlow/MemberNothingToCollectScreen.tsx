@@ -27,7 +27,8 @@ interface Props {
   farmerName: string;
   animalLabel: string;
   busy?: boolean;
-  failed?: boolean;
+  /** The server's reason for refusing, shown as it was written. */
+  failed?: string | null;
   onFinish: () => void;
 }
 
@@ -36,7 +37,7 @@ export default function MemberNothingToCollectScreen({
   farmerName,
   animalLabel,
   busy = false,
-  failed = false,
+  failed = null,
   onFinish,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
@@ -71,14 +72,19 @@ export default function MemberNothingToCollectScreen({
         <InfoRow label={t('payment.animal')} value={animalLabel} last />
       </View>
 
-      {failed && (
+      {/* Said before the button is tapped, not after it fails. A rate nobody has entered is
+          an administrator's gap, and the Mait can do nothing about it in the yard except
+          know that it is not their fault. */}
+      {!event.amount_due && (
         <FlowNotice
-          tone="error"
-          title={t('errors.generic')}
-          body={t('aiFlow.tryAgainInAMoment')}
-          testID="payment-error"
+          tone="accent"
+          title={t('payment.unpricedTitle')}
+          body={t('payment.unpricedBody')}
+          testID="payment-unpriced"
         />
       )}
+
+      {!!failed && <FlowNotice tone="error" title={failed} testID="payment-error" />}
     </FlowScreen>
   );
 }

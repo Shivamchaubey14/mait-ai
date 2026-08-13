@@ -244,7 +244,9 @@
     "trySendingAgain": "Try sending the code again",
     "saveAndFinish": "Save & finish",
     "saveAndFinishOffline": "Save & finish",
-    "herNumber": "her number"
+    "herNumber": "her number",
+    "unpricedTitle": "This breed has no rate yet",
+    "unpricedBody": "An administrator sets it on the breed list. The insemination is still recorded."
   },
   "inventory": {
     "strawsRemaining": "{{count}} straws remaining",

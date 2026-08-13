@@ -244,7 +244,9 @@
     "trySendingAgain": "कोड दोबारा भेजने की कोशिश करें",
     "saveAndFinish": "सहेजकर पूरा करें",
     "saveAndFinishOffline": "सहेजकर पूरा करें",
-    "herNumber": "उनका नंबर"
+    "herNumber": "उनका नंबर",
+    "unpricedTitle": "इस नस्ल की दर अभी नहीं लगी",
+    "unpricedBody": "प्रशासक नस्ल सूची में दर लगाते हैं। AI फिर भी दर्ज होगी।"
   },
   "inventory": {
     "strawsRemaining": "{{count}} स्ट्रॉ बाकी",

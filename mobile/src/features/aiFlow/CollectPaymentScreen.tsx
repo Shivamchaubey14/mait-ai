@@ -31,7 +31,8 @@ interface Props {
   /** False when the handset has no connection: UPI cannot be started, and cash is the answer. */
   online: boolean;
   busy?: boolean;
-  failed?: boolean;
+  /** The server's reason for refusing, shown as it was written. */
+  failed?: string | null;
   onContinue: (mode: PaymentMode) => void;
   onBack: () => void;
 }
@@ -41,7 +42,7 @@ export default function CollectPaymentScreen({
   farmerName,
   online,
   busy = false,
-  failed = false,
+  failed = null,
   onContinue,
   onBack,
 }: Props): React.JSX.Element {
@@ -102,14 +103,19 @@ export default function CollectPaymentScreen({
         </View>
       )}
 
-      {failed && (
+      {/* Said before the button is tapped, not after it fails. A rate nobody has entered is
+          an administrator's gap, and the Mait can do nothing about it in the yard except
+          know that it is not their fault. */}
+      {!event.amount_due && (
         <FlowNotice
-          tone="error"
-          title={t('errors.generic')}
-          body={t('aiFlow.tryAgainInAMoment')}
-          testID="payment-error"
+          tone="accent"
+          title={t('payment.unpricedTitle')}
+          body={t('payment.unpricedBody')}
+          testID="payment-unpriced"
         />
       )}
+
+      {!!failed && <FlowNotice tone="error" title={failed} testID="payment-error" />}
     </FlowScreen>
   );
 }

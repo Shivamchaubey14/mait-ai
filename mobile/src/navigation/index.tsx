@@ -101,7 +101,8 @@ export default function RootNavigator(): React.JSX.Element {
   const [payCode, setPayCode] = useState('');
   const [payProblem, setPayProblem] = useState<string | null>(null);
   const [payBusy, setPayBusy] = useState(false);
-  const [payFailed, setPayFailed] = useState(false);
+  /** The server's own words when a payment is refused — it knows why and the Mait needs it. */
+  const [payFailed, setPayFailed] = useState<string | null>(null);
 
   const [uploading, setUploading] = useState(false);
   const [pending, setPending] = useState(0);
@@ -196,13 +197,14 @@ export default function RootNavigator(): React.JSX.Element {
       return;
     }
     setPayBusy(true);
-    setPayFailed(false);
+    setPayFailed(null);
     try {
       await initiatePayment({ eventId: event.id, ...(mode ? { mode } : {}) }).unwrap();
-    } catch {
-      // A member's deduction is the server's own bookkeeping and should not strand a Mait in
-      // a yard; the queue and the back office both still see the event.
-      setPayFailed(true);
+    } catch (err) {
+      // Shown rather than swallowed. The commonest refusal by far is a breed the administrator
+      // has not priced, and the server says so in a sentence a Mait can act on — where
+      // "something went wrong" leaves them tapping a button that will never work.
+      setPayFailed((err as { data?: { detail?: string } })?.data?.detail ?? t('errors.generic'));
       setPayBusy(false);
       return;
     }
