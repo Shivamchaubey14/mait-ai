@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rates · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <!-- forms.css imports portal.css; the table and tile styles come with it. -->
+    <link rel="stylesheet" href="assets/css/forms.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="rates">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Rates</h1>
+            <p class="topbar__meta">What one insemination costs, by breed</p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--primary" id="save-all" type="button">Save changes</button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- The count that matters is the unpriced one: a breed at zero stops a Mait mid-round
+             with the animal already served, so it is the first thing this page should say. -->
+        <section class="tiles" aria-label="Pricing summary">
+          <article class="tile tile--warn">
+            <p class="tile__label">Not priced yet</p>
+            <p class="tile__value" id="unpriced">—</p>
+            <p class="tile__foot">A Mait cannot close a capture on these</p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">Member rate</p>
+            <p class="tile__value" id="member-range">—</p>
+            <p class="tile__foot">Deducted from her milk payment</p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">Non-member rate</p>
+            <p class="tile__value" id="non-member-range">—</p>
+            <p class="tile__foot">Collected by the Mait, on the spot</p>
+          </article>
+        </section>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search by breed or code"
+            aria-label="Search by breed or code"
+          />
+          <button class="chip is-active" id="kind-COW" type="button" aria-pressed="true">
+            Cow
+          </button>
+          <button class="chip" id="kind-BUFF" type="button" aria-pressed="false">Buffalo</button>
+          <button class="chip" id="kind-unpriced" type="button" aria-pressed="false">
+            Not priced
+          </button>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Rates by breed">
+          <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Breed</th>
+                <th scope="col" class="table__num">Member pays</th>
+                <th scope="col" class="table__num">Non-member pays</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+          </div>
+        </section>
+
+        <!-- Said on the page, because the consequence of a zero is invisible from here: it
+             lands on a Mait standing in a yard with the animal already served. -->
+        <div class="notice notice--warn">
+          <div class="notice__body">
+            <p class="notice__title">A rate left at zero is not free</p>
+            <p>
+              It reads as unpriced, and the app tells the Mait to ask an administrator rather
+              than quoting a figure the dairy cannot stand behind. Both figures are per
+              insemination and reach every handset on its next request.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/controls.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/rates.js"></script>
+  </body>
+</html>

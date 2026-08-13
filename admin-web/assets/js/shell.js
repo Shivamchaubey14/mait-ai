@@ -31,6 +31,8 @@ window.MaitAI = window.MaitAI || {};
       'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M3 20a6 6 0 0 1 12 0M17 11a3 3 0 1 0 0-6M21 20a6 6 0 0 0-4-5.6',
     inventory: 'M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10',
     products: 'M4 6h16M4 12h16M4 18h10M18 16v5M15.5 18.5h5',
+    /* A price tag: the one section that is about money rather than about things or people. */
+    rates: 'M20.6 13.4 12 22l-9-9V3h10zM7.5 7.5h.01',
     indents: 'M6 3h9l5 5v13H6zM14 3v6h6M9 13h7M9 17h5',
     leaderboard: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
     exceptions: 'M12 3 2 20h20zM12 9v5M12 17.5v.5',
@@ -59,6 +61,7 @@ window.MaitAI = window.MaitAI || {};
     { key: 'members', label: 'Members', href: 'members.html' },
     { key: 'inventory', label: 'Inventory', href: 'inventory.html' },
     { key: 'products', label: 'Products', href: 'products.html' },
+    { key: 'rates', label: 'Rates', href: 'rates.html' },
     { key: 'indents', label: 'Indents', href: 'indents.html' },
     { key: 'leaderboard', label: 'Leaderboard', href: 'leaderboard.html' },
     { key: 'exceptions', label: 'Exceptions', href: 'exceptions.html', badge: true },

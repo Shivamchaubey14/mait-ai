@@ -145,3 +145,13 @@
   outline: 2px solid var(--color-primary-wash);
   outline-offset: 1px;
 }
+
+/* A rate cell on the Rates screen.
+   Narrow and right-aligned, because the column is read as money down the page rather than as
+   a form field across it — and the full-width input every other screen uses would put two
+   text boxes where two numbers belong. */
+.input--rate {
+  width: 7.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
