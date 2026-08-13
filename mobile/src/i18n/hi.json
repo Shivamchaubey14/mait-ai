@@ -7,7 +7,8 @@
     "save": "सेव करें",
     "search": "खोजें",
     "loading": "लोड हो रहा है…",
-    "continue": "आगे बढ़ें"
+    "continue": "आगे बढ़ें",
+    "close": "बंद करें"
   },
   "auth": {
     "mobileNumber": "मोबाइल नंबर",
@@ -123,7 +124,7 @@
     "onRecordCount_other": "{{name}} के नाम {{count}} पशु दर्ज हैं।",
     "nothingOnRecord": "{{name}} के नाम अभी कोई पशु दर्ज नहीं।",
     "addAnimalSubtitle": "{{name}} के लिए नया पशु दर्ज किया जा रहा है।",
-    "animalTypeLabel": "गाय या भैंस?",
+    "animalTypeLabel": "गाय या भैंस",
     "animalInitial": {
       "COW": "गा",
       "BUFF": "भै"
@@ -192,7 +193,18 @@
     "queueExpiredBody": "यह फ़ोन IT विभाग को दिखाएँ — ऐप डिलीट न करें।",
     "whichBreedTitle": "यह स्ट्रॉ किस नस्ल की है?",
     "whichBreedBody": "यह नंबर अभी दर्ज नहीं है। बताएँ यह किस बंडल से निकली है।",
-    "breedInFlask": "आपके फ्लास्क में {{count}}"
+    "breedInFlask": "आपके फ्लास्क में {{count}}",
+    "chooseBreed": "नस्ल चुनें",
+    "earTagNumber": "कान का टैग नंबर",
+    "optionalSuffix": "— वैकल्पिक",
+    "earTagExample": "जैसे 4821",
+    "animalPhotoTitle": "पशु की फ़ोटो",
+    "animalPhotoBody": "ताकि अगली बार पहचान सकें",
+    "take": "लें",
+    "usePhoto": "यही फ़ोटो रखें",
+    "saveAnimal": "पशु सहेजें",
+    "forFarmer": "{{name}} के लिए",
+    "forFarmerWithCode": "{{name}} के लिए · {{code}}"
   },
   "payment": {
     "mode": "भुगतान का तरीका",

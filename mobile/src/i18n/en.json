@@ -7,7 +7,8 @@
     "save": "Save",
     "search": "Search",
     "loading": "Loading…",
-    "continue": "Continue"
+    "continue": "Continue",
+    "close": "Close"
   },
   "auth": {
     "mobileNumber": "Mobile number",
@@ -121,9 +122,9 @@
     "whichAnimal": "Which animal?",
     "onRecordCount_one": "{{name}} has one on record.",
     "onRecordCount_other": "{{name}} has {{count}} on record.",
-    "nothingOnRecord": "Nothing on record for {{name}} yet.",
+    "nothingOnRecord": "{{name}} has none on record yet.",
     "addAnimalSubtitle": "Registering a new animal for {{name}}.",
-    "animalTypeLabel": "Cow or buffalo?",
+    "animalTypeLabel": "Cow or buffalo",
     "animalInitial": {
       "COW": "C",
       "BUFF": "B"
@@ -192,7 +193,18 @@
     "queueExpiredBody": "Show this phone to the IT department — do not delete the app.",
     "whichBreedTitle": "Which breed is this straw?",
     "whichBreedBody": "This number is not on record yet. Say which bundle it came out of.",
-    "breedInFlask": "{{count}} in your flask"
+    "breedInFlask": "{{count}} in your flask",
+    "chooseBreed": "Choose a breed",
+    "earTagNumber": "Ear tag number",
+    "optionalSuffix": "— optional",
+    "earTagExample": "e.g. 4821",
+    "animalPhotoTitle": "Photo of the animal",
+    "animalPhotoBody": "So you recognise her next visit",
+    "take": "Take",
+    "usePhoto": "Use this photo",
+    "saveAnimal": "Save animal",
+    "forFarmer": "For {{name}}",
+    "forFarmerWithCode": "For {{name}} · {{code}}"
   },
   "payment": {
     "mode": "Payment mode",
