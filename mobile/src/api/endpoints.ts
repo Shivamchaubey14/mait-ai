@@ -15,6 +15,7 @@ import type {
   BreedConfig,
   CurrentUser,
   FarmerKey,
+  Payment,
   FarmerOtpSent,
   InventorySummary,
   Member,
@@ -132,6 +133,31 @@ export const maitaiApi = api.injectEndpoints({
 
     verifyFarmerOtp: builder.mutation<{ verified: boolean }, FarmerKey & { otp: string }>({
       query: body => ({ url: '/farmers/otp/verify/', method: 'POST', body }),
+    }),
+
+    /**
+     * Record how this insemination is paid for.
+     *
+     * A member's mode is not the app's to choose — the server records a deduction against her
+     * milk payment whatever is sent. A non-member's is COD or ONLINE, and the authorisation
+     * code goes to her own number.
+     */
+    initiatePayment: builder.mutation<Payment, { eventId: number; mode?: 'COD' | 'ONLINE' }>({
+      query: ({ eventId, mode }) => ({
+        url: `/payments/${eventId}/initiate/`,
+        method: 'POST',
+        body: mode ? { mode } : {},
+      }),
+      invalidatesTags: ['Payment', 'AIEvent'],
+    }),
+
+    verifyPaymentOtp: builder.mutation<Payment, { eventId: number; otp: string }>({
+      query: ({ eventId, otp }) => ({
+        url: `/payments/${eventId}/otp/verify/`,
+        method: 'POST',
+        body: { otp },
+      }),
+      invalidatesTags: ['Payment', 'AIEvent'],
     }),
 
     createAnimal: builder.mutation<Animal, AnimalDraft>({
@@ -263,6 +289,8 @@ export const {
   useGetNonMemberQuery,
   useListBreedsQuery,
   useCreateAnimalMutation,
+  useInitiatePaymentMutation,
+  useVerifyPaymentOtpMutation,
   useUploadAnimalPhotoMutation,
   useSendFarmerOtpMutation,
   useVerifyFarmerOtpMutation,

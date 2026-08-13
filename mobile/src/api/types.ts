@@ -227,6 +227,25 @@ export interface Product {
   display_order: number;
 }
 
+// ---- payment -------------------------------------------------------------------------
+/** How one insemination was paid for. A member's is a deduction; a non-member's is collected. */
+export interface Payment {
+  id: number;
+  ai_event: number;
+  amount: string;
+  mode: 'DEDUCT' | 'COD' | 'ONLINE';
+  mode_display: string;
+  status: 'pending' | 'verified' | 'failed';
+  status_display: string;
+  is_verified: boolean;
+  member_otp_verified: boolean;
+  cod_otp_verified: boolean;
+  utr_number: string;
+  payment_screenshot_url: string;
+  failure_reason: string;
+  created_at: string;
+}
+
 // ---- AI event ------------------------------------------------------------------------
 export type AIEventStatus =
   'draft' | 'straw_verified' | 'photo_captured' | 'payment_pending' | 'completed' | 'cancelled';
@@ -247,6 +266,16 @@ export interface AIEvent {
   animal_type: AnimalTypeCode;
   breed: string;
   ear_tag_no: string | null;
+  /** The breed of straw held for this event. */
+  semen_breed: string;
+  /**
+   * What this insemination costs, in rupees, decided by the server.
+   *
+   * Null where the administrator has not priced the breed for this kind of farmer. The app
+   * then says the service is chargeable without naming a figure — a number the system cannot
+   * stand behind is heard by the farmer as final.
+   */
+  amount_due: string | null;
   straw_unique_no: string;
   ai_photo_url: string;
   gps_lat: string | null;

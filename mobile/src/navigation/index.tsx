@@ -12,22 +12,30 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { attachPhoto } from '@api/capture';
+import { attachPhoto, completeEvent } from '@api/capture';
 import { newClientUuid } from '@api/client';
-import { useGetMemberQuery, useGetNonMemberQuery } from '@api/endpoints';
+import {
+  useGetInventorySummaryQuery,
+  useGetMemberQuery,
+  useGetNonMemberQuery,
+  useInitiatePaymentMutation,
+  useVerifyPaymentOtpMutation,
+} from '@api/endpoints';
 import { pendingCount } from '@api/queue';
 import { drainQueue } from '@api/sync';
 import type { AIEvent, Animal, Member, MPP, NonMember } from '@api/types';
-import { Banner, Screen } from '@/components';
 import BottomNav, { Tab } from '@/components/BottomNav';
 import AddNonMemberScreen from '@/features/aiFlow/AddNonMemberScreen';
 import CapturePhotoScreen from '@/features/aiFlow/CapturePhotoScreen';
+import CaptureDoneScreen from '@/features/aiFlow/CaptureDoneScreen';
+import CollectPaymentScreen, { PaymentMode } from '@/features/aiFlow/CollectPaymentScreen';
 import ConfirmFarmerScreen from '@/features/aiFlow/ConfirmFarmerScreen';
+import MemberNothingToCollectScreen from '@/features/aiFlow/MemberNothingToCollectScreen';
+import RecordPaymentScreen from '@/features/aiFlow/RecordPaymentScreen';
 import SelectAnimalScreen from '@/features/aiFlow/SelectAnimalScreen';
 import SelectBreedScreen from '@/features/aiFlow/SelectBreedScreen';
 import SelectFarmerScreen from '@/features/aiFlow/SelectFarmerScreen';
@@ -42,7 +50,7 @@ import IndentsScreen from '@/features/stock/IndentsScreen';
 import RequestStockScreen from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
 import { useAppSelector } from '@/store';
-import { colors, spacing, typography } from '@theme/tokens';
+import { colors } from '@theme/tokens';
 
 /** Where the capture flow has got to. `null` means it is not running. */
 type CaptureStep =
@@ -54,6 +62,9 @@ type CaptureStep =
   | 'selectAnimal'
   | 'selectBreed'
   | 'capturePhoto'
+  | 'memberStatement'
+  | 'collectPayment'
+  | 'recordPayment'
   | 'done';
 
 /** Who the capture is for. Exactly one of the two codes is ever set. */
@@ -68,7 +79,6 @@ function clockTime(): string {
 
 export default function RootNavigator(): React.JSX.Element {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const accessToken = useAppSelector(state => state.auth.accessToken);
 
   const [tab, setTab] = useState<Tab>('home');
@@ -85,10 +95,22 @@ export default function RootNavigator(): React.JSX.Element {
   const [animal, setAnimal] = useState<Animal | null>(null);
   const [event, setEvent] = useState<AIEvent | null>(null);
 
+  /** How a non-member is paying, and where her authorisation code went. */
+  const [payMode, setPayMode] = useState<PaymentMode>('COD');
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const [payCode, setPayCode] = useState('');
+  const [payProblem, setPayProblem] = useState<string | null>(null);
+  const [payBusy, setPayBusy] = useState(false);
+  const [payFailed, setPayFailed] = useState(false);
+
   const [uploading, setUploading] = useState(false);
   const [pending, setPending] = useState(0);
   const [online, setOnline] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+
+  const [initiatePayment] = useInitiatePaymentMutation();
+  const [verifyPaymentOtp] = useVerifyPaymentOtpMutation();
+  const inventory = useGetInventorySummaryQuery();
 
   const memberDetail = useGetMemberQuery(farmer?.kind === 'member' ? farmer.memberCode : '', {
     skip: farmer?.kind !== 'member',
@@ -160,6 +182,59 @@ export default function RootNavigator(): React.JSX.Element {
     setEvent(unfinished);
     setClientUuid(unfinished.client_uuid);
     setStep('capturePhoto');
+  };
+
+  /**
+   * Close the capture: record the payment, then complete the event.
+   *
+   * Completion goes through the offline queue, so a Mait in a village with no signal finishes
+   * the round rather than being held on a screen by a network they do not have. What is never
+   * faked is the authorisation: an unverified payment stays unverified, and the app says so.
+   */
+  const finishCapture = async (mode?: PaymentMode) => {
+    if (!event) {
+      return;
+    }
+    setPayBusy(true);
+    setPayFailed(false);
+    try {
+      await initiatePayment({ eventId: event.id, ...(mode ? { mode } : {}) }).unwrap();
+    } catch {
+      // A member's deduction is the server's own bookkeeping and should not strand a Mait in
+      // a yard; the queue and the back office both still see the event.
+      setPayFailed(true);
+      setPayBusy(false);
+      return;
+    }
+
+    const outcome = await completeEvent(event.id, clientUuid, accessToken);
+    setPending(outcome.remaining);
+    if (outcome.sent) {
+      setLastSyncAt(clockTime());
+      inventory.refetch();
+    }
+    setPayBusy(false);
+    setStep('done');
+  };
+
+  /** Ask for her authorisation code, and remember whether it could be sent at all. */
+  const startCollection = async (mode: PaymentMode) => {
+    if (!event) {
+      return;
+    }
+    setPayMode(mode);
+    setPayProblem(null);
+    setPayBusy(true);
+    try {
+      const payment = await initiatePayment({ eventId: event.id, mode }).unwrap();
+      setCodeSentTo(payment.mode === 'DEDUCT' ? null : t('payment.herNumber'));
+    } catch {
+      // No signal, or the gateway refused. The cash is already in the Mait's hand, so the
+      // capture continues and the code is asked for when the network comes back.
+      setCodeSentTo(null);
+    }
+    setPayBusy(false);
+    setStep('recordPayment');
   };
 
   /**
@@ -331,38 +406,99 @@ export default function RootNavigator(): React.JSX.Element {
           if (outcome.sent) {
             setLastSyncAt(clockTime());
           }
-          setStep('done');
+          // A member owes nothing and a non-member owes now: two different screens, and the
+          // fork was answered at step 1.
+          setStep(farmer?.kind === 'member' ? 'memberStatement' : 'collectPayment');
         }}
         onBack={() => setStep('selectBreed')}
       />
     );
   }
 
+  const animalLabel = animal
+    ? animal.ear_tag_no
+      ? t('aiFlow.animalWithTag', {
+          type: t(`aiFlow.animalType.${animal.animal_type}`),
+          tag: animal.ear_tag_no,
+        })
+      : t('aiFlow.noEarTag', { type: t(`aiFlow.animalType.${animal.animal_type}`) })
+    : '';
+
+  if (step === 'memberStatement' && event && farmer) {
+    return (
+      <MemberNothingToCollectScreen
+        event={event}
+        farmerName={farmer.name}
+        animalLabel={animalLabel}
+        busy={payBusy}
+        failed={payFailed}
+        onFinish={() => finishCapture()}
+      />
+    );
+  }
+
+  if (step === 'collectPayment' && event && farmer) {
+    return (
+      <CollectPaymentScreen
+        event={event}
+        farmerName={farmer.name}
+        online={online}
+        busy={payBusy}
+        failed={payFailed}
+        onContinue={startCollection}
+        onBack={() => setStep('capturePhoto')}
+      />
+    );
+  }
+
+  if (step === 'recordPayment' && event && farmer) {
+    return (
+      <RecordPaymentScreen
+        event={event}
+        farmerName={farmer.name}
+        mode={payMode}
+        sentTo={codeSentTo}
+        code={payCode}
+        onCodeChange={setPayCode}
+        onResend={() => startCollection(payMode)}
+        problem={payProblem}
+        busy={payBusy}
+        onFinish={async () => {
+          // With a code in hand it has to be right before anything closes. With none — no
+          // signal to send one — the capture is saved and the code is asked for later.
+          if (codeSentTo) {
+            setPayBusy(true);
+            try {
+              await verifyPaymentOtp({ eventId: event.id, otp: payCode.trim() }).unwrap();
+            } catch {
+              setPayProblem(t('aiFlow.otpWrong'));
+              setPayBusy(false);
+              return;
+            }
+            setPayBusy(false);
+          }
+          await finishCapture();
+        }}
+        onBack={() => setStep('collectPayment')}
+      />
+    );
+  }
+
   if (step === 'done') {
     return (
-      <View style={[styles.flex, { paddingTop: insets.top }]}>
-        <Screen>
-          <Banner tone="info" message={t('aiFlow.comingNext')} testID="not-built-yet" />
-          <Text style={styles.selected}>{farmer?.name}</Text>
-          {/* The number only where the depot issued numbered stock. Nobody reads one in the
-              field any more, so most events have a breed and no number at all. */}
-          {!!event && (
-            <Text style={styles.selected}>
-              {event.straw_unique_no
-                ? `${t('aiFlow.strawHeld')} · ${event.straw_unique_no}`
-                : t('aiFlow.strawHeld')}
-            </Text>
-          )}
-          {pending > 0 && (
-            <Text style={styles.pending} testID="pending-queue">
-              {t('aiFlow.savedOfflineBody', { count: pending })}
-            </Text>
-          )}
-          <Text style={styles.doneLink} onPress={leaveCapture} testID="capture-done">
-            {t('home.backToHome')}
-          </Text>
-        </Screen>
-      </View>
+      <CaptureDoneScreen
+        event={event}
+        farmerName={farmer?.name ?? ''}
+        animalLabel={animalLabel}
+        time={clockTime()}
+        pending={pending}
+        strawsLeft={
+          event?.semen_breed ? (inventory.data?.by_breed?.[event.semen_breed] ?? null) : null
+        }
+        strawBreed={event?.semen_breed ?? ''}
+        onStartAnother={startCapture}
+        onHome={leaveCapture}
+      />
     );
   }
 
@@ -434,22 +570,4 @@ export default function RootNavigator(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
-  selected: {
-    ...typography.h3,
-    color: colors.text,
-    textAlign: 'center',
-    marginTop: spacing[3],
-  },
-  pending: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing[4],
-  },
-  doneLink: {
-    ...typography.bodyStrong,
-    color: colors.primaryDark,
-    textAlign: 'center',
-    marginTop: spacing[5],
-  },
 });
