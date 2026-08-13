@@ -123,6 +123,23 @@ export const maitaiApi = api.injectEndpoints({
       invalidatesTags: ['Animal', 'Member'],
     }),
 
+    /**
+     * Her portrait, sent after she has been registered.
+     *
+     * A second call rather than part of the first: the animal has to exist even if the upload
+     * dies on a village connection, because the capture flow is already standing on her id.
+     * A Mait who loses the photo has an animal with no picture; one who loses the animal has
+     * to start the step again with the farmer waiting.
+     */
+    uploadAnimalPhoto: builder.mutation<Animal, { id: number; uri: string }>({
+      query: ({ id, uri }) => {
+        const form = new FormData();
+        form.append('photo', { uri, name: 'animal.jpg', type: 'image/jpeg' } as unknown as Blob);
+        return { url: `/animals/${id}/photo/`, method: 'PATCH', body: form };
+      },
+      invalidatesTags: ['Animal', 'Member'],
+    }),
+
     // ---- inventory -----------------------------------------------------------------
     /** The catalogue behind the stock request form. Cached — it changes rarely. */
     listProducts: builder.query<Product[], void>({
@@ -229,6 +246,7 @@ export const {
   useGetNonMemberQuery,
   useListBreedsQuery,
   useCreateAnimalMutation,
+  useUploadAnimalPhotoMutation,
   useGetInventorySummaryQuery,
   useListProductsQuery,
   useLazyValidateStrawQuery,

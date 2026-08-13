@@ -137,6 +137,8 @@ export interface Animal {
   animal_type_display: string;
   breed: string;
   ear_tag_no: string | null;
+  /** Her portrait, taken at registration. Empty when nobody has photographed her. */
+  photo_url: string;
   ai_event_count: number;
   /** When this animal was last served. Null until she has been. */
   last_ai_at: string | null;

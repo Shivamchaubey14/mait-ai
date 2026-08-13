@@ -45,6 +45,26 @@ function resolveApiBaseUrl(): string {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
+/**
+ * Turn a stored file path into something a handset can fetch.
+ *
+ * The API returns media as a root-relative path — `/media/animal-photos/...` — because in
+ * production the portal and the API share an origin and a relative path is correct there. A
+ * phone has no such origin: `/media/...` resolves against nothing, and the image silently
+ * never loads. In production `STORAGES` is S3 and the same field comes back absolute, which
+ * is why an already-absolute URL is handed straight back.
+ */
+export function mediaUrl(path: string | null | undefined): string | undefined {
+  if (!path) {
+    return undefined;
+  }
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  const origin = API_BASE_URL.replace(API_PATH, '');
+  return `${origin}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 /** How long a queued offline event stays replayable. Mirrors the server TTL (ADR 0003). */
 export const IDEMPOTENCY_TTL_HOURS = 24;
 
