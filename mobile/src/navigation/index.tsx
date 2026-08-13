@@ -27,8 +27,7 @@ import { Banner, Screen } from '@/components';
 import BottomNav, { Tab } from '@/components/BottomNav';
 import AddNonMemberScreen from '@/features/aiFlow/AddNonMemberScreen';
 import CapturePhotoScreen from '@/features/aiFlow/CapturePhotoScreen';
-import ConfirmMemberScreen from '@/features/aiFlow/ConfirmMemberScreen';
-import ScanStrawScreen from '@/features/aiFlow/ScanStrawScreen';
+import ConfirmFarmerScreen from '@/features/aiFlow/ConfirmFarmerScreen';
 import SelectAnimalScreen from '@/features/aiFlow/SelectAnimalScreen';
 import SelectBreedScreen from '@/features/aiFlow/SelectBreedScreen';
 import SelectFarmerScreen from '@/features/aiFlow/SelectFarmerScreen';
@@ -50,11 +49,10 @@ type CaptureStep =
   | 'ownerType'
   | 'selectMpp'
   | 'selectFarmer'
-  | 'confirmMember'
+  | 'confirmFarmer'
   | 'addNonMember'
   | 'selectAnimal'
   | 'selectBreed'
-  | 'scanStraw'
   | 'capturePhoto'
   | 'done';
 
@@ -85,8 +83,6 @@ export default function RootNavigator(): React.JSX.Element {
   const [mpp, setMpp] = useState<MPP | null>(null);
   const [farmer, setFarmer] = useState<Farmer | null>(null);
   const [animal, setAnimal] = useState<Animal | null>(null);
-  /** The breed of straw the Mait said they would use, chosen before the number is entered. */
-  const [semenBreed, setSemenBreed] = useState<string | null>(null);
   const [event, setEvent] = useState<AIEvent | null>(null);
 
   const [uploading, setUploading] = useState(false);
@@ -175,12 +171,19 @@ export default function RootNavigator(): React.JSX.Element {
    */
   const chooseMember = (selected: Member) => {
     setFarmer({ kind: 'member', name: selected.member_name, memberCode: selected.member_code });
-    setStep('confirmMember');
+    setStep('confirmFarmer');
   };
 
+  /**
+   * A non-member goes through the same confirmation a member does.
+   *
+   * Her number was typed in by the Mait a moment ago, which is exactly why it is worth
+   * proving: it is the number the receipt will go to, and a digit wrong there is a receipt
+   * that reaches nobody.
+   */
   const chooseNonMember = (selected: NonMember) => {
     setFarmer({ kind: 'nonMember', name: selected.name, nonMemberId: selected.id });
-    setStep('selectAnimal');
+    setStep('confirmFarmer');
   };
 
   /**
@@ -244,12 +247,19 @@ export default function RootNavigator(): React.JSX.Element {
     );
   }
 
-  if (step === 'confirmMember' && farmer?.kind === 'member') {
+  if (step === 'confirmFarmer' && farmer) {
     return withTabs(
-      <ConfirmMemberScreen
-        memberCode={farmer.memberCode}
+      <ConfirmFarmerScreen
+        farmer={
+          farmer.kind === 'member'
+            ? { kind: 'member', memberCode: farmer.memberCode }
+            : { kind: 'nonMember', id: farmer.nonMemberId }
+        }
         onConfirm={() => setStep('selectAnimal')}
-        onSearchAgain={() => setStep('selectFarmer')}
+        // A member goes back to the roster to be found again. A non-member has already been
+        // created, so back goes to the MPP rather than into the form that made her —
+        // re-submitting it would register the same woman twice.
+        onSearchAgain={() => setStep(farmer.kind === 'member' ? 'selectFarmer' : 'selectMpp')}
       />,
     );
   }
@@ -282,43 +292,30 @@ export default function RootNavigator(): React.JSX.Element {
         // A non-member has already been created by the time this screen is reached, so back
         // goes past that form rather than into it — re-submitting it would add the same
         // person twice. A member goes back to the card that was just confirmed.
-        onBack={() => setStep(ownerType === 'member' ? 'confirmMember' : 'selectMpp')}
+        onBack={() => setStep('confirmFarmer')}
       />,
     );
   }
 
-  if (step === 'selectBreed' && animal) {
+  if (step === 'selectBreed' && mpp && farmer && animal) {
     return withTabs(
       <SelectBreedScreen
         animalType={animal.animal_type}
-        onSelect={breed => {
-          setSemenBreed(breed.code);
-          setStep('scanStraw');
-        }}
-        onBack={() => setStep('selectAnimal')}
-      />,
-    );
-  }
-
-  if (step === 'scanStraw' && mpp && farmer && animal) {
-    return (
-      <ScanStrawScreen
+        // Her own breed, carried through from step 4 so the step opens already answered.
+        suggestedBreed={animal.breed}
         capture={{
           clientUuid,
           mppCode: mpp.mpp_code,
           memberCode: farmer.kind === 'member' ? farmer.memberCode : undefined,
           nonMemberId: farmer.kind === 'nonMember' ? farmer.nonMemberId : undefined,
           animalId: animal.id,
-          // Chosen at the previous step, and sent with the check: it is what tells an
-          // unnumbered straw apart when the Mait is carrying two breeds of them.
-          semenBreed,
         }}
         onCreated={created => {
           setEvent(created);
           setStep('capturePhoto');
         }}
-        onBack={() => setStep('selectBreed')}
-      />
+        onBack={() => setStep('selectAnimal')}
+      />,
     );
   }
 
@@ -336,7 +333,7 @@ export default function RootNavigator(): React.JSX.Element {
           }
           setStep('done');
         }}
-        onBack={() => setStep('scanStraw')}
+        onBack={() => setStep('selectBreed')}
       />
     );
   }
@@ -347,9 +344,13 @@ export default function RootNavigator(): React.JSX.Element {
         <Screen>
           <Banner tone="info" message={t('aiFlow.comingNext')} testID="not-built-yet" />
           <Text style={styles.selected}>{farmer?.name}</Text>
+          {/* The number only where the depot issued numbered stock. Nobody reads one in the
+              field any more, so most events have a breed and no number at all. */}
           {!!event && (
             <Text style={styles.selected}>
-              {t('aiFlow.strawVerified')} · {event.straw_unique_no}
+              {event.straw_unique_no
+                ? `${t('aiFlow.strawHeld')} · ${event.straw_unique_no}`
+                : t('aiFlow.strawHeld')}
             </Text>
           )}
           {pending > 0 && (

@@ -1,10 +1,16 @@
 /**
  * Step 5 of the AI capture flow — which breed of straw (SRS §6.3 step 4, C7).
  *
- * Asked before the straw number rather than after it. A Mait carrying unnumbered stock in two
- * breeds cannot be identified by the number alone — the server answers `breed-required` and
- * the old flow only found that out after the Mait had typed the number and been refused.
- * Asking first turns a rejection into a question.
+ * **The straw is named by breed and by nothing else.** The flow used to ask for the number
+ * printed on it, and that number can only be read by lifting the goblet clear of the liquid
+ * nitrogen — which warms every straw in it, cumulatively and invisibly. The app was asking a
+ * Mait to damage the semen in order to record it. So identity gives way to quantity: the
+ * Mait says which breed, the platform holds one of that breed from their stock, and ten
+ * straws still complete exactly ten inseminations.
+ *
+ * This is therefore the step that commits. The event is created here, which is why the tab
+ * bar disappears after it and not before: from here on there is a record on the server that
+ * walking away would strand.
  *
  * Every configured breed for this species is listed, including the ones the flask is empty of.
  * They are shown blocked with the reason on the row, never hidden: a Mait who cannot find
@@ -12,11 +18,16 @@
  * stock" tells them to raise an indent.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useGetInventorySummaryQuery, useListBreedsQuery } from '@api/endpoints';
-import type { AnimalTypeCode, BreedConfig } from '@api/types';
+import { ErrorCode, errorCodeOf } from '@api/client';
+import {
+  useCreateAiEventMutation,
+  useGetInventorySummaryQuery,
+  useListBreedsQuery,
+} from '@api/endpoints';
+import type { AIEvent, AnimalTypeCode, BreedConfig } from '@api/types';
 import { LOW_STRAWS_PER_BREED } from '@/config/env';
 
 import { FlowNotice, FlowScreen, FlowSpacer, OptionCard } from './components';
@@ -24,17 +35,40 @@ import { FlowNotice, FlowScreen, FlowSpacer, OptionCard } from './components';
 interface Props {
   /** The species of the animal chosen at the previous step — a cow is not served buffalo semen. */
   animalType: AnimalTypeCode;
-  onSelect: (breed: BreedConfig) => void;
+  /**
+   * The breed of the animal chosen at step 4, if her record carries one.
+   *
+   * Pre-selected here when the Mait is holding straws of it. Like breeds to like is the
+   * ordinary case — a Sahiwal is served Sahiwal — so the step arrives already answered and a
+   * Mait who agrees taps Continue once. It is a default, not a decision: every other breed is
+   * one tap away, and changing it costs nothing.
+   */
+  suggestedBreed?: string | null;
+  /** Everything the event needs, gathered by the previous four steps. */
+  capture: {
+    clientUuid: string;
+    mppCode: string;
+    memberCode?: string;
+    nonMemberId?: number;
+    animalId: number;
+  };
+  onCreated: (event: AIEvent) => void;
   onBack: () => void;
 }
 
 export default function SelectBreedScreen({
   animalType,
-  onSelect,
+  suggestedBreed,
+  capture,
+  onCreated,
   onBack,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const [code, setCode] = useState<string | null>(null);
+  const [suggestionApplied, setSuggestionApplied] = useState(false);
+  const [rejection, setRejection] = useState<'out_of_stock' | 'generic' | null>(null);
+
+  const [createAiEvent, { isLoading: creating }] = useCreateAiEventMutation();
 
   const { data: breeds = [], isLoading: breedsLoading } = useListBreedsQuery(animalType);
   const {
@@ -66,6 +100,54 @@ export default function SelectBreedScreen({
   const chosen = rows.find(row => row.breed.code === code && row.straws > 0);
   const loading = breedsLoading || stockLoading;
 
+  /**
+   * Answer the step with her own breed, once the flask is known.
+   *
+   * It has to wait for both the catalogue and the stock: a breed the Mait is not carrying
+   * cannot be pre-selected, and until the stock lands every breed looks like one they have
+   * none of. Applied once, and never again — a Mait who has changed the answer must not have
+   * it changed back under them by a refresh.
+   */
+  useEffect(() => {
+    if (suggestionApplied || loading || rows.length === 0) {
+      return;
+    }
+    setSuggestionApplied(true);
+    const match = rows.find(row => row.breed.code === suggestedBreed && row.straws > 0);
+    if (match) {
+      setCode(match.breed.code);
+    }
+  }, [suggestionApplied, loading, rows, suggestedBreed]);
+
+  /**
+   * Open the event against a straw of this breed.
+   *
+   * The server holds one from the Mait's stock and deducts nothing yet — an abandoned
+   * capture costs them no straw, because no insemination happened. It can still refuse: the
+   * screen's counts are a moment old, and another event may have taken the last one.
+   */
+  const commit = async () => {
+    if (!chosen) {
+      return;
+    }
+    setRejection(null);
+    try {
+      const event = await createAiEvent({
+        client_uuid: capture.clientUuid,
+        mpp_code: capture.mppCode,
+        ...(capture.memberCode
+          ? { member_code: capture.memberCode }
+          : { non_member_id: capture.nonMemberId }),
+        animal_id: capture.animalId,
+        semen_breed: chosen.breed.code,
+      }).unwrap();
+      onCreated(event);
+    } catch (err) {
+      setRejection(errorCodeOf(err) === ErrorCode.INSUFFICIENT_STOCK ? 'out_of_stock' : 'generic');
+      refetch();
+    }
+  };
+
   return (
     <FlowScreen
       step={4}
@@ -75,11 +157,29 @@ export default function SelectBreedScreen({
       refresh={{ refreshing: isFetching && !loading, onRefresh: refetch }}
       cta={{
         label: t('common.continue'),
-        onPress: () => chosen && onSelect(chosen.breed),
+        onPress: commit,
         disabled: !chosen,
+        busy: creating,
         testID: 'breed-continue',
       }}
     >
+      {rejection === 'out_of_stock' && (
+        <FlowNotice
+          tone="error"
+          title={t('aiFlow.strawNotInStockTitle')}
+          body={t('aiFlow.raiseIndentSoon')}
+          testID="breed-rejected"
+        />
+      )}
+      {rejection === 'generic' && (
+        <FlowNotice
+          tone="error"
+          title={t('errors.generic')}
+          body={t('aiFlow.tryAgainInAMoment')}
+          testID="breed-rejected"
+        />
+      )}
+
       {loading && <FlowNotice tone="info" title={t('common.loading')} />}
 
       {!loading && breeds.length === 0 && (
