@@ -120,6 +120,16 @@ interface FlowScreenProps {
   onBack?: () => void;
   /** Shown as a tick instead of a back arrow on the terminal screen. */
   done?: boolean;
+  /**
+   * Green instead of Ink, for the screens that carry a settled fact rather than a question.
+   *
+   * Nothing to collect, and Recorded. Both are statements, and a Mait reading green knows the
+   * answer before they have read the words — which is the point of a colour that means one
+   * thing everywhere in the product.
+   */
+  tone?: 'ink' | 'good';
+  /** A short word above the question — "Payment", "Proof of payment". */
+  eyebrow?: string;
   children: React.ReactNode;
   /** The footer CTA. Absent, the footer is not rendered at all. */
   cta?: {
@@ -157,6 +167,8 @@ export function FlowScreen({
   subtitle,
   onBack,
   done = false,
+  tone = 'ink',
+  eyebrow,
   children,
   cta,
   link,
@@ -177,6 +189,7 @@ export function FlowScreen({
     <View
       style={[
         styles.hero,
+        tone === 'good' && styles.heroGood,
         {
           marginTop: insets.top + spacing[2],
           marginLeft: spacing[3] + insets.left,
@@ -201,7 +214,7 @@ export function FlowScreen({
             <Ionicons name="arrow-back" size={20} color={colors.surface} />
           </Pressable>
         )}
-        {!!label && <Text style={styles.stepLabel}>{label}</Text>}
+        {!!(eyebrow ?? label) && <Text style={styles.stepLabel}>{eyebrow ?? label}</Text>}
       </View>
 
       {(step !== null || done) && (
@@ -965,6 +978,33 @@ export function IdentityCard({
   );
 }
 
+/**
+ * A label on the left, its value on the right, one hairline between rows.
+ *
+ * For the two or three facts a Mait reads back at the end of a capture — who it was for, which
+ * animal. A card of these is quicker to check against the animal in front of them than the
+ * same facts in a paragraph.
+ */
+export function InfoRow({
+  label,
+  value,
+  last = false,
+}: {
+  label: string;
+  value: string;
+  /** Drops the hairline, so the last row does not underline the bottom of its card. */
+  last?: boolean;
+}): React.JSX.Element {
+  return (
+    <View style={[styles.infoRow, !last && styles.infoRowRuled]}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 // --------------------------------------------------------------------------------------
 // Info tile
 // --------------------------------------------------------------------------------------
@@ -1087,6 +1127,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
     overflow: 'hidden',
   },
+  heroGood: { backgroundColor: colors.primaryDark },
   heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1358,6 +1399,17 @@ const styles = StyleSheet.create({
   fact: { width: '50%', paddingTop: spacing[2], paddingRight: spacing[3] },
   factLabel: { ...typography.caption, color: colors.textMuted },
   factValue: { ...typography.bodyStrong, color: colors.ink, marginTop: 2 },
+
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[3],
+    paddingVertical: spacing[3],
+  },
+  infoRowRuled: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  infoLabel: { ...typography.body, color: colors.textMuted },
+  infoValue: { ...typography.bodyStrong, color: colors.ink, flexShrink: 1, textAlign: 'right' },
 
   tile: {
     flexDirection: 'row',
