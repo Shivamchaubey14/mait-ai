@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from apps.core.exceptions import InvalidStateTransition, MPPNotAssigned, PaymentNotVerified
 from apps.core.services import record_audit
-from apps.inventory.services import consume_straw, get_straw_for_mait
+from apps.inventory.services import consume_straw, get_straw_for_mait, take_straw_of_breed
 
 from .models import AIEvent, AIEventTimeline
 
@@ -102,7 +102,41 @@ def start_ai_event(
         # Raises on a straw the Mait does not hold or has already used, which rolls the
         # draft back with it — a failed scan must not leave a half-started event behind.
         verify_straw(event, straw_unique_no, semen_breed=semen_breed, actor=actor)
+    elif semen_breed:
+        reserve_straw_by_breed(event, semen_breed, actor=actor)
 
+    return event
+
+
+@transaction.atomic
+def reserve_straw_by_breed(event: AIEvent, semen_breed: str, *, actor=None) -> AIEvent:
+    """
+    Hold one straw of a breed against this event, with no number read (SRS §6.3 step 4).
+
+    The capture flow no longer asks for a straw number. Reading one means lifting the goblet
+    clear of the liquid nitrogen, which warms every straw in it — the app was asking a Mait to
+    damage the semen in order to record it. The breed is asked instead, at the step before,
+    and the count is what gates the work: ten straws of a breed complete ten inseminations of
+    it, and the eleventh is refused for want of stock.
+
+    Nothing is deducted here, exactly as with a scanned number. Stock moves at completion
+    (SRS §6.4.3), so a capture the Mait abandons costs them nothing — no insemination
+    happened.
+    """
+    straw = take_straw_of_breed(event.mait, semen_breed)
+
+    _transition(
+        event,
+        AIEvent.Status.STRAW_VERIFIED,
+        actor=actor,
+        note=f"{semen_breed.strip().upper()} straw held from stock",
+    )
+    event.semen_batch = straw
+    # Carried when the depot issued numbered stock, and left blank when it did not. An
+    # unnumbered row's placeholder is a bookkeeping artefact, not a number anyone read off a
+    # straw, and writing it here would look like a scan that never happened.
+    event.straw_unique_no = "" if straw.is_unnumbered else straw.unique_straw_no
+    event.save(update_fields=["semen_batch", "straw_unique_no", "status", "updated_at"])
     return event
 
 

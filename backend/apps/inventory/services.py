@@ -129,6 +129,42 @@ def get_straw_for_mait(
     return straw
 
 
+def take_straw_of_breed(mait, breed: str) -> SemenBatch:
+    """
+    Pick one straw of a breed out of this Mait's holding, without anybody reading a number.
+
+    **Why no number is asked for.** A straw lives in liquid nitrogen at -196degC. Lifting the
+    goblet high enough to read the number printed on a straw warms every straw in it, and the
+    damage is cumulative and invisible — the cost of that scan is not the Mait's time, it is
+    the viability of the semen they are about to use and of everything sitting beside it. The
+    number was a good identifier on paper and a bad instruction in a yard.
+
+    So the gate becomes a count rather than an identity: a Mait holding ten straws of a breed
+    can complete ten inseminations of it, and the eleventh is refused for want of stock. What
+    is lost is the ability to say *which* straw went into which animal — kept anyway wherever
+    the depot issued numbered stock, because the row picked here carries its own number.
+
+    Oldest first, by received date: semen is perishable, and a flask worked front-to-back
+    would leave the oldest straws to expire at the bottom.
+    """
+    code = (breed or "").strip().upper()
+    if not code:
+        raise BreedRequired("Say which breed of straw is being used.")
+
+    holdings = MaitInventory.objects.filter(
+        mait=mait, product_type=ProductType.STRAW, qty_available__gt=0
+    ).values_list("product_ref_id", flat=True)
+
+    straw = (
+        SemenBatch.objects.filter(id__in=list(holdings), breed=code, is_consumed=False)
+        .order_by("received_date", "id")
+        .first()
+    )
+    if straw is None:
+        raise InsufficientStock(f"You are not carrying any {code} straws. Raise a new indent.")
+    return straw
+
+
 def consume_straw(*, mait, straw: SemenBatch, ai_event_id: int, actor=None) -> MaitInventory:
     """
     Deduct one straw from a Mait's stock.

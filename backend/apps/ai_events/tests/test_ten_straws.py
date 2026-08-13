@@ -195,3 +195,89 @@ class TestTenStrawsTenEvents:
 
         assert second.status_code == 409
         assert second.json()["type"].endswith("/straw-already-consumed")
+
+
+def _capture_by_breed(client, mpp, member, animal, breed="GIR"):
+    """Open an event the way the app now does it — by breed, with no number read."""
+    return client.post(
+        f"{BASE}/",
+        {
+            "client_uuid": str(uuid.uuid4()),
+            "mpp_code": mpp.mpp_code,
+            "member_code": member.member_code,
+            "animal_id": animal.id,
+            "semen_breed": breed,
+        },
+        format="json",
+    )
+
+
+class TestTenStrawsWithNoNumbersRead:
+    """
+    The same promise, through the flow the app actually walks.
+
+    A straw number can only be read by lifting the goblet out of the liquid nitrogen, which
+    warms every straw in it. So the app names the breed and the platform counts: ten straws
+    of a breed complete ten inseminations of it, and the eleventh is refused. Identity is
+    replaced by quantity, and the sentence this whole system exists to guarantee is unchanged.
+    """
+
+    def test_ten_straws_complete_exactly_ten_events(
+        self, mait_client, mait, mpp, member, animal, stocked_mait
+    ):
+        stocked_mait(STRAWS)
+        assert available_straw_count(mait) == STRAWS
+
+        for _ in range(STRAWS):
+            created = _capture_by_breed(mait_client, mpp, member, animal)
+            assert created.status_code == 201, created.json()
+            # Held, not deducted: stock moves only at completion.
+            assert created.json()["status"] == AIEvent.Status.STRAW_VERIFIED
+
+            event = _reach_payment_pending(mait_client, created.json()["id"])
+            assert mait_client.post(f"{BASE}/{event.id}/complete/").status_code == 200
+
+        assert available_straw_count(mait) == 0
+        assert AIEvent.objects.filter(status=AIEvent.Status.COMPLETED).count() == STRAWS
+
+    def test_the_eleventh_capture_is_refused(
+        self, mait_client, mait, mpp, member, animal, stocked_mait
+    ):
+        stocked_mait(1)
+
+        first = _capture_by_breed(mait_client, mpp, member, animal)
+        _reach_payment_pending(mait_client, first.json()["id"])
+        mait_client.post(f"{BASE}/{first.json()['id']}/complete/")
+
+        second = _capture_by_breed(mait_client, mpp, member, animal)
+
+        # Refused at the open, before anything is recorded against the animal.
+        assert second.status_code == 409
+        assert second.json()["type"].endswith("/insufficient-stock")
+        assert AIEvent.objects.filter(status=AIEvent.Status.COMPLETED).count() == 1
+
+    def test_a_breed_the_mait_is_not_carrying_is_refused(
+        self, mait_client, mpp, member, animal, stocked_mait
+    ):
+        stocked_mait(2)
+
+        response = _capture_by_breed(mait_client, mpp, member, animal, breed="MURRAH")
+
+        assert response.status_code == 409
+        assert response.json()["type"].endswith("/insufficient-stock")
+        assert not AIEvent.objects.exists()
+
+    def test_the_straw_it_held_is_the_one_it_consumes(
+        self, mait_client, mait, mpp, member, animal, stocked_mait
+    ):
+        """
+        Traceability survives where the depot issued numbered stock: no number was read in
+        the field, but the row the platform picked is recorded against the event.
+        """
+        straws = stocked_mait(1)
+
+        created = _capture_by_breed(mait_client, mpp, member, animal)
+        event = AIEvent.objects.get(pk=created.json()["id"])
+
+        assert event.semen_batch_id == straws[0].id
+        assert event.straw_unique_no == straws[0].unique_straw_no

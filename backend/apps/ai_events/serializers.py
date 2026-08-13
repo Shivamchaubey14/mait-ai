@@ -169,8 +169,16 @@ class AIEventCreateSerializer(serializers.Serializer):
     one cannot be de-duplicated afterwards, and by then the damage is a double insemination
     record.
 
-    ``straw_unique_no`` is optional. Supplied, the event is validated against stock and lands
-    in ``straw_verified``; omitted, it stays a ``draft`` the Mait can come back to.
+    The straw is named by **breed**, not by number. Reading a number means lifting the goblet
+    out of the liquid nitrogen, which warms every straw in it — the app would be asking a Mait
+    to damage the semen in order to record it. So ``semen_breed`` opens the capture and holds
+    one straw of that breed from the Mait's stock, and the gate becomes a count: ten straws of
+    a breed complete ten inseminations of it.
+
+    ``straw_unique_no`` remains accepted for the cases where a number is genuinely known
+    without opening anything — a depot scan, an admin correction, a barcode on the goblet.
+    Supplied, it is validated against stock as before and wins over the breed. With neither,
+    the event stays a ``draft`` the Mait can come back to.
     """
 
     client_uuid = serializers.UUIDField()
@@ -184,9 +192,9 @@ class AIEventCreateSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         help_text=(
-            "Breed of the straw used. Needed only when the number is not on record yet and "
-            "the Mait is carrying unnumbered stock in more than one breed — the number alone "
-            "cannot say which bundle it came from."
+            "Breed of the straw used. This is how the capture flow names a straw: one of "
+            "that breed is held from the Mait's stock and deducted at completion, with no "
+            "number read and no goblet lifted out of the nitrogen."
         ),
     )
 
