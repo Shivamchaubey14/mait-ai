@@ -15,12 +15,22 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import { AI_FLOW_STEPS } from '@/config/env';
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
 import { FlowNotice, FlowScreen } from './components';
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** `11 Aug · 10:42` — 24-hour, because a Mait reading a record wants the order, not am/pm. */
+function stamp(when: Date): string {
+  const time = `${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`;
+  return `${when.getDate()} ${MONTHS[when.getMonth()]} · ${time}`;
+}
 
 export interface CapturedPhoto {
   uri: string;
@@ -46,6 +56,16 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
   const [taking, setTaking] = useState(false);
   const [fix, setFix] = useState<Location.LocationObject | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const [torch, setTorch] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+
+  // The clock on screen is the one that will be stamped on the record, so it has to be the
+  // real time rather than the time the screen happened to open.
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 15_000);
+    return () => clearInterval(tick);
+  }, []);
 
   // Asked for as the screen opens, not at the shutter: a GPS fix can take several seconds in
   // a yard, and making the Mait wait after they have already framed the animal is the one
@@ -99,12 +119,7 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
   // -- permission gate -------------------------------------------------------------------
   if (!permission) {
     return (
-      <FlowScreen
-        step={5}
-        stepLabel={t('aiFlow.proofPhoto')}
-        title={t('aiFlow.takePhoto')}
-        onBack={onBack}
-      >
+      <FlowScreen step={5} title={t('aiFlow.takePhoto')} onBack={onBack}>
         <ActivityIndicator color={colors.primary} />
       </FlowScreen>
     );
@@ -114,7 +129,6 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
     return (
       <FlowScreen
         step={5}
-        stepLabel={t('aiFlow.proofPhoto')}
         title={t('aiFlow.takePhoto')}
         subtitle={t('aiFlow.cameraNeededSubtitle')}
         onBack={onBack}
@@ -138,7 +152,6 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
     return (
       <FlowScreen
         step={5}
-        stepLabel={t('aiFlow.proofPhoto')}
         title={t('aiFlow.photoTaken')}
         subtitle={t('aiFlow.photoTakenSubtitle')}
         onBack={() => setShot(null)}
@@ -184,30 +197,76 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
   // -- camera ----------------------------------------------------------------------------
   return (
     <View style={styles.root}>
-      <CameraView ref={camera} style={styles.camera} facing="back" testID="camera" />
+      <StatusBar style="light" backgroundColor={colors.ink} />
 
-      <View style={[styles.overlay, { paddingTop: insets.top + spacing[3] }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          onPress={onBack}
-          style={styles.back}
-          testID="photo-back"
-        >
-          <Ionicons name="arrow-back" size={20} color={colors.surface} />
-        </Pressable>
-        <Text style={styles.instruction}>{t('aiFlow.frameTheAnimal')}</Text>
+      {/* The step and the question, on the page rather than in the flow's Ink card — the card
+          is a frame for a body, and here the body is a live camera that wants the room. */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing[3] }]}>
+        <View style={styles.headerTop}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            onPress={onBack}
+            style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
+            testID="photo-back"
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.surface} />
+          </Pressable>
+          <Text style={styles.stepLabel}>
+            {t('aiFlow.stepOf', { current: AI_FLOW_STEPS.length, total: AI_FLOW_STEPS.length })}
+          </Text>
+        </View>
+        <Text style={styles.title}>{t('aiFlow.takePhoto')}</Text>
       </View>
 
-      <View style={[styles.controls, { paddingBottom: insets.bottom + spacing[5] }]}>
-        {/* Stated before the shot, so a Mait knows whether the pin will be on it. */}
-        <Text style={styles.gpsState}>
-          {locationDenied
-            ? t('aiFlow.noPin')
-            : fix
-              ? t('aiFlow.pinReady', { accuracy: Math.round(fix.coords.accuracy ?? 0) })
-              : t('aiFlow.findingPin')}
-        </Text>
+      {/* A dashed frame around the preview: it reads as a space to be filled, which is what
+          the Mait is being asked to do — put two things inside it. */}
+      <View style={styles.frame}>
+        <View style={styles.cameraWrap}>
+          <CameraView
+            ref={camera}
+            style={StyleSheet.absoluteFill}
+            facing={facing}
+            enableTorch={torch}
+            testID="camera"
+          />
+        </View>
+
+        {/* What has to be in shot, said at the top rather than across the middle: the middle
+            is where the animal goes. */}
+        <Text style={styles.frameHint}>{t('aiFlow.animalAndMaitInFrame')}</Text>
+      </View>
+
+      {/* The two facts that will be stamped on the record, shown before the shutter so a Mait
+          knows what they are about to capture rather than discovering it afterwards. */}
+      <View style={styles.stampRow}>
+        <View style={styles.stampLeft}>
+          <Ionicons
+            name="location-outline"
+            size={16}
+            color={fix ? colors.surface : 'rgba(255,255,255,0.55)'}
+          />
+          <Text style={styles.stampValue} numberOfLines={1}>
+            {locationDenied
+              ? t('aiFlow.noPin')
+              : fix
+                ? `${fix.coords.latitude.toFixed(4)}, ${fix.coords.longitude.toFixed(4)}`
+                : t('aiFlow.findingPin')}
+          </Text>
+        </View>
+        <Text style={styles.stampValue}>{stamp(now)}</Text>
+      </View>
+
+      <View style={[styles.controls, { paddingBottom: insets.bottom + spacing[4] }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('aiFlow.flipCamera')}
+          onPress={() => setFacing(current => (current === 'back' ? 'front' : 'back'))}
+          style={({ pressed }) => [styles.sideButton, pressed && styles.sideButtonPressed]}
+          testID="photo-flip"
+        >
+          <Ionicons name="camera-reverse-outline" size={22} color={colors.surface} />
+        </Pressable>
 
         <Pressable
           accessibilityRole="button"
@@ -220,73 +279,139 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
           {taking ? <ActivityIndicator color={colors.ink} /> : <View style={styles.shutterInner} />}
         </Pressable>
 
-        {/* No gallery button, on purpose (SRS Â§6.3 step 5). */}
-        <Text style={styles.cameraOnly}>{t('aiFlow.cameraOnly')}</Text>
+        {/* A torch, not a flash: sheds are dark at the hours a Mait works, and a light that
+            stays on lets them frame the shot before taking it. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: torch }}
+          accessibilityLabel={t('aiFlow.light')}
+          onPress={() => setTorch(on => !on)}
+          style={({ pressed }) => [
+            styles.sideButton,
+            torch && styles.sideButtonOn,
+            pressed && styles.sideButtonPressed,
+          ]}
+          testID="photo-torch"
+        >
+          <Ionicons
+            name={torch ? 'flashlight' : 'flashlight-outline'}
+            size={22}
+            color={torch ? colors.ink : colors.surface}
+          />
+        </Pressable>
       </View>
+
+      {/* No gallery button, on purpose (SRS §6.3 step 5). */}
+      <Text style={[styles.cameraOnly, { paddingBottom: insets.bottom }]}>
+        {t('aiFlow.cameraOnly')}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.ink },
-  camera: { ...StyleSheet.absoluteFillObject },
 
-  overlay: {
+  header: { paddingHorizontal: spacing[5], paddingBottom: spacing[4] },
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    paddingHorizontal: spacing[4],
+    marginBottom: spacing[3],
   },
   back: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  instruction: {
-    ...typography.bodyStrong,
-    color: colors.surface,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-  },
+  backPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
+  stepLabel: { ...typography.label, color: colors.surface, opacity: 0.72 },
+  title: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
 
-  controls: {
-    marginTop: 'auto',
-    alignItems: 'center',
-    gap: spacing[3],
+  // Dashed, because it is a space waiting to be filled rather than a picture already taken.
+  frame: {
+    flex: 1,
+    marginHorizontal: spacing[4],
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255,255,255,0.28)',
+    borderRadius: radius.lg,
+    padding: spacing[1],
   },
-  gpsState: {
+  // The rounding lives here rather than on the frame: clipping a camera surface to a corner
+  // radius is the sort of thing Android does badly, and this keeps the dashes off it.
+  cameraWrap: { flex: 1, borderRadius: radius.md, overflow: 'hidden', backgroundColor: '#0B1219' },
+  frameHint: {
+    position: 'absolute',
+    top: spacing[3],
+    alignSelf: 'center',
     ...typography.caption,
     color: colors.surface,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(12,21,27,0.6)',
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[1],
     borderRadius: radius.pill,
     overflow: 'hidden',
   },
+
+  stampRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[3],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3],
+  },
+  stampLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], flexShrink: 1 },
+  // On the dark capture screen. The review screen's version of this line is on white, and is
+  // `stampText` below.
+  stampValue: { ...typography.label, color: colors.surface },
+
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[6],
+    paddingHorizontal: spacing[5],
+  },
+  sideButton: {
+    width: MIN_TOUCH_TARGET,
+    height: MIN_TOUCH_TARGET,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  sideButtonPressed: { backgroundColor: 'rgba(255,255,255,0.24)' },
+  sideButtonOn: { backgroundColor: colors.surface },
+  // Ringed in green: the one control on a dark screen that must be found without looking.
   shutter: {
     width: 74,
     height: 74,
     borderRadius: 37,
     borderWidth: 4,
-    borderColor: colors.surface,
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  shutterPressed: { backgroundColor: 'rgba(255,255,255,0.5)' },
-  shutterInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
     backgroundColor: colors.surface,
   },
-  cameraOnly: { ...typography.caption, color: colors.surface, opacity: 0.75 },
+  shutterPressed: { backgroundColor: colors.background },
+  shutterInner: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: colors.surface,
+  },
+  cameraOnly: {
+    ...typography.caption,
+    color: colors.surface,
+    opacity: 0.6,
+    textAlign: 'center',
+    paddingTop: spacing[3],
+  },
 
   preview: {
     width: '100%',

@@ -99,20 +99,28 @@ export const IT_SUPPORT_PHONE =
  * roster and pays nothing today, a non-member is typed in from scratch and pays on the spot.
  * Asking it last would mean walking a Mait through five screens built on an assumption.
  *
- * The six are the questions with an answer to choose. The proof photo comes after them and is
- * shown as a named screen rather than a seventh number — it is not something a Mait picks, it
- * is something they do, and the screens past it (payment, done) are named for the same reason.
+ * **Six steps, eight screens.** A step is a question, not a screen, and two of these are asked
+ * over two screens: the farmer is found and then read back to her own phone, and the animal
+ * step can open a sheet to register one. Both halves carry the same number, because the bar
+ * measures how far through the work a Mait is rather than how many screens they have touched
+ * — and a bar that advanced on a confirmation would promise progress that had not happened.
  *
- * `collectPayment` is not in this list. It is Phase 4 and does not exist yet, and counting a
- * screen that never arrives made the bar promise a step that was really the last.
+ * Step 5 is the straw, and it asks only for its **breed**. The number printed on a straw can
+ * only be read by lifting the goblet out of the liquid nitrogen, which warms every straw in
+ * it: the app was asking a Mait to damage the semen in order to record it.
+ *
+ * The photo is the sixth and last: it is the act the whole flow exists to evidence. The
+ * screens past it — payment, done — are named rather than numbered. `collectPayment` is not
+ * in this list because it is Phase 4 and does not exist yet, and counting a screen that never
+ * arrives made the bar promise a step that was really the last.
  */
 export const AI_FLOW_STEPS = [
   'ownerType',
   'selectMpp',
   'selectFarmer',
   'selectAnimal',
-  'selectBreed',
-  'scanStraw',
+  'straw',
+  'proofPhoto',
 ] as const;
 
 /**
