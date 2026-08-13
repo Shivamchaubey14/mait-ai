@@ -9,7 +9,7 @@ guarantee itself is proved in test_completion.py — this is about the door in f
 from __future__ import annotations
 
 import io
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -113,7 +113,12 @@ class TestPhoto:
         )
 
         assert response.status_code == 200
-        assert response.json()["performed_at"].startswith(performed.strftime("%Y-%m-%d"))
+        # Compared as instants, not as the first ten characters of a string. DRF renders in
+        # the project's timezone, so for the five and a half hours after midnight IST the
+        # local date is a day ahead of the UTC one and a prefix match fails on a response
+        # that is perfectly correct.
+        returned = datetime.fromisoformat(response.json()["performed_at"])
+        assert abs((returned - performed).total_seconds()) < 1
 
     def test_rejects_a_future_timestamp(self, mait_client, mpp, member, animal, stocked_mait):
         """A wrong phone clock would sort the event ahead of everything real."""
