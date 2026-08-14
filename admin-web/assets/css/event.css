@@ -14,28 +14,70 @@
   align-items: start;
 }
 
-/* Dark, so the photo is the brightest thing on the page — which is how it gets judged. */
+/* --- the evidence cards ------------------------------------------------------------------
+   The card is `.panel`'s construction — white surface, one border, the same radius — so the
+   evidence column reads as the rest of the portal. The dark well is inside it rather than
+   around it: the photo is still the brightest thing on the screen, which is how it gets
+   judged, but a page whose left-hand column is two black slabs reads as two things that
+   failed to load, which is how this one was reported. */
 .proof {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+  margin: 0 0 var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.proof__frame {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 190px;
   padding: var(--space-4);
-  margin: 0 0 var(--space-4);
   background: var(--ink-700);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .proof__image {
   max-width: 100%;
+  max-height: 460px;
+  object-fit: contain;
   border-radius: var(--radius-sm);
 }
 
-.proof__caption {
+/* No photo, or a photo that would not load. Stated in words with a glyph, rather than left to
+   the browser's broken-image icon — which says "this portal is broken" when the truth is
+   usually "this event has not got that far yet". */
+.proof__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-200);
+}
+
+.proof__empty-icon svg {
+  width: 30px;
+  height: 30px;
+  opacity: 0.7;
+}
+
+.proof__empty-text {
   font-family: var(--font-heading);
   font-size: var(--text-label);
-  color: var(--ink-200);
+  text-align: center;
+}
+
+/* The stamp under the evidence. Caption type in muted ink, the same line the tiles and the
+   topbar meta are set in — it is a note about the picture, not a heading over it. */
+.proof__caption {
+  padding: var(--space-3) var(--space-2) var(--space-1);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
   text-align: center;
 }
 

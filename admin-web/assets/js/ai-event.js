@@ -93,19 +93,7 @@
     tone($('#status-tile'), statusTone);
     $('#status-icon').html(MaitAI.shell.icon(TONE_ICON[statusTone] || 'info'));
 
-    // Through `mediaUrl`, not straight into `src`: the path the API returns is root-relative,
-    // and the portal is not always served from the API's origin.
-    if (event.ai_photo_url) {
-      $('#proof').html(
-        '<img class="proof__image" src="' +
-          ui.escapeHtml(MaitAI.api.mediaUrl(event.ai_photo_url)) +
-          '" alt="AI proof photo for event ' +
-          event.id +
-          '" />'
-      );
-    } else {
-      $('#proof-caption').text('No photo captured yet — the event is at ' + event.status_display);
-    }
+    renderProof(event);
 
     if (event.gps_lat && event.gps_lng) {
       $('#map-caption').text(
@@ -116,6 +104,38 @@
           ' E'
       );
     }
+  }
+
+  /**
+   * The proof photo, or an honest statement that there is not one.
+   *
+   * `ai_photo_url` is root-relative, and on the development path the portal is not served from
+   * the API's origin — so this goes through `api.mediaUrl()` rather than into `src` as it
+   * comes. The `error` handler covers the rest: a photo whose file has gone from the bucket
+   * should say so in words, not leave the browser's broken-image glyph on a dark box.
+   */
+  function renderProof(event) {
+    const src = MaitAI.api.mediaUrl(event.ai_photo_url);
+    if (!src) {
+      $('#proof-empty-text').text('No photo yet — the event is at ' + event.status_display);
+      $('#proof-caption').text('AI proof photo — nothing captured yet');
+      return;
+    }
+
+    const stamp = event.performed_at || event.created_at;
+    $('#proof-caption').text('AI proof photo · captured ' + ui.dateTime(stamp));
+
+    $('<img>')
+      .addClass('proof__image')
+      .attr('alt', 'AI proof photo for event ' + event.id)
+      .on('load', function () {
+        $('#proof-frame').empty().append(this);
+      })
+      .on('error', function () {
+        $('#proof-empty-text').text('The photo could not be loaded');
+        $('#proof-caption').text('AI proof photo · captured ' + ui.dateTime(stamp) + ' · missing');
+      })
+      .attr('src', src);
   }
 
   function renderTrail(entries, event) {
