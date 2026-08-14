@@ -85,6 +85,30 @@
     return ui.daysAgo(indent.requested_at) >= STALE_AFTER_DAYS;
   }
 
+  /**
+   * The status pill, carrying the half of "issued" the status field does not.
+   *
+   * `issued` covers two situations that look nothing alike to a Mait: stock set aside at the
+   * depot, and stock in their hands. Only the second is in their balance — issuing credits
+   * nothing on purpose, `confirm_collection` is what moves it (apps/indents/services.py) — so
+   * an admin who issued 25 straws saw a green Issued pill, went looking for the stock on the
+   * Inventory screen, and found none of it. The status alone cannot tell them why.
+   *
+   * Yellow is waiting on somebody everywhere else in this portal, and this is waiting on the
+   * Mait. Green is kept for the end of the chain, where the straws are actually theirs.
+   */
+  function statusPill(indent) {
+    if (isStale(indent)) {
+      return ui.pill('Stale', 'bad');
+    }
+    if (indent.status === 'issued') {
+      return indent.received_at
+        ? ui.pill('Collected', 'good')
+        : ui.pill('Awaiting collection', 'warn');
+    }
+    return ui.pill(indent.status_display, STATUS_TONE[indent.status] || null);
+  }
+
   /** Only the two open states have anything an admin can do to them. */
   function actionCell(indent) {
     if (indent.status === 'requested') {
@@ -126,7 +150,7 @@
       syncCell(indent) +
       '</td>' +
       '<td>' +
-      ui.pill(stale ? 'Stale' : indent.status_display, stale ? 'bad' : STATUS_TONE[indent.status]) +
+      statusPill(indent) +
       '</td>' +
       '<td>' +
       actionCell(indent) +
@@ -167,9 +191,7 @@
     $('#fulfil').prop('hidden', false);
     $('#fulfil-title').text('IND-' + indent.id);
     $('#fulfil-who').text(indent.mait_name + ' · ' + indent.mait_code);
-    $('#fulfil-status').html(
-      ui.pill(indent.status_display, STATUS_TONE[indent.status] || null) + ' ' + syncPill(indent)
-    );
+    $('#fulfil-status').html(statusPill(indent) + ' ' + syncPill(indent));
     // The mark takes the colour of the stage, so the panel reads as "a decision" or "a
     // handover" before a word of it has been read.
     $('#fulfil-mark')
