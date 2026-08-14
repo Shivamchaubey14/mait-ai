@@ -35,8 +35,8 @@ class Command(BaseCommand):
         parser.add_argument("--breed", default="MURRAH", help="Breed code stamped on them.")
         parser.add_argument(
             "--prefix",
-            default="DEMO",
-            help="Straw number prefix, so seeded stock is obvious in the data.",
+            default="",
+            help="Optional straw number prefix. Empty by default — see the note in handle().",
         )
 
     def handle(self, *args, **options):
@@ -52,18 +52,25 @@ class Command(BaseCommand):
         except Mait.DoesNotExist as exc:
             raise CommandError(f"No Mait with vendor code {code}.") from exc
 
+        # No marker in the number by default. `unique_straw_no` is the number printed on the
+        # straw and the one an operator reads off the AI event screen when settling a dispute,
+        # so a word stuck on the front of it reads as part of the number rather than as a note
+        # about the row. What the row is stays recorded where it belongs and where it cannot
+        # be mistaken for evidence: `semen_station` says Development, and the ledger entry
+        # says it was seeded. Pass --prefix to put one back.
+        prefix = options["prefix"]
+        stem = f"{prefix}-{breed}-" if prefix else f"{breed}-"
+
         # Numbered from wherever the last seeded straw left off, so running this twice does
         # not collide on the unique straw number.
-        existing = SemenBatch.objects.filter(
-            unique_straw_no__startswith=f"{options['prefix']}-{breed}-"
-        ).count()
+        existing = SemenBatch.objects.filter(unique_straw_no__startswith=stem).count()
 
         issued = []
         for index in range(count):
             straw = SemenBatch.objects.create(
-                unique_straw_no=f"{options['prefix']}-{breed}-{existing + index + 1:04d}",
+                unique_straw_no=f"{stem}{existing + index + 1:04d}",
                 breed=breed,
-                bull_id="DEMO-BULL",
+                bull_id=f"{breed}-BULL",
                 semen_station="Development",
                 received_date=timezone.localdate(),
             )
