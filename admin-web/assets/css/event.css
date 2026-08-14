@@ -114,7 +114,14 @@
   background: var(--color-surface);
 }
 
-/* --- audit trail ---------------------------------------------------------------------- */
+/* --- audit trail ----------------------------------------------------------------------
+   `.panel__icon` is a white chip, which is invisible on a white panel — on the dashboard it
+   always sits on a tinted one. Tinted here so the glyph reads as a chip rather than as a
+   stray mark beside the heading. */
+.trail__icon {
+  background: var(--ink-50);
+}
+
 .trail {
   list-style: none;
   padding: 0;
