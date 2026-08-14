@@ -23,6 +23,18 @@
     cancelled: 'bad',
   };
 
+  /* Which glyph a tone gets on the Status tile. Waiting is a clock, not a warning triangle —
+     an event at step 5 has not gone wrong, it has not finished. */
+  const TONE_ICON = { good: 'good', warn: 'clock', bad: 'bad', info: 'info' };
+
+  /** Put a tile's tone on, having cleared whichever one was there before. */
+  function tone($tile, name) {
+    $tile.removeClass('tile--good tile--warn tile--bad tile--info');
+    if (name) {
+      $tile.addClass('tile--' + name);
+    }
+  }
+
   function eventId() {
     const match = /[?&]id=(\d+)/.exec(window.location.search);
     return match ? match[1] : null;
@@ -46,10 +58,17 @@
           : 'The event has not reached step 4'
     );
 
+    // Money is green once it is verified and yellow while it is not, the same way the
+    // dashboard's Pending payments card is yellow. A failed payment is the one thing on this
+    // screen that needs someone to act, so it goes red.
     const payment = event.payment;
     $('#payment-amount').text(payment ? ui.money(payment.amount) : 'None yet');
     $('#payment-foot').text(
       payment ? payment.mode_display + ' · ' + payment.status_display : 'Payment is taken at step 6'
+    );
+    tone(
+      $('#payment-tile'),
+      !payment ? null : payment.status === 'failed' ? 'bad' : payment.is_verified ? 'good' : 'warn'
     );
 
     if (event.gps_lat && event.gps_lng) {
@@ -58,21 +77,21 @@
       );
       $('#gps-foot').text('Recorded on the device at capture');
     } else {
-      $('#gps-value').text('—').addClass('tile__value--warn');
+      // The tile's own tint carries this now, so the value keeps the tile's ink.
+      tone($('#gps-tile'), 'warn');
+      $('#gps-value').text('—');
       $('#gps-foot').text('No location recorded yet');
     }
 
+    const statusTone = STATUS_TONE[event.status];
     $('#status-value').text(event.status_display);
     $('#status-foot').text(
       event.completed_at
         ? 'Completed ' + ui.dateTime(event.completed_at)
         : 'Started ' + ui.dateTime(event.created_at)
     );
-    if (STATUS_TONE[event.status] === 'bad') {
-      $('#status-value').addClass('tile__value--bad');
-    } else if (STATUS_TONE[event.status] === 'warn') {
-      $('#status-value').addClass('tile__value--warn');
-    }
+    tone($('#status-tile'), statusTone);
+    $('#status-icon').html(MaitAI.shell.icon(TONE_ICON[statusTone] || 'info'));
 
     // Through `mediaUrl`, not straight into `src`: the path the API returns is root-relative,
     // and the portal is not always served from the API's origin.

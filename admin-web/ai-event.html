@@ -26,24 +26,74 @@
 
         <div id="alert-region" role="alert" aria-live="polite"></div>
 
+        <!-- The shared stat tile, same as the dashboard: the glyph names the figure and the
+             tint says how to feel about it. Straw and Location are statements of fact, so they
+             keep the neutral and info tones set here; Payment and Status depend on the event,
+             so ai-event.js puts their tone on. -->
         <section class="tiles" aria-label="Event summary">
-          <article class="tile">
-            <p class="tile__label">Straw</p>
+          <article class="tile" id="straw-tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10" />
+                </svg>
+              </span>
+              Straw
+            </p>
             <p class="tile__value" id="straw-no">—</p>
             <p class="tile__foot" id="straw-foot"></p>
           </article>
-          <article class="tile">
-            <p class="tile__label">Payment</p>
+          <article class="tile" id="payment-tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <!-- The rupee the dashboard's Pending payments card is drawn with. -->
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M6 4h12M6 9h12M6 14h3M9 14c6 0 6-10 0-10M6 14l8 7" />
+                </svg>
+              </span>
+              Payment
+            </p>
             <p class="tile__value" id="payment-amount">—</p>
             <p class="tile__foot" id="payment-foot"></p>
           </article>
-          <article class="tile">
-            <p class="tile__label">Location</p>
+          <article class="tile tile--info" id="gps-tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11M12 10h.01" />
+                </svg>
+              </span>
+              Location
+            </p>
             <p class="tile__value" id="gps-value">—</p>
             <p class="tile__foot" id="gps-foot"></p>
           </article>
-          <article class="tile">
-            <p class="tile__label">Status</p>
+          <article class="tile" id="status-tile">
+            <p class="tile__label">
+              <span class="tile__icon" id="status-icon" aria-hidden="true"></span>
+              Status
+            </p>
             <p class="tile__value" id="status-value">—</p>
             <p class="tile__foot" id="status-foot"></p>
           </article>
