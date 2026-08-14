@@ -41,6 +41,10 @@ window.MaitAI = window.MaitAI || {};
 
     /* Not sidebar sections: the filter bar's magnifier and the four notice tones. */
     search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4.3-4.3',
+    /* Waiting, as opposed to wrong. The dashboard already draws this one for "Lifetime"; an
+       event still moving through the flow needs it too, and a warning triangle would say the
+       event had gone wrong rather than that it had not finished. */
+    clock: 'M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7.5V12l3.5 2',
     info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 11v5.5M12 7.5v.5',
     warn: 'M12 3 2 20h20zM12 9v5M12 17.5v.5',
     bad: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M9 9l6 6M15 9l-6 6',
@@ -169,6 +173,16 @@ window.MaitAI = window.MaitAI || {};
   MaitAI.shell = {
     sections: SECTIONS,
     escapeHtml: escapeHtml,
+
+    /**
+     * One glyph from the portal's set, drawn in `currentColor`.
+     *
+     * Exposed for the slots a page can only fill once it knows what it is showing — the event
+     * detail screen cannot put a tick on the Status tile in HTML, because the event might be
+     * cancelled. Pages whose glyph is fixed still write the `<svg>` inline, the way the
+     * dashboard's tiles do; there is no need for script to draw something that never changes.
+     */
+    icon: icon,
 
     /**
      * One query parameter, or ''.
