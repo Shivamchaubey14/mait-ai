@@ -74,10 +74,12 @@
       $('#status-value').addClass('tile__value--warn');
     }
 
+    // Through `mediaUrl`, not straight into `src`: the path the API returns is root-relative,
+    // and the portal is not always served from the API's origin.
     if (event.ai_photo_url) {
       $('#proof').html(
         '<img class="proof__image" src="' +
-          ui.escapeHtml(event.ai_photo_url) +
+          ui.escapeHtml(MaitAI.api.mediaUrl(event.ai_photo_url)) +
           '" alt="AI proof photo for event ' +
           event.id +
           '" />'

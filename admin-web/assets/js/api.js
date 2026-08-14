@@ -205,6 +205,29 @@ window.MaitAI = window.MaitAI || {};
       return BASE_URL;
     },
 
+    /**
+     * Resolve a media path the API returned into a URL the browser can actually fetch.
+     *
+     * `ai_photo_url` comes back root-relative — `/media/ai-photos/…` — which is correct
+     * behind nginx, where the portal and the API share an origin. On the no-Docker
+     * development path the portal is static-served on 8080, so the browser asked the file
+     * server for the photo and got a 404: the proof photo, the one thing the event detail
+     * screen exists to show, rendered as a broken-image glyph on a dark box.
+     *
+     * Absolute URLs pass through untouched — in production the photos are signed S3 links,
+     * and prefixing one with an origin would break it.
+     */
+    mediaUrl: function (path) {
+      if (!path) {
+        return '';
+      }
+      if (/^(https?:)?\/\//i.test(path)) {
+        return path;
+      }
+      const origin = BASE_URL.replace(/\/api\/v1\/?$/, '');
+      return origin + (path.charAt(0) === '/' ? '' : '/') + path;
+    },
+
     login: function (username, password) {
       return request({
         path: '/auth/login/',
