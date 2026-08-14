@@ -84,7 +84,7 @@
     }
 
     const statusTone = STATUS_TONE[event.status];
-    $('#status-value').text(event.status_display);
+    $('#status-value').html(ui.pill(event.status_display, statusTone));
     $('#status-foot').text(
       event.completed_at
         ? 'Completed ' + ui.dateTime(event.completed_at)

@@ -43,6 +43,35 @@
   min-height: 130px;
 }
 
+/* --- the summary tiles ---------------------------------------------------------------------
+   Two of the four hold something that is not a quantity, and the tile's 32px display face is
+   sized for a quantity. A straw number set in it wrapped across two lines and pushed the row
+   out of alignment with the dashboard's. */
+.tile__value--code {
+  font-size: var(--text-h2);
+  overflow-wrap: anywhere;
+}
+
+/* The status tile states a state, and the portal already has a component for that word — the
+   pill from the events table. Setting it in display type instead would read as a figure. The
+   line keeps the tile's height so the row stays level. */
+.tile__value--pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--text-display) * var(--leading-tight));
+}
+
+/* White, the way the tile's own icon chip is — the card carries the wash, the chip carries
+   the word, the word keeps its colour. Every pill tone is drawn on the same wash as the tile
+   tone that goes with it, so `pill--info` on `tile--info` was the right words in the right
+   colour with no pill visible around them at all. */
+.tile__value--pill .pill {
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--text-body);
+  background: var(--color-surface);
+}
+
 /* --- audit trail ---------------------------------------------------------------------- */
 .trail {
   list-style: none;
