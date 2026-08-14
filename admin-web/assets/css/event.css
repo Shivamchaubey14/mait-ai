@@ -137,6 +137,11 @@
 /* The stamp under the evidence. Caption type in muted ink, the same line the tiles and the
    topbar meta are set in — it is a note about the picture, not a heading over it. */
 .proof__caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  flex: none;
   padding: var(--space-3) var(--space-2) var(--space-1);
   font-size: var(--text-caption);
   color: var(--color-text-muted);
