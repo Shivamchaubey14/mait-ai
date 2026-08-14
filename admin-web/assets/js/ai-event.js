@@ -170,7 +170,21 @@
         src: 'https://maps.google.com/maps?q=' + encodeURIComponent(point) + '&z=17&output=embed',
       });
 
-    $('#map').addClass('proof__frame--live').empty().append(frame);
+    // Stretched over the frame, because a click landing inside a cross-origin iframe belongs
+    // to that document and this one never hears about it. It does mean the embedded map no
+    // longer pans under the cursor — the card is a way through to the real thing rather than
+    // a map to work in, which is what a 200px window on a village is useful for anyway.
+    const open = $('<a>')
+      .addClass('map__open')
+      .attr({
+        href: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(point),
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        'aria-label': 'Open ' + point + ' in Google Maps in a new tab',
+      })
+      .append($('<span>').addClass('map__hint').text('Open in Google Maps ↗'));
+
+    $('#map').addClass('proof__frame--live').empty().append(frame, open);
   }
 
   function renderTrail(entries, event) {
