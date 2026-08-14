@@ -279,9 +279,13 @@
   background: var(--ink-50);
 }
 
+/* The left padding is what keeps the timeline inside the box that clips it. Each step's dot
+   is drawn 7px to the left of the list's own edge, and `overflow-y: auto` makes this a scroll
+   container — which clips on both axes, not just the one named. Without the padding every dot
+   was sliced in half down its centre line and the rail behind it cut off with it. */
 .trail {
   list-style: none;
-  padding: 0;
+  padding: 0 0 0 var(--space-2);
   margin: 0;
   flex: 1 1 auto;
   min-height: 0;
