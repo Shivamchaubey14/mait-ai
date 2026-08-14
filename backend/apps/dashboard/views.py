@@ -255,6 +255,25 @@ def trends(request):
         for row in completed.values("date").annotate(total=Sum("ai_count"))
     }
 
+    # Today is read live, overriding whatever the aggregate holds for it.
+    #
+    # The aggregate is written hourly, so today's slice is missing until the first run after
+    # midnight and stale by up to an hour after that. The "AI events today" tile directly
+    # above this chart is already counted live (see `summary`), so reading the chart from the
+    # aggregate alone put two numbers that contradict each other on one screen — the tile
+    # saying one event today, the chart drawing a flat line — and the chart was the wrong one.
+    #
+    # This costs one day of rows, not the window: settled days stay on the aggregate, which is
+    # what it is for. `summary` bounds its own counts the same way against the same §7 target.
+    today_completed = AIEvent.objects.filter(
+        status=AIEvent.Status.COMPLETED,
+        completed_at__gte=start_of_day(end),
+        completed_at__lt=end_of_day(end),
+    )
+    if district:
+        today_completed = today_completed.filter(mpp__district_code=district)
+    by_day[end] = today_completed.count()
+
     # Pending payments are read live: they are by definition not yet aggregated, and the
     # number is small. Small enough that the day each one falls on is worked out here rather
     # than asked of the database, which cannot answer it without timezone tables.

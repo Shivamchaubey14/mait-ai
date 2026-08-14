@@ -128,6 +128,53 @@ def test_a_pending_payment_lands_on_its_own_day(admin_client, event):
     assert sum(row["pending"] for row in body["results"]) == 1
 
 
+def _bar(body, day=None):
+    """The completed count the chart would draw for a day."""
+    wanted = (day or timezone.localdate()).isoformat()
+    return next(row["completed"] for row in body["results"] if row["date"] == wanted)
+
+
+def test_todays_event_is_on_the_chart_before_the_aggregator_has_run(admin_client, event):
+    """
+    The chart and the tile above it must not contradict each other.
+
+    The aggregate is written hourly, so between an insemination and the next run there is no
+    slice for today at all. Reading the chart from the aggregate alone drew a flat line under
+    a tile that said one event today, and the operator has no way to tell which is lying.
+    """
+    event()
+
+    trends = admin_client.get("/api/v1/dashboard/trends/", {"days": 7}).json()
+    summary = admin_client.get("/api/v1/dashboard/summary/").json()
+
+    assert DailyAIAggregate.objects.count() == 0, "the job has deliberately not run"
+    assert _bar(trends) == 1
+    assert _bar(trends) == summary["today"]
+
+
+def test_the_chart_does_not_double_todays_events_once_aggregated(admin_client, event):
+    event()
+    event()
+    aggregate_daily_ai_counts()
+
+    body = admin_client.get("/api/v1/dashboard/trends/", {"days": 7}).json()
+
+    # Counted live *and* present in the aggregate: the live figure replaces the slice rather
+    # than adding to it.
+    assert _bar(body) == 2
+
+
+def test_settled_days_still_come_from_the_aggregate(admin_client, event):
+    yesterday = timezone.localdate() - timedelta(days=1)
+    event(when=start_of_day(yesterday) + timedelta(hours=9))
+    aggregate_daily_ai_counts(lookback_days=2)
+
+    body = admin_client.get("/api/v1/dashboard/trends/", {"days": 7}).json()
+
+    assert _bar(body, yesterday) == 1
+    assert _bar(body) == 0
+
+
 # --- the aggregation job the trend chart reads ----------------------------------------------
 
 
