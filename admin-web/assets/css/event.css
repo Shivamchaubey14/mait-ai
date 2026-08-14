@@ -81,8 +81,66 @@
   text-align: center;
 }
 
-.proof--map {
-  min-height: 130px;
+/* --- the map -------------------------------------------------------------------------------
+   A light well, not a dark one: a map is a light thing. Dashed and tinted is what an event
+   with no GPS is left with — a card waiting for a location rather than one that failed to
+   draw a map.
+
+   Fixed, and the photo above takes the slack. The map is a frame onto a place, so it wants a
+   consistent size; the photo is the thing being examined, so it is what should get the room
+   a taller window offers. */
+.proof__frame--map {
+  flex: none;
+  height: 200px;
+  background: var(--ink-50);
+  border: 1px dashed var(--color-border);
+}
+
+/* With a map in it the well is a frame, not a placeholder: no padding insetting the tiles, a
+   solid edge, and the dashes gone — those said "waiting for a map". */
+.proof__frame--live {
+  padding: 0;
+  border-style: solid;
+}
+
+.map__embed {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.map__pin {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The same white chip the tiles and notices carry their glyph in, in the red the map's own
+   marker is drawn in — so the card with no location reads as the same kind of thing as the
+   card with one. */
+.map__pin-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-error);
+  background: var(--color-surface);
+}
+
+.map__pin-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.map__coords {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--text-label);
+  color: var(--color-ink);
 }
 
 /* --- the summary tiles ---------------------------------------------------------------------

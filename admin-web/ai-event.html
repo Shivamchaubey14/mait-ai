@@ -127,9 +127,37 @@
               </figcaption>
             </figure>
 
-            <div class="proof proof--map" id="map">
-              <p class="proof__caption" id="map-caption">No GPS recorded yet</p>
-            </div>
+            <!-- Where the insemination happened, on the card rather than a tab away.
+                 ai-event.js replaces the plate below with a Google map pinned to the recorded
+                 point; the plate is what an event with no GPS is left with.
+
+                 An iframe, not the Maps JavaScript API: this page renders member PII, and
+                 README.md forbids third-party script on it for exactly that reason. A framed
+                 map is a separate origin and cannot read this document. -->
+            <figure class="proof proof--map">
+              <div class="proof__frame proof__frame--map" id="map">
+                <p class="map__pin" id="map-plate">
+                  <span class="map__pin-icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11M12 10h.01" />
+                    </svg>
+                  </span>
+                  <span class="map__coords" id="map-empty-text">No GPS recorded yet</span>
+                </p>
+              </div>
+              <!-- The figures stay under the map: a pin shows roughly where, and a dispute is
+                   settled on exactly where. -->
+              <figcaption class="proof__caption" id="map-foot">
+                Where the handset was when the photo was taken
+              </figcaption>
+            </figure>
           </div>
 
           <!-- SRS §9.6 — the trail a dispute is settled from, so it is readable rather than

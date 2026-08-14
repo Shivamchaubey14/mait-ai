@@ -94,16 +94,7 @@
     $('#status-icon').html(MaitAI.shell.icon(TONE_ICON[statusTone] || 'info'));
 
     renderProof(event);
-
-    if (event.gps_lat && event.gps_lng) {
-      $('#map-caption').text(
-        'Pin at ' +
-          Number(event.gps_lat).toFixed(4) +
-          ' N, ' +
-          Number(event.gps_lng).toFixed(4) +
-          ' E'
-      );
-    }
+    renderMap(event);
   }
 
   /**
@@ -136,6 +127,50 @@
         $('#proof-caption').text('AI proof photo · captured ' + ui.dateTime(stamp) + ' · missing');
       })
       .attr('src', src);
+  }
+
+  /**
+   * The map, pinned to where the event was captured.
+   *
+   * `maps.google.com/maps?q=…&output=embed` rather than the Embed API: it takes no key, so
+   * the pin is on the card on every deployment from the moment this ships, including this
+   * one. It is Google's long-standing keyless embed and not part of the documented Embed API
+   * — if it is ever withdrawn, the replacement is the same URL with `/maps/embed/v1/place`
+   * and a key, and only the string below changes.
+   *
+   * Framed, not scripted. This page renders member PII and README.md forbids third-party
+   * script on it; a cross-origin frame cannot read this document. The sandbox withholds
+   * `allow-top-navigation`, so the framed page cannot move the operator off the portal.
+   *
+   * `q=lat,lng` is what drops the marker on the point. Without it the same map draws centred
+   * on the village with nothing marked, which answers a different question.
+   */
+  function renderMap(event) {
+    if (!event.gps_lat || !event.gps_lng) {
+      $('#map-foot').text('No location was recorded for this event');
+      return;
+    }
+
+    const lat = Number(event.gps_lat);
+    const lng = Number(event.gps_lng);
+    const point = lat + ',' + lng;
+
+    // The figures stay under the map: a pin shows roughly where, and a dispute is settled on
+    // exactly where.
+    $('#map-foot').text(
+      lat.toFixed(4) + '° N, ' + lng.toFixed(4) + '° E · recorded by the handset at capture'
+    );
+
+    const frame = $('<iframe>')
+      .addClass('map__embed')
+      .attr({
+        title: 'Map of where event ' + event.id + ' was captured',
+        loading: 'lazy',
+        sandbox: 'allow-scripts allow-same-origin allow-popups allow-forms',
+        src: 'https://maps.google.com/maps?q=' + encodeURIComponent(point) + '&z=17&output=embed',
+      });
+
+    $('#map').addClass('proof__frame--live').empty().append(frame);
   }
 
   function renderTrail(entries, event) {
