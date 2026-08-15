@@ -7,10 +7,28 @@
  * already has; drop a timeout and an insemination that happened is gone.
  */
 
-import { completeEvent } from '../capture';
-import { clearQueue, pendingCount } from '../queue';
+import { attachPhoto, completeEvent } from '../capture';
+import { clearQueue, pendingCount, readQueue } from '../queue';
+import type { QueuedLabel } from '../queue';
+import type { CapturedPhoto } from '@/features/aiFlow/CapturePhotoScreen';
 
 const TOKEN = 'access-token';
+
+const LABEL: QueuedLabel = {
+  farmer: 'Kavita Devi',
+  kind: 'member',
+  amount: null,
+  at: '10:42',
+  eventId: 7,
+};
+
+const PHOTO: CapturedPhoto = {
+  uri: 'file:///proof.jpg',
+  gpsLat: 28.367,
+  gpsLng: 79.4304,
+  accuracy: 12,
+  performedAt: '2026-08-14T10:42:00.000Z',
+};
 
 beforeEach(async () => {
   await clearQueue();
@@ -79,5 +97,37 @@ describe('completing an event', () => {
 
     const call = (global.fetch as jest.Mock).mock.calls[0];
     expect(call[1].headers['Idempotency-Key']).toBe('uuid-abc');
+  });
+});
+
+describe('the label on a queued job', () => {
+  /**
+   * The waiting list is read on a handset that by definition cannot reach the server, so
+   * whatever names the row has to travel with the job. A member's capture queues no payment,
+   * and the payment job was the only one that used to carry a label — so a member's record
+   * reached that screen with nothing on it but the word "Capture".
+   */
+  it('names the farmer on a queued completion', async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('Network request failed'));
+
+    await completeEvent(7, 'uuid-1', TOKEN, LABEL);
+
+    expect((await readQueue())[0]?.label).toEqual(LABEL);
+  });
+
+  it('names the farmer on a queued photo', async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('Network request failed'));
+
+    await attachPhoto(7, 'uuid-1', PHOTO, TOKEN, LABEL);
+
+    const [job] = await readQueue();
+    expect(job?.kind).toBe('attachPhoto');
+    expect(job?.label?.farmer).toBe('Kavita Devi');
+  });
+
+  it('names the farmer on a photo queued with no session at all', async () => {
+    await attachPhoto(7, 'uuid-1', PHOTO, null, LABEL);
+
+    expect((await readQueue())[0]?.label).toEqual(LABEL);
   });
 });

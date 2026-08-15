@@ -26,7 +26,7 @@ import {
   useVerifyPaymentOtpMutation,
 } from '@api/endpoints';
 import { enqueue, pendingCount, readQueue } from '@api/queue';
-import type { QueuedJob } from '@api/queue';
+import type { QueuedJob, QueuedLabel } from '@api/queue';
 import { drainQueue } from '@api/sync';
 import type { AIEvent, Animal, Member, MPP, NonMember } from '@api/types';
 import BottomNav, { Tab } from '@/components/BottomNav';
@@ -188,6 +188,27 @@ export default function RootNavigator(): React.JSX.Element {
   };
 
   /**
+   * Who the capture in progress is for, to be written onto every job it queues.
+   *
+   * The waiting list is read on a handset that by definition cannot reach the server, so a row
+   * that had to ask who the farmer was would be blank exactly when it is needed — which is why
+   * the name travels with the job rather than being looked up later.
+   *
+   * Only the payment job used to carry one. A member never queues a payment, so a member's
+   * record reached that screen with nothing to show but the word "Capture": a Mait scrolling a
+   * list of anonymous rows, looking for the insemination they are afraid went missing, cannot
+   * tell whether it is there.
+   */
+  const captureLabel = (mode?: PaymentMode): QueuedLabel => ({
+    farmer: farmer?.name ?? '',
+    kind: farmer?.kind === 'member' ? 'member' : 'nonMember',
+    amount: event?.amount_due ?? null,
+    ...(mode ? { mode } : {}),
+    at: clockTime(),
+    ...(event ? { eventId: event.id } : {}),
+  });
+
+  /**
    * Pick a half-finished capture back up.
    *
    * Only ever called with an event whose straw is verified and whose photo never arrived, so
@@ -229,14 +250,7 @@ export default function RootNavigator(): React.JSX.Element {
           'verifyPayment',
           clientUuid,
           { eventId: event.id, mode: mode ?? 'COD' },
-          {
-            farmer: farmer?.name ?? '',
-            kind: farmer?.kind === 'member' ? 'member' : 'nonMember',
-            amount: event.amount_due,
-            mode: mode ?? 'COD',
-            at: clockTime(),
-            eventId: event.id,
-          },
+          captureLabel(mode ?? 'COD'),
         );
       } else {
         // A real refusal, shown rather than swallowed. The commonest by far is a breed the
@@ -248,7 +262,7 @@ export default function RootNavigator(): React.JSX.Element {
       }
     }
 
-    const outcome = await completeEvent(event.id, clientUuid, accessToken);
+    const outcome = await completeEvent(event.id, clientUuid, accessToken, captureLabel(mode));
     setPending(outcome.remaining);
     if (outcome.sent) {
       setLastSyncAt(clockTime());
@@ -441,7 +455,13 @@ export default function RootNavigator(): React.JSX.Element {
         busy={uploading}
         onCaptured={async photo => {
           setUploading(true);
-          const outcome = await attachPhoto(event.id, clientUuid, photo, accessToken);
+          const outcome = await attachPhoto(
+            event.id,
+            clientUuid,
+            photo,
+            accessToken,
+            captureLabel(),
+          );
           setUploading(false);
           setPending(outcome.remaining);
           if (outcome.sent) {

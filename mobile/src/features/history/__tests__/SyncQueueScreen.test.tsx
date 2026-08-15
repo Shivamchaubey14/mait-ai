@@ -60,6 +60,39 @@ describe('toCaptures', () => {
     expect(captures[0]?.needsCode).toBe(true);
     expect(captures[1]?.needsCode).toBe(false);
   });
+
+  // The photo is queued before the payment has a mode, so the earliest job knows the least.
+  // Reading the whole row off it reported a UPI payment as cash for the rest of the day.
+  it('takes each fact from the first job that actually carries it', () => {
+    const captures = toCaptures([
+      job({
+        clientUuid: 'laxmi',
+        kind: 'attachPhoto',
+        payload: { eventId: 12 },
+        label: { farmer: 'Laxmi Devi', kind: 'nonMember', at: '9:26' },
+      }),
+      job({
+        clientUuid: 'laxmi',
+        kind: 'verifyPayment',
+        payload: { eventId: 12, mode: 'ONLINE' },
+        label: {
+          farmer: 'Laxmi Devi',
+          kind: 'nonMember',
+          amount: '300.00',
+          mode: 'ONLINE',
+          at: '9:31',
+          eventId: 12,
+        },
+      }),
+    ]);
+
+    expect(captures).toHaveLength(1);
+    // The time the capture happened, from the first job — not the later one.
+    expect(captures[0]?.at).toBe('9:26');
+    // The mode, which only the later job knew.
+    expect(captures[0]?.mode).toBe('ONLINE');
+    expect(captures[0]?.amount).toBe('300.00');
+  });
 });
 
 describe('SyncQueueScreen', () => {
@@ -108,6 +141,25 @@ describe('SyncQueueScreen', () => {
     fireEvent.press(screen.getByTestId('queue-enter-code-radha'));
 
     expect(onEnterCode).toHaveBeenCalledWith(expect.objectContaining({ eventId: 9 }));
+  });
+
+  // The regression this screen was reported for: a member's capture queues no payment, and
+  // nothing else attached a label, so the row read "Capture · Member" — the one thing a list
+  // that promises "nothing here is lost" cannot say to someone hunting a record.
+  it('names the farmer on a member row rather than falling back to "Capture"', () => {
+    renderScreen([KAVITA]);
+
+    expect(screen.getByText('Kavita Devi')).toBeTruthy();
+    expect(screen.queryByText('Capture')).toBeNull();
+    expect(screen.getByText('Member · 10:42')).toBeTruthy();
+  });
+
+  it('drops the dangling separator when a capture was queued without its time', () => {
+    renderScreen([
+      job({ clientUuid: 'no-clock', label: { farmer: 'Sunita Yadav', kind: 'member', at: '' } }),
+    ]);
+
+    expect(screen.getByText('Member')).toBeTruthy();
   });
 
   it('shows how far a send has got, so a slow one does not look stuck', () => {

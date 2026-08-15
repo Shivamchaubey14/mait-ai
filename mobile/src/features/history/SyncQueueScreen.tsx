@@ -54,23 +54,41 @@ interface Props {
   onBack: () => void;
 }
 
-/** Group the raw jobs into one row per capture — a Mait thinks in inseminations, not in jobs. */
+/**
+ * Group the raw jobs into one row per capture — a Mait thinks in inseminations, not in jobs.
+ *
+ * Each field is taken from the first job that actually carries it, rather than from the first
+ * job outright. One capture queues several jobs and they do not all know the same things: the
+ * photo is queued before a payment has a mode, so reading the whole row off the earliest job
+ * would report a UPI payment as cash for the rest of the day.
+ */
 export function toCaptures(jobs: QueuedJob[], sendingUuid?: string | null): QueuedCapture[] {
   const byCapture = new Map<string, QueuedCapture>();
   jobs.forEach(job => {
     const label = job.label;
-    const existing = byCapture.get(job.clientUuid);
-    const capture: QueuedCapture = existing ?? {
+    const capture: QueuedCapture = byCapture.get(job.clientUuid) ?? {
       clientUuid: job.clientUuid,
-      farmer: label?.farmer ?? '',
-      kind: label?.kind ?? 'member',
-      amount: label?.amount ?? null,
-      mode: label?.mode,
-      at: label?.at ?? '',
-      eventId: label?.eventId ?? (job.payload.eventId as number | undefined),
+      farmer: '',
+      kind: 'member',
+      amount: null,
+      at: '',
       needsCode: false,
       sending: false,
     };
+
+    // First non-empty wins, so the earliest job still decides the time the capture happened
+    // and a later one can only fill in what was missing.
+    if (label) {
+      capture.farmer ||= label.farmer;
+      capture.at ||= label.at;
+      capture.amount ??= label.amount ?? null;
+      capture.mode ??= label.mode;
+      if (label.kind) {
+        capture.kind = label.kind;
+      }
+    }
+    capture.eventId ??= label?.eventId ?? (job.payload.eventId as number | undefined);
+
     if (job.kind === 'verifyPayment') {
       capture.needsCode = true;
     }
@@ -85,11 +103,13 @@ function subtitle(capture: QueuedCapture, t: TFunction): string {
   const who = t(capture.kind === 'member' ? 'aiFlow.member' : 'aiFlow.nonMember');
   const money =
     capture.amount && capture.kind === 'nonMember'
-      ? ` · ₹ ${Math.round(Number(capture.amount))} ${t(
+      ? `₹ ${Math.round(Number(capture.amount))} ${t(
           capture.mode === 'ONLINE' ? 'payment.upi' : 'payment.cash',
         ).toLowerCase()}`
       : '';
-  return `${who}${money} · ${capture.at}`;
+  // Joined rather than concatenated, so a capture queued before its time was known reads
+  // "Member" and not "Member · " with a separator hanging off the end of it.
+  return [who, money, capture.at].filter(Boolean).join(' · ');
 }
 
 export default function SyncQueueScreen({

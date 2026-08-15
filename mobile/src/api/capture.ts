@@ -14,6 +14,7 @@ import type { CapturedPhoto } from '@/features/aiFlow/CapturePhotoScreen';
 import { API_BASE_URL } from '@/config/env';
 
 import { enqueue, pendingCount } from './queue';
+import type { QueuedLabel } from './queue';
 import { drainQueue } from './sync';
 
 export interface CaptureOutcome {
@@ -33,6 +34,14 @@ export async function attachPhoto(
   clientUuid: string,
   photo: CapturedPhoto,
   accessToken: string | null,
+  /**
+   * Who this capture was for, written onto the job so the waiting list can name it.
+   *
+   * Optional only because the queue tolerates its absence — pass it. A job queued without one
+   * shows up on the waiting list as the word "Capture" and nothing else, which is the one
+   * thing that screen must never say to a Mait looking for a record they are afraid they lost.
+   */
+  label?: QueuedLabel,
 ): Promise<CaptureOutcome> {
   const payload = {
     eventId,
@@ -43,7 +52,7 @@ export async function attachPhoto(
   };
 
   if (!accessToken) {
-    await enqueue('attachPhoto', clientUuid, payload);
+    await enqueue('attachPhoto', clientUuid, payload, label);
     return { sent: false, remaining: await pendingCount() };
   }
 
@@ -85,7 +94,7 @@ export async function attachPhoto(
     // Network. Fall through to the queue.
   }
 
-  await enqueue('attachPhoto', clientUuid, payload);
+  await enqueue('attachPhoto', clientUuid, payload, label);
   return { sent: false, remaining: await pendingCount() };
 }
 
@@ -94,9 +103,11 @@ export async function completeEvent(
   eventId: number,
   clientUuid: string,
   accessToken: string | null,
+  /** As on `attachPhoto`: what the waiting list needs to name this record. */
+  label?: QueuedLabel,
 ): Promise<CaptureOutcome> {
   if (!accessToken) {
-    await enqueue('completeEvent', clientUuid, { eventId });
+    await enqueue('completeEvent', clientUuid, { eventId }, label);
     return { sent: false, remaining: await pendingCount() };
   }
 
@@ -124,6 +135,6 @@ export async function completeEvent(
     // Network. Queue it.
   }
 
-  await enqueue('completeEvent', clientUuid, { eventId });
+  await enqueue('completeEvent', clientUuid, { eventId }, label);
   return { sent: false, remaining: await pendingCount() };
 }
