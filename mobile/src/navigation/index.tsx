@@ -12,7 +12,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useTranslation } from 'react-i18next';
 
@@ -170,6 +170,88 @@ export default function RootNavigator(): React.JSX.Element {
     });
     return () => unsubscribe();
   }, [sync]);
+
+  /**
+   * Android's back gesture, which this navigator had never listened for.
+   *
+   * There is no react-navigation here — the shell is a state machine of `if`s — so nothing was
+   * claiming the press and Android did what it does with an unhandled one: it backgrounded the
+   * app. A Mait swiping back off the waiting list, expecting Home, got their whole round thrown
+   * off screen instead, which on a screen whose entire purpose is "nothing here is lost" is the
+   * worst possible answer.
+   *
+   * Each state goes exactly where that screen's own back affordance goes, and no further. The
+   * steps that deliberately offer no way back — a payment taken, an event recorded and not yet
+   * closed — swallow the press rather than inventing a route out of a half-finished capture.
+   */
+  const goBack = useCallback((): boolean => {
+    if (queueOpen) {
+      setQueueOpen(false);
+      setTab('home');
+      return true;
+    }
+
+    if (step) {
+      const previous: Partial<Record<CaptureStep, CaptureStep | null>> = {
+        ownerType: null,
+        selectMpp: 'ownerType',
+        selectFarmer: 'selectMpp',
+        confirmFarmer: farmer?.kind === 'member' ? 'selectFarmer' : 'selectMpp',
+        addNonMember: ownerType === 'member' ? 'selectFarmer' : 'selectMpp',
+        selectAnimal: 'confirmFarmer',
+        selectBreed: 'selectAnimal',
+        capturePhoto: 'selectBreed',
+        collectPayment: 'capturePhoto',
+        recordPayment: 'collectPayment',
+        done: null,
+      };
+
+      // A step absent from the map is one with no back affordance on screen — the member's
+      // statement, where the event exists and the only way on is forward. The press is taken
+      // and dropped, so it cannot strand a capture.
+      if (!(step in previous)) {
+        return true;
+      }
+
+      const target = previous[step] ?? null;
+      if (target === null) {
+        setStep(null);
+        setTab('home');
+      } else {
+        setStep(target);
+      }
+      return true;
+    }
+
+    if (requestingStock) {
+      setRequestingStock(false);
+      return true;
+    }
+
+    if (indentView) {
+      setIndentView(0);
+      return true;
+    }
+
+    if (indentView === 0) {
+      setIndentView(null);
+      return true;
+    }
+
+    if (tab !== 'home') {
+      setTab('home');
+      return true;
+    }
+
+    // Home is the bottom of the stack. Left unhandled on purpose, so back there still closes
+    // the app the way every other Android app does.
+    return false;
+  }, [queueOpen, step, farmer, ownerType, requestingStock, indentView, tab]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', goBack);
+    return () => subscription.remove();
+  }, [goBack]);
 
   if (!accessToken) {
     return <LoginScreen />;
@@ -583,8 +665,8 @@ export default function RootNavigator(): React.JSX.Element {
           } as Farmer);
           setStep('recordPayment');
         }}
-        // Home, the same place the list was opened from. The two ways out of a screen should
-        // not land in two different places.
+        // Home, the same place the back gesture goes. The list is reached from Home's tile, and
+        // the two ways out of a screen should not land in two different places.
         onBack={() => {
           setQueueOpen(false);
           setTab('home');
