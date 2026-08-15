@@ -489,6 +489,7 @@
     "subtitle_other": "इस फ़ोन में {{count}} रिकॉर्ड हैं।",
     "sendingProgress": "{{total}} में से {{done}} भेजा जा रहा है…",
     "needsAttention": "ध्यान चाहिए",
+    "waiting": "बाकी है",
     "syncing": "भेजा जा रहा है",
     "synced": "भेज दिया",
     "codeNeverEntered": "उनका भुगतान कोड दर्ज नहीं हुआ।",

@@ -20,6 +20,21 @@ export interface SyncResult {
   expired: number;
 }
 
+/**
+ * How far a drain has got, counted in captures rather than in jobs.
+ *
+ * A Mait thinks in inseminations, and the waiting list draws one row per capture — so a
+ * progress line counting the three or four jobs behind each row would run to a total nobody
+ * on the screen can see, and would move four times while one row sat there.
+ */
+export interface SyncProgress {
+  /** Which capture is being sent, 1-based — the `2` in "Sending 2 of 3". */
+  done: number;
+  total: number;
+  /** The capture in flight, so the list can mark that row and only that row. */
+  clientUuid: string | null;
+}
+
 /** A 4xx other than 409 means the request is wrong and will be wrong every time. */
 function isPermanent(status: number): boolean {
   return status >= 400 && status < 500 && status !== 409 && status !== 429;
@@ -86,7 +101,14 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
  * Returns rather than throws: a failed drain is the normal state of a phone in a village,
  * and the caller shows a count, not an error.
  */
-export async function drainQueue(accessToken: string | null): Promise<SyncResult> {
+export async function drainQueue(
+  accessToken: string | null,
+  /**
+   * Called before each capture goes out, and once more with nothing in flight when the drain
+   * stops. Optional: the queue drains on reconnect with no screen watching.
+   */
+  onProgress?: (progress: SyncProgress) => void,
+): Promise<SyncResult> {
   if (!accessToken) {
     const jobs = await readQueue();
     return { sent: 0, remaining: jobs.length, expired: 0 };
@@ -96,12 +118,28 @@ export async function drainQueue(accessToken: string | null): Promise<SyncResult
   const jobs = await readQueue();
   let sent = 0;
 
+  // The captures this drain will actually attempt, in queue order. Expired jobs are left out
+  // because they are never sent, and counting them would promise a total the drain will not
+  // reach.
+  const captures: string[] = [];
+  jobs.forEach(job => {
+    if (!stale.some(expired => expired.id === job.id) && !captures.includes(job.clientUuid)) {
+      captures.push(job.clientUuid);
+    }
+  });
+
   for (const job of jobs) {
     // Past the idempotency window a resend would be read as a new request, so it is left in
     // place and reported instead.
     if (stale.some(expired => expired.id === job.id)) {
       continue;
     }
+
+    onProgress?.({
+      done: captures.indexOf(job.clientUuid) + 1,
+      total: captures.length,
+      clientUuid: job.clientUuid,
+    });
 
     try {
       const response = await send(job, accessToken);
@@ -125,6 +163,11 @@ export async function drainQueue(accessToken: string | null): Promise<SyncResult
       break; // Almost certainly the network. Stop; the next reconnect tries again.
     }
   }
+
+  // Nothing in flight any more, whether the drain emptied the queue or stopped at a failure.
+  // Said explicitly so the screen clears its "Syncing" row rather than leaving one marked as
+  // in-flight until the next drain happens to start.
+  onProgress?.({ done: captures.length, total: captures.length, clientUuid: null });
 
   const left = await readQueue();
   return { sent, remaining: left.length, expired: stale.length };

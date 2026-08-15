@@ -152,3 +152,86 @@ describe('draining', () => {
     expect(result.remaining).toBe(1);
   });
 });
+
+/**
+ * What the waiting list is told while a drain runs.
+ *
+ * It used to be told nothing it could use: a count pinned at "Sending 0 of 3…" from start to
+ * finish, which is indistinguishable from being stuck, and every row marked as syncing at once,
+ * which is a claim a Mait can watch fail. On one bar of signal a send takes a minute, and that
+ * minute is the whole time they have to decide whether to keep waiting or ride back.
+ */
+describe('reporting progress', () => {
+  /** Every progress callback a drain made, in order. */
+  async function progressOf(token: string | null = TOKEN) {
+    const seen: { done: number; total: number; clientUuid: string | null }[] = [];
+    await drainQueue(token, p => seen.push({ ...p }));
+    return seen;
+  }
+
+  it('counts captures rather than jobs, because that is what the screen draws', async () => {
+    // One capture queues several jobs. Counting jobs would run to a total nobody on the screen
+    // can see, and would tick four times while one row sat there.
+    (global.fetch as jest.Mock).mockImplementation(ok);
+    await enqueue('createEvent', 'uuid-1', {});
+    await enqueue('attachPhoto', 'uuid-1', { eventId: 1 });
+    await enqueue('completeEvent', 'uuid-2', { eventId: 2 });
+
+    const seen = await progressOf();
+
+    expect(seen.every(p => p.total === 2)).toBe(true);
+    expect(seen.map(p => p.done)).toEqual([1, 1, 2, 2]);
+  });
+
+  it('names the capture on the wire, so one row moves and not the whole list', async () => {
+    (global.fetch as jest.Mock).mockImplementation(ok);
+    await enqueue('completeEvent', 'uuid-1', { eventId: 1 });
+    await enqueue('completeEvent', 'uuid-2', { eventId: 2 });
+
+    const seen = await progressOf();
+
+    expect(seen.map(p => p.clientUuid)).toEqual(['uuid-1', 'uuid-2', null]);
+  });
+
+  it('says explicitly that nothing is in flight when the drain ends', async () => {
+    // Without the final call the screen leaves a row marked as sending until the next drain
+    // happens to start — a record shown as moving on a handset doing nothing at all.
+    (global.fetch as jest.Mock).mockImplementation(ok);
+    await enqueue('completeEvent', 'uuid-1', { eventId: 1 });
+
+    const seen = await progressOf();
+
+    expect(seen[seen.length - 1]).toEqual({ done: 1, total: 1, clientUuid: null });
+  });
+
+  it('clears the in-flight row even when the drain stopped at a failure', async () => {
+    (global.fetch as jest.Mock).mockImplementation(() => status(502));
+    await enqueue('completeEvent', 'uuid-1', { eventId: 1 });
+
+    const seen = await progressOf();
+
+    expect(seen[seen.length - 1]?.clientUuid).toBeNull();
+  });
+
+  it('leaves expired jobs out of the total it promises', async () => {
+    // They are never sent, so counting them would show a total the drain cannot reach — the
+    // count stopping short of its own total is exactly what being stuck looks like.
+    (global.fetch as jest.Mock).mockImplementation(ok);
+    await enqueue('completeEvent', 'uuid-old', { eventId: 1 });
+    await enqueue('completeEvent', 'uuid-new', { eventId: 2 });
+    const raw = JSON.parse((await AsyncStorage.getItem('maitai.queue.v1')) as string);
+    raw[0].queuedAt = Date.now() - 25 * 60 * 60 * 1000;
+    await AsyncStorage.setItem('maitai.queue.v1', JSON.stringify(raw));
+
+    const seen = await progressOf();
+
+    expect(seen.every(p => p.total === 1)).toBe(true);
+    expect(seen.map(p => p.clientUuid)).toEqual(['uuid-new', null]);
+  });
+
+  it('reports nothing at all without a session, rather than a drain that never runs', async () => {
+    await enqueue('completeEvent', 'uuid-1', { eventId: 1 });
+
+    expect(await progressOf(null)).toEqual([]);
+  });
+});

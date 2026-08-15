@@ -16,6 +16,15 @@
  * Nothing here has to be tapped. The queue drains itself the moment the handset finds signal
  * (see the NetInfo listener in navigation), and this screen exists for the Mait who wants to
  * watch it happen, or to push it along at the edge of a village.
+ *
+ * Four states on the rows, not three: *Waiting* is the ordinary one and *Syncing* belongs only
+ * to the capture actually in flight. Marking every queued row as syncing was a lie a Mait can
+ * catch — a day's records all claiming to be moving while the count under them sits still —
+ * and the screen's whole job is to be believed.
+ *
+ * The reassurance stays put. The hero, the progress line and the retry button are fixed and
+ * only the rows scroll, so a Mait working down twenty of them can still see what is being sent
+ * and can still reach the button without scrolling back up for it.
  */
 
 import React from 'react';
@@ -99,6 +108,19 @@ export function toCaptures(jobs: QueuedJob[], sendingUuid?: string | null): Queu
   return [...byCapture.values()].sort((a, b) => Number(b.needsCode) - Number(a.needsCode));
 }
 
+/**
+ * Which of the three words a waiting row carries.
+ *
+ * *Needs attention* wins over everything, because it is the only one that asks for a person.
+ * After that the only question is whether this capture is the one on the wire right now.
+ */
+function status(capture: QueuedCapture): string {
+  if (capture.needsCode) {
+    return 'queue.needsAttention';
+  }
+  return capture.sending ? 'queue.syncing' : 'queue.waiting';
+}
+
 function subtitle(capture: QueuedCapture, t: TFunction): string {
   const who = t(capture.kind === 'member' ? 'aiFlow.member' : 'aiFlow.nonMember');
   const money =
@@ -138,31 +160,37 @@ export default function SyncQueueScreen({
         (needing > 0 ? ' ' + t('queue.needsYou', { count: needing }) : '')
       }
       onBack={onBack}
+      tabBarBelow
       cta={
         captures.length > 0
           ? { label: t('queue.tryAllAgain'), onPress: onRetryAll, testID: 'queue-retry-all' }
           : undefined
       }
+      /* Pinned under the hero rather than sitting at the top of the list. A count moving is the
+         difference between "it is working" and "it is stuck", and it is worth least at the one
+         moment it used to disappear — when the Mait scrolls down to see how much is left. */
+      stickyTop={
+        progress ? (
+          <FlowNotice
+            tone="info"
+            body={t('queue.sendingProgress', { done: progress.done, total: progress.total })}
+            icon="sync-outline"
+            testID="queue-progress"
+          />
+        ) : undefined
+      }
     >
-      {/* Progress, where there is any. A count moving is the difference between "it is working"
-          and "it is stuck", and on one bar of signal that difference takes a minute to show. */}
-      {!!progress && (
-        <FlowNotice
-          tone="info"
-          body={t('queue.sendingProgress', { done: progress.done, total: progress.total })}
-          icon="sync-outline"
-          testID="queue-progress"
-        />
-      )}
-
       {captures.map(capture => (
         <View key={capture.clientUuid} style={capture.needsCode ? styles.attention : undefined}>
           <OptionCard
             swatch={false}
             title={capture.farmer || t('queue.unnamedCapture')}
             subtitle={subtitle(capture, t)}
-            pill={t(capture.needsCode ? 'queue.needsAttention' : 'queue.syncing')}
-            pillTone={capture.needsCode ? 'accent' : 'primary'}
+            pill={t(status(capture))}
+            /* Green only while it is genuinely moving. A row that is merely queued gets the
+               grey, because on a list of ten the colour is what a Mait reads first and it
+               should point at the one thing happening. */
+            pillTone={capture.needsCode ? 'accent' : capture.sending ? 'primary' : 'muted'}
             testID={`queue-${capture.clientUuid}`}
           />
 

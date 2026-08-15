@@ -28,6 +28,7 @@ import {
 import { enqueue, pendingCount, readQueue } from '@api/queue';
 import type { QueuedJob, QueuedLabel } from '@api/queue';
 import { drainQueue } from '@api/sync';
+import type { SyncProgress } from '@api/sync';
 import type { AIEvent, Animal, Member, MPP, NonMember } from '@api/types';
 import BottomNav, { Tab } from '@/components/BottomNav';
 import AddNonMemberScreen from '@/features/aiFlow/AddNonMemberScreen';
@@ -92,6 +93,8 @@ export default function RootNavigator(): React.JSX.Element {
   const [queueOpen, setQueueOpen] = useState(false);
   const [queueJobs, setQueueJobs] = useState<QueuedJob[]>([]);
   const [draining, setDraining] = useState(false);
+  /** How far the running drain has got, and which capture is on the wire. */
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
 
   const [clientUuid, setClientUuid] = useState(newClientUuid);
   /** Answered at step 1, and it decides where step 3 goes. */
@@ -129,10 +132,13 @@ export default function RootNavigator(): React.JSX.Element {
 
   const sync = useCallback(async () => {
     setDraining(true);
-    const result = await drainQueue(accessToken);
+    const result = await drainQueue(accessToken, setProgress);
     setPending(result.remaining);
     setQueueJobs(await readQueue());
     setDraining(false);
+    // Cleared rather than left at its last value: the line is about a send happening now, and
+    // a finished count sitting under the hero reads as one that is still running.
+    setProgress(null);
     if (result.sent > 0) {
       setLastSyncAt(clockTime());
     }
@@ -325,14 +331,18 @@ export default function RootNavigator(): React.JSX.Element {
    * insemination is an invitation to strand one: an animal served, a straw spent, nothing
    * recorded.
    */
-  const withTabs = (screen: React.JSX.Element) => (
+  const withTabs = (screen: React.JSX.Element, active: Tab = 'home') => (
     <View style={styles.flex}>
       <View style={styles.flex}>{screen}</View>
       <BottomNav
-        active="home"
+        active={active}
         pending={pending}
         onChange={next => {
           setStep(null);
+          // The waiting list is layered over the tabs like the capture flow is, so it has to be
+          // closed here too. Without this a tab press left it open and every destination drew
+          // the queue instead — the bar moved and the screen did not.
+          setQueueOpen(false);
           setTab(next);
         }}
       />
@@ -546,12 +556,17 @@ export default function RootNavigator(): React.JSX.Element {
   }
 
   if (queueOpen) {
-    const captures = toCaptures(queueJobs);
+    // The uuid on the wire is what tells one row's "Syncing" from the rest of the list's
+    // "Waiting" — without it every row claimed to be moving at once.
+    const captures = toCaptures(queueJobs, progress?.clientUuid);
     return withTabs(
       <SyncQueueScreen
         captures={captures}
         synced={[]}
-        progress={draining && captures.length ? { done: 0, total: captures.length } : null}
+        // The drain's own count, not a placeholder. It used to be pinned at `done: 0`, so a
+        // long send read "Sending 0 of 3…" from start to finish — which is what being stuck
+        // looks like.
+        progress={draining && progress && progress.total > 0 ? progress : null}
         onRetryAll={sync}
         onEnterCode={capture => {
           // Back into the payment step for that capture, where the code is asked for again.
@@ -568,8 +583,16 @@ export default function RootNavigator(): React.JSX.Element {
           } as Farmer);
           setStep('recordPayment');
         }}
-        onBack={() => setQueueOpen(false)}
+        // Home, the same place the list was opened from. The two ways out of a screen should
+        // not land in two different places.
+        onBack={() => {
+          setQueueOpen(false);
+          setTab('home');
+        }}
       />,
+      // The count of what is waiting rides on AI events, so that is the tab this screen
+      // belongs to — Home was lit while a different screen was open.
+      'history',
     );
   }
 

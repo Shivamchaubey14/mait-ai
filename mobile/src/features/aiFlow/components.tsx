@@ -158,6 +158,14 @@ interface FlowScreenProps {
    * question the app, so every step that can go stale should offer it.
    */
   refresh?: { refreshing: boolean; onRefresh: () => void };
+  /**
+   * There is a tab bar under this screen, so the footer must not reserve the safe area again.
+   *
+   * The bar already pads itself clear of the home indicator. Adding the same inset here on top
+   * of it opens a second gap the height of the first, which on a gesture-navigation handset is
+   * most of an empty row between the button and the bar.
+   */
+  tabBarBelow?: boolean;
 }
 
 export function FlowScreen({
@@ -175,6 +183,7 @@ export function FlowScreen({
   footerNote,
   stickyTop,
   refresh,
+  tabBarBelow = false,
 }: FlowScreenProps): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -287,7 +296,7 @@ export function FlowScreen({
               {
                 paddingLeft: spacing[5] + insets.left,
                 paddingRight: spacing[5] + insets.right,
-                paddingBottom: spacing[4] + insets.bottom,
+                paddingBottom: spacing[4] + (tabBarBelow ? 0 : insets.bottom),
               },
             ]}
           >
@@ -403,8 +412,15 @@ interface OptionCardProps {
   swatch?: boolean;
   /** Right-hand qualifier, e.g. "Nearest". */
   pill?: string;
-  /** Tints the pill amber instead of green — a qualifier that is a warning, e.g. "Low". */
-  pillTone?: 'primary' | 'accent';
+  /**
+   * Amber instead of green for a qualifier that is a warning ("Low"), or grey for one that is
+   * merely a state nobody has to act on ("Waiting").
+   *
+   * The grey matters on a list where several pills are visible at once: if waiting and sending
+   * are both green, the colour has stopped saying anything and the Mait has to read every row
+   * to find the one that is actually moving.
+   */
+  pillTone?: 'primary' | 'accent' | 'muted';
   selected?: boolean;
   /**
    * Blocked rows stay on screen rather than disappearing: a Mait who cannot find a farmer
@@ -511,6 +527,7 @@ export function OptionCard({
           style={[
             styles.pill,
             pillTone === 'accent' && styles.pillAccent,
+            pillTone === 'muted' && styles.pillMuted,
             blocked && styles.pillBlocked,
           ]}
         >
@@ -518,6 +535,7 @@ export function OptionCard({
             style={[
               styles.pillLabel,
               pillTone === 'accent' && styles.pillLabelAccent,
+              pillTone === 'muted' && styles.pillLabelMuted,
               blocked && styles.pillLabelBlocked,
             ]}
           >
@@ -1437,9 +1455,13 @@ const styles = StyleSheet.create({
   },
   // Yolk fill with Ink on it, never yellow text on a pale surface (DESIGN_SYSTEM — Colour).
   pillAccent: { backgroundColor: colors.secondaryWash },
+  // The page's own grey, outlined so it still reads as a pill on a white card rather than as
+  // a hole in it.
+  pillMuted: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
   pillBlocked: { backgroundColor: colors.errorWash },
   pillLabel: { ...typography.caption, color: colors.primaryDark },
   pillLabelAccent: { color: yolk[800] },
+  pillLabelMuted: { color: colors.textMuted },
   pillLabelBlocked: { color: colors.error },
 
   radio: {

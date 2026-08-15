@@ -61,6 +61,17 @@ describe('toCaptures', () => {
     expect(captures[1]?.needsCode).toBe(false);
   });
 
+  it('marks only the capture actually on the wire as sending', () => {
+    const captures = toCaptures([KAVITA, RADHA], 'kavita');
+
+    expect(captures.find(c => c.clientUuid === 'kavita')?.sending).toBe(true);
+    expect(captures.find(c => c.clientUuid === 'radha')?.sending).toBe(false);
+  });
+
+  it('marks nothing as sending when no drain is running', () => {
+    expect(toCaptures([KAVITA, RADHA]).every(c => !c.sending)).toBe(true);
+  });
+
   // The photo is queued before the payment has a mode, so the earliest job knows the least.
   // Reading the whole row off it reported a UPI payment as cash for the rest of the day.
   it('takes each fact from the first job that actually carries it', () => {
@@ -104,10 +115,11 @@ describe('SyncQueueScreen', () => {
   function renderScreen(
     jobs: QueuedJob[],
     progress = null as null | { done: number; total: number },
+    sendingUuid: string | null = null,
   ) {
     return renderWithStore(
       <SyncQueueScreen
-        captures={toCaptures(jobs)}
+        captures={toCaptures(jobs, sendingUuid)}
         synced={[]}
         progress={progress}
         onRetryAll={onRetryAll}
@@ -144,8 +156,8 @@ describe('SyncQueueScreen', () => {
   });
 
   // The regression this screen was reported for: a member's capture queues no payment, and
-  // nothing else attached a label, so the row read "Capture · Member" — the one thing a list
-  // that promises "nothing here is lost" cannot say to someone hunting a record.
+  // nothing else attached a label, so the row read "Capture · Member · Waiting" — the one
+  // thing a list that promises "nothing here is lost" cannot say to someone hunting a record.
   it('names the farmer on a member row rather than falling back to "Capture"', () => {
     renderScreen([KAVITA]);
 
@@ -160,6 +172,22 @@ describe('SyncQueueScreen', () => {
     ]);
 
     expect(screen.getByText('Member')).toBeTruthy();
+  });
+
+  it('says a queued record is waiting, and only calls syncing what is being sent', () => {
+    // The whole list used to read "Syncing" whether anything was moving or not, which is a
+    // claim a Mait can watch fail: three rows all sending, and the count never changing.
+    renderScreen([KAVITA, RADHA], { done: 1, total: 2 }, 'kavita');
+
+    expect(screen.getByText('Syncing')).toBeTruthy();
+    expect(screen.queryByText('Waiting')).toBeNull();
+  });
+
+  it('calls nothing syncing when no drain is running', () => {
+    renderScreen([KAVITA]);
+
+    expect(screen.getByText('Waiting')).toBeTruthy();
+    expect(screen.queryByText('Syncing')).toBeNull();
   });
 
   it('shows how far a send has got, so a slow one does not look stuck', () => {

@@ -489,6 +489,7 @@
     "subtitle_other": "{{count}} records are on this phone.",
     "sendingProgress": "Sending {{done}} of {{total}}…",
     "needsAttention": "Needs attention",
+    "waiting": "Waiting",
     "syncing": "Syncing",
     "synced": "Synced",
     "codeNeverEntered": "Her payment code was never entered.",
