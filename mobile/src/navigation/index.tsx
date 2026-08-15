@@ -591,10 +591,13 @@ export default function RootNavigator(): React.JSX.Element {
             onResume={resumeCapture}
             online={online}
             pending={pending}
-            // The tile answers for itself now: it opens the list of what is waiting, and
-            // pushes at the same time. A number that only kicks an invisible drain leaves a
-            // Mait unable to tell a bad network from a lost day's work.
-            onSync={() => {
+            // Pull-to-refresh drains and stays put. It shared a prop with the tile below, so
+            // tugging Home down to reload it opened the waiting list instead.
+            onSync={sync}
+            // The tile answers for itself: it opens the list of what is waiting, and pushes at
+            // the same time. A number that only kicks an invisible drain leaves a Mait unable
+            // to tell a bad network from a lost day's work.
+            onOpenQueue={() => {
               setQueueOpen(true);
               refreshQueue();
               sync();

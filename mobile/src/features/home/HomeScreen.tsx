@@ -32,7 +32,16 @@ interface Props {
   /** Live from NetInfo, so the banner reflects the radio rather than the last failed call. */
   online: boolean;
   pending: number;
+  /**
+   * Push what is queued, staying on this screen.
+   *
+   * Separate from `onOpenQueue` because pull-to-refresh calls it. The two used to be one prop,
+   * so tugging the page down to reload it navigated away to the waiting list — a gesture that
+   * everywhere else in the world means "show me this screen again" was the one way to leave it.
+   */
   onSync: () => void;
+  /** Open the waiting list. The yellow tile, and only the yellow tile. */
+  onOpenQueue: () => void;
   lastSyncAt: string | null;
 }
 
@@ -64,6 +73,7 @@ export default function HomeScreen({
   online,
   pending,
   onSync,
+  onOpenQueue,
   lastSyncAt,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
@@ -150,7 +160,7 @@ export default function HomeScreen({
 
           <Pressable
             accessibilityRole="button"
-            onPress={onSync}
+            onPress={onOpenQueue}
             style={[styles.tile, styles.tileWaiting]}
             testID="tile-waiting"
           >

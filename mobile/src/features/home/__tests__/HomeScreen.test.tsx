@@ -8,7 +8,8 @@
  */
 
 import React from 'react';
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { ScrollView } from 'react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import HomeScreen from '../HomeScreen';
 import type { AIEvent, InventorySummary } from '@api/types';
@@ -66,6 +67,7 @@ const props = {
   online: true,
   pending: 0,
   onSync: jest.fn(),
+  onOpenQueue: jest.fn(),
   lastSyncAt: null,
 };
 
@@ -157,5 +159,33 @@ describe('HomeScreen', () => {
     mockApi(SUMMARY, []);
     render({ online: false });
     expect(screen.getByTestId('sync-offline')).toBeTruthy();
+  });
+
+  it('opens the waiting list from the tile, and only from the tile', async () => {
+    const onOpenQueue = jest.fn();
+    const onSync = jest.fn();
+    mockApi(SUMMARY, []);
+    render({ pending: 3, onOpenQueue, onSync });
+
+    fireEvent.press(screen.getByTestId('tile-waiting'));
+
+    expect(onOpenQueue).toHaveBeenCalled();
+  });
+
+  it('stays on Home when the page is pulled down to refresh', async () => {
+    // The two shared a prop, so the gesture that everywhere else means "show me this screen
+    // again" was the one way to leave it.
+    const onOpenQueue = jest.fn();
+    const onSync = jest.fn();
+    mockApi(SUMMARY, []);
+    render({ pending: 3, onOpenQueue, onSync });
+
+    const scroll = screen.UNSAFE_getByType(ScrollView);
+    await act(async () => {
+      scroll.props.refreshControl.props.onRefresh();
+    });
+
+    expect(onSync).toHaveBeenCalled();
+    expect(onOpenQueue).not.toHaveBeenCalled();
   });
 });
