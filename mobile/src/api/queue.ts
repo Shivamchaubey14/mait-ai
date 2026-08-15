@@ -138,7 +138,12 @@ export async function pendingCount(): Promise<number> {
   return (await readQueue()).length;
 }
 
-/** Only for tests and a signed-out device — never as a way to clear a failing job. */
+/**
+ * Only for tests and a signed-out device — never as a way to clear a failing job.
+ *
+ * Called from the session persistence middleware on `loggedOut`, so the queue leaves with the
+ * Mait it belongs to. A job that will not send needs a person to look at it, not a wipe.
+ */
 export async function clearQueue(): Promise<void> {
   await AsyncStorage.removeItem(STORAGE_KEY);
 }

@@ -9,6 +9,8 @@
 
 import type { Middleware } from '@reduxjs/toolkit';
 
+import { clearQueue } from '@api/queue';
+
 import { loggedIn, loggedOut, tokensRefreshed } from './authSlice';
 import { clearSession, saveSession } from './session';
 
@@ -45,6 +47,20 @@ export const sessionPersistence: Middleware = store => next => action => {
     // Signing out is the only thing that clears it. Every other failure leaves the session
     // in place, so a dropped connection never costs a Mait their login.
     clearSession();
+
+    /**
+     * The queue goes with the session, which it never used to.
+     *
+     * Those jobs are one Mait's captures, signed with their token and their `client_uuid`s.
+     * Left behind on a handset that is about to be handed to somebody else, they would drain
+     * under whoever signs in next — and until then they sat on the waiting list of a Mait who
+     * had no way to be rid of them, because nothing in the app could clear it.
+     *
+     * Safe here and nowhere else: Settings already refuses to sign out with unsent work until
+     * it has been confirmed a second time, and that warning says plainly that these records
+     * can only be sent by this Mait on this handset.
+     */
+    clearQueue();
   }
 
   return result;

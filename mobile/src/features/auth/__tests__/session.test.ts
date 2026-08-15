@@ -6,9 +6,13 @@
  * village with one bar, halfway through work they have already done.
  */
 
+import { configureStore } from '@reduxjs/toolkit';
 import * as SecureStore from 'expo-secure-store';
 
+import { clearQueue, enqueue, pendingCount } from '@api/queue';
+
 import authReducer, { loggedIn, loggedOut, sessionRestored, tokensRefreshed } from '../authSlice';
+import { sessionPersistence } from '../persistence';
 import { clearSession, loadSession, saveSession } from '../session';
 
 const USER = {
@@ -29,6 +33,7 @@ const SESSION = {
 beforeEach(async () => {
   // The mocked store is module-level, so it outlives a test unless it is emptied.
   await clearSession();
+  await clearQueue();
   jest.clearAllMocks();
 });
 
@@ -117,5 +122,42 @@ describe('the auth slice', () => {
 
     expect(out.accessToken).toBeNull();
     expect(out.restored).toBe(true);
+  });
+});
+
+describe('signing out', () => {
+  function storeWithPersistence() {
+    return configureStore({
+      reducer: { auth: authReducer },
+      middleware: getDefault => getDefault().concat(sessionPersistence),
+    });
+  }
+
+  /**
+   * The queue belongs to the Mait, not to the handset.
+   *
+   * Left behind, those jobs would drain under whoever signs in next — and until then they sat
+   * on a waiting list their owner had no way to empty, because nothing in the app cleared it.
+   */
+  it('takes the unsent queue with the session', async () => {
+    await enqueue('completeEvent', 'uuid-1', { eventId: 5 });
+    expect(await pendingCount()).toBe(1);
+
+    storeWithPersistence().dispatch(loggedOut());
+
+    // The middleware fires the clear without awaiting it, as it does for the session itself.
+    await new Promise(resolve => setImmediate(resolve));
+    expect(await pendingCount()).toBe(0);
+  });
+
+  it('leaves the queue alone on a token refresh, which is not a sign-out', async () => {
+    const store = storeWithPersistence();
+    store.dispatch(loggedIn({ access: 'a1', refresh: 'r1', user: USER, assignedMppCodes: [] }));
+    await enqueue('completeEvent', 'uuid-2', { eventId: 6 });
+
+    store.dispatch(tokensRefreshed({ access: 'a2' }));
+
+    await new Promise(resolve => setImmediate(resolve));
+    expect(await pendingCount()).toBe(1);
   });
 });
