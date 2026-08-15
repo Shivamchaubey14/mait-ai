@@ -113,6 +113,13 @@ export async function completeEvent(
       const result = await drainQueue(accessToken);
       return { sent: true, remaining: result.remaining };
     }
+
+    // As on the photo: a 4xx is a refusal, not a dropped connection, and it will be refused
+    // again on every retry. Queuing one put the capture on the waiting list for good — it sat
+    // there claiming to need a network it already had, and no amount of signal could clear it.
+    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+      return { sent: false, remaining: await pendingCount() };
+    }
   } catch {
     // Network. Queue it.
   }
