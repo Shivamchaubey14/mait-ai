@@ -11,6 +11,11 @@
  *
  * The figure comes from the server, priced by the administrator against the breed used. Where
  * nobody has priced it, the sentence stands without a number rather than inventing one.
+ *
+ * The number is what she will be charged; it is not something this app collects or settles.
+ * The deduction is made by the finance department in their own software, against the milk
+ * payout. Everything here is a record for them to reconcile against — which is why the screen
+ * has no payment control on it at all, and why finishing needs no authorisation code.
  */
 
 import React from 'react';

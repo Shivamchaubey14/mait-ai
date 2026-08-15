@@ -208,7 +208,12 @@ def attach_photo(
 @transaction.atomic
 def mark_payment_pending(event: AIEvent, *, actor=None) -> AIEvent:
     """Advance to ``payment_pending`` when payment is initiated (SRS §6.5)."""
-    _transition(event, AIEvent.Status.PAYMENT_PENDING, actor=actor, note="Payment initiated")
+    _transition(
+        event,
+        AIEvent.Status.PAYMENT_PENDING,
+        actor=actor,
+        note="Payment initiated (Will be processed by Finance Department)",
+    )
     event.save(update_fields=["status", "updated_at"])
     return event
 
@@ -249,7 +254,7 @@ def complete_ai_event(event: AIEvent, *, actor=None) -> AIEvent:
     )
 
     _transition(
-        event, AIEvent.Status.COMPLETED, actor=actor, note="Payment verified, straw deducted"
+        event, AIEvent.Status.COMPLETED, actor=actor, note="Payment initiated, straw deducted"
     )
     event.completed_at = timezone.now()
     event.save(update_fields=["status", "completed_at", "updated_at"])

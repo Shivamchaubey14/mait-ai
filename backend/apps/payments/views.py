@@ -112,9 +112,16 @@ class PaymentInitiateView(_EventScoped):
         """
         The member case, start to finish in one call.
 
-        There is no state to move through: she owes the dairy, the dairy owes her more, and
-        the two are settled at the payout. What this leaves behind is the row that settlement
-        is reconciled against.
+        **This platform never moves a member's money.** The deduction itself is made by the
+        finance department, in their own software, against the milk payout. Nothing here calls
+        a gateway, asks her to authorise anything, or waits on a settlement — the row exists so
+        finance has something to reconcile against, and so the AI event has the verified
+        payment its completion requires.
+
+        That is why it is written `VERIFIED` on creation. There is no state to move through:
+        she owes the dairy, the dairy owes her more, and the two are settled at the payout. A
+        pending status here would be this app claiming to be waiting for something it is not
+        party to, and it would hold the capture open forever.
         """
         from apps.ai_events.services import mark_payment_pending
 
