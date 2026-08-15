@@ -6,6 +6,12 @@ connection that drops mid-flight. It cannot tell "the server never received this
 "the server processed it and the response was lost", so it retries blindly. This module is
 what makes that safe.
 
+A record is identified by **key and endpoint together**, never by the key alone. ADR 0003 makes
+the capture's ``client_uuid`` the ``Idempotency-Key`` on *every* write for that event, so one
+key legitimately arrives at several endpoints with a different body each time. Keyed globally,
+the create's stored record answered the completion's lookup, the fingerprints disagreed, and
+every completion in the product was rejected as a client bug — on a perfect network.
+
 Usage::
 
     @idempotent(endpoint="ai-events.complete")
@@ -53,14 +59,16 @@ def idempotent(endpoint: str):
                 return view_method(self, request, *args, **kwargs)
 
             fp = fingerprint(getattr(request, "data", {}))
+            # Scoped to this endpoint. The same key is expected at several of them for one
+            # capture (ADR 0003); it is a reuse *within* one endpoint that means a client bug.
             existing = IdempotencyRecord.objects.filter(
-                key=key, expires_at__gt=timezone.now()
+                key=key, endpoint=endpoint, expires_at__gt=timezone.now()
             ).first()
 
             if existing:
                 if existing.request_fingerprint != fp:
-                    # Same key, different body. Replaying the stored response here would
-                    # silently return the wrong answer and hide a real client bug.
+                    # Same key, same endpoint, different body. Replaying the stored response
+                    # here would silently return the wrong answer and hide a real client bug.
                     raise IdempotencyKeyConflict()
                 return Response(existing.response_body, status=existing.response_status)
 

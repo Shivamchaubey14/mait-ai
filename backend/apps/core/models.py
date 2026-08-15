@@ -74,9 +74,15 @@ class IdempotencyRecord(TimeStampedModel):
     The mobile offline queue retries blindly on reconnect; this is what makes that safe.
     `request_fingerprint` catches a client reusing a key for different content — that is a
     client bug, and returning the wrong stored response would hide it.
+
+    Identified by key *and* endpoint. ADR 0003 puts one capture's `client_uuid` on every write
+    for that event, so the same key reaches create, complete and the rest with a different body
+    each time; that is the design, not a client bug. The key was unique on its own until
+    2026-08-14, which meant the create's record answered the completion's lookup and every
+    completion was refused with a 422.
     """
 
-    key = models.CharField(max_length=64, unique=True, db_index=True)
+    key = models.CharField(max_length=64, db_index=True)
     endpoint = models.CharField(max_length=120)
     request_fingerprint = models.CharField(max_length=64)
     response_status = models.PositiveSmallIntegerField()
@@ -86,6 +92,11 @@ class IdempotencyRecord(TimeStampedModel):
     class Meta:
         db_table = "idempotency_record"
         indexes = [models.Index(fields=["expires_at"], name="idem_expiry_idx")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["key", "endpoint"], name="idempotency_key_endpoint_uniq"
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.key} → {self.response_status}"
