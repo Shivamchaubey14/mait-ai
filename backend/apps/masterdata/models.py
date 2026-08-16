@@ -206,22 +206,46 @@ class NonMember(TimeStampedModel):
     data is captured at creation (SRS §7 Compliance).
     """
 
+    class Relation(models.TextChoices):
+        FATHER = "father", "Father"
+        HUSBAND = "husband", "Husband"
+
     name = models.CharField(max_length=150, db_index=True)
     # Two women in one village share a first name more often than not, and the roster a Mait
     # reads on the second visit has to tell them apart. Members carry the same field from SAP.
     father_husband_name = models.CharField(max_length=150, blank=True)
+    # Which of the two that name is. SAP's member master collapses them into one column and
+    # this app inherited the shape, but a Mait is standing in front of her and knows the
+    # answer — and "Sunita w/o Ram" and "Sunita d/o Ram" are two different women in a village
+    # where the same names repeat. Blank on rows that predate the question.
+    relation = models.CharField(
+        max_length=10,
+        choices=Relation.choices,
+        blank=True,
+        help_text="Whether father_husband_name is her father or her husband.",
+    )
     mobile_no = models.CharField(max_length=15, validators=[mobile_validator], db_index=True)
     address = models.CharField(max_length=255, blank=True)
 
     # PII — encrypted at rest, masked in API responses (SRS §16), same treatment members and
-    # Maits get. The card itself is never photographed or stored; SRS §7 asks for data
-    # minimisation, and a masked number satisfies it.
+    # Maits get.
     #
     # Required, unlike everywhere else this field appears. It is what proves this farmer is
     # not already on the membership roll — a member recorded as a non-member is one a Mait can
     # charge in cash for a service the dairy has already paid for.
     aadhar_no = EncryptedCharField(max_length=20, blank=True)
     aadhar_hash = models.CharField(max_length=64, blank=True, db_index=True)
+
+    # Both faces of the card, photographed at registration.
+    #
+    # This reverses the original decision, which was that the card is never photographed
+    # because SRS §7 asks for data minimisation and a masked number satisfies it. The dairy
+    # asked for the images, so they are held — but they are the most sensitive thing this
+    # product stores, and they are treated accordingly: written through `default_storage`, so
+    # they land in the encrypted S3 bucket in production, and never returned to a handset.
+    # The app is told whether they exist, not where they are (see NonMemberSerializer).
+    aadhar_front_url = models.CharField(max_length=500, blank=True)
+    aadhar_back_url = models.CharField(max_length=500, blank=True)
 
     mpp = models.ForeignKey(
         MPP,

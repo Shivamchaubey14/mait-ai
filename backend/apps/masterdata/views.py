@@ -37,10 +37,12 @@ from .serializers import (
     MemberListSerializer,
     MPPDetailSerializer,
     MPPListSerializer,
+    NonMemberAadhaarSerializer,
     NonMemberDetailSerializer,
     NonMemberSerializer,
     UploadErrorRowSerializer,
 )
+from .storage import store_aadhaar_image
 from .tasks import process_master_upload
 from .templates_xlsx import assignment_template_response
 from .verification import (
@@ -377,6 +379,8 @@ class NonMemberViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, views
     def get_serializer_class(self):
         # The detail shape carries the animals already registered to this farmer, which is
         # what step 3 of the capture flow picks from.
+        if self.action == "aadhaar":
+            return NonMemberAadhaarSerializer
         return NonMemberDetailSerializer if self.action == "retrieve" else NonMemberSerializer
 
     def get_serializer_context(self):
@@ -407,6 +411,56 @@ class NonMemberViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, views
             request=self.request,
             meta={"mpp_id": non_member.mpp_id},
         )
+
+    @extend_schema(
+        summary="Attach her Aadhaar card",
+        description=(
+            "Multipart: `front`, `back`, or both. Photographed at registration, as evidence "
+            "behind the number that was typed.\n\n"
+            "Separate from registration rather than part of it, like an animal's portrait: "
+            "the record must survive a village connection dropping a JPEG, because the flow "
+            "is standing on her id by then and losing it costs the whole form again.\n\n"
+            "The stored URLs are never returned. The response says whether each face is on "
+            "file — `aadhar_front_captured` and `aadhar_back_captured` — because a Mait needs "
+            "to know the step is done and a link to somebody's identity card has no business "
+            "in a handset's cache."
+        ),
+        request=NonMemberAadhaarSerializer,
+        responses={200: NonMemberSerializer},
+    )
+    @action(detail=True, methods=["patch"], parser_classes=[MultiPartParser, FormParser])
+    def aadhaar(self, request, pk=None):
+        non_member = self.get_object()
+
+        serializer = NonMemberAadhaarSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Outside any transaction: an upload holds the connection for as long as the village
+        # network takes, and a transaction held open that long blocks whatever sits behind it.
+        changed = []
+        if serializer.validated_data.get("front"):
+            non_member.aadhar_front_url = store_aadhaar_image(
+                non_member, serializer.validated_data["front"], face="front"
+            )
+            changed.append("aadhar_front_url")
+        if serializer.validated_data.get("back"):
+            non_member.aadhar_back_url = store_aadhaar_image(
+                non_member, serializer.validated_data["back"], face="back"
+            )
+            changed.append("aadhar_back_url")
+
+        non_member.save(update_fields=[*changed, "updated_at"])
+
+        record_audit(
+            action=AuditLog.Action.UPDATE,
+            entity_type="non_member",
+            entity_id=non_member.id,
+            request=request,
+            # Which faces arrived, never where they landed. An audit row is read by more
+            # people than the record is.
+            meta={"aadhaar_faces": [f.replace("aadhar_", "").replace("_url", "") for f in changed]},
+        )
+        return Response(NonMemberSerializer(non_member).data)
 
 
 @extend_schema(tags=["master-data"])

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.animals.serializers import AnimalSerializer
+from apps.animals.serializers import MAX_PHOTO_BYTES, AnimalSerializer
 from apps.core.fields import pii_lookup_hash
 
 from .models import MAX_ERRORS_STORED, MPP, DataUploadLog, Mait, Member, NonMember
@@ -296,16 +296,25 @@ class NonMemberSerializer(serializers.ModelSerializer):
     # evidence of when anything happened.
     consent = serializers.BooleanField(write_only=True, required=False, default=False)
 
+    # Whether each face of the card is on file — not where it is. The images are identity
+    # documents, and a URL to one has no business sitting in a handset's response cache. The
+    # app needs to know the step is done; that is all this says.
+    aadhar_front_captured = serializers.SerializerMethodField()
+    aadhar_back_captured = serializers.SerializerMethodField()
+
     class Meta:
         model = NonMember
         fields = [
             "id",
             "name",
             "father_husband_name",
+            "relation",
             "mobile_no",
             "address",
             "aadhar_no",
             "masked_aadhar",
+            "aadhar_front_captured",
+            "aadhar_back_captured",
             "consent",
             "mpp",
             "created_by_mait",
@@ -320,26 +329,38 @@ class NonMemberSerializer(serializers.ModelSerializer):
         # caused it. The database constraint is untouched and is still the actual guarantee.
         validators: list = []
 
+    def get_aadhar_front_captured(self, obj) -> bool:
+        return bool(obj.aadhar_front_url)
+
+    def get_aadhar_back_captured(self, obj) -> bool:
+        return bool(obj.aadhar_back_url)
+
     def validate_aadhar_no(self, value: str) -> str:
         """
-        Twelve digits, and they must not already be on the membership roll.
+        Twelve digits, and belonging to nobody already on file — member or non-member.
 
-        This is the one check that stops the fraud the non-member path invites: a member
+        The membership check is what stops the fraud the non-member path invites: a member
         recorded as a non-member is a farmer the Mait can take cash from for a service the
         dairy has already paid for out of her milk payment. She has no reason to query it —
         she was asked for money and she paid it.
 
-        Matched on the keyed fingerprint, never on the number: the encrypted column cannot be
-        searched, and adding a searchable copy of an Aadhaar to solve that would be a worse
-        problem than the one being solved.
+        The non-member check closes the other half of the same hole, which was open. One
+        Aadhaar could be registered any number of times: at a second MPP, or at the same one
+        on a different mobile — the only uniqueness the table had was mobile-per-MPP. Every
+        copy is a farmer who can be charged again, and a duplicate is indistinguishable from
+        a second woman once the round is over.
+
+        Both are matched on the keyed fingerprint, never on the number: the encrypted column
+        cannot be searched, and adding a searchable copy of an Aadhaar to solve that would be
+        a worse problem than the one being solved.
         """
         digits = "".join(c for c in value if c.isdigit())
         if len(digits) != 12:
             raise serializers.ValidationError("Aadhaar is 12 digits.")
 
-        member = (
-            Member.objects.filter(aadhar_hash=pii_lookup_hash(digits)).select_related("mpp").first()
-        )
+        fingerprint = pii_lookup_hash(digits)
+
+        member = Member.objects.filter(aadhar_hash=fingerprint).select_related("mpp").first()
         if member is not None:
             # Named, because the Mait's next action is to go back and find her in the roster,
             # and "this Aadhaar is registered" would leave them guessing at which farmer.
@@ -348,6 +369,20 @@ class NonMemberSerializer(serializers.ModelSerializer):
                 f"{member.mpp.mpp_name} ({member.member_code}). "
                 "Record this as a member — she pays nothing today."
             )
+
+        already = NonMember.objects.filter(aadhar_hash=fingerprint)
+        if self.instance is not None:
+            already = already.exclude(pk=self.instance.pk)
+        duplicate = already.select_related("mpp").first()
+        if duplicate is not None:
+            # Named and placed, so the Mait can go and find the record rather than conclude
+            # the app is refusing her for no reason.
+            raise serializers.ValidationError(
+                f"This Aadhaar is already registered to {duplicate.name} at "
+                f"{duplicate.mpp.mpp_name}. She is on file — pick her instead of "
+                "registering her twice."
+            )
+
         return digits
 
     def validate_mobile_no(self, value: str) -> str:
@@ -399,6 +434,42 @@ class NonMemberSerializer(serializers.ModelSerializer):
                 )
 
         return attrs
+
+
+class NonMemberAadhaarSerializer(serializers.Serializer):
+    """
+    Both faces of her Aadhaar card, photographed at registration.
+
+    Sent after the record exists rather than as part of creating it, the same way an animal's
+    portrait and a proof photo are. A registration that has already succeeded must not be
+    undone by a village connection dropping a JPEG — the flow is standing on her id by then,
+    and losing it costs the Mait the whole form again with the farmer waiting.
+
+    Either face may be sent alone, so a retry only re-sends what failed, but at least one must
+    be present: an empty request is a Mait who thinks they have uploaded something.
+    """
+
+    front = serializers.ImageField(required=False)
+    back = serializers.ImageField(required=False)
+
+    def validate(self, attrs):
+        if not attrs.get("front") and not attrs.get("back"):
+            raise serializers.ValidationError("Send the front of the card, the back, or both.")
+        return attrs
+
+    def _check_size(self, value):
+        if value.size > MAX_PHOTO_BYTES:
+            raise serializers.ValidationError(
+                f"That image is {value.size // 1024 // 1024} MB. "
+                f"Keep it under {MAX_PHOTO_BYTES // 1024 // 1024} MB."
+            )
+        return value
+
+    def validate_front(self, value):
+        return self._check_size(value)
+
+    def validate_back(self, value):
+        return self._check_size(value)
 
 
 class NonMemberDetailSerializer(NonMemberSerializer):

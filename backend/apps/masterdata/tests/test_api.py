@@ -11,7 +11,9 @@ import io
 import json
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
+from PIL import Image
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
@@ -21,6 +23,13 @@ from conftest import MPPFactory
 pytestmark = pytest.mark.django_db
 
 BASE = "/api/v1"
+
+
+def a_card_image(name="aadhaar.jpg"):
+    """A real JPEG — ImageField opens it, so a handful of bytes will not do."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (60, 38), (220, 220, 200)).save(buffer, format="JPEG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/jpeg")
 
 
 def auth(api_client, user):
@@ -183,6 +192,100 @@ class TestSearchAndFilter:
     def test_list_uses_the_standard_envelope(self, api_client, admin_user, member):
         body = auth(api_client, admin_user).get(f"{BASE}/members/").json()
         assert set(body) >= {"count", "next", "previous", "results"}
+
+
+class TestAadhaarCard:
+    """
+    Both faces of the card, photographed at registration (SRS §6.3 step 2).
+
+    This reverses the original decision that the card is never photographed. The dairy asked
+    for the images; what the tests hold onto is the rule that came with them — the URLs are
+    never returned to a handset, because a link to somebody's identity document has no
+    business in an app's response cache.
+    """
+
+    @pytest.fixture
+    def non_member(self, api_client, mait_user, mpp):
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            {
+                "name": "Radha Singh",
+                "mobile_no": "9876543210",
+                "mpp": mpp.id,
+                "aadhar_no": "123456789012",
+                "consent": True,
+            },
+            format="json",
+        )
+        assert response.status_code == 201, response.json()
+        return NonMember.objects.get(pk=response.json()["id"])
+
+    def test_both_faces_are_stored(self, api_client, mait_user, non_member):
+        response = auth(api_client, mait_user).patch(
+            f"{BASE}/non-members/{non_member.id}/aadhaar/",
+            {"front": a_card_image("front.jpg"), "back": a_card_image("back.jpg")},
+            format="multipart",
+        )
+
+        assert response.status_code == 200, response.json()
+        non_member.refresh_from_db()
+        assert non_member.aadhar_front_url
+        assert non_member.aadhar_back_url
+
+    def test_the_response_says_captured_and_never_where(self, api_client, mait_user, non_member):
+        """
+        SRS §16 in spirit. The Mait needs to know the step is done, and nothing more.
+        """
+        response = auth(api_client, mait_user).patch(
+            f"{BASE}/non-members/{non_member.id}/aadhaar/",
+            {"front": a_card_image()},
+            format="multipart",
+        )
+
+        body = response.json()
+        assert body["aadhar_front_captured"] is True
+        assert body["aadhar_back_captured"] is False
+        # The location of an identity document must not travel back to a handset.
+        assert "aadhar_front_url" not in body
+        assert non_member.__class__.objects.get(pk=non_member.id).aadhar_front_url not in str(body)
+
+    def test_one_face_may_be_retried_alone(self, api_client, mait_user, non_member):
+        """A retry re-sends what failed, not what already landed."""
+        auth(api_client, mait_user).patch(
+            f"{BASE}/non-members/{non_member.id}/aadhaar/",
+            {"front": a_card_image()},
+            format="multipart",
+        )
+        non_member.refresh_from_db()
+        front = non_member.aadhar_front_url
+
+        auth(api_client, mait_user).patch(
+            f"{BASE}/non-members/{non_member.id}/aadhaar/",
+            {"back": a_card_image()},
+            format="multipart",
+        )
+        non_member.refresh_from_db()
+
+        assert non_member.aadhar_front_url == front
+        assert non_member.aadhar_back_url
+
+    def test_an_empty_upload_is_refused(self, api_client, mait_user, non_member):
+        """A request with no image is a Mait who thinks they have uploaded something."""
+        response = auth(api_client, mait_user).patch(
+            f"{BASE}/non-members/{non_member.id}/aadhaar/",
+            {},
+            format="multipart",
+        )
+        assert response.status_code == 400
+
+    def test_another_maits_farmer_is_out_of_reach(self, api_client, admin_user, non_member):
+        """SRS §16 — the queryset is scoped to the registering Mait, and so is this."""
+        response = auth(api_client, admin_user).patch(
+            f"{BASE}/non-members/{non_member.id}/aadhaar/",
+            {"front": a_card_image()},
+            format="multipart",
+        )
+        assert response.status_code == 403
 
 
 class TestUploadValidation:
@@ -426,6 +529,77 @@ class TestNonMemberRegistration:
         assert "non_field_errors" not in errors
         assert "Radha Singh" in " ".join(errors["mobile_no"])
         assert NonMember.objects.filter(mobile_no="9876543210", mpp=mpp).count() == 1
+
+    def test_relation_says_whose_name_that_is(self, api_client, mait_user, mpp):
+        """
+        The column has held both since SAP, and a record that cannot say which cannot tell a
+        daughter from a wife — two different women in a village where the same names repeat.
+        """
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            {
+                "name": "Sunita",
+                "father_husband_name": "Ram Singh",
+                "relation": "husband",
+                "mobile_no": "9876543210",
+                "mpp": mpp.id,
+                "aadhar_no": "111122223333",
+                "consent": True,
+            },
+            format="json",
+        )
+        assert response.status_code == 201, response.json()
+        assert NonMember.objects.get(pk=response.json()["id"]).relation == "husband"
+
+    def test_a_relation_that_is_neither_is_refused(self, api_client, mait_user, mpp):
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            {
+                "name": "Sunita",
+                "relation": "uncle",
+                "mobile_no": "9876543210",
+                "mpp": mpp.id,
+                "aadhar_no": "111122223333",
+            },
+            format="json",
+        )
+        assert response.status_code == 400
+        assert "relation" in response.json()["errors"]
+
+    def test_one_aadhaar_cannot_be_registered_twice(self, api_client, mait_user, mpp):
+        """
+        The other half of the fraud the membership check closes, which was open.
+
+        Uniqueness on the table was mobile-per-MPP only, so the same Aadhaar went in again on
+        a different number, or at a second MPP, as often as anyone liked. Every copy is a
+        farmer who can be charged again, and once the round is over a duplicate is
+        indistinguishable from a second woman.
+        """
+        body = {
+            "name": "Radha Singh",
+            "mobile_no": "9876543210",
+            "mpp": mpp.id,
+            "aadhar_no": "123456789012",
+            "consent": True,
+        }
+        assert (
+            auth(api_client, mait_user)
+            .post(f"{BASE}/non-members/", body, format="json")
+            .status_code
+            == 201
+        )
+
+        # A different number, so the mobile-per-MPP constraint does not catch it.
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            dict(body, mobile_no="9876500099", name="Radha S"),
+            format="json",
+        )
+
+        assert response.status_code == 400
+        message = " ".join(response.json()["errors"]["aadhar_no"])
+        assert "Radha Singh" in message
+        assert NonMember.objects.filter(aadhar_hash__isnull=False).count() == 1
 
     def test_cannot_register_at_another_maits_mpp(self, api_client, mait_user, mpp):
         """

@@ -192,9 +192,25 @@ matched, and a *plain* hash of a twelve-digit number is brute-forced in minutes 
 derived from `FIELD_ENCRYPTION_KEY` with a domain label, giving a column that is searchable to
 the application and useless to anyone holding a copy of the database. Migration `0006`
 backfills the roll; members whose SAP row carried no Aadhaar are not checkable by this route,
-which is a data gap to close upstream. The number itself is stored encrypted, read back masked
-(SRS §16), and **the card is never photographed** — SRS §7 asks for data minimisation, and
-storing card images carries UIDAI obligations a masked number does not.
+which is a data gap to close upstream. The number itself is stored encrypted and read back
+masked (SRS §16). The **duplicate check also covers non-members**, which it did not: uniqueness
+on that table was mobile-per-MPP only, so one Aadhaar went in again on a different number, or
+at a second MPP, as often as anyone liked — and every copy is a farmer who can be charged
+again.
+
+**Both faces of the card are photographed**, at the dairy's request. This reverses the earlier
+decision to hold nothing but the number, which reasoned from SRS §7 data minimisation that a
+masked number was enough and that card images carry UIDAI obligations it does not. Those
+obligations now apply and are worth stating plainly: the images are written through
+`default_storage`, so they land in the encrypted S3 bucket in production, and **the URL is
+never returned to a handset** — the API answers `aadhar_front_captured` / `aadhar_back_captured`
+instead, because a Mait needs to know the step is done and a link to somebody's identity
+document has no business in an app's response cache. Registration and the upload are two calls,
+and only the upload is allowed to fail.
+
+Alongside them, a **Father / Husband radio** says which of the two `father_husband_name` is. The
+column has carried both since SAP; a record that cannot say which cannot tell a daughter from a
+wife, and in a village where the same names repeat that is two women in one row.
 | C6 | **Step 4 — Select animal** | ✅ · designed | *Which animal?* A Cow/Buffalo segmented control over the farmer's animals, each row led by **her photograph** where there is one and by a handle (`C1`, `C2`) where there is not, then her tag or `no tag`, and *Last AI 14 Mar 2026 · HF Cross* — because two untagged cows are told apart by a face, by when they were last served, and by nothing else the app holds. A dashed **Add an animal** card ends the list: a place for a record rather than another record. |
 | C6b | **Add an animal** | ✅ · designed | A sheet over C6, not a screen — registering is a detour from the list, handed straight back to it, so the question stays legible behind and the tab bar is not covered. Named for the farmer it will register against (*For Kavita Devi · MEM00000412*). Asks four things in the order a Mait can answer them by looking at the animal: cow or buffalo, her breed from a **dropdown** (the one closed list in the flow — twenty breed cards would bury the two fields under them), her ear tag *— optional*, and **a photograph**. The photo is the point: most animals here carry no tag, and next visit the row shows her face. Registration and the upload are two calls, and only the photo is allowed to fail. |
 | C7 | **Step 5 — Which breed** | ✅ · designed | *Which breed?* The straw's breed, asked before its number, so a Mait carrying unnumbered stock in two breeds is asked a question instead of refused one. **Opens already answered with the animal's own breed**, where the flask holds it — like to like is the ordinary case, so agreeing costs one tap and every other breed is still one tap away. Rows carry `18 straws with you`, a `Low` pill under five, and every configured breed the flask is empty of shown **blocked** with `None in your stock` — never hidden. Most-carried first. |

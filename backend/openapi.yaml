@@ -2519,6 +2519,42 @@ paths:
               schema:
                 $ref: '#/components/schemas/NonMemberDetail'
           description: ''
+  /api/v1/non-members/{id}/aadhaar/:
+    patch:
+      operationId: non_members_aadhaar_partial_update
+      description: |-
+        Multipart: `front`, `back`, or both. Photographed at registration, as evidence behind the number that was typed.
+
+        Separate from registration rather than part of it, like an animal's portrait: the record must survive a village connection dropping a JPEG, because the flow is standing on her id by then and losing it costs the whole form again.
+
+        The stored URLs are never returned. The response says whether each face is on file — `aadhar_front_captured` and `aadhar_back_captured` — because a Mait needs to know the step is done and a link to somebody's identity card has no business in a handset's cache.
+      summary: Attach her Aadhaar card
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this non member.
+        required: true
+      tags:
+      - master-data
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNonMemberAadhaarRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNonMemberAadhaarRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NonMember'
+          description: ''
   /api/v1/payments/{ai_event_id}/:
     get:
       operationId: payments_retrieve
@@ -3208,6 +3244,9 @@ components:
       description: |-
         * `COW` - Cow
         * `BUFF` - Buffalo
+    BlankEnum:
+      enum:
+      - ''
     BreedConfig:
       type: object
       description: |-
@@ -4443,6 +4482,15 @@ components:
         father_husband_name:
           type: string
           maxLength: 150
+        relation:
+          description: |-
+            Whether father_husband_name is her father or her husband.
+
+            * `father` - Father
+            * `husband` - Husband
+          oneOf:
+          - $ref: '#/components/schemas/RelationEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         mobile_no:
           type: string
           pattern: ^[6-9]\d{9}$
@@ -4452,6 +4500,12 @@ components:
           maxLength: 255
         masked_aadhar:
           type: string
+          readOnly: true
+        aadhar_front_captured:
+          type: boolean
+          readOnly: true
+        aadhar_back_captured:
+          type: boolean
           readOnly: true
         mpp:
           type: integer
@@ -4470,6 +4524,8 @@ components:
           format: date-time
           readOnly: true
       required:
+      - aadhar_back_captured
+      - aadhar_front_captured
       - consent_captured_at
       - created_at
       - created_by_mait
@@ -4496,6 +4552,15 @@ components:
         father_husband_name:
           type: string
           maxLength: 150
+        relation:
+          description: |-
+            Whether father_husband_name is her father or her husband.
+
+            * `father` - Father
+            * `husband` - Husband
+          oneOf:
+          - $ref: '#/components/schemas/RelationEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         mobile_no:
           type: string
           pattern: ^[6-9]\d{9}$
@@ -4505,6 +4570,12 @@ components:
           maxLength: 255
         masked_aadhar:
           type: string
+          readOnly: true
+        aadhar_front_captured:
+          type: boolean
+          readOnly: true
+        aadhar_back_captured:
+          type: boolean
           readOnly: true
         mpp:
           type: integer
@@ -4528,6 +4599,8 @@ components:
             $ref: '#/components/schemas/Animal'
           readOnly: true
       required:
+      - aadhar_back_captured
+      - aadhar_front_captured
       - animals
       - consent_captured_at
       - created_at
@@ -4549,6 +4622,15 @@ components:
         father_husband_name:
           type: string
           maxLength: 150
+        relation:
+          description: |-
+            Whether father_husband_name is her father or her husband.
+
+            * `father` - Father
+            * `husband` - Husband
+          oneOf:
+          - $ref: '#/components/schemas/RelationEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         mobile_no:
           type: string
           minLength: 1
@@ -5078,6 +5160,25 @@ components:
             maxLength: 15
           description: The complete set this Mait covers. An empty list clears their
             coverage.
+    PatchedNonMemberAadhaarRequest:
+      type: object
+      description: |-
+        Both faces of her Aadhaar card, photographed at registration.
+
+        Sent after the record exists rather than as part of creating it, the same way an animal's
+        portrait and a proof photo are. A registration that has already succeeded must not be
+        undone by a village connection dropping a JPEG — the flow is standing on her id by then,
+        and losing it costs the Mait the whole form again with the farmer waiting.
+
+        Either face may be sent alone, so a retry only re-sends what failed, but at least one must
+        be present: an empty request is a Mait who thinks they have uploaded something.
+      properties:
+        front:
+          type: string
+          format: binary
+        back:
+          type: string
+          format: binary
     Payment:
       type: object
       description: Read shape for one payment.
@@ -5242,6 +5343,14 @@ components:
         * `indent` - Indent
         * `ai_event` - AI event
         * `manual` - Manual adjustment
+    RelationEnum:
+      enum:
+      - father
+      - husband
+      type: string
+      description: |-
+        * `father` - Father
+        * `husband` - Husband
     Role412Enum:
       enum:
       - super_admin

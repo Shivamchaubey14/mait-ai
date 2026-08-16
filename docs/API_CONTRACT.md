@@ -95,6 +95,7 @@ would lock a working Mait out of the app.
 | GET | `/members/` | Search members (by mpp, mobile, member_code, name) | JWT |
 | GET | `/members/{member_code}/` | Member detail incl. animals | JWT |
 | POST | `/non-members/` | Register a new non-member on the fly | Mait |
+| PATCH | `/non-members/{id}/aadhaar/` | Attach the front and/or back of her Aadhaar card | Mait |
 | GET | `/non-members/{id}/` | Non-member detail | JWT |
 | POST | `/farmers/otp/send/` | Send a verification code to a farmer, before the capture proceeds | Mait |
 | POST | `/farmers/otp/verify/` | Check the code she read out | Mait |
@@ -111,6 +112,19 @@ registered at that MPP on that number comes back under `mobile_no`, naming her, 
 as DRF's own `non_field_errors` uniqueness message. That key had no box on any screen, so the
 app filed it and drew nothing — and the Mait's tap on **Save & continue** was indistinguishable
 from a dead button.
+
+**One Aadhaar, one farmer.** `aadhar_no` is refused if it is already on the membership roll
+*or* already registered to another non-member. The second half of that was open: uniqueness on
+the table was mobile-per-MPP only, so the same card went in again on a different number, or at
+a second MPP, and every copy is a farmer who can be charged twice. Both are matched on the
+keyed fingerprint, never on the encrypted column.
+
+**The card is photographed, and its images never come back.** `PATCH .../aadhaar/` takes
+`front`, `back`, or both, as multipart — either alone, so a retry re-sends only what failed.
+It is a second call rather than part of registration, like an animal's portrait: the farmer
+must be on file even if a village connection drops a JPEG, because the capture flow is standing
+on her id by then. The response reports `aadhar_front_captured` and `aadhar_back_captured`
+booleans; the stored URLs are never serialised to a handset.
 
 **The farmer's number is never in the request.** Both calls name her by `member_code` *or*
 `non_member_id`, and the server reads the destination off her record. A Mait who could
