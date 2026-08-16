@@ -30,7 +30,7 @@ import {
   yolk,
 } from '@theme/tokens';
 
-import AnimalCamera from './AnimalCamera';
+import FlowCamera from './FlowCamera';
 import { Dropdown, FlowNotice, LabelledField, Segmented, useKeyboardOverlap } from './components';
 
 const ANIMAL_TYPES: AnimalTypeCode[] = ['COW', 'BUFF'];
@@ -94,7 +94,10 @@ export default function AddAnimalSheet({
 
   if (camera) {
     return (
-      <AnimalCamera
+      <FlowCamera
+        instruction={t('aiFlow.frameTheAnimal')}
+        permissionBody={t('aiFlow.animalPhotoBody')}
+        testIDPrefix="animal-camera"
         onCaptured={uri => {
           setPhotoUri(uri);
           setCamera(false);

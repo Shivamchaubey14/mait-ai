@@ -14,6 +14,32 @@ import type { MPP } from '@api/types';
 import { jsonResponse, renderWithStore } from '@/test-utils';
 
 /**
+ * The camera, reduced to the one thing this screen cares about: a photo came back.
+ *
+ * Framing a card is `FlowCamera`'s job and is tested nowhere near here. What matters on this
+ * form is that both faces gate the button and both are sent.
+ */
+jest.mock('../FlowCamera', () => {
+  const Actual = jest.requireActual('react');
+  const { Pressable, Text } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: ({
+      testIDPrefix,
+      onCaptured,
+    }: {
+      testIDPrefix: string;
+      onCaptured: (uri: string) => void;
+    }) =>
+      Actual.createElement(
+        Pressable,
+        { testID: `${testIDPrefix}-stub`, onPress: () => onCaptured(`file:///${testIDPrefix}.jpg`) },
+        Actual.createElement(Text, null, 'capture'),
+      ),
+  };
+});
+
+/**
  * A field-level validation failure, shaped the way the API sends one (SRS §9.11).
  *
  * Built here rather than with the shared `problemResponse` helper because this test needs a
@@ -72,12 +98,29 @@ function render(overrides: Partial<React.ComponentProps<typeof AddNonMemberScree
   );
 }
 
+/** Photograph one face of the card, through the stubbed camera. */
+function captureFace(face: 'front' | 'back') {
+  fireEvent.press(screen.getByTestId(`non-member-aadhaar-${face}`));
+  fireEvent.press(screen.getByTestId(`aadhaar-camera-${face}-stub`));
+}
+
 /** Fills everything the form needs except whatever the test is about. */
-function fillForm({ aadhaar = '123456789012' }: { aadhaar?: string } = {}) {
+function fillForm({
+  aadhaar = '123456789012',
+  relation = 'husband' as 'father' | 'husband' | '',
+  cards = true,
+}: { aadhaar?: string; relation?: 'father' | 'husband' | ''; cards?: boolean } = {}) {
   fireEvent.changeText(screen.getByTestId('non-member-name'), 'Radha Singh');
   fireEvent.changeText(screen.getByTestId('non-member-mobile'), '9876543210');
   if (aadhaar) {
     fireEvent.changeText(screen.getByTestId('non-member-aadhaar'), aadhaar);
+  }
+  if (relation) {
+    fireEvent.press(screen.getByTestId(`non-member-relation-${relation}`));
+  }
+  if (cards) {
+    captureFace('front');
+    captureFace('back');
   }
   fireEvent.press(screen.getByTestId('non-member-consent'));
 }
@@ -108,6 +151,27 @@ describe('AddNonMemberScreen', () => {
     fireEvent.changeText(screen.getByTestId('non-member-name'), 'Radha Singh');
     fireEvent.changeText(screen.getByTestId('non-member-mobile'), '9876543210');
     fireEvent.changeText(screen.getByTestId('non-member-aadhaar'), '123456789012');
+    fireEvent.press(screen.getByTestId('non-member-relation-husband'));
+    captureFace('front');
+    captureFace('back');
+    expect(screen.getByTestId('non-member-save')).toBeDisabled();
+  });
+
+  it('will not save without saying whose name that is', () => {
+    // The column has held both a father's and a husband's name since SAP. A record that
+    // cannot say which cannot tell a daughter from a wife, and in a village where the same
+    // names repeat that is two women collapsed into one row.
+    render();
+    fillForm({ relation: '' });
+    expect(screen.getByTestId('non-member-save')).toBeDisabled();
+  });
+
+  it('will not save on only one face of the card', () => {
+    // An optional evidence field is one that is always skipped, and half a card proves half
+    // of nothing.
+    render();
+    fillForm({ cards: false });
+    captureFace('front');
     expect(screen.getByTestId('non-member-save')).toBeDisabled();
   });
 
@@ -183,5 +247,49 @@ describe('AddNonMemberScreen', () => {
     fireEvent.press(screen.getByTestId('non-member-save'));
 
     await waitFor(() => expect(screen.getByTestId('non-member-error')).toBeTruthy());
+  });
+
+  it('sends whose name it is, so a wife is not filed as a daughter', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(jsonResponse({ id: 5 }, 201));
+    render();
+    fillForm({ relation: 'father' });
+
+    fireEvent.press(screen.getByTestId('non-member-save'));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(await requestBody(0)).toMatchObject({ relation: 'father' });
+  });
+
+  it('sends both faces of the card once she exists', async () => {
+    // Two calls, in order: the registration, then the images against the id it returned.
+    // The card cannot be sent first — there is nothing to attach it to.
+    (global.fetch as jest.Mock).mockResolvedValue(jsonResponse({ id: 5 }, 201));
+    render();
+    fillForm();
+
+    fireEvent.press(screen.getByTestId('non-member-save'));
+
+    await waitFor(() => expect((global.fetch as jest.Mock).mock.calls.length).toBe(2));
+    const [input] = (global.fetch as jest.Mock).mock.calls[1];
+    const url = typeof input === 'string' ? input : input.url;
+    expect(url).toContain('/non-members/5/aadhaar/');
+  });
+
+  it('goes on when the card upload fails, because she is already registered', async () => {
+    // The record is what the flow is standing on. Sending a Mait back to re-enter five fields
+    // and re-photograph a document because a village dropped a JPEG would cost more than the
+    // images are worth — they can be retried, the form cannot.
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(jsonResponse({ id: 5, name: 'Radha Singh' }, 201))
+      .mockRejectedValueOnce(new TypeError('Network request failed'));
+
+    const onCreated = jest.fn();
+    render({ onCreated });
+    fillForm();
+
+    fireEvent.press(screen.getByTestId('non-member-save'));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(onCreated.mock.calls[0][0]).toMatchObject({ id: 5 });
   });
 });

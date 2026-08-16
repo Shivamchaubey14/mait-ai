@@ -26,6 +26,27 @@ import { loggedIn } from '@/features/auth/authSlice';
 import type { AuthUser } from '@/features/auth/authSlice';
 import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
 
+/** Both cameras in the flow, reduced to "a photo came back". */
+jest.mock('@/features/aiFlow/FlowCamera', () => {
+  const Actual = jest.requireActual('react');
+  const { Pressable: P, Text: T } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: ({
+      testIDPrefix,
+      onCaptured,
+    }: {
+      testIDPrefix: string;
+      onCaptured: (uri: string) => void;
+    }) =>
+      Actual.createElement(
+        P,
+        { testID: `${testIDPrefix}-stub`, onPress: () => onCaptured(`file:///${testIDPrefix}.jpg`) },
+        Actual.createElement(T, null, 'capture'),
+      ),
+  };
+});
+
 jest.mock('@/features/aiFlow/CapturePhotoScreen', () => {
   const { Pressable: P, Text: T } = jest.requireActual('react-native');
   const Actual = jest.requireActual('react');
@@ -118,6 +139,9 @@ function mockApi() {
     if (url.includes('/non-members/') && method === 'POST') {
       return jsonResponse({ id: 7, name: 'Radha Singh', mobile_no: '9876543210' }, 201);
     }
+    if (url.includes('/aadhaar/')) {
+      return jsonResponse({ id: 7, aadhar_front_captured: true, aadhar_back_captured: true });
+    }
     if (url.includes('/non-members/')) {
       return jsonResponse({
         id: 7,
@@ -177,6 +201,11 @@ async function walkToThePhoto() {
   fireEvent.changeText(await screen.findByTestId('non-member-name'), 'Radha Singh');
   fireEvent.changeText(screen.getByTestId('non-member-mobile'), '9876543210');
   fireEvent.changeText(screen.getByTestId('non-member-aadhaar'), '123456789012');
+  fireEvent.press(screen.getByTestId('non-member-relation-husband'));
+  for (const face of ['front', 'back'] as const) {
+    fireEvent.press(screen.getByTestId(`non-member-aadhaar-${face}`));
+    fireEvent.press(screen.getByTestId(`aadhaar-camera-${face}-stub`));
+  }
   fireEvent.press(screen.getByTestId('non-member-consent'));
   fireEvent.press(screen.getByTestId('non-member-save'));
 

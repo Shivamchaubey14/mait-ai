@@ -82,14 +82,26 @@ export interface MemberDetail extends Member {
   animals: Animal[];
 }
 
+/** Whose name `father_husband_name` is. Blank on rows registered before it was asked. */
+export type Relation = 'father' | 'husband';
+
 export interface NonMember {
   id: number;
   name: string;
   father_husband_name: string;
+  relation: Relation | '';
   mobile_no: string;
   address: string;
   /** Read-only and masked (SRS §16). The raw number never comes back to the handset. */
   masked_aadhar: string;
+  /**
+   * Whether each face of her Aadhaar card is on file — never where it is.
+   *
+   * The images are identity documents. The app is told the step is done; a URL to one has no
+   * business in a handset's response cache.
+   */
+  aadhar_front_captured: boolean;
+  aadhar_back_captured: boolean;
   mpp: number;
   created_by_mait: number;
   created_at: string;
@@ -107,6 +119,8 @@ export interface FarmerOtpSent {
 export interface NonMemberDraft {
   name: string;
   father_husband_name?: string;
+  /** Which of the two that name is — a Mait standing in front of her knows. */
+  relation?: Relation;
   mobile_no: string;
   address?: string;
   /** Twelve digits, or omitted. Write-only — the server stores it encrypted. */
@@ -119,6 +133,12 @@ export interface NonMemberDraft {
    * record, and the record is what SRS §7 asks for.
    */
   consent?: boolean;
+}
+
+/** Both faces of the card, or whichever of them still needs sending after a failed try. */
+export interface AadhaarImages {
+  front?: string | null;
+  back?: string | null;
 }
 
 /** Non-member detail carries the animals already registered to them (SRS §6.3 step 3). */

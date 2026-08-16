@@ -14,6 +14,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -607,6 +608,130 @@ export function Segmented<T extends string>({
         );
       })}
     </View>
+  );
+}
+
+// --------------------------------------------------------------------------------------
+// Radio group
+// --------------------------------------------------------------------------------------
+/**
+ * A one-of-N choice as radio buttons on one line, under the field it qualifies.
+ *
+ * `Segmented` answers a question that stands on its own — cow or buffalo, before a list. This
+ * answers one *about the box above it*: whose name that is. A segmented control there would
+ * read as a filter on the field rather than a property of it, and it always carries a value,
+ * which would mean guessing between a father and a husband on a form where nobody has said.
+ *
+ * So it starts unanswered, and each option is a real radio: a ring that fills. At arm's length
+ * in sunlight an empty circle and a filled one are the same circle, which is why the chosen
+ * one takes a tick and the label goes to the strong face.
+ */
+export function RadioGroup<T extends string>({
+  options,
+  value,
+  onChange,
+  testID,
+}: {
+  options: { value: T; label: string }[];
+  value: T | null;
+  onChange: (next: T) => void;
+  /** Suffixed with the option value, so each choice is addressable in tests. */
+  testID?: string;
+}): React.JSX.Element {
+  return (
+    <View style={styles.radioRow}>
+      {options.map(option => {
+        const active = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: active }}
+            accessibilityLabel={option.label}
+            onPress={() => onChange(option.value)}
+            style={({ pressed }) => [
+              styles.radioOption,
+              active && styles.radioOptionOn,
+              pressed && !active && styles.cardPressed,
+            ]}
+            testID={testID ? `${testID}-${option.value}` : undefined}
+          >
+            <View style={[styles.radio, active && styles.radioOn]}>
+              {active && <Ionicons name="checkmark" size={14} color={colors.surface} />}
+            </View>
+            <Text
+              style={[styles.radioLabel, active && styles.radioLabelOn]}
+              numberOfLines={1}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// --------------------------------------------------------------------------------------
+// Capture tile
+// --------------------------------------------------------------------------------------
+/**
+ * A slot for a photograph that has to be taken, drawn as the space it will fill.
+ *
+ * Dashed and empty until there is one, then the shot itself with a tick over it — the same
+ * language as the add card and the animal portrait, so a Mait who has met one has met all
+ * three. Pairs side by side, because the two faces of a card are one job and splitting them
+ * down the page makes the second look optional.
+ */
+export function CaptureTile({
+  label,
+  hint,
+  uri,
+  onPress,
+  testID,
+}: {
+  label: string;
+  hint: string;
+  /** The photo taken for this slot, or null while it is still a space. */
+  uri: string | null;
+  onPress: () => void;
+  testID?: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: !!uri }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.capture,
+        !!uri && styles.captureFilled,
+        pressed && styles.cardPressed,
+      ]}
+      testID={testID}
+    >
+      {uri ? (
+        <>
+          <Image source={{ uri }} style={styles.captureShot} resizeMode="cover" />
+          <View style={styles.captureTick}>
+            <Ionicons name="checkmark" size={14} color={colors.surface} />
+          </View>
+        </>
+      ) : (
+        <View style={styles.captureEmpty}>
+          <Ionicons name="camera-outline" size={22} color={colors.textMuted} />
+        </View>
+      )}
+
+      <Text style={styles.captureLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={styles.captureHint} numberOfLines={1}>
+        {uri ? t('aiFlow.retake') : hint}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -1474,6 +1599,64 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioOn: { borderColor: colors.primary, backgroundColor: colors.primary },
+
+  // Two options sharing a line, each its own touch target. The gap is the flow's, so the pair
+  // sits on the same rhythm as the fields above and below it.
+  radioRow: { flexDirection: 'row', gap: spacing[3], marginBottom: spacing[4] },
+  radioOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: spacing[4],
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+  },
+  radioOptionOn: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
+  radioLabel: { ...typography.body, color: colors.text, flexShrink: 1 },
+  radioLabelOn: { ...typography.bodyStrong, color: colors.primaryDark },
+
+  // A slot the height of the card it will hold, so the form does not jump when one is taken.
+  capture: {
+    flex: 1,
+    alignItems: 'center',
+    padding: spacing[3],
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.textDisabled,
+    borderRadius: radius.lg,
+  },
+  captureFilled: {
+    borderStyle: 'solid',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryWash,
+  },
+  captureEmpty: {
+    width: '100%',
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+  },
+  captureShot: { width: '100%', height: 72, borderRadius: radius.md },
+  captureTick: {
+    position: 'absolute',
+    top: spacing[2],
+    right: spacing[2],
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  captureLabel: { ...typography.bodyStrong, color: colors.ink, marginTop: spacing[2] },
+  captureHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
 
   // Bigger than the radio's tick and with no ring behind it, because it is only ever drawn
   // on the row that won.

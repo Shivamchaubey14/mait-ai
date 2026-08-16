@@ -7,6 +7,7 @@
 
 import { api, idempotencyHeaders } from './client';
 import type {
+  AadhaarImages,
   AIEvent,
   AIEventDraft,
   Animal,
@@ -107,6 +108,38 @@ export const maitaiApi = api.injectEndpoints({
     getNonMember: builder.query<NonMemberDetail, number>({
       query: id => `/non-members/${id}/`,
       providesTags: ['Member', 'Animal'],
+    }),
+
+    /**
+     * Both faces of her Aadhaar card, sent once the record exists.
+     *
+     * A second call rather than part of the registration, for the same reason the animal's
+     * portrait is: the farmer must be on file even if the upload dies on a village
+     * connection. Losing the images costs a retry; losing the registration costs the whole
+     * form again with her standing there.
+     *
+     * Either face may be sent alone, so a retry re-sends only what failed.
+     */
+    uploadNonMemberAadhaar: builder.mutation<NonMember, { id: number } & AadhaarImages>({
+      query: ({ id, front, back }) => {
+        const form = new FormData();
+        if (front) {
+          form.append('front', {
+            uri: front,
+            name: 'aadhaar-front.jpg',
+            type: 'image/jpeg',
+          } as unknown as Blob);
+        }
+        if (back) {
+          form.append('back', {
+            uri: back,
+            name: 'aadhaar-back.jpg',
+            type: 'image/jpeg',
+          } as unknown as Blob);
+        }
+        return { url: `/non-members/${id}/aadhaar/`, method: 'PATCH', body: form };
+      },
+      invalidatesTags: ['Member'],
     }),
 
     // ---- animals -------------------------------------------------------------------
@@ -286,6 +319,7 @@ export const {
   useListMembersQuery,
   useGetMemberQuery,
   useCreateNonMemberMutation,
+  useUploadNonMemberAadhaarMutation,
   useGetNonMemberQuery,
   useListBreedsQuery,
   useCreateAnimalMutation,

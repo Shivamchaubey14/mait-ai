@@ -10,24 +10,40 @@
  * collected outside the SAP membership process, so "they probably agreed" is not a record.
  *
  * Aadhaar is mandatory here and nowhere else in the app, and it is not being collected to
- * describe her. The server matches it against the membership roll before creating anything,
- * because this is the one screen in the product that ends with a Mait asking a farmer for
- * cash — and a member recorded as a non-member is a farmer paying twice for a service her
- * milk payment has already covered. She has no reason to query it: she was asked, and she
- * paid. The match is done on a keyed fingerprint server-side; the app never holds a member
- * list to search, and the number never comes back to the handset.
+ * describe her. The server matches it against the membership roll — and against every
+ * non-member already on file — before creating anything, because this is the one screen in
+ * the product that ends with a Mait asking a farmer for cash. A member recorded as a
+ * non-member is a farmer paying twice for a service her milk payment has already covered, and
+ * a non-member registered twice is one who can be charged twice. She has no reason to query
+ * either: she was asked, and she paid. The match is done on a keyed fingerprint server-side;
+ * the app never holds a roster to search, and the number never comes back to the handset.
+ *
+ * Both faces of the card are photographed, as the evidence behind the number that was typed.
+ * They are uploaded after the record exists rather than with it, so a village connection
+ * dropping a JPEG costs a retry and not the whole form — and they are never read back to the
+ * handset, which is told only that each face is on file.
  */
 
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { useCreateNonMemberMutation } from '@api/endpoints';
+import { useCreateNonMemberMutation, useUploadNonMemberAadhaarMutation } from '@api/endpoints';
 import { splitRejection } from '@api/problem';
-import type { MPP, NonMember } from '@api/types';
-import { colors, typography } from '@theme/tokens';
+import type { MPP, NonMember, Relation } from '@api/types';
+import { colors, spacing, typography } from '@theme/tokens';
 
-import { CheckboxRow, FlowNotice, FlowScreen, FlowSpacer, LabelledField } from './components';
+import FlowCamera from './FlowCamera';
+import {
+  CaptureTile,
+  CheckboxRow,
+  FlowLabel,
+  FlowNotice,
+  FlowScreen,
+  FlowSpacer,
+  LabelledField,
+  RadioGroup,
+} from './components';
 
 interface Props {
   mpp: MPP;
@@ -42,7 +58,17 @@ interface Props {
  * it beside the fields rather than inferring it means adding a field without adding it here
  * fails loudly, not silently.
  */
-const OWNED_FIELDS = ['name', 'father_husband_name', 'mobile_no', 'address', 'aadhar_no'];
+const OWNED_FIELDS = [
+  'name',
+  'father_husband_name',
+  'relation',
+  'mobile_no',
+  'address',
+  'aadhar_no',
+];
+
+/** Which face of the card the camera is open for, or null when it is closed. */
+type Face = 'front' | 'back';
 
 /** 4+4+4, the way it is printed on the card and read aloud from it. */
 function formatAadhaar(digits: string): string {
@@ -56,6 +82,12 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
   const [mobileNo, setMobileNo] = useState('');
   const [address, setAddress] = useState('');
   const [aadhaar, setAadhaar] = useState('');
+  /** Unanswered until the Mait says. Nobody should guess between a father and a husband. */
+  const [relation, setRelation] = useState<Relation | null>(null);
+  /** Where the camera wrote each face of the card. */
+  const [front, setFront] = useState<string | null>(null);
+  const [back, setBack] = useState<string | null>(null);
+  const [camera, setCamera] = useState<Face | null>(null);
   const [consent, setConsent] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   /** Whatever the refusal said that no box on this form can carry. */
@@ -70,12 +102,26 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
   }, [brand, t]);
 
   const [createNonMember, { isLoading }] = useCreateNonMemberMutation();
+  const [uploadAadhaar, { isLoading: uploading }] = useUploadNonMemberAadhaarMutation();
 
   const isValidMobile = /^[6-9]\d{9}$/.test(mobileNo);
   // Aadhaar is required here and nowhere else in the app. It is what the server checks against
   // the membership roll, and without it the non-member path would be a way to bill a member
   // in cash for a service her milk payment has already covered.
-  const canSubmit = name.trim().length >= 2 && isValidMobile && aadhaar.length === 12 && consent;
+  //
+  // Both faces of the card are required with it. An optional evidence field is one that is
+  // always skipped, and a number with no card behind it is exactly the row nobody can settle
+  // an argument with six months later. The relation is required for the same reason it was
+  // added: "Sunita w/o Ram" and "Sunita d/o Ram" are two women, and a blank says which is
+  // neither.
+  const canSubmit =
+    name.trim().length >= 2 &&
+    isValidMobile &&
+    aadhaar.length === 12 &&
+    !!relation &&
+    !!front &&
+    !!back &&
+    consent;
 
   const handleSubmit = async () => {
     setRefusal(null);
@@ -84,6 +130,7 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
       const created = await createNonMember({
         name: name.trim(),
         father_husband_name: fatherHusband.trim(),
+        ...(relation ? { relation } : {}),
         mobile_no: mobileNo,
         address: address.trim(),
         aadhar_no: aadhaar,
@@ -93,6 +140,16 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
         // button is not a record of anything (SRS §7 Compliance).
         consent: true,
       }).unwrap();
+
+      // She exists now. The card follows, and is allowed to fail: sending the Mait back to
+      // re-enter five fields and re-photograph a document because a village dropped a JPEG
+      // would be a worse answer than a record whose images can be retried from her detail.
+      try {
+        await uploadAadhaar({ id: created.id, front, back }).unwrap();
+      } catch {
+        // Deliberately swallowed — see above. The record is what the flow needs to go on.
+      }
+
       onCreated(created);
     } catch (err) {
       // Server-side validation is the authority; surface its per-field messages rather than
@@ -104,6 +161,24 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
     }
   };
 
+  if (camera) {
+    return (
+      <FlowCamera
+        instruction={
+          camera === 'front' ? t('aiFlow.frameCardFront') : t('aiFlow.frameCardBack')
+        }
+        permissionBody={t('aiFlow.aadhaarPhotoBody')}
+        guide="card"
+        testIDPrefix={`aadhaar-camera-${camera}`}
+        onCaptured={uri => {
+          (camera === 'front' ? setFront : setBack)(uri);
+          setCamera(null);
+        }}
+        onCancel={() => setCamera(null)}
+      />
+    );
+  }
+
   return (
     <FlowScreen
       step={2}
@@ -114,7 +189,7 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
         label: t('aiFlow.saveAndContinue'),
         onPress: handleSubmit,
         disabled: !canSubmit,
-        busy: isLoading,
+        busy: isLoading || uploading,
         testID: 'non-member-save',
       }}
       /* In the footer, not at the top of the body. This form is five fields and a consent
@@ -153,6 +228,22 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
         testID="non-member-father-husband"
       />
 
+      {/* Whose name that was. Asked here rather than folded into the label, because the
+          column it fills has held both since SAP, and a record that cannot say which is a
+          record that cannot tell a daughter from a wife. */}
+      <RadioGroup
+        options={[
+          { value: 'father', label: t('aiFlow.relationFather') },
+          { value: 'husband', label: t('aiFlow.relationHusband') },
+        ]}
+        value={relation}
+        onChange={setRelation}
+        testID="non-member-relation"
+      />
+      {!!fieldErrors.relation?.[0] && (
+        <Text style={styles.relationError}>{fieldErrors.relation[0]}</Text>
+      )}
+
       <LabelledField
         label={t('auth.mobileNumber')}
         tone="info"
@@ -179,8 +270,9 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
       />
 
       {/* Required, and it is the only field here that is doing more than describing her: the
-          server checks it against the membership roll before creating anything. The number is
-          stored encrypted and comes back masked; the card itself is never photographed. */}
+          server checks it against the membership roll, and against every non-member already
+          registered, before creating anything. The number is stored encrypted and comes back
+          masked — it never returns to the handset in full. */}
       <LabelledField
         label={t('aiFlow.aadhaar')}
         tone="info"
@@ -194,6 +286,27 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
         maxLength={14} // twelve digits plus two grouping spaces
         testID="non-member-aadhaar"
       />
+
+      {/* The card behind the number. Both faces, side by side, because they are one job —
+          stacked down the page the second one reads as an afterthought and gets skipped. */}
+      <FlowLabel>{t('aiFlow.aadhaarCard')}</FlowLabel>
+      <View style={styles.cards}>
+        <CaptureTile
+          label={t('aiFlow.cardFront')}
+          hint={t('aiFlow.tapToPhotograph')}
+          uri={front}
+          onPress={() => setCamera('front')}
+          testID="non-member-aadhaar-front"
+        />
+        <CaptureTile
+          label={t('aiFlow.cardBack')}
+          hint={t('aiFlow.tapToPhotograph')}
+          uri={back}
+          onPress={() => setCamera('back')}
+          testID="non-member-aadhaar-back"
+        />
+      </View>
+      <Text style={styles.cardsHint}>{t('aiFlow.aadhaarCardHint')}</Text>
 
       <CheckboxRow
         checked={consent}
@@ -217,4 +330,20 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
 const styles = StyleSheet.create({
   consent: { ...typography.body, color: colors.info },
   consentBrand: { color: colors.primaryDark, fontFamily: typography.bodyStrong.fontFamily },
+
+  cards: { flexDirection: 'row', gap: spacing[3] },
+  cardsHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing[2],
+    marginBottom: spacing[4],
+  },
+  // The radio pair carries its own bottom margin, so this sits against it rather than under
+  // a gap that would read as the message belonging to the field below.
+  relationError: {
+    ...typography.caption,
+    color: colors.error,
+    marginTop: -spacing[3],
+    marginBottom: spacing[4],
+  },
 });

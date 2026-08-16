@@ -1,13 +1,18 @@
 /**
- * A camera for the animal's portrait.
+ * The capture flow's full-screen camera, for the pictures that are not evidence.
  *
  * Not the proof-photo screen. That one burns in a GPS pin and a timestamp because it is
- * evidence of an insemination at a place and a time; this is a picture of a cow so the Mait
- * recognises her in six months. No pin, no clock, no permission dance if it can be helped —
- * the Mait is standing in front of the animal with the farmer waiting.
+ * evidence of an insemination at a place and a time. These are pictures taken so a record can
+ * be recognised later — a cow the Mait must know again in six months, an identity card behind
+ * a number that was typed. No pin, no clock, and no permission dance if it can be helped: the
+ * Mait is standing in front of the subject with the farmer waiting.
  *
  * Camera only, no gallery picker, for the same reason as everywhere else in the flow: a photo
- * chosen from a roll is a photo of an animal somewhere, once.
+ * chosen from a roll is a photo of something, somewhere, once.
+ *
+ * One component for both jobs because they differ only in what is said and what is drawn over
+ * the viewfinder. Two copies would drift, and the half that drifts is always the permission
+ * gate — the part that is hardest to reach in testing and worst to get wrong in a yard.
  */
 
 import React, { useRef, useState } from 'react';
@@ -19,13 +24,33 @@ import { useTranslation } from 'react-i18next';
 
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
-export default function AnimalCamera({
-  onCaptured,
-  onCancel,
-}: {
+interface Props {
+  /** The line over the viewfinder — what to point the camera at. */
+  instruction: string;
+  /** Why the camera is being asked for, on the permission gate. */
+  permissionBody: string;
+  /**
+   * A framing guide drawn over the viewfinder.
+   *
+   * `card` outlines an Aadhaar-shaped rectangle. A card photographed freehand comes out
+   * skewed, cropped or too far away to read, and the Mait cannot tell until somebody in an
+   * office tries to use it — by which time she has gone home.
+   */
+  guide?: 'card';
+  /** Prefixes every testID, so two cameras on one screen stay addressable. */
+  testIDPrefix: string;
   onCaptured: (uri: string) => void;
   onCancel: () => void;
-}): React.JSX.Element {
+}
+
+export default function FlowCamera({
+  instruction,
+  permissionBody,
+  guide,
+  testIDPrefix,
+  onCaptured,
+  onCancel,
+}: Props): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const camera = useRef<CameraView>(null);
@@ -41,8 +66,10 @@ export default function AnimalCamera({
     setTaking(true);
     try {
       const photo = await camera.current.takePictureAsync({
-        // Enough to recognise her, small enough to send on one bar of signal.
-        quality: 0.6,
+        // A card carries twelve digits that have to survive being read in an office, so it
+        // gets more than the portrait does — and still not so much that it cannot leave a
+        // handset on one bar of signal.
+        quality: guide === 'card' ? 0.8 : 0.6,
         skipProcessing: true,
       });
       if (photo) {
@@ -58,13 +85,13 @@ export default function AnimalCamera({
     return (
       <View style={[styles.root, styles.gate, { paddingTop: insets.top + spacing[5] }]}>
         <Text style={styles.gateTitle}>{t('aiFlow.cameraNeededTitle')}</Text>
-        <Text style={styles.gateBody}>{t('aiFlow.animalPhotoBody')}</Text>
+        <Text style={styles.gateBody}>{permissionBody}</Text>
 
         <Pressable
           accessibilityRole="button"
           onPress={requestPermission}
           style={styles.primary}
-          testID="animal-camera-allow"
+          testID={`${testIDPrefix}-allow`}
         >
           <Text style={styles.primaryLabel}>{t('aiFlow.allowCamera')}</Text>
         </Pressable>
@@ -72,7 +99,7 @@ export default function AnimalCamera({
           accessibilityRole="button"
           onPress={onCancel}
           style={styles.link}
-          testID="animal-camera-skip"
+          testID={`${testIDPrefix}-skip`}
         >
           <Text style={styles.linkLabel}>{t('common.cancel')}</Text>
         </Pressable>
@@ -84,13 +111,19 @@ export default function AnimalCamera({
   if (shot) {
     return (
       <View style={styles.root}>
-        <Image source={{ uri: shot }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        {/* `contain` for a card: cropping to fill is how a corner with the number on it goes
+            missing between the shot and the review. */}
+        <Image
+          source={{ uri: shot }}
+          style={StyleSheet.absoluteFill}
+          resizeMode={guide === 'card' ? 'contain' : 'cover'}
+        />
         <View style={[styles.controls, { paddingBottom: insets.bottom + spacing[5] }]}>
           <Pressable
             accessibilityRole="button"
             onPress={() => setShot(null)}
             style={styles.secondary}
-            testID="animal-camera-retake"
+            testID={`${testIDPrefix}-retake`}
           >
             <Text style={styles.secondaryLabel}>{t('aiFlow.retake')}</Text>
           </Pressable>
@@ -98,7 +131,7 @@ export default function AnimalCamera({
             accessibilityRole="button"
             onPress={() => onCaptured(shot)}
             style={styles.primary}
-            testID="animal-camera-use"
+            testID={`${testIDPrefix}-use`}
           >
             <Text style={styles.primaryLabel}>{t('aiFlow.usePhoto')}</Text>
           </Pressable>
@@ -114,8 +147,14 @@ export default function AnimalCamera({
         ref={camera}
         style={StyleSheet.absoluteFill}
         facing="back"
-        testID="animal-camera"
+        testID={`${testIDPrefix}-view`}
       />
+
+      {guide === 'card' && (
+        <View style={styles.guideLayer} pointerEvents="none">
+          <View style={styles.cardGuide} />
+        </View>
+      )}
 
       <View style={[styles.top, { paddingTop: insets.top + spacing[3] }]}>
         <Pressable
@@ -123,11 +162,11 @@ export default function AnimalCamera({
           accessibilityLabel={t('common.close')}
           onPress={onCancel}
           style={styles.close}
-          testID="animal-camera-close"
+          testID={`${testIDPrefix}-close`}
         >
           <Ionicons name="close" size={20} color={colors.surface} />
         </Pressable>
-        <Text style={styles.instruction}>{t('aiFlow.frameTheAnimal')}</Text>
+        <Text style={styles.instruction}>{instruction}</Text>
       </View>
 
       <View style={[styles.controls, { paddingBottom: insets.bottom + spacing[5] }]}>
@@ -137,7 +176,7 @@ export default function AnimalCamera({
           onPress={take}
           disabled={taking}
           style={styles.shutter}
-          testID="animal-camera-shutter"
+          testID={`${testIDPrefix}-shutter`}
         >
           <View style={styles.shutterInner} />
         </Pressable>
@@ -159,6 +198,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing[5],
   },
 
+  // An outline, not a mask. A darkened surround would hide whether the Mait's thumb is over
+  // a corner of the card, which is the commonest way one of these comes out unusable.
+  guideLayer: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  cardGuide: {
+    width: '86%',
+    // 1.586:1, the ID-1 card the Aadhaar is printed on.
+    aspectRatio: 1.586,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    borderRadius: radius.md,
+    opacity: 0.85,
+  },
+
   top: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -173,7 +225,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
-  instruction: { ...typography.label, color: colors.surface },
+  instruction: { ...typography.label, color: colors.surface, flex: 1 },
 
   controls: {
     position: 'absolute',
