@@ -146,6 +146,12 @@ a:hover {
 .content {
   padding: var(--space-5);
   max-width: var(--content-max-width);
+  /* A grid item's `min-width` is `auto`, which means it refuses to be narrower than its widest
+     content — so a wide table pushed this column past the viewport and put a scrollbar under
+     the whole page, sidebar included. `.table-wrap` already scrolls a wide table inside
+     itself; it never got the chance, because the column it sits in had grown to fit. Every
+     screen with more columns than the window is wide was one page-width away from this. */
+  min-width: 0;
 }
 
 .topbar {
@@ -754,6 +760,20 @@ a:hover {
 .table__name {
   font-weight: 600;
   color: var(--color-ink);
+}
+
+/* A name that opens a record. `.table__code` is the green treatment for an identifier — an
+   event number, a straw — and a person's name set in green reads as a code rather than as a
+   name. This keeps the name looking like a name and lets the underline on hover be what says
+   it is a link, which is the one signal a row of plain text still needs. */
+.table__name--link {
+  color: var(--color-ink);
+}
+
+.table__name--link:hover,
+.table__name--link:focus-visible {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
 }
 
 .table__sub {

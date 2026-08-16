@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Non-members · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/portal.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="non-members">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Non-members</h1>
+            <p class="topbar__meta">
+              <span id="non-member-count">—</span> registered by Maits in the field
+            </p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- Members arrive from SAP already checked. These did not: a Mait typed the row in a
+             yard, and it is the one path in the product that ends with cash changing hands.
+             Said here rather than assumed, because it is why this screen exists at all. -->
+        <div class="notice">
+          <span class="notice__icon" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">These rows were entered in the field, not imported</p>
+            <p class="notice__body">
+              A non-member pays her Mait directly, so her Aadhaar and her consent are the whole
+              audit trail. Numbers are masked here; opening a record to view the card is logged
+              against your account.
+            </p>
+          </div>
+        </div>
+
+        <section class="tiles" aria-label="Summary">
+          <article class="tile" id="tile-total">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M3 5h18v14H3zM8.5 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4M5.5 16.5a3 3 0 0 1 6 0M14.5 10h4M14.5 13.5h3"
+                  />
+                </svg>
+              </span>
+              Registered
+            </p>
+            <p class="tile__value" id="total-value">—</p>
+            <p class="tile__foot">Across every MPP</p>
+          </article>
+
+          <article class="tile tile--bad" id="tile-no-card">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M9 9l6 6M15 9l-6 6" />
+                </svg>
+              </span>
+              Card missing
+            </p>
+            <p class="tile__value" id="no-card-value">—</p>
+            <p class="tile__foot tile__foot--bad" id="no-card-foot">Nothing to check against</p>
+          </article>
+
+          <article class="tile tile--warn" id="tile-no-consent">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3 2 20h20zM12 9v5M12 17.5v.5" />
+                </svg>
+              </span>
+              No consent on record
+            </p>
+            <p class="tile__value" id="no-consent-value">—</p>
+            <p class="tile__foot">Registered before it was captured</p>
+          </article>
+
+          <article class="tile tile--info">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M8 3h8v4H8zM5 7h14v14H5zM9 12h6M9 16h4" />
+                </svg>
+              </span>
+              Inseminations
+            </p>
+            <p class="tile__value" id="events-value">—</p>
+            <p class="tile__foot">Served on this page</p>
+          </article>
+        </section>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search her name, mobile or household"
+            aria-label="Search her name, mobile or household"
+          />
+          <select class="select" id="filter-mpp" aria-label="MPP">
+            <option value="">All MPPs</option>
+          </select>
+          <button class="chip chip--bad" id="filter-no-card" type="button" aria-pressed="false">
+            No card on file
+          </button>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Non-members">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Farmer</th>
+                  <th scope="col">Mobile</th>
+                  <th scope="col">MPP</th>
+                  <th scope="col">Registered by</th>
+                  <th class="table__num" scope="col">Animals</th>
+                  <th class="table__num" scope="col">AI</th>
+                  <th scope="col">Aadhaar</th>
+                  <th scope="col">Registered</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="8">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/controls.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/non-members.js"></script>
+  </body>
+</html>

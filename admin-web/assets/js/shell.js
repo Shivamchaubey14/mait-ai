@@ -29,6 +29,12 @@ window.MaitAI = window.MaitAI || {};
     assignments: 'M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11M12 10h.01',
     members:
       'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M3 20a6 6 0 0 1 12 0M17 11a3 3 0 1 0 0-6M21 20a6 6 0 0 0-4-5.6',
+    /* An identity card with a face on it. Members are a roster — two people — because they
+       arrive from SAP in their thousands. A non-member arrives one at a time, in a yard, and
+       what makes her a record at all is the card the Mait photographed: that is the honest
+       glyph for the section, and it cannot be mistaken for the two-person one above it. */
+    'non-members':
+      'M3 5h18v14H3zM8.5 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4M5.5 16.5a3 3 0 0 1 6 0M14.5 10h4M14.5 13.5h3',
     inventory: 'M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10',
     products: 'M4 6h16M4 12h16M4 18h10M18 16v5M15.5 18.5h5',
     /* A price tag: the one section that is about money rather than about things or people. */
@@ -63,6 +69,10 @@ window.MaitAI = window.MaitAI || {};
     { key: 'mpps', label: 'MPPs', href: 'mpps.html' },
     { key: 'assignments', label: 'Assignment', href: 'assignments.html' },
     { key: 'members', label: 'Members', href: 'members.html' },
+    // Directly under Members: they are the same question — who is this farmer — answered from
+    // two different rosters, and a Mait's field registrations belong beside the SAP master
+    // rather than filed among the operational screens further down.
+    { key: 'non-members', label: 'Non-members', href: 'non-members.html' },
     { key: 'inventory', label: 'Inventory', href: 'inventory.html' },
     { key: 'products', label: 'Products', href: 'products.html' },
     { key: 'rates', label: 'Rates', href: 'rates.html' },

@@ -473,6 +473,22 @@ window.MaitAI = window.MaitAI || {};
       return request({ path: '/members/', query: query });
     },
 
+    /**
+     * The farmers Maits registered in the field.
+     *
+     * `/admin/non-members/`, not the `/non-members/` the app uses: that one is scoped to the
+     * Mait who created the row, so an admin calling it gets a 403 and an empty screen. Pass
+     * `no_card: true` for the queue — the registrations with no Aadhaar image behind them.
+     */
+    nonMembers: function (query) {
+      return request({ path: '/admin/non-members/', query: query });
+    },
+
+    /** One of them, with her animals and the card images. The read is audit-logged. */
+    nonMember: function (id) {
+      return request({ path: '/admin/non-members/' + id + '/' });
+    },
+
     users: function (query) {
       return request({ path: '/admin/users/', query: query });
     },
