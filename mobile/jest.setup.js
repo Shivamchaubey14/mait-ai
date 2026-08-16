@@ -55,6 +55,25 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
+// The resize every captured photograph goes through (FlowCamera). Native, so it has to be
+// stubbed — and stubbed as a pass-through that returns a *different* uri, so a test can tell
+// the resized file from the one the camera handed back.
+jest.mock('expo-image-manipulator', () => {
+  const context = {
+    resize: jest.fn(() => context),
+    renderAsync: jest.fn(() =>
+      Promise.resolve({
+        saveAsync: jest.fn(() => Promise.resolve({ uri: 'file:///resized.jpg' })),
+      })
+    ),
+  };
+  return {
+    __esModule: true,
+    SaveFormat: { JPEG: 'jpeg' },
+    ImageManipulator: { manipulate: jest.fn(() => context) },
+  };
+});
+
 jest.mock('@react-native-community/netinfo', () => ({
   addEventListener: jest.fn(),
   // Tests default to "online". Offline behaviour is opt-in per test so a suite never

@@ -27,10 +27,16 @@ DEV_FIXED_OTP_CODE = env("DEV_FIXED_OTP_CODE", default="123456")
 # useless for development: a morning of testing the login screen exhausts it in minutes and
 # the app can only report that something went wrong. Loosened here and here only — base.py,
 # which staging and production inherit, is untouched.
+#
+# `login` is here for exactly the same reason, and was missed. 20 an hour is nothing once the
+# portal's own browser tests sign in per spec: the run starts failing on a 429 that reads, in
+# every screenshot, as the feature under test being broken rather than as the throttle doing
+# its job.
 REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     **REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"],
     "otp_send": env("DEV_OTP_SEND_RATE", default="100/hour"),
     "otp_verify": env("DEV_OTP_VERIFY_RATE", default="200/hour"),
+    "login": env("DEV_LOGIN_RATE", default="500/hour"),
 }
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
