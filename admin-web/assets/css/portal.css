@@ -628,79 +628,82 @@ a:hover {
   color: var(--color-error);
 }
 
-/* --- a panel whose head carries its colour -------------------------------------------------
-   `panel--warning` and `panel--error` wash the whole card, which is right for a queue card:
-   it is four lines long and the wash *is* the message. It is wrong for a panel holding a
-   table or a photograph — the table's own tinted head lands on a tint, and a photograph
-   judged against a coloured surround is a photograph judged wrong.
+/* --- a panel that carries its section's colour ----------------------------------------------
+   `panel--warning` and `panel--error` are the two states the dashboard shouts about. This is
+   the same idea generalised: a panel takes the tone of what it holds, in the same washes the
+   stat tiles use, so a tile and the panel under it are recognisably about the same thing.
 
-   So the head takes the colour and the body stays white, which is the same construction the
-   table already uses one level down: a tinted band that says what is underneath it. A column
-   of three white cards makes a reader parse three headings to find the one they want; a
-   column of three tinted bands is scanned.
+   A column of white cards makes a reader parse three headings to find the one they want. A
+   column of tinted cards is scanned, and the eye lands on the red one first — which is the
+   whole point on a screen where one panel is evidence and the others are description.
 
    The tone is never decoration. Neutral is a plain list, info is a statement of fact, and
    good / warn / bad are a state something is actually in. */
-.panel--tinted > .panel__head {
-  /* Out to the card's edges, over the padding `.panel` sets, and back again as its own. */
-  margin: calc(var(--space-4) * -1) calc(var(--space-4) * -1) var(--space-4);
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+.panel--tinted {
   background: var(--ink-50);
 }
 
-/* `.panel--flush` has no padding of its own — the table meets the card's edges — so there is
-   nothing to reach back over, and the head simply pads itself.
-
-   One step darker than `--ink-50` on purpose. A table's own head is already `--ink-50`, so a
-   neutral panel head at the same value sat directly on top of it and the two ran together as
-   one grey block with a column of labels floating in the middle of it. `--ink-100` puts a
-   visible step between "what this panel is" and "what these columns are". Toned heads do not
-   need it — a green or blue band never collides with the table's grey. */
-.panel--tinted.panel--flush > .panel__head {
-  margin: 0;
-  padding: var(--space-4);
-  background: var(--ink-100);
-}
-
-.panel--tinted.panel--flush.panel--info > .panel__head {
+.panel--tinted.panel--info {
   background: var(--color-info-wash);
+  border-color: var(--ink-100);
 }
 
-.panel--tinted.panel--flush.panel--good > .panel__head {
+/* `--green-100`, not `--color-primary-wash`, for the reason the green tile gives above: the
+   wash is paler than the neutral grey beside it, so a green card came out lighter than a grey
+   one and read as the card that had failed to load. */
+.panel--tinted.panel--good {
   background: var(--green-100);
+  border-color: var(--green-300);
 }
 
-.panel--tinted.panel--flush.panel--warn > .panel__head {
+.panel--tinted.panel--warn {
   background: var(--color-secondary-wash);
+  border-color: var(--yolk-200);
 }
 
-.panel--tinted.panel--flush.panel--bad > .panel__head {
+.panel--tinted.panel--bad {
   background: var(--color-error-wash);
+  border-color: var(--color-error);
+}
+
+/* The head keeps a rule under it. The card is one colour now, so without a separator the
+   title floats above its content with nothing saying where the heading stops. */
+.panel--tinted > .panel__head {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .panel--tinted.panel--info > .panel__head {
-  background: var(--color-info-wash);
   border-bottom-color: var(--ink-100);
 }
 
 .panel--tinted.panel--good > .panel__head {
-  background: var(--green-100);
   border-bottom-color: var(--green-300);
 }
 
 .panel--tinted.panel--warn > .panel__head {
-  background: var(--color-secondary-wash);
   border-bottom-color: var(--yolk-200);
 }
 
 .panel--tinted.panel--bad > .panel__head {
-  background: var(--color-error-wash);
   border-bottom-color: var(--color-error);
 }
 
-/* The chip stays white on the band and the glyph carries the colour — the same way round as a
+/* `.panel--flush` has no padding of its own — the table meets the card's edges — so the head
+   pads itself and the rule is the table's own top border. */
+.panel--tinted.panel--flush > .panel__head {
+  margin-bottom: 0;
+  padding: var(--space-4);
+}
+
+/* A table's head is `--ink-50`, which on a tinted card is either invisible or a second,
+   clashing tint. Translucent white instead: it lightens whatever it is over, so one rule
+   works on all five tones and the band still reads as the band that names the columns. */
+.panel--tinted .table thead {
+  background: rgb(255 255 255 / 55%);
+}
+
+/* The chip stays white on the wash and the glyph carries the colour — the same way round as a
    tile's icon and a notice's, so one construction is learned once. */
 .panel--good .panel__icon {
   color: var(--color-primary-dark);
