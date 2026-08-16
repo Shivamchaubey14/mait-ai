@@ -93,7 +93,7 @@
           <div class="farmer__main">
             <!-- The card first. It is the reason the record can be trusted at all, and an
                  operator opening this screen is almost always here to look at it. -->
-            <section class="panel" aria-labelledby="card-title">
+            <section class="panel panel--tinted" id="card-panel" aria-labelledby="card-title">
               <div class="panel__head">
                 <h2 class="panel__title" id="card-title">
                   <span class="panel__icon" id="card-panel-icon" aria-hidden="true"></span>
@@ -147,13 +147,13 @@
               </div>
 
               <p class="card-note">
-                Open a face to read it at full size. Check the number on the card against
-                <span class="card-note__value" id="masked-aadhaar">—</span>. Opening this record is
-                logged against your account.
+                <span id="open-hint">Open a face to read it at full size.</span> Check the number on
+                the card against <span class="card-note__value" id="masked-aadhaar">—</span>.
+                Opening this record is logged against your account.
               </p>
             </section>
 
-            <section class="panel panel--flush" aria-labelledby="animals-title">
+            <section class="panel panel--flush panel--tinted" aria-labelledby="animals-title">
               <div class="panel__head panel__head--flush">
                 <h2 class="panel__title" id="animals-title">
                   <span class="panel__icon" aria-hidden="true">
@@ -194,7 +194,7 @@
 
           <!-- Who she is, as a column of facts rather than a paragraph: this is what an
                operator reads back down the phone. -->
-          <section class="panel" aria-labelledby="identity-title">
+          <section class="panel panel--tinted panel--info" aria-labelledby="identity-title">
             <div class="panel__head">
               <h2 class="panel__title" id="identity-title">
                 <span class="panel__icon" aria-hidden="true">

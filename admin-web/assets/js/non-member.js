@@ -182,10 +182,17 @@
   function renderTiles(record) {
     const card = cardState(record);
     $('#card-tile').addClass('tile--' + card.tone);
+    // The evidence panel wears the state of the evidence — green when both faces are on file,
+    // red when there are none. It is the one panel on the screen whose colour is an answer
+    // rather than a label, so it is set here and not in the markup.
+    $('#card-panel').addClass('panel--' + card.tone);
     $('#card-icon').html(shell.icon(card.glyph));
     $('#card-panel-icon').html(shell.icon(card.glyph));
     $('#card-value').html(ui.pill(card.label, card.tone));
     $('#card-foot').text(card.foot);
+    // Nothing to open when neither face was taken — an instruction to click something that is
+    // not there reads as a broken screen rather than as a missing photograph.
+    $('#open-hint').prop('hidden', !record.aadhar_front_captured && !record.aadhar_back_captured);
     $('#card-count').text(
       (record.aadhar_front_captured ? 1 : 0) + (record.aadhar_back_captured ? 1 : 0) + ' of 2 faces'
     );
