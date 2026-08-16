@@ -288,6 +288,166 @@ class TestAadhaarCard:
         assert response.status_code == 403
 
 
+class TestAdminNonMemberDirectory:
+    """
+    The back office's view of what Maits registered in the field (W10b).
+
+    It exists because until now nobody outside the app could see these rows at all: the app's
+    own endpoint is scoped to the Mait who created each one, so an admin calling it got a 403
+    and an empty screen. A non-member is registered on a form that ends with cash changing
+    hands, and the only oversight of that was its absence from every admin screen.
+    """
+
+    @pytest.fixture
+    def registered(self, api_client, mait_user, mpp):
+        def make(name, mobile, aadhaar, consent=True):
+            response = auth(api_client, mait_user).post(
+                f"{BASE}/non-members/",
+                {
+                    "name": name,
+                    "father_husband_name": "Ram Singh",
+                    "relation": "husband",
+                    "mobile_no": mobile,
+                    "mpp": mpp.id,
+                    "aadhar_no": aadhaar,
+                    "consent": consent,
+                },
+                format="json",
+            )
+            assert response.status_code == 201, response.json()
+            return NonMember.objects.get(pk=response.json()["id"])
+
+        return make
+
+    def test_an_admin_sees_every_maits_registrations(
+        self, api_client, admin_user, mait_user, registered
+    ):
+        registered("Radha Singh", "9876543210", "111122223333")
+        registered("Sunita Devi", "9876543211", "444455556666")
+
+        response = auth(api_client, admin_user).get(f"{BASE}/admin/non-members/")
+
+        assert response.status_code == 200, response.json()
+        assert response.json()["count"] == 2
+
+    def test_a_mait_cannot_reach_the_back_offices_view(self, api_client, mait_user, registered):
+        """SRS §16. A Mait's own list is scoped; this one is not, so it is admin-only."""
+        registered("Radha Singh", "9876543210", "111122223333")
+        assert auth(api_client, mait_user).get(f"{BASE}/admin/non-members/").status_code == 403
+
+    def test_the_row_carries_what_makes_it_auditable(
+        self, api_client, admin_user, mait_user, registered, mpp
+    ):
+        """Who she is, who registered her, and whether the card and consent are on file."""
+        registered("Radha Singh", "9876543210", "111122223333")
+
+        row = auth(api_client, admin_user).get(f"{BASE}/admin/non-members/").json()["results"][0]
+
+        assert row["name"] == "Radha Singh"
+        assert row["relation_display"] == "Husband"
+        assert row["mpp_code"] == mpp.mpp_code
+        assert row["registered_by"] == mait_user.mait_profile.name
+        assert row["aadhar_front_captured"] is False
+        assert row["consent_captured_at"] is not None
+        # Counted in SQL, not per row: a page of fifty must not cost a hundred queries.
+        assert row["animal_count"] == 0
+        assert row["ai_event_count"] == 0
+
+    def test_no_card_filters_to_the_rows_that_need_chasing(
+        self, api_client, admin_user, mait_user, registered
+    ):
+        with_card = registered("Radha Singh", "9876543210", "111122223333")
+        registered("Sunita Devi", "9876543211", "444455556666")
+
+        auth(api_client, mait_user).patch(
+            f"{BASE}/non-members/{with_card.id}/aadhaar/",
+            {"front": a_card_image("front.jpg"), "back": a_card_image("back.jpg")},
+            format="multipart",
+        )
+
+        body = auth(api_client, admin_user).get(f"{BASE}/admin/non-members/?no_card=true").json()
+
+        assert [row["name"] for row in body["results"]] == ["Sunita Devi"]
+
+    def test_the_list_never_carries_the_card_urls(
+        self, api_client, admin_user, mait_user, registered
+    ):
+        """
+        A roster is read on a screen anyone walking past can see.
+
+        The images are readable from the detail, which is a deliberate act and audit-logged.
+        A list that shipped fifty links to fifty identity documents is not.
+        """
+        row = registered("Radha Singh", "9876543210", "111122223333")
+        auth(api_client, mait_user).patch(
+            f"{BASE}/non-members/{row.id}/aadhaar/",
+            {"front": a_card_image()},
+            format="multipart",
+        )
+
+        body = auth(api_client, admin_user).get(f"{BASE}/admin/non-members/").json()
+
+        assert "aadhar_front_url" not in body["results"][0]
+        assert body["results"][0]["aadhar_front_captured"] is True
+
+    def test_the_detail_shows_the_card_and_logs_the_read(
+        self, api_client, admin_user, mait_user, registered
+    ):
+        """
+        SRS §7, §16 — the promise the Members screen already makes about unmasking.
+
+        This response carries photographs of a government identity document. Who looked at one
+        is part of being allowed to hold them at all.
+        """
+        from apps.core.models import AuditLog
+
+        row = registered("Radha Singh", "9876543210", "111122223333")
+        auth(api_client, mait_user).patch(
+            f"{BASE}/non-members/{row.id}/aadhaar/",
+            {"front": a_card_image("front.jpg"), "back": a_card_image("back.jpg")},
+            format="multipart",
+        )
+
+        response = auth(api_client, admin_user).get(f"{BASE}/admin/non-members/{row.id}/")
+
+        assert response.status_code == 200, response.json()
+        body = response.json()
+        assert body["aadhar_front_url"]
+        assert body["aadhar_back_url"]
+        assert body["animals"] == []
+
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.PII_ACCESS,
+            entity_type="non_member",
+            entity_id=row.id,
+            actor=admin_user,
+        ).exists()
+
+    def test_a_record_with_no_card_is_not_logged_as_a_pii_read(
+        self, api_client, admin_user, registered
+    ):
+        """Nothing sensitive was returned, so there is nothing to record having looked at."""
+        from apps.core.models import AuditLog
+
+        row = registered("Radha Singh", "9876543210", "111122223333")
+
+        assert (
+            auth(api_client, admin_user).get(f"{BASE}/admin/non-members/{row.id}/").status_code
+            == 200
+        )
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.PII_ACCESS, entity_type="non_member", entity_id=row.id
+        ).exists()
+
+    def test_search_matches_her_name(self, api_client, admin_user, registered):
+        registered("Radha Singh", "9876543210", "111122223333")
+        registered("Sunita Devi", "9876543211", "444455556666")
+
+        body = auth(api_client, admin_user).get(f"{BASE}/admin/non-members/?search=Sunita").json()
+
+        assert [row["name"] for row in body["results"]] == ["Sunita Devi"]
+
+
 class TestUploadValidation:
     """SRS §6.1 — bad files are rejected before anything is queued."""
 

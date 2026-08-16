@@ -97,6 +97,8 @@ would lock a working Mait out of the app.
 | POST | `/non-members/` | Register a new non-member on the fly | Mait |
 | PATCH | `/non-members/{id}/aadhaar/` | Attach the front and/or back of her Aadhaar card | Mait |
 | GET | `/non-members/{id}/` | Non-member detail | JWT |
+| GET | `/admin/non-members/` | Every Mait's field registrations, for the back office | Admin |
+| GET | `/admin/non-members/{id}/` | One of them, with her animals and her card images | Admin |
 | POST | `/farmers/otp/send/` | Send a verification code to a farmer, before the capture proceeds | Mait |
 | POST | `/farmers/otp/verify/` | Check the code she read out | Mait |
 
@@ -125,6 +127,20 @@ It is a second call rather than part of registration, like an animal's portrait:
 must be on file even if a village connection drops a JPEG, because the capture flow is standing
 on her id by then. The response reports `aadhar_front_captured` and `aadhar_back_captured`
 booleans; the stored URLs are never serialised to a handset.
+
+**`/admin/non-members/` is a separate endpoint, not a permission branch.** `/non-members/` is a
+Mait's own working set, scoped to what they created, because a Mait has no business reading
+another's farmers (SRS §16) — an admin calling it gets a 403 and an empty screen. The admin
+route is the whole population, filterable by MPP and by `no_card=true`, the queue of
+registrations with nothing to check the number against. Row counts (`animal_count`,
+`ai_event_count`) are annotated in SQL, so a page of fifty costs one query rather than a
+hundred.
+
+Its **detail is the only endpoint that returns the card image URLs**, and the read is written
+to the audit log as `pii_access` against the operator's account — the same promise the Members
+screen makes about unmasking. The list never carries them: a roster is read on a screen anyone
+walking past can see, and fifty links to fifty identity documents is not a thing to hand out
+by default.
 
 **The farmer's number is never in the request.** Both calls name her by `member_code` *or*
 `non_member_id`, and the server reads the destination off her record. A Mait who could

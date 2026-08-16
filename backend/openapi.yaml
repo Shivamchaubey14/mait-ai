@@ -273,6 +273,111 @@ paths:
               schema:
                 $ref: '#/components/schemas/InventorySummary'
           description: ''
+  /api/v1/admin/non-members/:
+    get:
+      operationId: admin_non_members_list
+      description: |-
+        The farmers Maits registered in the field, for the back office (SRS §9.3, W10b).
+
+        Separate from ``NonMemberViewSet`` rather than a permission branch on it, because the two
+        answer different questions. That one is a Mait's own working set — scoped to what they
+        created, because a Mait has no business reading another's farmers (SRS §16). This one is
+        the whole population, and it exists because until now nobody outside the app could see it
+        at all: a non-member is registered on a form that ends with cash changing hands, and the
+        only oversight of that was the row's absence from every admin screen.
+
+        Counts are annotated rather than serialised per row. A farmer with four animals and eleven
+        inseminations is one row here, and a property that queried for each would be a page of
+        fifty rows costing a hundred queries.
+      summary: Search the non-members Maits have registered
+      parameters:
+      - in: query
+        name: created_by_mait
+        schema:
+          type: integer
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: mpp__mpp_code
+        schema:
+          type: string
+      - in: query
+        name: no_card
+        schema:
+          type: boolean
+        description: '`true` returns only the farmers missing one or both faces of
+          their Aadhaar card — the rows the back office has to chase.'
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: relation
+        schema:
+          type: string
+          enum:
+          - father
+          - husband
+        description: |-
+          Whether father_husband_name is her father or her husband.
+
+          * `father` - Father
+          * `husband` - Husband
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Matches her name, her mobile number, or the household name.
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAdminNonMemberListList'
+          description: ''
+  /api/v1/admin/non-members/{id}/:
+    get:
+      operationId: admin_non_members_retrieve
+      description: The only endpoint that returns the Aadhaar card image URLs. The
+        Mait's own app is told a boolean instead, because a link to an identity document
+        has no business in a handset's cache — an admin checking that the number typed
+        matches the card has to see the card. **The read is audit-logged against the
+        operator's account.**
+      summary: One non-member, with her card and her animals
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this non member.
+        required: true
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminNonMemberDetail'
+          description: ''
   /api/v1/admin/products/:
     get:
       operationId: admin_products_list
@@ -3027,6 +3132,230 @@ components:
       - id
       - note
       - to_status
+    AdminNonMemberDetail:
+      type: object
+      description: |-
+        One farmer, with everything the back office would open her record to settle.
+
+        **This is the only place the card images are readable**, and the only place they should be.
+        A Mait's own app is told a boolean, because a link to somebody's Aadhaar has no business in
+        a handset's cache; an admin verifying that the number typed matches the card has to see the
+        card, and that is what the whole image is for. The view records the read against the
+        operator's account, the same promise the Members screen already makes about unmasking.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        father_husband_name:
+          type: string
+          readOnly: true
+        relation:
+          allOf:
+          - $ref: '#/components/schemas/RelationEnum'
+          readOnly: true
+          description: |-
+            Whether father_husband_name is her father or her husband.
+
+            * `father` - Father
+            * `husband` - Husband
+        relation_display:
+          type: string
+          readOnly: true
+        mobile_no:
+          type: string
+          readOnly: true
+        address:
+          type: string
+          readOnly: true
+        masked_aadhar:
+          type: string
+          readOnly: true
+        aadhar_front_captured:
+          type: boolean
+          readOnly: true
+        aadhar_back_captured:
+          type: boolean
+          readOnly: true
+        mpp:
+          type: integer
+          readOnly: true
+          description: Nearest/served MPP.
+        mpp_code:
+          type: string
+          readOnly: true
+          default: ''
+        mpp_name:
+          type: string
+          readOnly: true
+          default: ''
+        registered_by:
+          type: string
+          readOnly: true
+          default: ''
+        registered_by_code:
+          type: string
+          readOnly: true
+          default: ''
+        animal_count:
+          type: integer
+          readOnly: true
+          default: 0
+        ai_event_count:
+          type: integer
+          readOnly: true
+          default: 0
+        consent_captured_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the farmer consented to their details being stored.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        aadhar_front_url:
+          type: string
+          readOnly: true
+        aadhar_back_url:
+          type: string
+          readOnly: true
+        animals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Animal'
+          readOnly: true
+      required:
+      - aadhar_back_captured
+      - aadhar_back_url
+      - aadhar_front_captured
+      - aadhar_front_url
+      - address
+      - ai_event_count
+      - animal_count
+      - animals
+      - consent_captured_at
+      - created_at
+      - father_husband_name
+      - id
+      - masked_aadhar
+      - mobile_no
+      - mpp
+      - mpp_code
+      - mpp_name
+      - name
+      - registered_by
+      - registered_by_code
+      - relation
+      - relation_display
+    AdminNonMemberList:
+      type: object
+      description: |-
+        The back office's view of the farmers Maits registered in the field (W10b).
+
+        A different shape from the app's, because a different question is being asked. A Mait
+        already knows who they just registered; an admin is looking at rows they have never seen,
+        entered by somebody else, on a form that ends with cash changing hands. So the columns are
+        the ones that make a row auditable without opening it: who she is, who registered her, and
+        whether the two things that keep the path honest — her card and her consent — are on file.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        father_husband_name:
+          type: string
+          readOnly: true
+        relation:
+          allOf:
+          - $ref: '#/components/schemas/RelationEnum'
+          readOnly: true
+          description: |-
+            Whether father_husband_name is her father or her husband.
+
+            * `father` - Father
+            * `husband` - Husband
+        relation_display:
+          type: string
+          readOnly: true
+        mobile_no:
+          type: string
+          readOnly: true
+        address:
+          type: string
+          readOnly: true
+        masked_aadhar:
+          type: string
+          readOnly: true
+        aadhar_front_captured:
+          type: boolean
+          readOnly: true
+        aadhar_back_captured:
+          type: boolean
+          readOnly: true
+        mpp:
+          type: integer
+          readOnly: true
+          description: Nearest/served MPP.
+        mpp_code:
+          type: string
+          readOnly: true
+          default: ''
+        mpp_name:
+          type: string
+          readOnly: true
+          default: ''
+        registered_by:
+          type: string
+          readOnly: true
+          default: ''
+        registered_by_code:
+          type: string
+          readOnly: true
+          default: ''
+        animal_count:
+          type: integer
+          readOnly: true
+          default: 0
+        ai_event_count:
+          type: integer
+          readOnly: true
+          default: 0
+        consent_captured_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the farmer consented to their details being stored.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - aadhar_back_captured
+      - aadhar_front_captured
+      - address
+      - ai_event_count
+      - animal_count
+      - consent_captured_at
+      - created_at
+      - father_husband_name
+      - id
+      - masked_aadhar
+      - mobile_no
+      - mpp
+      - mpp_code
+      - mpp_name
+      - name
+      - registered_by
+      - registered_by_code
+      - relation
+      - relation_display
     AdminUser:
       type: object
       description: Read shape for the user list (SRS §9.10).
@@ -4735,6 +5064,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AIEventTimeline'
+    PaginatedAdminNonMemberListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminNonMemberList'
     PaginatedAdminUserList:
       type: object
       required:

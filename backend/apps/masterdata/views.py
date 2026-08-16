@@ -9,7 +9,7 @@ time out at the proxy long before it finished (SRS §6.1.6).
 from __future__ import annotations
 
 from django.conf import settings
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -31,6 +31,8 @@ from apps.payments.services import issue_otp, verify_otp
 from . import columns as cols
 from .models import MPP, DataUploadLog, Member, NonMember
 from .serializers import (
+    AdminNonMemberDetailSerializer,
+    AdminNonMemberListSerializer,
     DataUploadLogSerializer,
     MasterUploadSerializer,
     MemberDetailSerializer,
@@ -461,6 +463,108 @@ class NonMemberViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, views
             meta={"aadhaar_faces": [f.replace("aadhar_", "").replace("_url", "") for f in changed]},
         )
         return Response(NonMemberSerializer(non_member).data)
+
+
+@extend_schema(tags=["master-data"])
+class AdminNonMemberViewSet(
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
+):
+    """
+    The farmers Maits registered in the field, for the back office (SRS §9.3, W10b).
+
+    Separate from ``NonMemberViewSet`` rather than a permission branch on it, because the two
+    answer different questions. That one is a Mait's own working set — scoped to what they
+    created, because a Mait has no business reading another's farmers (SRS §16). This one is
+    the whole population, and it exists because until now nobody outside the app could see it
+    at all: a non-member is registered on a form that ends with cash changing hands, and the
+    only oversight of that was the row's absence from every admin screen.
+
+    Counts are annotated rather than serialised per row. A farmer with four animals and eleven
+    inseminations is one row here, and a property that queried for each would be a page of
+    fifty rows costing a hundred queries.
+    """
+
+    permission_classes = [IsAdmin]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["mpp__mpp_code", "created_by_mait", "relation"]
+    search_fields = ["name", "mobile_no", "father_husband_name"]
+    ordering_fields = ["created_at", "name"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        queryset = NonMember.objects.select_related("mpp", "created_by_mait").annotate(
+            animal_count=Count("animals", distinct=True),
+            ai_event_count=Count("ai_events", distinct=True),
+        )
+        if self.action == "retrieve":
+            # Only on detail: the list has no animals column, and prefetching for a page of
+            # fifty would buy a second query for nothing.
+            queryset = queryset.prefetch_related(animals_with_history())
+        return queryset
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return AdminNonMemberDetailSerializer
+        return AdminNonMemberListSerializer
+
+    @extend_schema(
+        summary="Search the non-members Maits have registered",
+        parameters=[
+            OpenApiParameter(
+                "search",
+                description="Matches her name, her mobile number, or the household name.",
+                required=False,
+                type=str,
+            ),
+            OpenApiParameter(
+                "no_card",
+                description=(
+                    "`true` returns only the farmers missing one or both faces of their "
+                    "Aadhaar card — the rows the back office has to chase."
+                ),
+                required=False,
+                type=bool,
+            ),
+        ],
+        responses={200: AdminNonMemberListSerializer},
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        # A queue, not a filter: these are the registrations that cannot be checked against
+        # anything, and they are the reason an operator opens this screen twice.
+        if str(self.request.query_params.get("no_card", "")).lower() in ("true", "1"):
+            queryset = queryset.filter(Q(aadhar_front_url="") | Q(aadhar_back_url=""))
+        return queryset
+
+    @extend_schema(
+        summary="One non-member, with her card and her animals",
+        description=(
+            "The only endpoint that returns the Aadhaar card image URLs. The Mait's own app is "
+            "told a boolean instead, because a link to an identity document has no business in "
+            "a handset's cache — an admin checking that the number typed matches the card has "
+            "to see the card. **The read is audit-logged against the operator's account.**"
+        ),
+        responses={200: AdminNonMemberDetailSerializer},
+    )
+    def retrieve(self, request, *args, **kwargs):
+        non_member = self.get_object()
+
+        # Logged in the same spirit as unmasking a member's Aadhaar: this response carries
+        # photographs of a government identity document, and who looked at one is part of
+        # holding them at all (SRS §7, §16).
+        if non_member.aadhar_front_url or non_member.aadhar_back_url:
+            record_audit(
+                action=AuditLog.Action.PII_ACCESS,
+                entity_type="non_member",
+                entity_id=non_member.id,
+                request=request,
+                meta={"aadhaar_card_viewed": True},
+            )
+
+        return Response(self.get_serializer(non_member).data)
 
 
 @extend_schema(tags=["master-data"])

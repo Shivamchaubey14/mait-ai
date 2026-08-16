@@ -436,6 +436,87 @@ class NonMemberSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class AdminNonMemberListSerializer(serializers.ModelSerializer):
+    """
+    The back office's view of the farmers Maits registered in the field (W10b).
+
+    A different shape from the app's, because a different question is being asked. A Mait
+    already knows who they just registered; an admin is looking at rows they have never seen,
+    entered by somebody else, on a form that ends with cash changing hands. So the columns are
+    the ones that make a row auditable without opening it: who she is, who registered her, and
+    whether the two things that keep the path honest — her card and her consent — are on file.
+    """
+
+    relation_display = serializers.CharField(source="get_relation_display", read_only=True)
+    mpp_code = serializers.CharField(source="mpp.mpp_code", read_only=True, default="")
+    mpp_name = serializers.CharField(source="mpp.mpp_name", read_only=True, default="")
+    registered_by = serializers.CharField(source="created_by_mait.name", read_only=True, default="")
+    registered_by_code = serializers.CharField(
+        source="created_by_mait.sahayak_vendor_code", read_only=True, default=""
+    )
+    masked_aadhar = serializers.CharField(read_only=True)
+    aadhar_front_captured = serializers.SerializerMethodField()
+    aadhar_back_captured = serializers.SerializerMethodField()
+    animal_count = serializers.IntegerField(read_only=True, default=0)
+    ai_event_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = NonMember
+        fields = [
+            "id",
+            "name",
+            "father_husband_name",
+            "relation",
+            "relation_display",
+            "mobile_no",
+            "address",
+            "masked_aadhar",
+            "aadhar_front_captured",
+            "aadhar_back_captured",
+            "mpp",
+            "mpp_code",
+            "mpp_name",
+            "registered_by",
+            "registered_by_code",
+            "animal_count",
+            "ai_event_count",
+            "consent_captured_at",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_aadhar_front_captured(self, obj) -> bool:
+        return bool(obj.aadhar_front_url)
+
+    def get_aadhar_back_captured(self, obj) -> bool:
+        return bool(obj.aadhar_back_url)
+
+
+class AdminNonMemberDetailSerializer(AdminNonMemberListSerializer):
+    """
+    One farmer, with everything the back office would open her record to settle.
+
+    **This is the only place the card images are readable**, and the only place they should be.
+    A Mait's own app is told a boolean, because a link to somebody's Aadhaar has no business in
+    a handset's cache; an admin verifying that the number typed matches the card has to see the
+    card, and that is what the whole image is for. The view records the read against the
+    operator's account, the same promise the Members screen already makes about unmasking.
+    """
+
+    aadhar_front_url = serializers.CharField(read_only=True)
+    aadhar_back_url = serializers.CharField(read_only=True)
+    animals = AnimalSerializer(many=True, read_only=True)
+
+    class Meta(AdminNonMemberListSerializer.Meta):
+        fields = [
+            *AdminNonMemberListSerializer.Meta.fields,
+            "aadhar_front_url",
+            "aadhar_back_url",
+            "animals",
+        ]
+        read_only_fields = fields
+
+
 class NonMemberAadhaarSerializer(serializers.Serializer):
     """
     Both faces of her Aadhaar card, photographed at registration.
