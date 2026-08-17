@@ -11,7 +11,15 @@
  * a long list passes behind them rather than through them.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Dimensions,
   Image,
@@ -82,8 +90,12 @@ const ARROW_SIZE = 18;
  *
  * Read fresh on each event rather than captured once: the window is a different height in
  * landscape, and on a resizing Android window it is a different height with the keyboard up.
+ *
+ * Not exported. Every caller wants the reveal built on top of it, and one that only wanted the
+ * number would be a screen doing its own keyboard handling — which is exactly what left the
+ * sheet with a hand-written `scrollToEnd` on the one field somebody noticed.
  */
-export function useKeyboardOverlap(): number {
+function useKeyboardOverlap(): number {
   const [overlap, setOverlap] = useState(0);
 
   useEffect(() => {
@@ -105,6 +117,114 @@ export function useKeyboardOverlap(): number {
   }, []);
 
   return overlap;
+}
+
+/**
+ * Bringing the field a Mait just tapped above the keyboard.
+ *
+ * The footer already rides up — it is pinned to the bottom of a container that shrinks when
+ * the keyboard opens, on Android by `adjustResize` and on iOS by `KeyboardAvoidingView`. The
+ * *body* does not move, so on a short handset the button was visible above the keyboard and
+ * the box being typed into was behind it. A Mait typing a code they cannot see is a Mait who
+ * cannot tell a mistyped digit from a wrong one.
+ *
+ * So a focused field asks to be scrolled into the part of the screen that is still visible.
+ * Twice: once on focus, and again once the keyboard has finished opening, because focus fires
+ * before the viewport has shrunk and the first measurement is against a screen that is about
+ * to change size.
+ */
+interface FlowScrollApi {
+  reveal: (field: View | null) => void;
+}
+
+/**
+ * Exported so a scrolling body that is not a `FlowScreen` can provide one too — the add-animal
+ * sheet is the case. A field never reaches for this itself; it only ever consumes it.
+ */
+export const FlowScroll = createContext<FlowScrollApi | null>(null);
+
+/** How much of the screen is left above the field, so its label comes up with it. */
+const REVEAL_GAP = spacing[4];
+
+/**
+ * Wire a scrolling body to the fields inside it.
+ *
+ * Returns the ref to put on the `ScrollView`, the keyboard overlap for whatever padding the
+ * caller needs, and the context value that lets a field call back in. Shared by the flow's
+ * screens and by the sheet that opens over them — a sheet has the same problem and had the
+ * same half-fix, a hand-written `scrollToEnd` on the one field somebody noticed.
+ */
+export function useRevealOnFocus() {
+  const scroller = useRef<ScrollView>(null);
+  const pending = useRef<View | null>(null);
+  const overlap = useKeyboardOverlap();
+
+  const scrollTo = useCallback((field: View | null) => {
+    const scroll = scroller.current;
+    if (!field || !scroll) {
+      return;
+    }
+    // Measured against the scroll's own content, so `top` is already the offset to scroll to
+    // rather than a position on the screen that has to be converted into one.
+    const inner = scroll.getInnerViewNode?.();
+    if (!inner) {
+      return;
+    }
+    field.measureLayout(
+      inner,
+      (_left: number, top: number) => {
+        scroll.scrollTo({ y: Math.max(0, top - REVEAL_GAP), animated: true });
+      },
+      () => {
+        // The field left the tree between focus and measure. Nothing to bring into view.
+      },
+    );
+  }, []);
+
+  const reveal = useCallback(
+    (field: View | null) => {
+      pending.current = field;
+      // After the current frame: on focus the keyboard has not opened yet, so this first pass
+      // only helps when it is already up — switching from one field to another.
+      requestAnimationFrame(() => scrollTo(field));
+    },
+    [scrollTo],
+  );
+
+  // The keyboard has finished opening and the viewport is its final size. This is the pass
+  // that actually does the work the first time a field is tapped.
+  useEffect(() => {
+    if (overlap > 0 && pending.current) {
+      scrollTo(pending.current);
+    }
+  }, [overlap, scrollTo]);
+
+  // Nothing is focused any more, so nothing should be chased on the next keyboard event.
+  useEffect(() => {
+    if (overlap === 0) {
+      pending.current = null;
+    }
+  }, [overlap]);
+
+  const api = useMemo<FlowScrollApi>(() => ({ reveal }), [reveal]);
+
+  return { scroller, overlap, api };
+}
+
+/**
+ * Opt one input into the reveal, for the screens whose field is not `LabelledField`.
+ *
+ * `RequestStockScreen`'s quantity box sits between two stepper buttons and is a bare
+ * `TextInput` for that reason. It is still a box a Mait types into, halfway down a form that
+ * grows a row per product, so it needs the same treatment — this is the two props that give
+ * it one. The flow's own field components use it internally; a screen only reaches for it
+ * when it is building an input of its own.
+ */
+export function useFieldReveal() {
+  const ref = useRef<View>(null);
+  const flow = useContext(FlowScroll);
+  const onFocus = useCallback(() => flow?.reveal(ref.current), [flow]);
+  return { ref, onFocus };
 }
 
 // --------------------------------------------------------------------------------------
@@ -188,6 +308,7 @@ export function FlowScreen({
 }: FlowScreenProps): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { scroller, overlap, api } = useRevealOnFocus();
 
   const label =
     stepLabel ??
@@ -263,7 +384,12 @@ export function FlowScreen({
         )}
 
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          ref={scroller}
+          /* A keyboard's worth of room under the content while one is open. Without it a
+             field near the bottom cannot be scrolled any higher than the content's own end,
+             which on a short body is not high enough to clear the keyboard — the scroll runs
+             out before the field arrives. */
+          contentContainerStyle={[styles.scroll, !!overlap && { paddingBottom: overlap }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -284,7 +410,7 @@ export function FlowScreen({
               { paddingLeft: spacing[5] + insets.left, paddingRight: spacing[5] + insets.right },
             ]}
           >
-            {children}
+            <FlowScroll.Provider value={api}>{children}</FlowScroll.Provider>
           </View>
         </ScrollView>
 
@@ -659,10 +785,7 @@ export function RadioGroup<T extends string>({
             <View style={[styles.radio, active && styles.radioOn]}>
               {active && <Ionicons name="checkmark" size={14} color={colors.surface} />}
             </View>
-            <Text
-              style={[styles.radioLabel, active && styles.radioLabelOn]}
-              numberOfLines={1}
-            >
+            <Text style={[styles.radioLabel, active && styles.radioLabelOn]} numberOfLines={1}>
               {option.label}
             </Text>
           </Pressable>
@@ -799,8 +922,10 @@ export function FieldCard({
   error?: string | null;
   tone?: Tone;
 } & TextInputProps): React.JSX.Element {
+  const { ref: wrap, onFocus: reveal } = useFieldReveal();
+
   return (
-    <View style={styles.fieldWrap}>
+    <View ref={wrap} style={styles.fieldWrap}>
       <View style={[styles.card, !!error && styles.cardError]}>
         <View style={[styles.swatch, { backgroundColor: SWATCH[tone] }]} />
         <View style={styles.cardBody}>
@@ -810,6 +935,10 @@ export function FieldCard({
             placeholderTextColor={colors.textDisabled}
             accessibilityLabel={label}
             {...inputProps}
+            onFocus={event => {
+              reveal();
+              inputProps.onFocus?.(event);
+            }}
           />
         </View>
       </View>
@@ -853,9 +982,12 @@ export function LabelledField({
   error?: string | null;
 } & TextInputProps): React.JSX.Element {
   const [focused, setFocused] = useState(false);
+  // The whole wrapper, not the box: the label has to come up with the field it names,
+  // otherwise a Mait sees an unlabelled box appear over the keyboard.
+  const { ref: wrap, onFocus: reveal } = useFieldReveal();
 
   return (
-    <View style={styles.fieldWrap}>
+    <View ref={wrap} style={styles.fieldWrap}>
       <Text style={[styles.labelledLabel, { color: SWATCH_TINT[tone] }]}>
         {label}
         {!!optionalNote && <Text style={styles.optionalNote}> {optionalNote}</Text>}
@@ -885,6 +1017,7 @@ export function LabelledField({
              ring, which is what spreading the caller's props last used to do. */
           onFocus={event => {
             setFocused(true);
+            reveal();
             inputProps.onFocus?.(event);
           }}
           onBlur={event => {

@@ -24,7 +24,7 @@ import {
 } from '@api/endpoints';
 import type { ProblemDetails } from '@api/types';
 import BottomSheet, { Sheet, SheetSection } from '@/components/BottomSheet';
-import { FlowNotice, FlowScreen, FlowSpacer } from '@/features/aiFlow/components';
+import { FlowNotice, FlowScreen, FlowSpacer, useFieldReveal } from '@/features/aiFlow/components';
 import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -56,6 +56,45 @@ function blankLine(): Line {
 
 function stepOf(line: Line): number {
   return line.category === 'straw' ? STRAW_STEP : 1;
+}
+
+/**
+ * The quantity box, between its two stepper buttons.
+ *
+ * A component of its own only so it can hold a ref: this form grows a row per product, so the
+ * box being typed into is often halfway down a list and behind the keyboard. `useFieldReveal`
+ * is what asks the body to bring it back up — the same machinery the flow's own fields use,
+ * rather than a second answer to the same question.
+ */
+function QuantityBox({
+  value,
+  unit,
+  label,
+  onChangeText,
+  testID,
+}: {
+  value: string;
+  unit: string;
+  label: string;
+  onChangeText: (text: string) => void;
+  testID: string;
+}): React.JSX.Element {
+  const { ref, onFocus } = useFieldReveal();
+
+  return (
+    <View ref={ref} style={styles.quantityBody}>
+      <TextInput
+        style={styles.quantityInput}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={onFocus}
+        keyboardType="number-pad"
+        accessibilityLabel={label}
+        testID={testID}
+      />
+      <Text style={styles.quantityUnit}>{unit}</Text>
+    </View>
+  );
 }
 
 export default function RequestStockScreen({
@@ -311,19 +350,13 @@ export default function RequestStockScreen({
                 <Ionicons name="remove" size={18} color={colors.ink} />
               </Pressable>
 
-              <View style={styles.quantityBody}>
-                <TextInput
-                  style={styles.quantityInput}
-                  value={line.qty}
-                  onChangeText={text =>
-                    update(line.id, { qty: text.replace(/\D/g, '').slice(0, 4) })
-                  }
-                  keyboardType="number-pad"
-                  accessibilityLabel={t('requestStock.quantity')}
-                  testID={`indent-qty-${index}`}
-                />
-                <Text style={styles.quantityUnit}>{unitFor(line)}</Text>
-              </View>
+              <QuantityBox
+                value={line.qty}
+                unit={unitFor(line)}
+                label={t('requestStock.quantity')}
+                onChangeText={text => update(line.id, { qty: text.replace(/\D/g, '').slice(0, 4) })}
+                testID={`indent-qty-${index}`}
+              />
 
               <Pressable
                 accessibilityRole="button"
