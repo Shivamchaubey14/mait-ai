@@ -9,7 +9,7 @@ time out at the proxy long before it finished (SRS §6.1.6).
 from __future__ import annotations
 
 from django.conf import settings
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -41,6 +41,7 @@ from .serializers import (
     MPPListSerializer,
     NonMemberAadhaarSerializer,
     NonMemberDetailSerializer,
+    NonMemberPickerSerializer,
     NonMemberSerializer,
     UploadErrorRowSerializer,
 )
@@ -363,27 +364,78 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
 
 
 @extend_schema(tags=["master-data"])
-class NonMemberViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    """Non-member registration by a Mait in the field (SRS §9.3)."""
+class NonMemberViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """
+    The non-members a Mait works with in the field (SRS §9.3).
+
+    **Scoped by MPP, not by who typed the row in.** It used to be `created_by_mait`, which was
+    wrong in two ways that only showed up once registering the same woman twice became
+    impossible. A Mait who registered her in March and returns in August could still find her;
+    a Mait who took over that MPP could not see her at all, and the only thing the app offered
+    them was the registration form — which now refuses the Aadhaar as a duplicate and leaves
+    them with a farmer they cannot serve and cannot re-create.
+
+    An MPP is the unit of work here, the same way it is for members (`MemberViewSet` has always
+    scoped this way), so the rule is the same rule: a Mait sees the farmers at the collection
+    points they cover, and nothing else (SRS §16).
+    """
 
     serializer_class = NonMemberSerializer
     permission_classes = [IsMait]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ["mpp__mpp_code"]
+    # A Mait is told a name in the yard and reads a number off a phone. Both find her.
+    search_fields = ["name", "mobile_no", "father_husband_name"]
 
     def get_queryset(self):
         mait = getattr(self.request.user, "mait_profile", None)
         if mait is None:
             return NonMember.objects.none()
-        queryset = NonMember.objects.filter(created_by_mait=mait)
+
+        queryset = NonMember.objects.filter(mpp__mait=mait)
+        if self.action == "list":
+            # What the picker needs to tell two women in one village apart, counted in SQL:
+            # a page of rows that each queried for their own animals would be a query per row.
+            queryset = queryset.annotate(
+                animal_count=Count("animals", distinct=True),
+                ai_event_count=Count("ai_events", distinct=True),
+                last_ai_at=Max("ai_events__created_at"),
+            ).order_by("name")
         if self.action == "retrieve":
             queryset = queryset.prefetch_related(animals_with_history())
         return queryset
 
     def get_serializer_class(self):
         # The detail shape carries the animals already registered to this farmer, which is
-        # what step 3 of the capture flow picks from.
+        # what step 4 of the capture flow picks from.
         if self.action == "aadhaar":
             return NonMemberAadhaarSerializer
+        if self.action == "list":
+            return NonMemberPickerSerializer
         return NonMemberDetailSerializer if self.action == "retrieve" else NonMemberSerializer
+
+    @extend_schema(
+        summary="The non-members already registered at an MPP",
+        description=(
+            "What the capture flow offers a Mait once they have said *non-member* and picked "
+            "the collection point. Without it the only path was the registration form, so a "
+            "farmer served a second time was registered a second time — and since one Aadhaar "
+            "is now one farmer, that path simply refuses.\n\n"
+            "Scoped to the MPPs the requesting Mait covers. Pass `mpp__mpp_code` for one of "
+            "them, and `search` for her name, her number or the household name.\n\n"
+            "Each row carries how many animals are on her record and when she was last "
+            "served, because a Mait picking from a list of names in one village needs "
+            "something other than the name to tell two of them apart."
+        ),
+        responses={200: NonMemberPickerSerializer},
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def get_serializer_context(self):
         # The serializer needs to know whose MPPs are whose before it accepts one.

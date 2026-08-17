@@ -194,6 +194,126 @@ class TestSearchAndFilter:
         assert set(body) >= {"count", "next", "previous", "results"}
 
 
+class TestNonMemberPicker:
+    """
+    The roster a Mait picks from before registering anybody (SRS §6.3 step 2, C4b).
+
+    It exists because the capture flow used to go from the MPP straight into the registration
+    form, which assumed every non-member is a new one. She usually is not — a farmer without
+    membership is served again the next season — and the second visit registered her a second
+    time. That was untidy until one Aadhaar became one farmer; now the form refuses her card
+    and a Mait with no way to reach the existing record cannot serve her at all.
+    """
+
+    @pytest.fixture
+    def registered(self, api_client, mait_user, mpp):
+        def make(name, mobile, aadhaar, household="Ram Singh"):
+            response = auth(api_client, mait_user).post(
+                f"{BASE}/non-members/",
+                {
+                    "name": name,
+                    "father_husband_name": household,
+                    "relation": "husband",
+                    "mobile_no": mobile,
+                    "mpp": mpp.id,
+                    "aadhar_no": aadhaar,
+                    "consent": True,
+                },
+                format="json",
+            )
+            assert response.status_code == 201, response.json()
+            return NonMember.objects.get(pk=response.json()["id"])
+
+        return make
+
+    def test_lists_the_farmers_already_registered_at_the_mpp(
+        self, api_client, mait_user, mpp, registered
+    ):
+        registered("Radha Singh", "9876543210", "111122223333")
+        registered("Sunita Devi", "9876543211", "444455556666")
+
+        response = auth(api_client, mait_user).get(
+            f"{BASE}/non-members/", {"mpp__mpp_code": mpp.mpp_code}
+        )
+
+        assert response.status_code == 200, response.json()
+        assert [row["name"] for row in response.json()["results"]] == ["Radha Singh", "Sunita Devi"]
+
+    def test_the_row_carries_what_tells_two_of_them_apart(
+        self, api_client, mait_user, mpp, registered
+    ):
+        """A name does not identify her — the same names repeat in a village."""
+        registered("Radha Singh", "9876543210", "111122223333")
+
+        row = auth(api_client, mait_user).get(f"{BASE}/non-members/").json()["results"][0]
+
+        assert row["father_husband_name"] == "Ram Singh"
+        assert row["relation_display"] == "Husband"
+        assert row["mobile_no"] == "9876543210"
+        assert row["animal_count"] == 0
+        # Never served: the ordinary state of a registration whose capture never finished, and
+        # the reason a Mait is usually on this screen.
+        assert row["ai_event_count"] == 0
+        assert row["last_ai_at"] is None
+
+    def test_the_picker_never_carries_her_aadhaar(self, api_client, mait_user, registered):
+        """
+        Masked or otherwise. It is what proves she is not already a member, checked at
+        registration; a roster read aloud in a public place does not need it.
+        """
+        registered("Radha Singh", "9876543210", "111122223333")
+
+        row = auth(api_client, mait_user).get(f"{BASE}/non-members/").json()["results"][0]
+
+        assert "aadhar_no" not in row
+        assert "masked_aadhar" not in row
+
+    def test_search_finds_her_by_name_or_number(self, api_client, mait_user, registered):
+        registered("Radha Singh", "9876543210", "111122223333")
+        registered("Sunita Devi", "9876500099", "444455556666")
+
+        by_name = auth(api_client, mait_user).get(f"{BASE}/non-members/", {"search": "Sunita"})
+        by_number = auth(api_client, mait_user).get(
+            f"{BASE}/non-members/", {"search": "9876543210"}
+        )
+
+        assert [r["name"] for r in by_name.json()["results"]] == ["Sunita Devi"]
+        assert [r["name"] for r in by_number.json()["results"]] == ["Radha Singh"]
+
+    def test_a_mait_sees_the_farmers_at_their_mpp_whoever_registered_them(
+        self, api_client, mait_user, mpp, registered
+    ):
+        """
+        Scoped by MPP, not by who typed the row in.
+
+        Scoping on `created_by_mait` was wrong the moment an MPP changed hands: the new Mait
+        could not see her, and the only thing the app offered them was a form that now refuses
+        her Aadhaar as a duplicate. An MPP is the unit of work, as it is for members.
+        """
+        from apps.masterdata.models import Mait
+
+        her = registered("Radha Singh", "9876543210", "111122223333")
+        # Somebody else entered her; this Mait covers the collection point now.
+        her.created_by_mait = Mait.objects.create(
+            sahayak_vendor_code="SAH777777", name="Previous Mait"
+        )
+        her.save(update_fields=["created_by_mait"])
+
+        response = auth(api_client, mait_user).get(f"{BASE}/non-members/")
+
+        assert [row["name"] for row in response.json()["results"]] == ["Radha Singh"]
+
+    def test_another_maits_mpp_is_not_listed(self, api_client, mait_user, registered):
+        """SRS §16 — a Mait sees the collection points they cover, and nothing else."""
+        registered("Radha Singh", "9876543210", "111122223333")
+
+        response = auth(api_client, mait_user).get(
+            f"{BASE}/non-members/", {"mpp__mpp_code": MPPFactory().mpp_code}
+        )
+
+        assert response.json()["results"] == []
+
+
 class TestAadhaarCard:
     """
     Both faces of the card, photographed at registration (SRS §6.3 step 2).

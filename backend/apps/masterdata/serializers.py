@@ -517,6 +517,45 @@ class AdminNonMemberDetailSerializer(AdminNonMemberListSerializer):
         read_only_fields = fields
 
 
+class NonMemberPickerSerializer(serializers.ModelSerializer):
+    """
+    One row in the list a Mait picks from before a capture (SRS §6.3 step 2, C4b).
+
+    Deliberately not the registration shape. That one is a form being filled in; this is a
+    roster being read in a yard, and the question it has to answer is "which of these is the
+    woman in front of me". A name does not answer it — the same names repeat in a village —
+    so the row carries the household and whose name that is, her number, and the two facts
+    that identify her by her animals: how many are on her record and when she was last served.
+
+    No Aadhaar, masked or otherwise. It is what proves she is not already a member, and that
+    check happens at registration; a picker does not need it, and a screen full of them is a
+    screen full of identity numbers being held up in a public place.
+    """
+
+    relation_display = serializers.CharField(source="get_relation_display", read_only=True)
+    animal_count = serializers.IntegerField(read_only=True, default=0)
+    ai_event_count = serializers.IntegerField(read_only=True, default=0)
+    # Annotated: `Max` over her events, so a farmer who has never been served comes back null
+    # rather than absent.
+    last_ai_at = serializers.DateTimeField(read_only=True, allow_null=True, default=None)
+
+    class Meta:
+        model = NonMember
+        fields = [
+            "id",
+            "name",
+            "father_husband_name",
+            "relation",
+            "relation_display",
+            "mobile_no",
+            "animal_count",
+            "ai_event_count",
+            "last_ai_at",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
 class NonMemberAadhaarSerializer(serializers.Serializer):
     """
     Both faces of her Aadhaar card, photographed at registration.
