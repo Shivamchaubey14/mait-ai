@@ -99,6 +99,19 @@ would lock a working Mait out of the app.
 | POST | `/farmers/otp/send/` | Send a verification code to a farmer, before the capture proceeds | Mait |
 | POST | `/farmers/otp/verify/` | Check the code she read out | Mait |
 
+**Registering a non-member takes her consent, and the MPP must be the Mait's own.**
+`POST /non-members/` accepts a write-only `consent` boolean; the server stamps
+`consent_captured_at` from its own clock, because a handset's is not evidence of when
+anything happened (SRS §7). `mpp` must be one the requesting Mait covers — `/mpp/` only ever
+offers them their own, and a scope enforced solely by the screen that draws it is not
+enforced (SRS §16).
+
+Every refusal here is keyed to a field the registration form actually has: a farmer already
+registered at that MPP on that number comes back under `mobile_no`, naming her, rather than
+as DRF's own `non_field_errors` uniqueness message. That key had no box on any screen, so the
+app filed it and drew nothing — and the Mait's tap on **Save & continue** was indistinguishable
+from a dead button.
+
 **The farmer's number is never in the request.** Both calls name her by `member_code` *or*
 `non_member_id`, and the server reads the destination off her record. A Mait who could
 nominate the number could nominate their own phone, and a verification a Mait can satisfy

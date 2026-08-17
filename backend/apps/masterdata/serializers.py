@@ -289,6 +289,13 @@ class NonMemberSerializer(serializers.ModelSerializer):
     aadhar_no = serializers.CharField(write_only=True, max_length=20)
     masked_aadhar = serializers.CharField(read_only=True)
 
+    # She agreed, and the agreement is the record — not the disabled button on the handset
+    # that made her agree before the Mait could tap Save (SRS §7 Compliance). The app has
+    # always collected this tick and always dropped it, so `consent_captured_at` was null on
+    # every non-member ever registered. Timed server-side, because a device clock is not
+    # evidence of when anything happened.
+    consent = serializers.BooleanField(write_only=True, required=False, default=False)
+
     class Meta:
         model = NonMember
         fields = [
@@ -299,12 +306,19 @@ class NonMemberSerializer(serializers.ModelSerializer):
             "address",
             "aadhar_no",
             "masked_aadhar",
+            "consent",
             "mpp",
             "created_by_mait",
             "consent_captured_at",
             "created_at",
         ]
-        read_only_fields = ["id", "created_by_mait", "created_at"]
+        read_only_fields = ["id", "created_by_mait", "consent_captured_at", "created_at"]
+        # DRF builds a UniqueTogetherValidator from the model's uniqueness constraint, and it
+        # runs before `validate()` — so it, not the message below, is what a Mait used to get:
+        # "The fields mobile_no, mpp must make a unique set", filed under `non_field_errors`,
+        # which no screen renders. Dropped in favour of a sentence keyed to the field that
+        # caused it. The database constraint is untouched and is still the actual guarantee.
+        validators: list = []
 
     def validate_aadhar_no(self, value: str) -> str:
         """
@@ -348,6 +362,43 @@ class NonMemberSerializer(serializers.ModelSerializer):
         if len(digits) != 10 or digits[0] not in "6789":
             raise serializers.ValidationError("Enter a valid 10-digit Indian mobile number.")
         return digits
+
+    def validate(self, attrs):
+        """
+        The MPP must be one of this Mait's, and the farmer must not already be at it.
+
+        Both refusals used to arrive as ``non_field_errors`` or not at all, and the app had no
+        box for that key — so a Mait registering a woman who was already on file tapped Save
+        and watched nothing happen. The message is now keyed to ``mobile_no``, which is the
+        field they would have to change, and it names her, because the right next action is to
+        go back and pick the record that already exists rather than invent a second one.
+        """
+        mpp = attrs.get("mpp") or getattr(self.instance, "mpp", None)
+        mobile_no = attrs.get("mobile_no") or getattr(self.instance, "mobile_no", "")
+
+        # SRS §16 — a Mait may only register at their own MPPs. The app can only offer them
+        # their own, because /mpp/ is scoped, but the endpoint took whatever id it was handed.
+        mait = self.context.get("mait")
+        if mait is not None and mpp is not None and mpp.mait_id != mait.id:
+            raise serializers.ValidationError({"mpp": "This is not one of your MPPs."})
+
+        if mpp is not None and mobile_no:
+            existing = NonMember.objects.filter(mobile_no=mobile_no, mpp=mpp)
+            if self.instance is not None:
+                existing = existing.exclude(pk=self.instance.pk)
+            already = existing.first()
+            if already is not None:
+                raise serializers.ValidationError(
+                    {
+                        "mobile_no": (
+                            f"{already.name} is already registered at this MPP on this "
+                            "number. Go back and pick her from the list instead of "
+                            "registering her again."
+                        )
+                    }
+                )
+
+        return attrs
 
 
 class NonMemberDetailSerializer(NonMemberSerializer):

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.db.models import Count
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import filters, mixins, status, viewsets
@@ -378,15 +379,27 @@ class NonMemberViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, views
         # what step 3 of the capture flow picks from.
         return NonMemberDetailSerializer if self.action == "retrieve" else NonMemberSerializer
 
+    def get_serializer_context(self):
+        # The serializer needs to know whose MPPs are whose before it accepts one.
+        context = super().get_serializer_context()
+        context["mait"] = getattr(self.request.user, "mait_profile", None)
+        return context
+
     def perform_create(self, serializer):
         """
-        Stamp the creating Mait server-side.
+        Stamp the creating Mait, and the moment she consented, server-side.
 
-        Never taken from the request body — that would let one Mait attribute a registration
-        to another (SRS §16).
+        Neither is taken from the request body as a value — the Mait because that would let one
+        attribute a registration to another (SRS §16), and the consent time because a handset
+        clock is not evidence of when anything happened. The app sends `consent` as the fact
+        that she agreed; the server decides what time it is.
         """
         mait = getattr(self.request.user, "mait_profile", None)
-        non_member = serializer.save(created_by_mait=mait)
+        consented = serializer.validated_data.pop("consent", False)
+        non_member = serializer.save(
+            created_by_mait=mait,
+            consent_captured_at=timezone.now() if consented else None,
+        )
         record_audit(
             action="create",
             entity_type="non_member",

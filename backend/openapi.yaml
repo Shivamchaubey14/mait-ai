@@ -4462,6 +4462,7 @@ components:
         consent_captured_at:
           type: string
           format: date-time
+          readOnly: true
           nullable: true
           description: When the farmer consented to their details being stored.
         created_at:
@@ -4469,6 +4470,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - consent_captured_at
       - created_at
       - created_by_mait
       - id
@@ -4513,6 +4515,7 @@ components:
         consent_captured_at:
           type: string
           format: date-time
+          readOnly: true
           nullable: true
           description: When the farmer consented to their details being stored.
         created_at:
@@ -4526,6 +4529,7 @@ components:
           readOnly: true
       required:
       - animals
+      - consent_captured_at
       - created_at
       - created_by_mait
       - id
@@ -4558,14 +4562,13 @@ components:
           writeOnly: true
           minLength: 1
           maxLength: 20
+        consent:
+          type: boolean
+          writeOnly: true
+          default: false
         mpp:
           type: integer
           description: Nearest/served MPP.
-        consent_captured_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: When the farmer consented to their details being stored.
       required:
       - aadhar_no
       - mobile_no

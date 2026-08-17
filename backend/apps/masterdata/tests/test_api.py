@@ -16,6 +16,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
 from apps.masterdata.models import DataUploadLog, Member, NonMember
+from conftest import MPPFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -368,3 +369,82 @@ class TestNonMemberRegistration:
         assert member.aadhar_hash != ""
         assert "999988887777" not in member.aadhar_hash
         assert Member.objects.filter(aadhar_no="999988887777").first() is None
+
+    def test_consent_is_recorded_not_merely_required(self, api_client, mait_user, mpp):
+        """
+        SRS §7 — the tick on the handset gates the button; this is what makes it a record.
+
+        The app has always collected the consent and always dropped it, so every non-member
+        ever registered carried a null here. Timed server-side: a device clock is not evidence
+        of when anything happened.
+        """
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            {
+                "name": "Radha Singh",
+                "mobile_no": "9876543210",
+                "mpp": mpp.id,
+                "aadhar_no": "111122223333",
+                "consent": True,
+            },
+            format="json",
+        )
+        assert response.status_code == 201, response.json()
+        assert NonMember.objects.get(pk=response.json()["id"]).consent_captured_at is not None
+
+    def test_re_registering_her_says_who_she_is(self, api_client, mait_user, mpp):
+        """
+        The refusal that used to be a dead button.
+
+        DRF's own uniqueness message lands under `non_field_errors`, and no screen in the app
+        has a box for that key — so a Mait registering a woman already on file tapped Save and
+        watched nothing happen at all. Keyed to `mobile_no` instead, which is the field they
+        would have to change, and naming her, because the right next move is to go back and
+        pick the record that already exists.
+        """
+        body = {
+            "name": "Radha Singh",
+            "mobile_no": "9876543210",
+            "mpp": mpp.id,
+            "aadhar_no": "111122223333",
+            "consent": True,
+        }
+        assert (
+            auth(api_client, mait_user)
+            .post(f"{BASE}/non-members/", body, format="json")
+            .status_code
+            == 201
+        )
+
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            dict(body, aadhar_no="444455556666"),
+            format="json",
+        )
+        assert response.status_code == 400
+        errors = response.json()["errors"]
+        assert "non_field_errors" not in errors
+        assert "Radha Singh" in " ".join(errors["mobile_no"])
+        assert NonMember.objects.filter(mobile_no="9876543210", mpp=mpp).count() == 1
+
+    def test_cannot_register_at_another_maits_mpp(self, api_client, mait_user, mpp):
+        """
+        SRS §16. The app can only ever offer a Mait their own MPPs, because `/mpp/` is scoped —
+        but this endpoint took whatever id it was handed, and a scope enforced only by the
+        screen that draws it is not enforced.
+        """
+        response = auth(api_client, mait_user).post(
+            f"{BASE}/non-members/",
+            {
+                "name": "Radha Singh",
+                "mobile_no": "9876543210",
+                # Somebody else's, or nobody's — either way not this Mait's.
+                "mpp": MPPFactory().id,
+                "aadhar_no": "111122223333",
+                "consent": True,
+            },
+            format="json",
+        )
+        assert response.status_code == 400
+        assert "mpp" in response.json()["errors"]
+        assert not NonMember.objects.filter(mobile_no="9876543210").exists()
