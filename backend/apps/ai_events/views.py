@@ -67,13 +67,36 @@ class AIEventFilter(django_filters.FilterSet):
     date_from = django_filters.DateFilter(field_name="created_at", lookup_expr="date__gte")
     date_to = django_filters.DateFilter(field_name="created_at", lookup_expr="date__lte")
     search = django_filters.CharFilter(method="filter_search")
+    unfinished = django_filters.BooleanFilter(method="filter_unfinished")
 
     class Meta:
         model = AIEvent
-        fields = ["status", "mpp", "mait", "date_from", "date_to", "search"]
+        fields = ["status", "mpp", "mait", "date_from", "date_to", "search", "unfinished"]
 
     def filter_search(self, queryset, name, value):
         return search_events(queryset, value)
+
+    def filter_unfinished(self, queryset, name, value):
+        """
+        Captures that still need something from the Mait who started them.
+
+        Which statuses those are is a domain rule, not a client's opinion, so it lives here
+        rather than as a list of statuses each screen remembers to send. The app's job is to
+        ask for the unfinished ones and to know where each resumes; deciding *what unfinished
+        means* is the server's.
+
+        Terminal states are excluded by definition — a completed event needs nothing and a
+        cancelled one is over. Everything else is a Mait standing between an animal that has
+        been served and a record that says so.
+        """
+        if value is None:
+            return queryset
+        unfinished = AIEvent.UNFINISHED_STATUSES
+        return (
+            queryset.filter(status__in=unfinished)
+            if value
+            else queryset.exclude(status__in=unfinished)
+        )
 
 
 @extend_schema(tags=["ai-events"])

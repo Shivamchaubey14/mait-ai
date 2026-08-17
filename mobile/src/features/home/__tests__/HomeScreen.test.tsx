@@ -63,7 +63,7 @@ function mockApi(summary: InventorySummary, events: AIEvent[]) {
 const props = {
   onOpenStock: jest.fn(),
   onStartCapture: jest.fn(),
-  onResume: jest.fn(),
+  onOpenUnfinished: jest.fn(),
   online: true,
   pending: 0,
   onSync: jest.fn(),
@@ -118,19 +118,34 @@ describe('HomeScreen', () => {
     expect(screen.getByText('32 total')).toBeTruthy();
   });
 
-  it('offers to resume an insemination whose photo never arrived', async () => {
+  it('names the one unfinished capture, and opens the list', async () => {
     const unfinished = event({ id: 9, status: 'straw_verified', client_uuid: 'uuid-9' });
-    const onResume = jest.fn();
+    const onOpenUnfinished = jest.fn();
     mockApi(SUMMARY, [unfinished]);
-    render({ onResume });
+    render({ onOpenUnfinished });
 
     await waitFor(() => expect(screen.getByTestId('resume-unfinished')).toBeTruthy());
+    // One is named. A Mait with a single thing outstanding should not have to open a list to
+    // find out whose it is.
     expect(screen.getByText(/Kavita Devi/)).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('resume-unfinished'));
-    // The whole event goes back, so the flow can restore its client_uuid — a new one would
-    // record the insemination twice (ADR 0003).
-    expect(onResume).toHaveBeenCalledWith(expect.objectContaining({ client_uuid: 'uuid-9' }));
+    expect(onOpenUnfinished).toHaveBeenCalled();
+  });
+
+  it('counts them once there is more than one', async () => {
+    // Home used to surface exactly one — a straw verified today whose photo never arrived —
+    // and every other abandoned capture was invisible. For work already done, that is the
+    // worst kind of missing record.
+    mockApi(SUMMARY, [
+      event({ id: 9, status: 'straw_verified', client_uuid: 'uuid-9' }),
+      event({ id: 10, status: 'photo_captured', client_uuid: 'uuid-10' }),
+      event({ id: 11, status: 'payment_pending', client_uuid: 'uuid-11' }),
+    ]);
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('resume-unfinished')).toBeTruthy());
+    expect(screen.getByText('3 unfinished captures')).toBeTruthy();
   });
 
   it('says nothing about resuming when today is finished work', async () => {

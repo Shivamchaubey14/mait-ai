@@ -62,6 +62,10 @@ class AIEventSerializer(serializers.ModelSerializer):
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     mpp_code = serializers.CharField(source="mpp.mpp_code", read_only=True)
+    # The member's own code, not just her row id. It is what the app names her by everywhere
+    # else, and without it a capture picked back up out of the Unfinished list cannot re-fetch
+    # the farmer it belongs to — it would have a number the rest of the flow does not speak.
+    member_code = serializers.CharField(source="member.member_code", read_only=True, default="")
     mpp_name = serializers.CharField(source="mpp.mpp_name", read_only=True)
     # The admin list is a table of who did what: an event row without the Mait on it cannot
     # be read without opening every one of 31,000 rows.
@@ -91,6 +95,7 @@ class AIEventSerializer(serializers.ModelSerializer):
             "payment",
             "owner_type",
             "member",
+            "member_code",
             "non_member",
             "owner_name",
             "animal",

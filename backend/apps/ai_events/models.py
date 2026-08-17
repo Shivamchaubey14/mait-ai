@@ -35,6 +35,16 @@ class AIEvent(TimeStampedModel):
         Status.CANCELLED: (),  # terminal
     }
 
+    # Everything that is not terminal. A capture in one of these is a Mait standing between an
+    # animal that has been served and a record that says so — which is what the app's
+    # Unfinished list is for, and why the set is defined here rather than retyped per screen.
+    UNFINISHED_STATUSES = (
+        Status.DRAFT,
+        Status.STRAW_VERIFIED,
+        Status.PHOTO_CAPTURED,
+        Status.PAYMENT_PENDING,
+    )
+
     class OwnerType(models.TextChoices):
         MEMBER = "member", "Member"
         NON_MEMBER = "non_member", "Non-member"

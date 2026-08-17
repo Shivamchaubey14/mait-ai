@@ -17,7 +17,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import { useGetInventorySummaryQuery, useListAiEventsQuery } from '@api/endpoints';
-import type { AIEvent } from '@api/types';
 import { LanguageToggle } from '@/components/brand';
 import PageHero from '@/components/hero';
 import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
@@ -28,7 +27,8 @@ interface Props {
   onOpenStock: () => void;
   onStartCapture: () => void;
   /** Picks a half-finished event back up at the step it stopped at. */
-  onResume: (event: AIEvent) => void;
+  /** Opens the list of captures still owed a finish. */
+  onOpenUnfinished: () => void;
   /** Live from NetInfo, so the banner reflects the radio rather than the last failed call. */
   online: boolean;
   pending: number;
@@ -69,7 +69,7 @@ function initialsOf(name: string): string {
 export default function HomeScreen({
   onOpenStock,
   onStartCapture,
-  onResume,
+  onOpenUnfinished,
   online,
   pending,
   onSync,
@@ -91,10 +91,14 @@ export default function HomeScreen({
 
   const today = (events.data?.results ?? []).filter(event => isToday(event.created_at));
 
-  // A straw is verified and the photo never arrived. That is the one half-finished state this
-  // app can actually pick back up — a draft has no straw yet, and anything past the photo is
-  // waiting on the server rather than on the Mait.
-  const unfinished = today.find(event => event.status === 'straw_verified') ?? null;
+  // Everything still owed a finish, whatever step it stopped on and whatever day it was
+  // started. This used to be one event — a straw verified today whose photo never arrived —
+  // and every other abandoned capture was simply invisible, which for work already done is
+  // the worst kind of missing record. The list itself lives on its own screen; what Home
+  // carries is the count and the way in.
+  const unfinished = (events.data?.results ?? []).filter(
+    event => !['completed', 'cancelled'].includes(event.status),
+  );
 
   const byBreed = Object.entries(stock.data?.by_breed ?? {}).sort((a, b) => b[1] - a[1]);
   const totalStraws = stock.data?.total_straws ?? 0;
@@ -226,16 +230,18 @@ export default function HomeScreen({
           )}
         </View>
 
-        {!!unfinished && (
+        {unfinished.length > 0 && (
           <Pressable
             accessibilityRole="button"
-            onPress={() => onResume(unfinished)}
+            onPress={onOpenUnfinished}
             style={({ pressed }) => [styles.unfinished, pressed && styles.unfinishedPressed]}
             testID="resume-unfinished"
           >
             <Ionicons name="create-outline" size={17} color={colors.secondaryPressed} />
             <Text style={styles.unfinishedLabel} numberOfLines={1}>
-              {t('home.unfinished', { name: unfinished.owner_name })}
+              {unfinished.length === 1 && unfinished[0]
+                ? t('home.unfinished', { name: unfinished[0].owner_name })
+                : t('unfinished.openList', { count: unfinished.length })}
             </Text>
             <Text style={styles.resume}>{t('home.resume')}</Text>
           </Pressable>

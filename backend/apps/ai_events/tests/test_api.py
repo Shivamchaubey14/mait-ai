@@ -340,3 +340,100 @@ class TestReading:
         body = mait_client.get(f"{BASE}/{event_id}/").json()
         assert body["owner_name"] == member.member_name
         assert body["breed"] == "GIR"
+
+
+class TestUnfinished:
+    """
+    The captures that still need something from the Mait who started them (C13).
+
+    The app used to surface one of them — a straw verified today whose photo never arrived —
+    and every other abandoned capture was invisible. For work already done that is the worst
+    kind of missing record: the animal was served and a straw was spent, and nothing on the
+    handset admitted it.
+
+    Which statuses count is decided here rather than by each screen sending its own list, so
+    the app can ask the question without also having to hold the answer.
+    """
+
+    @pytest.fixture
+    def events(self, mait, mpp, member, animal):
+        from django.utils import timezone
+
+        from conftest import SemenBatchFactory
+
+        def make(status):
+            # A completed event carries a straw and a completion time — the database refuses
+            # one without them (`ai_event_completed_requires_straw`), which is the invariant
+            # that stops a service being recorded with nothing taken out of stock.
+            done = status == AIEvent.Status.COMPLETED
+            return AIEvent.objects.create(
+                client_uuid=uuid.uuid4(),
+                mait=mait,
+                mpp=mpp,
+                owner_type=AIEvent.OwnerType.MEMBER,
+                member=member,
+                animal=animal,
+                status=status,
+                semen_batch=SemenBatchFactory() if done else None,
+                completed_at=timezone.now() if done else None,
+            )
+
+        return make
+
+    def test_lists_every_state_that_still_needs_something(self, mait_client, events):
+        for status in AIEvent.UNFINISHED_STATUSES:
+            events(status)
+        events(AIEvent.Status.COMPLETED)
+        events(AIEvent.Status.CANCELLED)
+
+        response = mait_client.get(f"{BASE}/", {"unfinished": "true"})
+
+        assert response.status_code == 200, response.json()
+        returned = {row["status"] for row in response.json()["results"]}
+        assert returned == set(AIEvent.UNFINISHED_STATUSES)
+
+    def test_a_completed_capture_needs_nothing(self, mait_client, events):
+        """Terminal by definition — it is done, and a cancelled one is over."""
+        events(AIEvent.Status.COMPLETED)
+        events(AIEvent.Status.CANCELLED)
+
+        response = mait_client.get(f"{BASE}/", {"unfinished": "true"})
+
+        assert response.json()["count"] == 0
+
+    def test_the_inverse_returns_only_the_finished_ones(self, mait_client, events):
+        events(AIEvent.Status.STRAW_VERIFIED)
+        events(AIEvent.Status.COMPLETED)
+
+        response = mait_client.get(f"{BASE}/", {"unfinished": "false"})
+
+        assert [row["status"] for row in response.json()["results"]] == ["completed"]
+
+    def test_a_row_carries_the_member_code_the_app_names_her_by(self, mait_client, events, member):
+        """
+        Without it a capture picked back up holds a row id no other screen speaks, and the
+        resume cannot re-fetch the farmer it belongs to.
+        """
+        events(AIEvent.Status.PHOTO_CAPTURED)
+
+        row = mait_client.get(f"{BASE}/", {"unfinished": "true"}).json()["results"][0]
+
+        assert row["member_code"] == member.member_code
+
+    def test_another_maits_unfinished_work_is_not_listed(self, mait_client, other_mait, events):
+        """SRS §16 — the list is a Mait's own, like every other read in the app."""
+        events(AIEvent.Status.STRAW_VERIFIED)
+        stranger, other_mpp, other_member, other_animal = other_mait
+        AIEvent.objects.create(
+            client_uuid=uuid.uuid4(),
+            mait=stranger,
+            mpp=other_mpp,
+            owner_type=AIEvent.OwnerType.MEMBER,
+            member=other_member,
+            animal=other_animal,
+            status=AIEvent.Status.STRAW_VERIFIED,
+        )
+
+        response = mait_client.get(f"{BASE}/", {"unfinished": "true"})
+
+        assert response.json()["count"] == 1
