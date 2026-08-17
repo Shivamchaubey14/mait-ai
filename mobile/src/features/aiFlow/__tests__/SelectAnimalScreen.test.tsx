@@ -195,13 +195,20 @@ describe('SelectAnimalScreen', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('closes without registering anything', () => {
+  it('closes without registering anything', async () => {
     renderScreen([TAGGED]);
 
     fireEvent.press(screen.getByTestId('animal-add-card'));
     fireEvent.press(screen.getByTestId('add-animal-close'));
 
-    expect(screen.queryByTestId('animal-ear-tag')).toBeNull();
+    // Awaited, because the sheet now leaves rather than vanishes: it stays mounted for its
+    // exit animation and renders nothing of its own once that has played out.
+    // Awaited, because the sheet now leaves rather than vanishes: it stays mounted for its
+    // exit animation and renders nothing of its own once that has played out. The window is
+    // generous on purpose — what is being asserted is that it goes, not how fast.
+    await waitFor(() => expect(screen.queryByTestId('animal-ear-tag')).toBeNull(), {
+      timeout: 3000,
+    });
     expect(onSelect).not.toHaveBeenCalled();
   });
 

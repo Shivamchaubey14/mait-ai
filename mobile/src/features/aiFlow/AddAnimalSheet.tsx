@@ -12,8 +12,8 @@
  * record. Next visit, the row shows her face.
  */
 
-import React, { useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -30,8 +30,17 @@ import {
   yolk,
 } from '@theme/tokens';
 
+import { useSheetMotion } from '@/components/sheetMotion';
+
 import FlowCamera from './FlowCamera';
-import { Dropdown, FlowNotice, LabelledField, Segmented, useKeyboardOverlap } from './components';
+import {
+  Dropdown,
+  FlowNotice,
+  FlowScroll,
+  LabelledField,
+  Segmented,
+  useRevealOnFocus,
+} from './components';
 
 const ANIMAL_TYPES: AnimalTypeCode[] = ['COW', 'BUFF'];
 
@@ -44,6 +53,11 @@ export interface AnimalDraftInput {
 }
 
 interface Props {
+  /**
+   * Open or closed. Passed rather than rendered conditionally so the sheet can play its exit
+   * before it leaves the tree — torn out on the closing tap, there is nothing left to animate.
+   */
+  visible: boolean;
   /** Whose animal this will be, named on the sheet so it cannot be registered to the wrong one. */
   owner: { name: string; code?: string };
   /** The species the list was filtered to when the Mait tapped Add — the likely answer. */
@@ -63,6 +77,7 @@ interface Props {
 }
 
 export default function AddAnimalSheet({
+  visible,
   owner,
   initialType,
   saving,
@@ -73,14 +88,34 @@ export default function AddAnimalSheet({
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
-  const keyboard = useKeyboardOverlap();
-  const scroller = useRef<ScrollView>(null);
+  // The sheet has the same problem the flow's screens had — a Save button riding above the
+  // keyboard with the field being typed into hidden behind it — and now the same answer.
+  const { scroller, overlap: keyboard, api } = useRevealOnFocus();
 
   const [animalType, setAnimalType] = useState<AnimalTypeCode>(initialType);
   const [breed, setBreed] = useState<string | null>(null);
   const [earTag, setEarTag] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [camera, setCamera] = useState(false);
+
+  const { mounted, translateY, backdropOpacity } = useSheetMotion(visible);
+
+  /**
+   * A fresh form each time it opens.
+   *
+   * The sheet no longer unmounts on close — it stays for its exit — so the state that used to
+   * be cleared by remounting has to be cleared here. Without it the next animal opens carrying
+   * the last one's breed and ear tag, which is how one cow's tag ends up on another.
+   */
+  useEffect(() => {
+    if (visible) {
+      setAnimalType(initialType);
+      setBreed(null);
+      setEarTag('');
+      setPhotoUri(null);
+      setCamera(false);
+    }
+  }, [visible, initialType]);
 
   const hindi = i18n.language.startsWith('hi');
   const { data: breeds = [] } = useListBreedsQuery(animalType);
@@ -91,6 +126,10 @@ export default function AddAnimalSheet({
     // answer becomes buffalo.
     setBreed(null);
   };
+
+  if (!mounted) {
+    return <></>;
+  }
 
   if (camera) {
     return (
@@ -109,24 +148,32 @@ export default function AddAnimalSheet({
 
   return (
     <View style={styles.root}>
-      {/* Dimmed, not hidden. The question the sheet belongs to stays legible behind it. */}
-      <Pressable
-        style={styles.scrim}
-        accessibilityRole="button"
-        accessibilityLabel={t('common.close')}
-        onPress={onClose}
-        testID="add-animal-scrim"
-      />
+      {/* Dimmed, not hidden. The question the sheet belongs to stays legible behind it, and
+          the tint fades in with the sheet rather than snapping on. */}
+      <Animated.View style={[styles.scrim, { opacity: backdropOpacity }]}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.close')}
+          onPress={onClose}
+          testID="add-animal-scrim"
+        />
+      </Animated.View>
 
-      {/* The sheet stays welded to the bottom edge and grows into the keyboard rather than
-          being lifted off it. Lifting it left a band of scrim under the Save button, which
-          read as the sheet floating loose; padding it keeps the white running all the way
-          down, with the keyboard covering the part nobody needs to see. */}
-      <View
+      {/* The sheet's own padding never changes. It used to grow by the keyboard's height,
+          which on Android is counted twice — `adjustResize` has already shrunk the window the
+          sheet is measured against — so the whole thing was shoved up by two keyboards and
+          the Save button ended up floating high above the keypad with the field being typed
+          into nowhere in sight.
+
+          The keyboard belongs to the scroll instead (see below): the sheet stays put, the
+          form moves inside it, and what surfaces above the keypad is the field. */}
+      <Animated.View
         style={[
           styles.sheet,
-          { paddingBottom: keyboard > 0 ? keyboard + spacing[4] : spacing[5] + insets.bottom },
+          { paddingBottom: spacing[5] + insets.bottom, transform: [{ translateY }] },
         ]}
+        testID="add-animal-sheet"
       >
         <View style={styles.grabber} />
 
@@ -152,98 +199,104 @@ export default function AddAnimalSheet({
 
         <ScrollView
           ref={scroller}
+          /* The keyboard, as scroll padding rather than as sheet padding. This is what lets a
+             field near the bottom be brought clear of the keypad — without it the scroll runs
+             out before the field arrives — and it leaves the sheet itself untouched. */
+          contentContainerStyle={keyboard ? { paddingBottom: keyboard } : undefined}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.label}>{t('aiFlow.animalTypeLabel')}</Text>
-          <Segmented
-            options={ANIMAL_TYPES.map(code => ({
-              value: code,
-              label: t(`aiFlow.animalType.${code}`),
-            }))}
-            value={animalType}
-            onChange={chooseType}
-            testID="sheet-animal-type"
-          />
+          <FlowScroll.Provider value={api}>
+            <Text style={styles.label}>{t('aiFlow.animalTypeLabel')}</Text>
+            <Segmented
+              options={ANIMAL_TYPES.map(code => ({
+                value: code,
+                label: t(`aiFlow.animalType.${code}`),
+              }))}
+              value={animalType}
+              onChange={chooseType}
+              testID="sheet-animal-type"
+            />
 
-          <Dropdown
-            label={t('aiFlow.breed')}
-            placeholder={t('aiFlow.chooseBreed')}
-            value={breed}
-            options={breeds.map(option => ({
-              value: option.code,
-              label: (hindi && option.name_hi) || option.name,
-            }))}
-            onChange={setBreed}
-            testID="animal-breed"
-          />
+            <Dropdown
+              label={t('aiFlow.breed')}
+              placeholder={t('aiFlow.chooseBreed')}
+              value={breed}
+              options={breeds.map(option => ({
+                value: option.code,
+                label: (hindi && option.name_hi) || option.name,
+              }))}
+              onChange={setBreed}
+              testID="animal-breed"
+            />
 
-          <LabelledField
-            label={t('aiFlow.earTagNumber')}
-            optionalNote={t('aiFlow.optionalSuffix')}
-            tone="primary"
-            placeholder={t('aiFlow.earTagExample')}
-            error={fieldErrors.ear_tag_no?.[0]}
-            value={earTag}
-            onChangeText={setEarTag}
-            // The tag sits low in the sheet, so tapping it brings the rest of the sheet up
-            // with the keyboard rather than leaving the field under the cursor off screen.
-            onFocus={() => scroller.current?.scrollToEnd({ animated: true })}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            testID="animal-ear-tag"
-          />
+            <LabelledField
+              label={t('aiFlow.earTagNumber')}
+              optionalNote={t('aiFlow.optionalSuffix')}
+              tone="primary"
+              placeholder={t('aiFlow.earTagExample')}
+              error={fieldErrors.ear_tag_no?.[0]}
+              value={earTag}
+              onChangeText={setEarTag}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              testID="animal-ear-tag"
+            />
 
-          {/* Dashed and unfilled while it is empty, like the add card that opened this
+            {/* Dashed and unfilled while it is empty, like the add card that opened this
                 sheet: a place for something, not the thing. */}
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setCamera(true)}
-            style={({ pressed }) => [
-              styles.photo,
-              !!photoUri && styles.photoTaken,
-              pressed && styles.photoPressed,
-            ]}
-            testID="animal-photo"
-          >
-            {photoUri ? (
-              <Image source={{ uri: photoUri }} style={styles.thumb} resizeMode="cover" />
-            ) : (
-              <View style={styles.photoChip}>
-                <Ionicons name="camera-outline" size={20} color={colors.text} />
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setCamera(true)}
+              style={({ pressed }) => [
+                styles.photo,
+                !!photoUri && styles.photoTaken,
+                pressed && styles.photoPressed,
+              ]}
+              testID="animal-photo"
+            >
+              {photoUri ? (
+                <Image source={{ uri: photoUri }} style={styles.thumb} resizeMode="cover" />
+              ) : (
+                <View style={styles.photoChip}>
+                  <Ionicons name="camera-outline" size={20} color={colors.text} />
+                </View>
+              )}
+
+              <View style={styles.photoText}>
+                <Text style={styles.photoTitle}>{t('aiFlow.animalPhotoTitle')}</Text>
+                <Text style={styles.photoBody}>{t('aiFlow.animalPhotoBody')}</Text>
               </View>
-            )}
 
-            <View style={styles.photoText}>
-              <Text style={styles.photoTitle}>{t('aiFlow.animalPhotoTitle')}</Text>
-              <Text style={styles.photoBody}>{t('aiFlow.animalPhotoBody')}</Text>
-            </View>
+              <Text style={styles.take}>{photoUri ? t('aiFlow.retake') : t('aiFlow.take')}</Text>
+            </Pressable>
+            {/* Inside the scroll, with the refusal above it. A button pinned to the sheet's
+                floor is a button that rides up on the keyboard, which is the one thing this
+                sheet must not do — the Mait is looking at the box they are typing in, and a
+                Save bar hovering over the keypad is both in the way and easy to hit by
+                accident. It is the last thing in the form, so it is reached by finishing the
+                form. */}
+            {!!refusal && <FlowNotice tone="error" title={refusal} testID="animal-error" />}
 
-            <Text style={styles.take}>{photoUri ? t('aiFlow.retake') : t('aiFlow.take')}</Text>
-          </Pressable>
-
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !breed || saving, busy: saving }}
+              onPress={() => onSave({ animalType, breed, earTag, photoUri })}
+              disabled={!breed || saving}
+              style={({ pressed }) => [
+                styles.save,
+                !breed || saving ? styles.saveDisabled : styles.saveEnabled,
+                pressed && !!breed && !saving && styles.savePressed,
+              ]}
+              testID="animal-save"
+            >
+              <Text style={[styles.saveLabel, (!breed || saving) && styles.saveLabelDisabled]}>
+                {t('aiFlow.saveAnimal')}
+              </Text>
+            </Pressable>
+          </FlowScroll.Provider>
         </ScrollView>
-
-        {/* Outside the scroll, so a refusal cannot arrive off-screen. */}
-        {!!refusal && <FlowNotice tone="error" title={refusal} testID="animal-error" />}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !breed || saving, busy: saving }}
-          onPress={() => onSave({ animalType, breed, earTag, photoUri })}
-          disabled={!breed || saving}
-          style={({ pressed }) => [
-            styles.save,
-            !breed || saving ? styles.saveDisabled : styles.saveEnabled,
-            pressed && !!breed && !saving && styles.savePressed,
-          ]}
-          testID="animal-save"
-        >
-          <Text style={[styles.saveLabel, (!breed || saving) && styles.saveLabelDisabled]}>
-            {t('aiFlow.saveAnimal')}
-          </Text>
-        </Pressable>
-      </View>
+      </Animated.View>
     </View>
   );
 }

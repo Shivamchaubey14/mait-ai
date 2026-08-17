@@ -271,17 +271,19 @@ export default function SelectAnimalScreen({
         />
       </FlowScreen>
 
-      {adding && (
-        <AddAnimalSheet
-          owner={{ name: owner.name, code: owner.memberCode }}
-          initialType={animalType}
-          saving={saving}
-          fieldErrors={fieldErrors}
-          refusal={refusal}
-          onSave={handleSave}
-          onClose={() => setAdding(false)}
-        />
-      )}
+      {/* Always rendered, opened by the prop. Torn out of the tree on the closing tap it
+          would have nothing left to animate, and the sheet would vanish rather than leave —
+          it renders nothing of its own once the exit has played out. */}
+      <AddAnimalSheet
+        visible={adding}
+        owner={{ name: owner.name, code: owner.memberCode }}
+        initialType={animalType}
+        saving={saving}
+        fieldErrors={fieldErrors}
+        refusal={refusal}
+        onSave={handleSave}
+        onClose={() => setAdding(false)}
+      />
     </View>
   );
 }

@@ -1,0 +1,282 @@
+/**
+ * The field a Mait just tapped has to end up above the keyboard (SRS §7 Usability).
+ *
+ * The footer already rode up on its own — it is pinned to the bottom of a container that
+ * shrinks when the keyboard opens. The body did not, so on a short handset the button was
+ * visible and the box being typed into was behind the keyboard. On the step that asks for a
+ * farmer's authorisation code that is close to unusable: a Mait typing a code they cannot see
+ * cannot tell a mistyped digit from a wrong one, and the screen allows three attempts.
+ *
+ * These tests drive the real screens and assert on the scroll that results, because the bug
+ * was never in any one field — it was in nobody owning the question of where the body should
+ * be once the viewport had shrunk.
+ */
+
+import React from 'react';
+import { Keyboard, StyleSheet } from 'react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
+
+import AddAnimalSheet from '../AddAnimalSheet';
+import ConfirmFarmerScreen from '../ConfirmFarmerScreen';
+import { jsonResponse, renderWithStore } from '@/test-utils';
+
+/** Where a field is reported to sit inside the scrolling content. */
+const FIELD_TOP = 420;
+
+const mockScrollTo = jest.fn();
+
+/**
+ * A ScrollView that reports a content node and records what it was asked to scroll to.
+ *
+ * The real one measures nothing under Jest — there is no layout engine — so the assertion is
+ * that the body was told to move to the field's offset, which is the decision the code makes.
+ */
+jest.mock('react-native/Libraries/Components/ScrollView/ScrollView', () => {
+  const ReactActual = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+
+  const Mock = ReactActual.forwardRef(
+    (
+      { children, ...props }: { children?: React.ReactNode; testID?: string },
+      ref: React.Ref<unknown>,
+    ) => {
+      ReactActual.useImperativeHandle(ref, () => ({
+        getInnerViewNode: () => 'inner-node',
+        scrollTo: mockScrollTo,
+        scrollToEnd: jest.fn(),
+      }));
+      // Tagged so a test can ask what the scroll was given and what sits inside it — the real
+      // component's type is gone once the module is mocked.
+      return ReactActual.createElement(
+        View,
+        { ...props, testID: props.testID ?? 'mock-scroll' },
+        children,
+      );
+    },
+  );
+
+  // Both shapes: this RN reaches the module through `.default`, and the bare export is what
+  // anything still requiring it the old way would pick up.
+  Mock.__esModule = true;
+  Mock.default = Mock;
+  return Mock;
+});
+
+/** The keyboard listeners the components registered, by event name. */
+const listeners = new Map<string, (event: unknown) => void>();
+
+function captureKeyboardListeners() {
+  jest.spyOn(Keyboard, 'addListener').mockImplementation(((
+    event: string,
+    handler: (payload: unknown) => void,
+  ) => {
+    listeners.set(event, handler);
+    return { remove: jest.fn() };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  }) as any);
+}
+
+/** Raise the keyboard the way the OS does, so the reveal's second pass runs. */
+function raiseKeyboard(height = 300) {
+  act(() => {
+    listeners.get('keyboardDidShow')?.({
+      endCoordinates: { screenY: 800 - height, height, width: 400, screenX: 0 },
+    });
+  });
+}
+
+function dropKeyboard() {
+  act(() => {
+    listeners.get('keyboardDidHide')?.({});
+  });
+}
+
+const MEMBER = {
+  member_code: 'MEM00000412',
+  member_name: 'Kavita Devi',
+  father_husband_name: 'Ram',
+  mobile_no: '9876543210',
+  mpp_name: 'Baroli',
+  mpp_code: '001303',
+  can_receive_otp: true,
+  animals: [],
+};
+
+function sheet() {
+  return renderWithStore(
+    <AddAnimalSheet
+      visible
+      owner={{ name: 'Kavita Devi' }}
+      initialType="COW"
+      saving={false}
+      fieldErrors={{}}
+      refusal={null}
+      onSave={jest.fn()}
+      onClose={jest.fn()}
+    />,
+  );
+}
+
+describe('the sheet arrives and leaves', () => {
+  // Borrowed from milkkart-mobile, which had this right: a sheet that simply appears reads as
+  // the screen having been replaced rather than covered, and the Mait loses track of what they
+  // were doing behind it — which is the whole reason a sheet was chosen over a screen.
+  it('stays mounted through its exit, then renders nothing', async () => {
+    const { rerender } = renderWithStore(
+      <AddAnimalSheet
+        visible
+        owner={{ name: 'Kavita Devi' }}
+        initialType="COW"
+        saving={false}
+        fieldErrors={{}}
+        refusal={null}
+        onSave={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+    expect(screen.getByTestId('add-animal-sheet')).toBeTruthy();
+
+    rerender(
+      <AddAnimalSheet
+        visible={false}
+        owner={{ name: 'Kavita Devi' }}
+        initialType="COW"
+        saving={false}
+        fieldErrors={{}}
+        refusal={null}
+        onSave={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+
+    // Still there for the moment the exit is playing — torn out instantly it would vanish
+    // rather than leave.
+    expect(screen.queryByTestId('add-animal-sheet')).not.toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('add-animal-sheet')).toBeNull(), {
+      timeout: 3000,
+    });
+  });
+});
+
+describe('a focused field is brought above the keyboard', () => {
+  beforeEach(() => {
+    listeners.clear();
+    mockScrollTo.mockClear();
+    captureKeyboardListeners();
+
+    // Measuring against the scroll's content is native; report a fixed offset so the reveal
+    // has something to act on.
+    jest
+      .spyOn(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        require('react-native').View.prototype as any,
+        'measureLayout',
+      )
+      .mockImplementation(((_node: unknown, onSuccess: (left: number, top: number) => void) => {
+        onSuccess(0, FIELD_TOP);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      }) as any);
+
+    global.fetch = jest.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('/farmers/otp/send/')) {
+        return jsonResponse({ mobile_no: '••••• 43210', expires_in_seconds: 300 });
+      }
+      if (url.includes('/config/breeds/')) {
+        return jsonResponse([]);
+      }
+      return jsonResponse(MEMBER);
+    }) as jest.Mock;
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('scrolls the code field into view on "Is this her?"', async () => {
+    // The step the report came from. The identity card above the code box is deliberately
+    // large — it is the last chance to catch a mis-tapped member — which is exactly why the
+    // box under it ends up behind the keyboard.
+    renderWithStore(
+      <ConfirmFarmerScreen
+        farmer={{ kind: 'member', memberCode: MEMBER.member_code }}
+        onConfirm={jest.fn()}
+        onSearchAgain={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(await screen.findByTestId('farmer-verify'));
+    fireEvent(await screen.findByTestId('farmer-otp-input'), 'focus');
+    raiseKeyboard();
+
+    await waitFor(() => expect(mockScrollTo).toHaveBeenCalled());
+    // Stopped short of the field, so its label rides up with it — a box that arrives without
+    // the words naming it is a box a Mait has to guess at.
+    expect(mockScrollTo).toHaveBeenLastCalledWith(
+      expect.objectContaining({ y: expect.any(Number) }),
+    );
+    expect(mockScrollTo.mock.calls.at(-1)?.[0].y).toBeLessThan(FIELD_TOP);
+  });
+
+  it('scrolls a field in the bottom sheet too, not only the flow screens', async () => {
+    // The sheet had a hand-written `scrollToEnd` on the one field somebody noticed. It now
+    // goes through the same machinery, so a field added later is covered without anyone
+    // remembering to cover it.
+    sheet();
+
+    fireEvent(await screen.findByTestId('animal-ear-tag'), 'focus');
+    raiseKeyboard();
+
+    await waitFor(() => expect(mockScrollTo).toHaveBeenCalled());
+  });
+
+  it('leaves the sheet where it is, and keeps Save clear of the keypad', async () => {
+    // The report: typing a tag number put the Save button up above the keypad with the field
+    // being typed into nowhere in sight. Two causes, both fixed here. The sheet grew by the
+    // keyboard's height on top of Android's own `adjustResize`, so it was shoved up by two
+    // keyboards; and the button was pinned to the sheet's floor, so it rode up with it.
+    //
+    // `milkkart-mobile`'s sheets do it the other way round and are the reference: the sheet
+    // stays put, the keyboard becomes scroll padding, and the action sits inside the form.
+    sheet();
+
+    const sheetPadding = () =>
+      StyleSheet.flatten(screen.getByTestId('add-animal-sheet').props.style).paddingBottom;
+    const resting = sheetPadding();
+
+    fireEvent(await screen.findByTestId('animal-ear-tag'), 'focus');
+    raiseKeyboard(300);
+    await waitFor(() => expect(mockScrollTo).toHaveBeenCalled());
+
+    // The sheet is exactly where it was. It used to grow by the keyboard's height on top of
+    // Android's own `adjustResize`, which counts it twice and shoves the whole thing up by
+    // two keyboards.
+    expect(sheetPadding()).toBe(resting);
+
+    // And Save is inside the scrolling form, so it is reached by finishing the form rather
+    // than by hovering over the keypad.
+    const scroll = screen.getByTestId('mock-scroll');
+    let insideScroll = false;
+    for (let node = screen.getByTestId('animal-save').parent; node; node = node.parent) {
+      if (node === scroll) {
+        insideScroll = true;
+        break;
+      }
+    }
+    expect(insideScroll).toBe(true);
+  });
+
+  it('stops chasing a field once the keyboard is down', async () => {
+    sheet();
+
+    fireEvent(await screen.findByTestId('animal-ear-tag'), 'focus');
+    raiseKeyboard();
+    await waitFor(() => expect(mockScrollTo).toHaveBeenCalled());
+
+    dropKeyboard();
+    mockScrollTo.mockClear();
+
+    // A second keyboard, with nothing focused, must not yank the body back to whichever field
+    // was last tapped.
+    raiseKeyboard();
+    expect(mockScrollTo).not.toHaveBeenCalled();
+  });
+});
