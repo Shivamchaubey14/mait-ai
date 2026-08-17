@@ -1190,6 +1190,10 @@ paths:
           * `payment_pending` - Payment pending
           * `completed` - Completed
           * `cancelled` - Cancelled
+      - in: query
+        name: unfinished
+        schema:
+          type: boolean
       tags:
       - ai-events
       security:
@@ -1399,6 +1403,10 @@ paths:
           * `payment_pending` - Payment pending
           * `completed` - Completed
           * `cancelled` - Cancelled
+      - in: query
+        name: unfinished
+        schema:
+          type: boolean
       tags:
       - ai-events
       security:
@@ -2576,9 +2584,64 @@ paths:
                 additionalProperties: {}
           description: ''
   /api/v1/non-members/:
+    get:
+      operationId: non_members_list
+      description: |-
+        What the capture flow offers a Mait once they have said *non-member* and picked the collection point. Without it the only path was the registration form, so a farmer served a second time was registered a second time — and since one Aadhaar is now one farmer, that path simply refuses.
+
+        Scoped to the MPPs the requesting Mait covers. Pass `mpp__mpp_code` for one of them, and `search` for her name, her number or the household name.
+
+        Each row carries how many animals are on her record and when she was last served, because a Mait picking from a list of names in one village needs something other than the name to tell two of them apart.
+      summary: The non-members already registered at an MPP
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: mpp__mpp_code
+        schema:
+          type: string
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNonMemberPickerList'
+          description: ''
     post:
       operationId: non_members_create
-      description: Non-member registration by a Mait in the field (SRS §9.3).
+      description: |-
+        The non-members a Mait works with in the field (SRS §9.3).
+
+        **Scoped by MPP, not by who typed the row in.** It used to be `created_by_mait`, which was
+        wrong in two ways that only showed up once registering the same woman twice became
+        impossible. A Mait who registered her in March and returns in August could still find her;
+        a Mait who took over that MPP could not see her at all, and the only thing the app offered
+        them was the registration form — which now refuses the Aadhaar as a duplicate and leaves
+        them with a farmer they cannot serve and cannot re-create.
+
+        An MPP is the unit of work here, the same way it is for members (`MemberViewSet` has always
+        scoped this way), so the rule is the same rule: a Mait sees the farmers at the collection
+        points they cover, and nothing else (SRS §16).
       tags:
       - master-data
       requestBody:
@@ -2605,7 +2668,19 @@ paths:
   /api/v1/non-members/{id}/:
     get:
       operationId: non_members_retrieve
-      description: Non-member registration by a Mait in the field (SRS §9.3).
+      description: |-
+        The non-members a Mait works with in the field (SRS §9.3).
+
+        **Scoped by MPP, not by who typed the row in.** It used to be `created_by_mait`, which was
+        wrong in two ways that only showed up once registering the same woman twice became
+        impossible. A Mait who registered her in March and returns in August could still find her;
+        a Mait who took over that MPP could not see her at all, and the only thing the app offered
+        them was the registration form — which now refuses the Aadhaar as a duplicate and leaves
+        them with a farmer they cannot serve and cannot re-create.
+
+        An MPP is the unit of work here, the same way it is for members (`MemberViewSet` has always
+        scoped this way), so the rule is the same rule: a Mait sees the farmers at the collection
+        points they cover, and nothing else (SRS §16).
       parameters:
       - in: path
         name: id
@@ -2939,6 +3014,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        member_code:
+          type: string
+          readOnly: true
+          default: ''
         non_member:
           type: integer
           readOnly: true
@@ -3023,6 +3102,7 @@ components:
       - mait_code
       - mait_name
       - member
+      - member_code
       - mpp
       - mpp_code
       - mpp_name
@@ -4939,6 +5019,73 @@ components:
       - mobile_no
       - mpp
       - name
+    NonMemberPicker:
+      type: object
+      description: |-
+        One row in the list a Mait picks from before a capture (SRS §6.3 step 2, C4b).
+
+        Deliberately not the registration shape. That one is a form being filled in; this is a
+        roster being read in a yard, and the question it has to answer is "which of these is the
+        woman in front of me". A name does not answer it — the same names repeat in a village —
+        so the row carries the household and whose name that is, her number, and the two facts
+        that identify her by her animals: how many are on her record and when she was last served.
+
+        No Aadhaar, masked or otherwise. It is what proves she is not already a member, and that
+        check happens at registration; a picker does not need it, and a screen full of them is a
+        screen full of identity numbers being held up in a public place.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        father_husband_name:
+          type: string
+          readOnly: true
+        relation:
+          allOf:
+          - $ref: '#/components/schemas/RelationEnum'
+          readOnly: true
+          description: |-
+            Whether father_husband_name is her father or her husband.
+
+            * `father` - Father
+            * `husband` - Husband
+        relation_display:
+          type: string
+          readOnly: true
+        mobile_no:
+          type: string
+          readOnly: true
+        animal_count:
+          type: integer
+          readOnly: true
+          default: 0
+        ai_event_count:
+          type: integer
+          readOnly: true
+          default: 0
+        last_ai_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ai_event_count
+      - animal_count
+      - created_at
+      - father_husband_name
+      - id
+      - last_ai_at
+      - mobile_no
+      - name
+      - relation
+      - relation_display
     NonMemberRequest:
       type: object
       description: Quick-capture registration by a Mait in the field (SRS §6.3 step
@@ -5271,6 +5418,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MemberList'
+    PaginatedNonMemberPickerList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/NonMemberPicker'
     PaginatedUploadErrorRowList:
       type: object
       required:

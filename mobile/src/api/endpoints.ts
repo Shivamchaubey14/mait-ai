@@ -24,6 +24,7 @@ import type {
   MPP,
   NonMember,
   NonMemberDetail,
+  NonMemberSummary,
   NonMemberDraft,
   Product,
   Indent,
@@ -103,6 +104,31 @@ export const maitaiApi = api.injectEndpoints({
     createNonMember: builder.mutation<NonMember, NonMemberDraft>({
       query: body => ({ url: '/non-members/', method: 'POST', body }),
       invalidatesTags: ['Member'],
+    }),
+
+    /**
+     * The non-members already registered at an MPP.
+     *
+     * What step 3 offers before it offers a form. Without it the only path a Mait had was
+     * registering somebody, so the second visit to the same farmer registered her a second
+     * time — and now that one Aadhaar is one farmer, that path refuses outright.
+     *
+     * Scoped server-side to the MPPs this Mait covers, so the app never sends a "which Mait
+     * am I" filter that could be omitted or altered.
+     */
+    listNonMembers: builder.query<
+      Paginated<NonMemberSummary>,
+      { mppCode: string; search?: string }
+    >({
+      query: ({ mppCode, search }) => ({
+        url: '/non-members/',
+        params: {
+          mpp__mpp_code: mppCode,
+          limit: 50,
+          ...(search ? { search } : {}),
+        },
+      }),
+      providesTags: ['Member'],
     }),
 
     getNonMember: builder.query<NonMemberDetail, number>({
@@ -299,10 +325,23 @@ export const maitaiApi = api.injectEndpoints({
       invalidatesTags: ['Indent', 'Inventory'],
     }),
 
-    listAiEvents: builder.query<Paginated<AIEvent>, { status?: string } | void>({
+    /**
+     * The Mait's own events.
+     *
+     * `unfinished: true` asks for the captures that still need something from them. Which
+     * statuses those are is decided server-side — the app asks the question and knows where
+     * each answer resumes, but it does not keep its own list of what "unfinished" means.
+     */
+    listAiEvents: builder.query<
+      Paginated<AIEvent>,
+      { status?: string; unfinished?: boolean } | void
+    >({
       query: args => ({
         url: '/ai-events/',
-        params: args?.status ? { status: args.status } : undefined,
+        params: {
+          ...(args?.status ? { status: args.status } : {}),
+          ...(args?.unfinished ? { unfinished: true, limit: 50 } : {}),
+        },
       }),
       providesTags: ['AIEvent'],
     }),
@@ -319,6 +358,7 @@ export const {
   useListMembersQuery,
   useGetMemberQuery,
   useCreateNonMemberMutation,
+  useListNonMembersQuery,
   useUploadNonMemberAadhaarMutation,
   useGetNonMemberQuery,
   useListBreedsQuery,

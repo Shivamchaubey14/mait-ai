@@ -24,7 +24,7 @@ import RootNavigator from '../index';
 import { clearQueue } from '@api/queue';
 import { loggedIn } from '@/features/auth/authSlice';
 import type { AuthUser } from '@/features/auth/authSlice';
-import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
+import { jsonResponse, makeStore, problemResponse, renderWithStore } from '@/test-utils';
 
 /** Both cameras in the flow, reduced to "a photo came back". */
 jest.mock('@/features/aiFlow/FlowCamera', () => {
@@ -41,7 +41,10 @@ jest.mock('@/features/aiFlow/FlowCamera', () => {
     }) =>
       Actual.createElement(
         P,
-        { testID: `${testIDPrefix}-stub`, onPress: () => onCaptured(`file:///${testIDPrefix}.jpg`) },
+        {
+          testID: `${testIDPrefix}-stub`,
+          onPress: () => onCaptured(`file:///${testIDPrefix}.jpg`),
+        },
         Actual.createElement(T, null, 'capture'),
       ),
   };
@@ -96,6 +99,12 @@ const ANIMAL = {
   last_ai_breed: null,
 };
 
+/** Every call the payment endpoints saw, so a test can read what was actually sent. */
+let paymentCalls: { url: string; body: string }[] = [];
+
+/** What the non-member picker lists. Set per test; empty means "register a new one". */
+let nonMemberRoster: Record<string, unknown>[] = [];
+
 /** ₹300 — a non-member's own rate, which is not the member one. */
 const EVENT = {
   id: 20,
@@ -142,6 +151,11 @@ function mockApi() {
     if (url.includes('/aadhaar/')) {
       return jsonResponse({ id: 7, aadhar_front_captured: true, aadhar_back_captured: true });
     }
+    // The picker's roster. Empty by default, so the walk goes on to register somebody — the
+    // path this test has always taken.
+    if (url.includes('/non-members/?') || url.endsWith('/non-members/')) {
+      return jsonResponse({ count: 0, next: null, previous: null, results: nonMemberRoster });
+    }
     if (url.includes('/non-members/')) {
       return jsonResponse({
         id: 7,
@@ -169,6 +183,21 @@ function mockApi() {
       return jsonResponse(EVENT, 201);
     }
     if (url.includes('/payments/')) {
+      // RTK Query calls fetch with a Request, so the body is on the request rather than on
+      // `init` — read from whichever carries it, or the test sees every call as empty.
+      const body =
+        init?.body !== undefined && init?.body !== null
+          ? String(init.body)
+          : typeof input === 'string'
+            ? ''
+            : await input.clone().text();
+      paymentCalls.push({ url, body });
+
+      // The server refuses a non-member payment with no mode — "Say how she is paying" —
+      // which is exactly the refusal the completion used to walk into.
+      if (url.includes('/initiate/') && !body.includes('mode')) {
+        return problemResponse(400, 'validation-error', 'Say how she is paying: COD or ONLINE.');
+      }
       return jsonResponse({ id: 12, ai_event: 20, mode: 'COD', status: 'pending' });
     }
     return jsonResponse({ count: 0, next: null, previous: null, results: [] });
@@ -178,7 +207,12 @@ function mockApi() {
 function renderApp() {
   const store = makeStore();
   store.dispatch(
-    loggedIn({ access: 'access-token', refresh: 'refresh-token', user: USER, assignedMppCodes: [] }),
+    loggedIn({
+      access: 'access-token',
+      refresh: 'refresh-token',
+      user: USER,
+      assignedMppCodes: [],
+    }),
   );
   return renderWithStore(<RootNavigator />, { store });
 }
@@ -197,7 +231,11 @@ async function walkToThePhoto() {
   // No MPP to pick between — this Mait covers one, and the picker skips itself rather than
   // asking a question with a single answer.
 
-  // Step 3 — the screen where Save & continue used to do nothing at all.
+  // Step 3 opens on who is already registered here. Nobody is, so the way on is the dashed
+  // card at the end of the list.
+  fireEvent.press(await screen.findByTestId('non-member-add-card'));
+
+  // Step 3, the form — the screen where Save & continue used to do nothing at all.
   fireEvent.changeText(await screen.findByTestId('non-member-name'), 'Radha Singh');
   fireEvent.changeText(screen.getByTestId('non-member-mobile'), '9876543210');
   fireEvent.changeText(screen.getByTestId('non-member-aadhaar'), '123456789012');
@@ -227,6 +265,8 @@ async function walkToThePhoto() {
 describe('a non-member reaches the payment screens', () => {
   beforeEach(async () => {
     await clearQueue();
+    nonMemberRoster = [];
+    paymentCalls = [];
     mockApi();
     (NetInfo.addEventListener as jest.Mock).mockReturnValue(() => {});
     jest
@@ -235,6 +275,46 @@ describe('a non-member reaches the payment screens', () => {
   });
 
   afterEach(() => jest.restoreAllMocks());
+
+  it('offers the farmers already registered here, before offering a form', async () => {
+    // The gap this screen closes. A farmer without membership is served again next season,
+    // and until now the second visit had no way to reach the record from the first — it went
+    // straight into the registration form, which now refuses her Aadhaar as a duplicate and
+    // leaves the Mait unable to serve the woman in front of them.
+    nonMemberRoster = [
+      {
+        id: 7,
+        name: 'Radha Singh',
+        father_husband_name: 'Ram Singh',
+        relation: 'husband',
+        relation_display: 'Husband',
+        mobile_no: '9876543210',
+        animal_count: 1,
+        ai_event_count: 0,
+        last_ai_at: null,
+        created_at: '2026-03-14T10:00:00+05:30',
+      },
+    ];
+
+    renderApp();
+    fireEvent.press(await screen.findByTestId('home-start-ai'));
+    await screen.findByText('Is she a member?');
+    fireEvent.press(screen.getByTestId('owner-non-member'));
+    fireEvent.press(screen.getByTestId('owner-type-continue'));
+
+    // Her row, told apart from every other Radha Singh by whose household she is from.
+    await screen.findByText('Which farmer?');
+    expect(screen.getByText('Husband: Ram Singh · 98765 43210')).toBeTruthy();
+    // Nobody has inseminated her yet, which is the state a Mait is usually looking for.
+    expect(screen.getByText('Never served')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('non-member-7'));
+    fireEvent.press(screen.getByTestId('non-member-continue'));
+
+    // Straight to the confirmation, with no registration form in between.
+    await screen.findByText('Is this her?');
+    expect(screen.queryByTestId('non-member-name')).toBeNull();
+  });
 
   it('asks how she is paying once the photo is taken', async () => {
     fireEvent.press(await walkToThePhoto());
@@ -251,6 +331,43 @@ describe('a non-member reaches the payment screens', () => {
     await screen.findByText('How is she paying?');
     expect(screen.getByText('₹ 300')).toBeTruthy();
     expect(screen.getByText('To collect from Radha Singh')).toBeTruthy();
+  });
+
+  it('keeps the tab bar on the money steps, so a Mait is not trapped there', async () => {
+    // The bar used to disappear from the straw scan onward, on the reasoning that one under a
+    // half-captured insemination invites a Mait to strand it. That depended on a stranded
+    // capture being unrecoverable, which it no longer is — anything half-done shows up in
+    // Unfinished and resumes where it stopped. These are the screens a Mait lingers on.
+    fireEvent.press(await walkToThePhoto());
+
+    await screen.findByText('How is she paying?');
+    expect(screen.getByTestId('tab-stock')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('payment-continue'));
+    await screen.findByTestId('payment-save');
+    expect(screen.getByTestId('tab-stock')).toBeTruthy();
+  });
+
+  it('closes the capture with the mode it collected, not with nothing', async () => {
+    // The bug behind "That code is not right". After the code verified, the completion
+    // re-opened the payment with no mode at all, which the server refuses for a non-member —
+    // so a correct code was followed by a capture that would not close, and the Mait's next
+    // tap reported the already-spent code as wrong.
+    fireEvent.press(await walkToThePhoto());
+
+    await screen.findByText('How is she paying?');
+    fireEvent.press(screen.getByTestId('payment-continue'));
+
+    const code = await screen.findByTestId('payment-code-input');
+    fireEvent.changeText(code, '123456');
+    fireEvent.press(screen.getByTestId('payment-save'));
+
+    await waitFor(() => expect(screen.getByTestId('done-start-another')).toBeTruthy());
+
+    // Every initiate names the mode. One without it is the refusal this test exists for.
+    const initiates = paymentCalls.filter(call => call.url.includes('/initiate/'));
+    expect(initiates.length).toBeGreaterThan(0);
+    initiates.forEach(call => expect(call.body).toContain('COD'));
   });
 
   it('goes on to the authorisation code for the cash that was taken', async () => {

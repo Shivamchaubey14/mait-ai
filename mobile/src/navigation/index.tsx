@@ -17,7 +17,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { useTranslation } from 'react-i18next';
 
 import { attachPhoto, completeEvent } from '@api/capture';
-import { newClientUuid } from '@api/client';
+import { ErrorCode, errorCodeOf, newClientUuid } from '@api/client';
 import {
   useGetInventorySummaryQuery,
   useGetMemberQuery,
@@ -29,7 +29,7 @@ import { enqueue, pendingCount, readQueue } from '@api/queue';
 import type { QueuedJob, QueuedLabel } from '@api/queue';
 import { drainQueue } from '@api/sync';
 import type { SyncProgress } from '@api/sync';
-import type { AIEvent, Animal, Member, MPP, NonMember } from '@api/types';
+import type { AIEvent, Animal, Member, MPP, NonMember, NonMemberSummary } from '@api/types';
 import BottomNav, { Tab } from '@/components/BottomNav';
 import AddNonMemberScreen from '@/features/aiFlow/AddNonMemberScreen';
 import CapturePhotoScreen from '@/features/aiFlow/CapturePhotoScreen';
@@ -42,6 +42,9 @@ import SelectAnimalScreen from '@/features/aiFlow/SelectAnimalScreen';
 import SelectBreedScreen from '@/features/aiFlow/SelectBreedScreen';
 import SelectFarmerScreen from '@/features/aiFlow/SelectFarmerScreen';
 import SelectMppScreen from '@/features/aiFlow/SelectMppScreen';
+import SelectNonMemberScreen from '@/features/aiFlow/SelectNonMemberScreen';
+import UnfinishedScreen from '@/features/aiFlow/UnfinishedScreen';
+import { resumePoint } from '@/features/aiFlow/resume';
 import OwnerTypeScreen, { OwnerType } from '@/features/aiFlow/OwnerTypeScreen';
 import LoginScreen from '@/features/auth/LoginScreen';
 import HistoryScreen from '@/features/history/HistoryScreen';
@@ -60,6 +63,7 @@ type CaptureStep =
   | 'ownerType'
   | 'selectMpp'
   | 'selectFarmer'
+  | 'selectNonMember'
   | 'confirmFarmer'
   | 'addNonMember'
   | 'selectAnimal'
@@ -91,6 +95,8 @@ export default function RootNavigator(): React.JSX.Element {
   const [indentView, setIndentView] = useState<number | null>(null);
   /** The waiting-to-sync screen, opened from Home's yellow tile. */
   const [queueOpen, setQueueOpen] = useState(false);
+  /** The list of captures still owed a finish, opened from Home. */
+  const [unfinishedOpen, setUnfinishedOpen] = useState(false);
   const [queueJobs, setQueueJobs] = useState<QueuedJob[]>([]);
   const [draining, setDraining] = useState(false);
   /** How far the running drain has got, and which capture is on the wire. */
@@ -191,13 +197,20 @@ export default function RootNavigator(): React.JSX.Element {
       return true;
     }
 
+    if (unfinishedOpen) {
+      setUnfinishedOpen(false);
+      setTab('home');
+      return true;
+    }
+
     if (step) {
       const previous: Partial<Record<CaptureStep, CaptureStep | null>> = {
         ownerType: null,
         selectMpp: 'ownerType',
         selectFarmer: 'selectMpp',
-        confirmFarmer: farmer?.kind === 'member' ? 'selectFarmer' : 'selectMpp',
-        addNonMember: ownerType === 'member' ? 'selectFarmer' : 'selectMpp',
+        selectNonMember: 'selectMpp',
+        confirmFarmer: farmer?.kind === 'member' ? 'selectFarmer' : 'selectNonMember',
+        addNonMember: ownerType === 'member' ? 'selectFarmer' : 'selectNonMember',
         selectAnimal: 'confirmFarmer',
         selectBreed: 'selectAnimal',
         capturePhoto: 'selectBreed',
@@ -246,7 +259,7 @@ export default function RootNavigator(): React.JSX.Element {
     // Home is the bottom of the stack. Left unhandled on purpose, so back there still closes
     // the app the way every other Android app does.
     return false;
-  }, [queueOpen, step, farmer, ownerType, requestingStock, indentView, tab]);
+  }, [queueOpen, unfinishedOpen, step, farmer, ownerType, requestingStock, indentView, tab]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', goBack);
@@ -297,17 +310,66 @@ export default function RootNavigator(): React.JSX.Element {
   });
 
   /**
-   * Pick a half-finished capture back up.
+   * Pick a half-finished capture back up, at the step it actually stopped on.
    *
-   * Only ever called with an event whose straw is verified and whose photo never arrived, so
-   * the photo step is where it resumes. The event's own `client_uuid` is restored with it —
-   * minting a new one here would make the retry a second insemination as far as the server is
-   * concerned (ADR 0003).
+   * This used to send every resume to the photo step, which is right for one of the four
+   * places a capture can be abandoned and wrong for the other three — a Mait resumed at the
+   * camera for an event that already had its photo would take a second one and still not
+   * close it. `resumePoint` owns that mapping, and the Unfinished list labels its rows from
+   * the same function, so what the row promises is what tapping it does.
+   *
+   * The farmer is rebuilt from the event rather than re-fetched: every screen a resume lands
+   * on needs her name and her key, and both travel on the record. The event's own
+   * `client_uuid` is restored with it — minting a new one here would make the retry a second
+   * insemination as far as the server is concerned (ADR 0003).
    */
   const resumeCapture = (unfinished: AIEvent) => {
+    const point = resumePoint(unfinished);
+
     setEvent(unfinished);
     setClientUuid(unfinished.client_uuid);
-    setStep('capturePhoto');
+    setOwnerType(unfinished.owner_type === 'member' ? 'member' : 'nonMember');
+    setFarmer(
+      unfinished.owner_type === 'member'
+        ? {
+            kind: 'member',
+            name: unfinished.owner_name,
+            memberCode: unfinished.member_code,
+          }
+        : {
+            kind: 'nonMember',
+            name: unfinished.owner_name,
+            nonMemberId: unfinished.non_member ?? 0,
+          },
+    );
+
+    // Enough of the MPP and the animal for the steps a resume can land on. Neither screen
+    // reads more than these — the full records are a round trip this flow does not need, and
+    // the Mait is standing in a yard.
+    setMpp({
+      id: unfinished.mpp,
+      mpp_code: unfinished.mpp_code,
+      mpp_name: unfinished.mpp_name,
+    } as MPP);
+    setAnimal({
+      id: unfinished.animal,
+      animal_type: unfinished.animal_type,
+      breed: unfinished.breed,
+      ear_tag_no: unfinished.ear_tag_no,
+    } as Animal);
+
+    // A payment already started is waiting on her code, and it cannot be re-sent silently —
+    // the screen asks for it and offers to send another.
+    if (point.step === 'recordPayment') {
+      setPayMode('COD');
+      setCodeSentTo(null);
+      setPayCode('');
+      setPayProblem(null);
+    }
+
+    setPayFailed(null);
+    setUnfinishedOpen(false);
+    setStep(point.step);
   };
 
   /**
@@ -399,19 +461,23 @@ export default function RootNavigator(): React.JSX.Element {
    * proving: it is the number the receipt will go to, and a digit wrong there is a receipt
    * that reaches nobody.
    */
-  const chooseNonMember = (selected: NonMember) => {
+  const chooseNonMember = (selected: NonMember | NonMemberSummary) => {
     setFarmer({ kind: 'nonMember', name: selected.name, nonMemberId: selected.id });
     setStep('confirmFarmer');
   };
 
   /**
-   * The tab bar rides along until something has been committed.
+   * The tab bar rides along everywhere except the camera.
    *
-   * Owner type, MPP, farmer and animal are all still just choices — walking away from them
-   * costs a Mait four taps, not a record. From the straw scan on it is gone, because that is
-   * the step that creates the AI event on the server, and a tab bar under a half-captured
-   * insemination is an invitation to strand one: an animal served, a straw spent, nothing
-   * recorded.
+   * It used to disappear from the straw scan onward, on the reasoning that a bar under a
+   * half-captured insemination invites a Mait to strand one — an animal served, a straw
+   * spent, nothing recorded. That reasoning depended on a stranded capture being
+   * unrecoverable, which it no longer is: anything left half-done shows up in Unfinished and
+   * resumes at the step it stopped on. Hiding the bar now buys nothing and costs a Mait the
+   * ability to check their stock or answer a waiting record without abandoning the screen —
+   * and on the payment steps, which are the ones they linger on, that mattered.
+   *
+   * The camera keeps no bar: it is a viewfinder, not a screen with furniture.
    */
   const withTabs = (screen: React.JSX.Element, active: Tab = 'home') => (
     <View style={styles.flex}>
@@ -423,8 +489,10 @@ export default function RootNavigator(): React.JSX.Element {
           setStep(null);
           // The waiting list is layered over the tabs like the capture flow is, so it has to be
           // closed here too. Without this a tab press left it open and every destination drew
-          // the queue instead — the bar moved and the screen did not.
+          // the queue instead — the bar moved and the screen did not. The unfinished list is
+          // layered the same way and needs the same closing.
           setQueueOpen(false);
+          setUnfinishedOpen(false);
           setTab(next);
         }}
       />
@@ -450,9 +518,11 @@ export default function RootNavigator(): React.JSX.Element {
         onBack={() => setStep('ownerType')}
         onSelect={selected => {
           setMpp(selected);
-          // The fork answered at step 1 decides which of the two farmer screens this is.
-          // A non-member is not in any roster, so searching one would be a dead end.
-          setStep(ownerType === 'member' ? 'selectFarmer' : 'addNonMember');
+          // The fork answered at step 1 decides which roster this is. A non-member is not in
+          // the SAP master, but she is very often in the one the Maits themselves have built
+          // — she was registered on an earlier visit — so both branches open a list and both
+          // keep registering somebody new as the way out of it.
+          setStep(ownerType === 'member' ? 'selectFarmer' : 'selectNonMember');
         }}
       />,
     );
@@ -469,6 +539,17 @@ export default function RootNavigator(): React.JSX.Element {
     );
   }
 
+  if (step === 'selectNonMember' && mpp) {
+    return withTabs(
+      <SelectNonMemberScreen
+        mpp={mpp}
+        onSelect={chooseNonMember}
+        onAddNew={() => setStep('addNonMember')}
+        onBack={() => setStep('selectMpp')}
+      />,
+    );
+  }
+
   if (step === 'confirmFarmer' && farmer) {
     return withTabs(
       <ConfirmFarmerScreen
@@ -478,10 +559,10 @@ export default function RootNavigator(): React.JSX.Element {
             : { kind: 'nonMember', id: farmer.nonMemberId }
         }
         onConfirm={() => setStep('selectAnimal')}
-        // A member goes back to the roster to be found again. A non-member has already been
-        // created, so back goes to the MPP rather than into the form that made her —
-        // re-submitting it would register the same woman twice.
-        onSearchAgain={() => setStep(farmer.kind === 'member' ? 'selectFarmer' : 'selectMpp')}
+        // Back to whichever roster she was picked from. Never into the form that may have
+        // made her — re-submitting it would try to register the same woman twice, which the
+        // server now refuses outright.
+        onSearchAgain={() => setStep(farmer.kind === 'member' ? 'selectFarmer' : 'selectNonMember')}
       />,
     );
   }
@@ -491,9 +572,9 @@ export default function RootNavigator(): React.JSX.Element {
       <AddNonMemberScreen
         mpp={mpp}
         onCreated={chooseNonMember}
-        // Back to wherever this was reached from: the roster, if the Mait went looking for a
-        // member first, or the MPP picker if they said non-member at the fork.
-        onCancel={() => setStep(ownerType === 'member' ? 'selectFarmer' : 'selectMpp')}
+        // Back to whichever roster this was reached from — the members, if the Mait went
+        // looking there first, or the non-members they were just picking through.
+        onCancel={() => setStep(ownerType === 'member' ? 'selectFarmer' : 'selectNonMember')}
       />,
     );
   }
@@ -578,7 +659,7 @@ export default function RootNavigator(): React.JSX.Element {
     : '';
 
   if (step === 'memberStatement' && event && farmer) {
-    return (
+    return withTabs(
       <MemberNothingToCollectScreen
         event={event}
         farmerName={farmer.name}
@@ -586,12 +667,12 @@ export default function RootNavigator(): React.JSX.Element {
         busy={payBusy}
         failed={payFailed}
         onFinish={() => finishCapture()}
-      />
+      />,
     );
   }
 
   if (step === 'collectPayment' && event && farmer) {
-    return (
+    return withTabs(
       <CollectPaymentScreen
         event={event}
         farmerName={farmer.name}
@@ -600,12 +681,12 @@ export default function RootNavigator(): React.JSX.Element {
         failed={payFailed}
         onContinue={startCollection}
         onBack={() => setStep('capturePhoto')}
-      />
+      />,
     );
   }
 
   if (step === 'recordPayment' && event && farmer) {
-    return (
+    return withTabs(
       <RecordPaymentScreen
         event={event}
         farmerName={farmer.name}
@@ -623,17 +704,51 @@ export default function RootNavigator(): React.JSX.Element {
             setPayBusy(true);
             try {
               await verifyPaymentOtp({ eventId: event.id, otp: payCode.trim() }).unwrap();
-            } catch {
-              setPayProblem(t('aiFlow.otpWrong'));
+            } catch (err) {
+              // Wrong, expired and out of attempts need three different things from a Mait
+              // standing in a yard: read it again, send a new one, or stop asking. Collapsing
+              // them into "that code is not right" sent a Mait back to a farmer to re-read a
+              // number that could never work — the same distinction the farmer-verification
+              // step has always made.
+              switch (errorCodeOf(err)) {
+                case ErrorCode.OTP_EXPIRED:
+                  setPayProblem(t('aiFlow.otpExpired'));
+                  setCodeSentTo(null);
+                  break;
+                case ErrorCode.OTP_ATTEMPTS_EXCEEDED:
+                  setPayProblem(t('aiFlow.otpAttemptsExceeded'));
+                  setCodeSentTo(null);
+                  break;
+                default:
+                  setPayProblem(t('aiFlow.otpWrong'));
+              }
               setPayBusy(false);
               return;
             }
             setPayBusy(false);
           }
-          await finishCapture();
+          // The mode, not nothing. Without it the completion re-opened the payment with no
+          // mode at all, which the server refuses for a non-member — "Say how she is paying"
+          // — so a correct code was followed by a capture that would not close, and the next
+          // tap reported the already-spent code as wrong.
+          await finishCapture(payMode);
         }}
         onBack={() => setStep('collectPayment')}
-      />
+      />,
+    );
+  }
+
+  if (unfinishedOpen) {
+    return withTabs(
+      <UnfinishedScreen
+        onResume={resumeCapture}
+        onBack={() => {
+          setUnfinishedOpen(false);
+          setTab('home');
+        }}
+      />,
+      // It counts against AI events, so that is the tab it belongs to.
+      'history',
     );
   }
 
@@ -713,7 +828,7 @@ export default function RootNavigator(): React.JSX.Element {
           <HomeScreen
             onOpenStock={() => setTab('stock')}
             onStartCapture={startCapture}
-            onResume={resumeCapture}
+            onOpenUnfinished={() => setUnfinishedOpen(true)}
             online={online}
             pending={pending}
             // Pull-to-refresh drains and stays put. It shared a prop with the tile below, so

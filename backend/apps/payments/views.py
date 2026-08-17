@@ -167,6 +167,17 @@ class PaymentOTPVerifyView(_EventScoped):
         serializer = PaymentOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # Already authorised: say so rather than trying to spend the code a second time.
+        #
+        # A verified OTP is consumed, so a repeat lookup finds nothing pending and the honest
+        # answer from `verify_otp` is "no OTP is pending" — which the app could only render as
+        # the code being wrong. It was not wrong; it had already been accepted. A Mait whose
+        # first tap authorised the payment and then hit a refusal further down the line taps
+        # again, is told her code is bad, and asks a farmer to read out a number that will
+        # never work now. Idempotent instead, which is what a retried tap deserves.
+        if payment.is_verified:
+            return Response(PaymentSerializer(payment).data)
+
         purpose = (
             OTPLog.Purpose.PAYMENT_ONLINE
             if payment.mode == Payment.Mode.ONLINE

@@ -167,6 +167,36 @@ class TestNonMemberPaysTheMait:
         assert confirmed.status_code == 200, confirmed.json()
         assert confirmed.json()["is_verified"] is True
 
+    def test_confirming_an_already_authorised_payment_says_so(
+        self, mait_client, mpp, stocked_mait, priced_breed, non_member_animal, fixed_otp
+    ):
+        """
+        A retried tap must not be told the code was wrong.
+
+        A verified OTP is consumed, so a second lookup finds nothing pending and the honest
+        answer from `verify_otp` is "no OTP is pending" — which the app could only render as
+        the code being bad. It was not bad; it had already been accepted. That is exactly what
+        a Mait met: the first tap authorised the payment, the completion behind it was refused
+        for an unrelated reason, and the second tap sent them back to the farmer to re-read a
+        number that could never work again.
+        """
+        stocked_mait(1)
+        farmer, animal = non_member_animal
+        event_id = open_event(mait_client, mpp, animal, non_member=farmer)
+        mait_client.post(f"{BASE}/payments/{event_id}/initiate/", {"mode": "COD"}, format="json")
+
+        first = mait_client.post(
+            f"{BASE}/payments/{event_id}/otp/verify/", {"otp": fixed_otp}, format="json"
+        )
+        assert first.status_code == 200, first.json()
+
+        again = mait_client.post(
+            f"{BASE}/payments/{event_id}/otp/verify/", {"otp": fixed_otp}, format="json"
+        )
+
+        assert again.status_code == 200, again.json()
+        assert again.json()["is_verified"] is True
+
     def test_a_wrong_code_leaves_the_payment_unverified(
         self, mait_client, mpp, stocked_mait, priced_breed, non_member_animal, fixed_otp
     ):

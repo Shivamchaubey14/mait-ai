@@ -55,6 +55,7 @@ export default function MemberNothingToCollectScreen({
       eyebrow={t('payment.eyebrow')}
       title={t('payment.nothingToCollect')}
       subtitle={t('payment.nothingToCollectSubtitle')}
+      tabBarBelow
       cta={{
         label: t('payment.finish'),
         onPress: onFinish,

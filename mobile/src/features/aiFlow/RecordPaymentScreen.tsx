@@ -64,6 +64,7 @@ export default function RecordPaymentScreen({
       }
       subtitle={t('payment.recordSubtitle')}
       onBack={onBack}
+      tabBarBelow
       cta={{
         label: sentTo ? t('payment.saveAndFinish') : t('payment.saveAndFinishOffline'),
         onPress: onFinish,

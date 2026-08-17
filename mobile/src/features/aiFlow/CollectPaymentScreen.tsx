@@ -58,6 +58,7 @@ export default function CollectPaymentScreen({
       title={t('payment.howIsShePaying')}
       subtitle={t('payment.howIsShePayingSubtitle')}
       onBack={onBack}
+      tabBarBelow
       cta={{
         label: t('common.continue'),
         onPress: () => onContinue(chosen),

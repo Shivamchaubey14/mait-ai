@@ -94,6 +94,7 @@ would lock a working Mait out of the app.
 | GET | `/mpp/{mpp_code}/` | MPP detail incl. assigned Mait | JWT |
 | GET | `/members/` | Search members (by mpp, mobile, member_code, name) | JWT |
 | GET | `/members/{member_code}/` | Member detail incl. animals | JWT |
+| GET | `/non-members/` | The non-members already registered at the Mait's MPPs | Mait |
 | POST | `/non-members/` | Register a new non-member on the fly | Mait |
 | PATCH | `/non-members/{id}/aadhaar/` | Attach the front and/or back of her Aadhaar card | Mait |
 | GET | `/non-members/{id}/` | Non-member detail | JWT |
@@ -101,6 +102,19 @@ would lock a working Mait out of the app.
 | GET | `/admin/non-members/{id}/` | One of them, with her animals and her card images | Admin |
 | POST | `/farmers/otp/send/` | Send a verification code to a farmer, before the capture proceeds | Mait |
 | POST | `/farmers/otp/verify/` | Check the code she read out | Mait |
+
+**A Mait's non-members are scoped by MPP, not by who typed the row in.** `GET /non-members/`
+lists the farmers registered at the collection points that Mait covers — the roster the capture
+flow offers before it offers a registration form. Filter with `mpp__mpp_code`, search with
+`search` (her name, her number, the household name). Each row carries `animal_count`,
+`ai_event_count` and `last_ai_at`, because a Mait picking from a list of names in one village
+needs something other than the name to tell two of them apart. It never carries her Aadhaar,
+masked or otherwise: that is what proves she is not already a member, checked at registration,
+and a roster read aloud in a public place does not need it.
+
+Scoping this on `created_by_mait` was wrong the moment an MPP changed hands — the new Mait
+could not see her, and the only thing the app offered them was a form that now refuses her
+Aadhaar as a duplicate. An MPP is the unit of work, as it has always been for members.
 
 **Registering a non-member takes her consent, and the MPP must be the Mait's own.**
 `POST /non-members/` accepts a write-only `consent` boolean; the server stamps
@@ -194,8 +208,21 @@ created here; they arrive by being issued against an indent.
 | POST | `/ai-events/` | Create draft AI event (mpp, member/non-member, animal, straw no.) | Mait |
 | PATCH | `/ai-events/{id}/photo/` | Upload AI proof photo (multipart) with GPS/time stamp | Mait |
 | POST | `/ai-events/{id}/complete/` | Finalise — atomic straw deduction + status=completed | Mait |
-| GET | `/ai-events/` | List AI events (filters: mait, mpp, date range, status) | JWT |
+| GET | `/ai-events/` | List AI events (filters: mait, mpp, date range, status, `unfinished`) | JWT |
 | GET | `/ai-events/{id}/` | AI event full detail | JWT |
+
+**`unfinished=true` is the app's Unfinished list.** It returns the captures that still need
+something from the Mait who started them — every non-terminal status, which is
+`AIEvent.UNFINISHED_STATUSES` on the model. The set is decided server-side on purpose: the app
+asks the question and knows where each answer resumes, but it does not keep its own list of
+what "unfinished" means, because two copies of that rule drift and the drift reads as the app
+lying about what is missing. `unfinished=false` is the inverse — completed and cancelled.
+
+A capture can be abandoned in four places and each resumes at a different screen: no straw →
+the breed step, no photo → the camera, no payment → her statement for a member and *How is she
+paying?* for a non-member, payment started → the authorisation code. Every row therefore
+carries `member_code` as well as `member`, because the resume rebuilds the farmer from the
+event and the rest of the app names a member by her SAP code, not by her row id.
 | GET | `/ai-events/{id}/timeline/` | Step-by-step audit trail for one event | JWT |
 
 ## 9.7 Payment

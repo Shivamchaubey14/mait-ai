@@ -141,6 +141,32 @@ export interface AadhaarImages {
   back?: string | null;
 }
 
+/**
+ * One row in the picker the capture flow offers before registering anybody (C4b).
+ *
+ * A different shape from `NonMember`: that one is a form being filled in, this is a roster
+ * being read in a yard. The question is "which of these is the woman in front of me", and a
+ * name does not answer it — the same names repeat in a village. So the row carries the
+ * household, her number, and how her animals have been served.
+ *
+ * No Aadhaar. It is what proves she is not already a member, checked at registration; a
+ * picker does not need it, and a screenful of identity numbers held up in a public place is
+ * not a thing to build.
+ */
+export interface NonMemberSummary {
+  id: number;
+  name: string;
+  father_husband_name: string;
+  relation: Relation | '';
+  relation_display: string;
+  mobile_no: string;
+  animal_count: number;
+  ai_event_count: number;
+  /** When she was last served, or null if she never has been. */
+  last_ai_at: string | null;
+  created_at: string;
+}
+
 /** Non-member detail carries the animals already registered to them (SRS §6.3 step 3). */
 export interface NonMemberDetail extends NonMember {
   animals: Animal[];
@@ -287,6 +313,14 @@ export interface AIEvent {
   mpp_name: string;
   owner_type: 'member' | 'non_member';
   member: number | null;
+  /**
+   * Her SAP code, which is what the rest of the app names a member by.
+   *
+   * Empty for a non-member. Carried so a capture picked back up out of the Unfinished list can
+   * re-fetch the farmer it belongs to — with only the row id it would hold a number no other
+   * screen speaks.
+   */
+  member_code: string;
   non_member: number | null;
   owner_name: string;
   animal: number;
