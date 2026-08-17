@@ -22,7 +22,8 @@ import {
   useListBreedsQuery,
   useUploadAnimalPhotoMutation,
 } from '@api/endpoints';
-import type { Animal, AnimalTypeCode, ProblemDetails } from '@api/types';
+import { splitRejection } from '@api/problem';
+import type { Animal, AnimalTypeCode } from '@api/types';
 import { mediaUrl } from '@/config/env';
 import { radius } from '@theme/tokens';
 
@@ -39,6 +40,14 @@ interface Props {
 }
 
 const ANIMAL_TYPES: AnimalTypeCode[] = ['COW', 'BUFF'];
+
+/**
+ * The keys the add-animal sheet draws under a box of its own.
+ *
+ * `member_code` and `non_member_id` are deliberately absent: the sheet never asks for the
+ * owner, so a refusal about them has to be spoken rather than filed under a field.
+ */
+const OWNED_FIELDS = ['ear_tag_no', 'breed', 'animal_type'];
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -75,7 +84,8 @@ export default function SelectAnimalScreen({
   // an empty Cow list and conclude their animals are missing.
   const [animalType, setAnimalType] = useState<AnimalTypeCode>(animals[0]?.animal_type ?? 'COW');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
-  const [failed, setFailed] = useState(false);
+  /** Whatever the refusal said that the sheet has no box for. */
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   // Read only to put a name to the breed codes already on the farmer's animals; the sheet asks
   // for its own list when it opens.
@@ -156,7 +166,7 @@ export default function SelectAnimalScreen({
    */
   const handleSave = async (draft: AnimalDraftInput) => {
     setFieldErrors({});
-    setFailed(false);
+    setRefusal(null);
     try {
       const created = await createAnimal({
         ...(owner.memberCode
@@ -180,13 +190,12 @@ export default function SelectAnimalScreen({
       onSelect(created);
     } catch (err) {
       // The server is the authority on the ear tag being free and the breed being real;
-      // surface its per-field message so the Mait knows which box to fix.
-      const problem = (err as { data?: ProblemDetails })?.data;
-      if (problem?.errors) {
-        setFieldErrors(problem.errors);
-      } else {
-        setFailed(true);
-      }
+      // surface its per-field message so the Mait knows which box to fix. Everything it
+      // names that this sheet has no box for — an owner it will not accept, a farmer at
+      // another Mait's MPP — is said against the button instead of being dropped.
+      const { fields, message } = splitRejection(err, OWNED_FIELDS, t('errors.generic'));
+      setFieldErrors(fields);
+      setRefusal(message);
     }
   };
 
@@ -268,7 +277,7 @@ export default function SelectAnimalScreen({
           initialType={animalType}
           saving={saving}
           fieldErrors={fieldErrors}
-          failed={failed}
+          refusal={refusal}
           onSave={handleSave}
           onClose={() => setAdding(false)}
         />

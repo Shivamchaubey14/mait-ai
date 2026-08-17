@@ -144,4 +144,44 @@ describe('AddNonMemberScreen', () => {
     await waitFor(() => expect(screen.getByText(/already a member at Barsana MPP/)).toBeTruthy());
     expect(onCreated).not.toHaveBeenCalled();
   });
+
+  it('records that she consented, rather than only requiring it', async () => {
+    // The tick gates the button, and a gate is not a record. Without this on the wire,
+    // `consent_captured_at` is null on every non-member ever registered (SRS §7).
+    (global.fetch as jest.Mock).mockResolvedValue(jsonResponse({ id: 5 }, 201));
+    render();
+    fillForm();
+
+    fireEvent.press(screen.getByTestId('non-member-save'));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(await requestBody(0)).toMatchObject({ consent: true });
+  });
+
+  it('says so when the refusal belongs to no field on the form', async () => {
+    // The bug this test exists for: the server refused with a key the form had no box for,
+    // the screen filed it and drew nothing, and the Mait's tap was indistinguishable from a
+    // dead button. Anything unplaceable must be spoken.
+    (global.fetch as jest.Mock).mockResolvedValue(
+      fieldErrorResponse({ mpp: ['This is not one of your MPPs.'] }),
+    );
+
+    render();
+    fillForm();
+    fireEvent.press(screen.getByTestId('non-member-save'));
+
+    await waitFor(() => expect(screen.getByTestId('non-member-error')).toBeTruthy());
+    expect(screen.getByText('This is not one of your MPPs.')).toBeTruthy();
+  });
+
+  it('says so when the server refuses with no field map at all', async () => {
+    // A plain problem detail, or a request that never arrived. Neither may end in silence.
+    (global.fetch as jest.Mock).mockRejectedValue(new TypeError('Network request failed'));
+
+    render();
+    fillForm();
+    fireEvent.press(screen.getByTestId('non-member-save'));
+
+    await waitFor(() => expect(screen.getByTestId('non-member-error')).toBeTruthy());
+  });
 });

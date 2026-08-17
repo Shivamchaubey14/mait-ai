@@ -23,7 +23,8 @@ import { StyleSheet, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { useCreateNonMemberMutation } from '@api/endpoints';
-import type { MPP, NonMember, ProblemDetails } from '@api/types';
+import { splitRejection } from '@api/problem';
+import type { MPP, NonMember } from '@api/types';
 import { colors, typography } from '@theme/tokens';
 
 import { CheckboxRow, FlowNotice, FlowScreen, FlowSpacer, LabelledField } from './components';
@@ -33,6 +34,15 @@ interface Props {
   onCreated: (nonMember: NonMember) => void;
   onCancel: () => void;
 }
+
+/**
+ * The keys this form can put under a box of its own.
+ *
+ * Anything the server names outside this list is announced above the button instead. Keeping
+ * it beside the fields rather than inferring it means adding a field without adding it here
+ * fails loudly, not silently.
+ */
+const OWNED_FIELDS = ['name', 'father_husband_name', 'mobile_no', 'address', 'aadhar_no'];
 
 /** 4+4+4, the way it is printed on the card and read aloud from it. */
 function formatAadhaar(digits: string): string {
@@ -48,7 +58,8 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
   const [aadhaar, setAadhaar] = useState('');
   const [consent, setConsent] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
-  const [failed, setFailed] = useState(false);
+  /** Whatever the refusal said that no box on this form can carry. */
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   // Split around the product name so it can be set apart inside the sentence. Done this way
   // rather than in three strings because the word sits in a different place in Hindi.
@@ -67,7 +78,7 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
   const canSubmit = name.trim().length >= 2 && isValidMobile && aadhaar.length === 12 && consent;
 
   const handleSubmit = async () => {
-    setFailed(false);
+    setRefusal(null);
     setFieldErrors({});
     try {
       const created = await createNonMember({
@@ -77,17 +88,19 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
         address: address.trim(),
         aadhar_no: aadhaar,
         mpp: mpp.id,
+        // The tick above the button, sent rather than merely enforced on the handset. It is
+        // what stamps `consent_captured_at`, and a consent that exists only as a disabled
+        // button is not a record of anything (SRS §7 Compliance).
+        consent: true,
       }).unwrap();
       onCreated(created);
     } catch (err) {
       // Server-side validation is the authority; surface its per-field messages rather than
-      // a generic failure, so the Mait knows which box to fix.
-      const problem = (err as { data?: ProblemDetails })?.data;
-      if (problem?.errors) {
-        setFieldErrors(problem.errors);
-      } else {
-        setFailed(true);
-      }
+      // a generic failure, so the Mait knows which box to fix — and say out loud anything
+      // this form has no box for, rather than letting the tap look like nothing happened.
+      const { fields, message } = splitRejection(err, OWNED_FIELDS, t('errors.generic'));
+      setFieldErrors(fields);
+      setRefusal(message);
     }
   };
 
@@ -104,9 +117,16 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
         busy: isLoading,
         testID: 'non-member-save',
       }}
+      /* In the footer, not at the top of the body. This form is five fields and a consent
+         tick, so a Mait tapping Save is looking at the bottom of a screen they have scrolled;
+         a notice above the name field is off-screen at the exact moment it is needed, which
+         is indistinguishable from the button having done nothing. */
+      footerNote={
+        refusal ? (
+          <FlowNotice tone="error" title={refusal} testID="non-member-error" />
+        ) : undefined
+      }
     >
-      {failed && <FlowNotice tone="error" title={t('errors.generic')} testID="non-member-error" />}
-
       <LabelledField
         label={t('aiFlow.farmerName')}
         tone="primary"

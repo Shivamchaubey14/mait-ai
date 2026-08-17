@@ -51,7 +51,13 @@ interface Props {
   saving: boolean;
   /** Per-field messages from the server, keyed as the API sends them. */
   fieldErrors: Record<string, string[]>;
-  failed: boolean;
+  /**
+   * The part of a refusal no field on this sheet can carry, in the server's own words.
+   *
+   * Drawn against the Save button rather than in the scroll, because that is where the Mait
+   * is looking when they tap it — a message further up is a tap that appears to do nothing.
+   */
+  refusal: string | null;
   onSave: (draft: AnimalDraftInput) => void;
   onClose: () => void;
 }
@@ -61,7 +67,7 @@ export default function AddAnimalSheet({
   initialType,
   saving,
   fieldErrors,
-  failed,
+  refusal,
   onSave,
   onClose,
 }: Props): React.JSX.Element {
@@ -213,15 +219,10 @@ export default function AddAnimalSheet({
             <Text style={styles.take}>{photoUri ? t('aiFlow.retake') : t('aiFlow.take')}</Text>
           </Pressable>
 
-          {failed && (
-            <FlowNotice
-              tone="error"
-              title={t('errors.generic')}
-              body={t('aiFlow.tryAgainInAMoment')}
-              testID="animal-error"
-            />
-          )}
         </ScrollView>
+
+        {/* Outside the scroll, so a refusal cannot arrive off-screen. */}
+        {!!refusal && <FlowNotice tone="error" title={refusal} testID="animal-error" />}
 
         <Pressable
           accessibilityRole="button"

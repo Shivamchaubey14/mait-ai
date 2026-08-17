@@ -112,6 +112,13 @@ export interface NonMemberDraft {
   /** Twelve digits, or omitted. Write-only — the server stores it encrypted. */
   aadhar_no?: string;
   mpp: number;
+  /**
+   * She agreed to her details being held. Write-only; the server stamps the time.
+   *
+   * Sent rather than assumed: the tick on the handset gates the button, but a gate is not a
+   * record, and the record is what SRS §7 asks for.
+   */
+  consent?: boolean;
 }
 
 /** Non-member detail carries the animals already registered to them (SRS §6.3 step 3). */
