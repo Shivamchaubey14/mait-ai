@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { attachPhoto, completeEvent } from '@api/capture';
 import { ErrorCode, errorCodeOf, newClientUuid } from '@api/client';
 import {
+  maitaiApi,
   useGetInventorySummaryQuery,
   useGetMemberQuery,
   useGetNonMemberQuery,
@@ -55,7 +56,7 @@ import IndentDetailScreen from '@/features/stock/IndentDetailScreen';
 import IndentsScreen from '@/features/stock/IndentsScreen';
 import RequestStockScreen from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { colors } from '@theme/tokens';
 
 /** Where the capture flow has got to. `null` means it is not running. */
@@ -86,6 +87,7 @@ function clockTime(): string {
 
 export default function RootNavigator(): React.JSX.Element {
   const { t } = useTranslation();
+  const dispatch = useAppDispatch();
   const accessToken = useAppSelector(state => state.auth.accessToken);
 
   const [tab, setTab] = useState<Tab>('home');
@@ -136,6 +138,20 @@ export default function RootNavigator(): React.JSX.Element {
     { skip: farmer?.kind !== 'nonMember' },
   );
 
+  /**
+   * Tell the cached lists that the server has moved on.
+   *
+   * Completion, the photo upload and the queue drain all go out through `api/capture` and
+   * `api/sync` as plain fetches — they have to, because they run offline and through a retry
+   * queue that RTK Query knows nothing about. The cost is that nothing invalidates the event
+   * cache, so a capture that had just been completed on the server was still being served
+   * from memory as unfinished: the Unfinished list kept listing it and Home kept counting it,
+   * and the only way to clear it was to restart the app.
+   */
+  const eventsChanged = useCallback(() => {
+    dispatch(maitaiApi.util.invalidateTags(['AIEvent', 'Payment']));
+  }, [dispatch]);
+
   const sync = useCallback(async () => {
     setDraining(true);
     const result = await drainQueue(accessToken, setProgress);
@@ -147,8 +163,11 @@ export default function RootNavigator(): React.JSX.Element {
     setProgress(null);
     if (result.sent > 0) {
       setLastSyncAt(clockTime());
+      // A drain can carry completions, so what the lists hold is out of date the moment one
+      // lands.
+      eventsChanged();
     }
-  }, [accessToken]);
+  }, [accessToken, eventsChanged]);
 
   /** Read the queue for the screen that lists it, without sending anything. */
   const refreshQueue = useCallback(async () => {
@@ -358,11 +377,20 @@ export default function RootNavigator(): React.JSX.Element {
       ear_tag_no: unfinished.ear_tag_no,
     } as Animal);
 
-    // A payment already started is waiting on her code, and it cannot be re-sent silently —
-    // the screen asks for it and offers to send another.
+    // A payment already started is waiting on her code, so the screen has to ask for one.
+    //
+    // This used to clear `codeSentTo`, which is the state meaning "there was no signal to send
+    // a code with" — so the screen offered to save without one, the completion behind it was
+    // refused because the payment is not verified, and the capture stayed exactly where it
+    // was. The Mait resumed it, tapped the only button on the screen, and watched nothing
+    // happen for as many times as they cared to try.
+    //
+    // The mode is the one already recorded against the payment, not a guess: a farmer who
+    // chose UPI must not be resumed into a cash record. An expired code is handled by the
+    // screen's own "send again", which is why that link has to be there.
     if (point.step === 'recordPayment') {
-      setPayMode('COD');
-      setCodeSentTo(null);
+      setPayMode(unfinished.payment?.mode === 'ONLINE' ? 'ONLINE' : 'COD');
+      setCodeSentTo(t('payment.herNumber'));
       setPayCode('');
       setPayProblem(null);
     }
@@ -417,6 +445,9 @@ export default function RootNavigator(): React.JSX.Element {
     if (outcome.sent) {
       setLastSyncAt(clockTime());
       inventory.refetch();
+      // The capture is closed on the server. Without this the list it was picked from goes on
+      // offering it, which reads as the work not having been recorded at all.
+      eventsChanged();
     }
     setPayBusy(false);
     setStep('done');

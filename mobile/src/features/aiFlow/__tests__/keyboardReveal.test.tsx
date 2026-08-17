@@ -37,7 +37,18 @@ jest.mock('react-native/Libraries/Components/ScrollView/ScrollView', () => {
 
   const Mock = ReactActual.forwardRef(
     (
-      { children, ...props }: { children?: React.ReactNode; testID?: string },
+      {
+        children,
+        innerViewRef,
+        ...props
+      }: {
+        children?: React.ReactNode;
+        testID?: string;
+        // The real ScrollView hands its content view out through this. `measureLayout` needs
+        // a ref to a native component, so the reveal cannot work without it — which is the
+        // whole point of the prop and worth reproducing here rather than stubbing past.
+        innerViewRef?: React.RefObject<unknown>;
+      },
       ref: React.Ref<unknown>,
     ) => {
       ReactActual.useImperativeHandle(ref, () => ({
@@ -46,11 +57,12 @@ jest.mock('react-native/Libraries/Components/ScrollView/ScrollView', () => {
         scrollToEnd: jest.fn(),
       }));
       // Tagged so a test can ask what the scroll was given and what sits inside it — the real
-      // component's type is gone once the module is mocked.
+      // component's type is gone once the module is mocked. The children hang off an inner
+      // View carrying `innerViewRef`, exactly as the real one arranges them.
       return ReactActual.createElement(
         View,
         { ...props, testID: props.testID ?? 'mock-scroll' },
-        children,
+        ReactActual.createElement(View, { ref: innerViewRef }, children),
       );
     },
   );

@@ -90,7 +90,7 @@ export default function AddAnimalSheet({
   const insets = useSafeAreaInsets();
   // The sheet has the same problem the flow's screens had — a Save button riding above the
   // keyboard with the field being typed into hidden behind it — and now the same answer.
-  const { scroller, overlap: keyboard, api } = useRevealOnFocus();
+  const { scroller, content, overlap: keyboard, api } = useRevealOnFocus();
 
   const [animalType, setAnimalType] = useState<AnimalTypeCode>(initialType);
   const [breed, setBreed] = useState<string | null>(null);
@@ -199,6 +199,7 @@ export default function AddAnimalSheet({
 
         <ScrollView
           ref={scroller}
+          innerViewRef={content}
           /* The keyboard, as scroll padding rather than as sheet padding. This is what lets a
              field near the bottom be brought clear of the keypad — without it the scroll runs
              out before the field arrives — and it leaves the sheet itself untouched. */

@@ -156,20 +156,30 @@ const REVEAL_GAP = spacing[4];
  */
 export function useRevealOnFocus() {
   const scroller = useRef<ScrollView>(null);
+  /**
+   * The scroll's inner content view, handed in by `innerViewRef`.
+   *
+   * `measureLayout` wants a ref to a native component. Given `getInnerViewNode()` — a node
+   * handle, and the obvious-looking thing to reach for — the new architecture rejects it with
+   * "ref.measureLayout must be called with a ref to a native component", the callback never
+   * fires, and the field silently never moves. The failure is invisible in Jest, where the
+   * method is stubbed, and shows up only on a device.
+   */
+  // `null!` because `innerViewRef` is typed `RefObject<View>` rather than allowing null, and
+  // a ref is null until the view mounts. Nothing reads it before then — every use is inside a
+  // callback fired by a focus, which cannot happen before the scroll has rendered.
+  const content = useRef<View>(null!);
   const pending = useRef<View | null>(null);
   const overlap = useKeyboardOverlap();
 
   const scrollTo = useCallback((field: View | null) => {
     const scroll = scroller.current;
-    if (!field || !scroll) {
+    const inner = content.current;
+    if (!field || !scroll || !inner) {
       return;
     }
     // Measured against the scroll's own content, so `top` is already the offset to scroll to
     // rather than a position on the screen that has to be converted into one.
-    const inner = scroll.getInnerViewNode?.();
-    if (!inner) {
-      return;
-    }
     field.measureLayout(
       inner,
       (_left: number, top: number) => {
@@ -208,7 +218,7 @@ export function useRevealOnFocus() {
 
   const api = useMemo<FlowScrollApi>(() => ({ reveal }), [reveal]);
 
-  return { scroller, overlap, api };
+  return { scroller, content, overlap, api };
 }
 
 /**
@@ -308,7 +318,7 @@ export function FlowScreen({
 }: FlowScreenProps): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { scroller, overlap, api } = useRevealOnFocus();
+  const { scroller, content, overlap, api } = useRevealOnFocus();
 
   const label =
     stepLabel ??
@@ -385,6 +395,7 @@ export function FlowScreen({
 
         <ScrollView
           ref={scroller}
+          innerViewRef={content}
           /* A keyboard's worth of room under the content while one is open. Without it a
              field near the bottom cannot be scrolled any higher than the content's own end,
              which on a short body is not high enough to clear the keyboard — the scroll runs

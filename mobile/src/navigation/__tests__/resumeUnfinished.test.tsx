@@ -210,11 +210,38 @@ describe('the unfinished list', () => {
     expect(screen.queryByTestId('payment-mode-COD')).toBeNull();
   });
 
-  it('resumes a started payment at the code, which is what it is waiting for', async () => {
+  it('resumes a started payment at the code, and asks for one', async () => {
     events = [unfinished({ status: 'payment_pending' })];
     await openTheOnlyRow();
 
     await waitFor(() => expect(screen.getByTestId('payment-save')).toBeTruthy());
+
+    // The box has to be there. It used to be hidden — the resume cleared the state that means
+    // "a code went out", so the screen offered to save without one, the completion behind it
+    // was refused because the payment is not verified, and the capture stayed exactly where it
+    // was however many times a Mait tapped.
+    expect(screen.getByTestId('payment-code-input')).toBeTruthy();
+    expect(screen.getByTestId('payment-resend')).toBeTruthy();
+  });
+
+  it('resumes a UPI payment as UPI, not as cash', async () => {
+    // A farmer who paid online must not be picked back up into a cash record.
+    events = [
+      unfinished({
+        status: 'payment_pending',
+        payment: {
+          amount: '300.00',
+          mode: 'ONLINE',
+          mode_display: 'Online',
+          status: 'pending',
+          is_verified: false,
+        },
+      }),
+    ];
+    await openTheOnlyRow();
+
+    await waitFor(() => expect(screen.getByTestId('payment-save')).toBeTruthy());
+    expect(screen.getByText(/paid online/i)).toBeTruthy();
   });
 
   it('says so plainly when nothing is outstanding', async () => {

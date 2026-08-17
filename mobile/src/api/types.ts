@@ -337,6 +337,21 @@ export interface AIEvent {
    * stand behind is heard by the farmer as final.
    */
   amount_due: string | null;
+  /**
+   * Just enough payment to read the row without opening it, or null before step 6.
+   *
+   * Null is normal rather than missing: an event in `straw_verified` has no payment yet. What
+   * the app reads it for is the mode a resumed capture was already recorded under — a farmer
+   * who chose UPI must not be picked back up into a cash record.
+   */
+  payment: {
+    amount: string;
+    mode: 'COD' | 'ONLINE' | 'DEDUCTION';
+    mode_display: string;
+    status: string;
+    status_display: string;
+    is_verified: boolean;
+  } | null;
   straw_unique_no: string;
   ai_photo_url: string;
   gps_lat: string | null;

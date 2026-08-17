@@ -35,6 +35,11 @@ import type {
 } from './types';
 
 export const maitaiApi = api.injectEndpoints({
+  // Fast Refresh re-evaluates this module on every save, which re-injects endpoints that are
+  // already registered and fills the log with "called injectEndpoints to override
+  // already-existing endpointName". Harmless, and noisy enough to bury a real error next to
+  // it. Never on in a release build, where the module is evaluated once.
+  overrideExisting: __DEV__,
   endpoints: builder => ({
     // ---- auth ----------------------------------------------------------------------
     sendLoginOtp: builder.mutation<{ detail: string; expires_in_seconds: number }, string>({
