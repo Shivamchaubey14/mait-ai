@@ -1,52 +1,190 @@
 /**
- * Stock — what a Mait is carrying, by breed.
+ * Inventory — everything the dairy has put in a Mait's hands (SRS §6.4, M15).
  *
- * The number that gates everything: a Mait at zero cannot record an AI event at all, so this
- * screen says that outright rather than showing a zero and leaving them to work it out in a
- * yard with a farmer waiting.
+ * Three kinds of thing, and they are three kinds because a Mait acts on them differently. A
+ * straw is spent on one insemination and is the number that decides whether the day can start
+ * at all. A consumable runs down and gets reordered. A piece of equipment is issued once and
+ * held until the dairy asks for it back — it is never used up, so a count of it means nothing
+ * and the only question about it is whether it still works.
  *
- * A breed at zero stays on the list. Dropping it would make a Mait think the breed was never
- * issued to them, when in fact they have run out of it — and those need different actions.
+ * Putting all three on one scroll made the screen a list of unrelated numbers. They are tabs
+ * now, so each one gets a headline that answers its own question: how many straws, how many
+ * supplies, how many items held.
+ *
+ * Every row says what became of the stock, not just what is left. `issued 10 · used 8` beside
+ * a balance of 2 is a day's work accounted for; a bare 2 is a number to worry about. The
+ * ledger has carried that all along and nothing had ever asked it for it.
  */
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import {
   useGetInventorySummaryQuery,
-  useListAiEventsQuery,
   useListBreedsQuery,
   useListIndentsQuery,
 } from '@api/endpoints';
-import PageHero from '@/components/hero';
-import { EmptyState, ErrorState, SkeletonList, SyncBanner } from '@/components/states';
-import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
+import type { Indent, StrawLot, SuppliesLot } from '@api/types';
+import { BrandMark } from '@/components/brand';
+import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
+import {
+  colors,
+  MIN_TOUCH_TARGET,
+  radius,
+  shadows,
+  spacing,
+  typography,
+  yolk,
+} from '@theme/tokens';
+
+type Tab = 'straws' | 'consumables' | 'equipment';
+
+const TABS: Tab[] = ['straws', 'consumables', 'equipment'];
 
 /** Fewer than this of one breed is worth flagging on the row itself. */
 const LOW_PER_BREED = 3;
 
 /**
- * An icon per product, so a row is recognisable before it is read.
+ * Below this a consumable is called low, by catalogue code.
  *
- * Keyed on the catalogue code rather than the name: names are editable from the admin and
- * translated, codes are not. Anything unmapped falls back to a box, which is honest — it is
- * something issued to the Mait whose shape we do not know.
+ * Per product because the units are not comparable: two litres of nitrogen is an emergency and
+ * two pairs of gloves is a morning. Anything unlisted falls back to a small count, which is
+ * the honest default for something issued by the piece.
  */
-const PRODUCT_ICON: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
-  SHEATH: 'medkit-outline',
-  GLOVES: 'hand-left-outline',
-  LN2: 'snow-outline',
-  AI_GUN: 'construct-outline',
-  EAR_TAG_APPLICATOR: 'pricetag-outline',
-  THAWING_TRAY: 'grid-outline',
-  THERMO_MONITOR: 'thermometer-outline',
-};
+const LOW_CONSUMABLE: Record<string, number> = { LN2: 3, SHEATH: 10, GLOVES: 5 };
+const LOW_CONSUMABLE_FALLBACK = 5;
 
-const FALLBACK_ICON: React.ComponentProps<typeof Ionicons>['name'] = 'cube-outline';
+function isLowConsumable(item: SuppliesLot): boolean {
+  return item.qty <= (LOW_CONSUMABLE[item.code] ?? LOW_CONSUMABLE_FALLBACK);
+}
 
+/** "14 Mar 2026" — with the year, because equipment is held for seasons rather than days. */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function longDate(iso: string | null): string | null {
+  if (!iso) {
+    return null;
+  }
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) {
+    return null;
+  }
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function clock(at: number | undefined): string {
+  const d = at ? new Date(at) : new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// --------------------------------------------------------------------------------------
+// Pieces
+// --------------------------------------------------------------------------------------
+/**
+ * One line of stock.
+ *
+ * The figure sits on the right, hard against the edge, so a column of them can be read down
+ * without reading a single name — which is how a Mait checks a flask against what the screen
+ * says. Low rows take the amber wash the rest of the product uses for "act on this".
+ */
+function StockRow({
+  name,
+  meta,
+  value,
+  unit,
+  low = false,
+  badge,
+  testID,
+}: {
+  name: string;
+  meta: string;
+  /** The number, or a status word for something that is not counted. */
+  value: string;
+  unit?: string;
+  low?: boolean;
+  /** A pill beside the name — "Low", "In use". */
+  badge?: { label: string; tone: 'warn' | 'good' | 'info' };
+  testID?: string;
+}): React.JSX.Element {
+  return (
+    <View style={[styles.row, low && styles.rowLow]} testID={testID}>
+      <View style={styles.rowBody}>
+        <View style={styles.rowTitleLine}>
+          <Text style={styles.rowName} numberOfLines={1}>
+            {name}
+          </Text>
+          {!!badge && (
+            <View style={[styles.pill, styles[`pill${badge.tone}` as const]]}>
+              <Text style={[styles.pillLabel, styles[`pillLabel${badge.tone}` as const]]}>
+                {badge.label}
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.rowMeta} numberOfLines={1}>
+          {meta}
+        </Text>
+      </View>
+
+      <View style={styles.rowFigure}>
+        <Text style={[styles.rowValue, low && styles.rowValueLow]}>{value}</Text>
+        {!!unit && <Text style={styles.rowUnit}>{unit}</Text>}
+      </View>
+    </View>
+  );
+}
+
+/** A section rule — the species a group of straws belongs to, and its total. */
+function GroupHead({ label, meta }: { label: string; meta: string }): React.JSX.Element {
+  return (
+    <View style={styles.groupHead}>
+      <Text style={styles.groupLabel}>{label}</Text>
+      <Text style={styles.groupMeta}>{meta}</Text>
+    </View>
+  );
+}
+
+/** The amber warning that belongs to one tab rather than to a row. */
+function Warning({ title, body }: { title: string; body: string }): React.JSX.Element {
+  return (
+    <View style={styles.warning} testID="stock-warning">
+      <Ionicons name="warning-outline" size={18} color={colors.secondaryPressed} />
+      <View style={styles.warningBody}>
+        <Text style={styles.warningTitle}>{title}</Text>
+        <Text style={styles.warningText}>{body}</Text>
+      </View>
+    </View>
+  );
+}
+
+/** A quiet line under a list, explaining how the numbers move. */
+function Footnote({
+  text,
+  action,
+  onPress,
+}: {
+  text: string;
+  action?: string;
+  onPress?: () => void;
+}): React.JSX.Element {
+  return (
+    <View style={styles.footnote}>
+      <Text style={styles.footnoteText}>{text}</Text>
+      {!!action && (
+        <Pressable accessibilityRole="button" onPress={onPress} testID="stock-footnote-action">
+          <Text style={styles.footnoteAction}>{action}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+// --------------------------------------------------------------------------------------
+// Screen
+// --------------------------------------------------------------------------------------
 export default function StockScreen({
   onOpenIndents,
   onRequestStock,
@@ -55,482 +193,560 @@ export default function StockScreen({
   onRequestStock: () => void;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const [tab, setTab] = useState<Tab>('straws');
+
   const stock = useGetInventorySummaryQuery();
   const breeds = useListBreedsQuery();
-  const events = useListAiEventsQuery();
   const indents = useListIndentsQuery();
 
-  // Requested and approved are the ones still owed to the Mait. Issued and rejected are
-  // finished business, and counting them would make the card claim work that is not coming.
-  const openIndents = (indents.data?.results ?? []).filter(
-    indent => indent.status === 'requested' || indent.status === 'approved',
-  ).length;
-
   const hindi = i18n.language.startsWith('hi');
-  const total = stock.data?.total_straws ?? 0;
-  const byBreed = Object.entries(stock.data?.by_breed ?? {});
 
-  // Only breeds the Mait actually holds. Listing every configured breed at zero made them
-  // scroll past a dozen rows that say nothing to reach the two that do.
-  const rows = byBreed.filter(([, qty]) => qty > 0).sort((a, b) => b[1] - a[1]);
-  const lowBreeds = rows.filter(([, qty]) => qty > 0 && qty <= LOW_PER_BREED).length;
+  /** A breed's own name, from the admin's list. Falls back to the code, which is never wrong. */
+  const breedName = (code: string): string => {
+    const config = (breeds.data ?? []).find(item => item.code === code);
+    return (hindi && config?.name_hi) || config?.name || code;
+  };
 
-  // Counted from the events already fetched for Home and History rather than guessed at.
-  const usedThisMonth = (events.data?.results ?? []).filter(event => {
-    const when = new Date(event.completed_at ?? event.created_at);
-    const now = new Date();
-    return (
-      event.status === 'completed' &&
-      when.getMonth() === now.getMonth() &&
-      when.getFullYear() === now.getFullYear()
-    );
-  }).length;
-
-  // Consumables are counted in units held, equipment in items held: a Mait with 40 sheaths
-  // and one AI gun is carrying both, and a single "products" number would hide which.
+  // Memoised because the grouping below depends on it, and `?? []` is a fresh array on every
+  // render — which would re-group the whole flask each time the screen so much as blinked.
+  const straws = useMemo(() => stock.data?.straws ?? [], [stock.data]);
   const consumables = stock.data?.consumables ?? [];
   const assets = stock.data?.assets ?? [];
-  const consumableUnits = consumables.reduce((sum, item) => sum + item.qty, 0);
-  const assetUnits = assets.reduce((sum, item) => sum + item.qty, 0);
-  const everything = total + consumableUnits + assetUnits;
 
-  const config = (code: string) => (breeds.data ?? []).find(breed => breed.code === code);
+  /** Straws under their species, so a Mait reads the flask the way it is packed. */
+  const grouped = useMemo(() => {
+    const groups: { type: string; rows: StrawLot[] }[] = [];
+    for (const type of ['COW', 'BUFF', ''] as const) {
+      const rows = straws.filter(row => row.animal_type === type);
+      if (rows.length) {
+        groups.push({ type, rows });
+      }
+    }
+    return groups;
+  }, [straws]);
 
-  const label = (code: string) => {
-    const found = config(code);
-    return found ? (hindi && found.name_hi) || found.name : code;
+  /**
+   * What has been approved but is not in the Mait's hands yet.
+   *
+   * It belongs on this screen because it changes what a low count means: two straws with
+   * twenty already approved is a delivery to chase, and two with nothing behind them is a
+   * round that cannot happen.
+   */
+  const incoming = (indents.data?.results ?? []).filter(
+    indent => indent.status === 'approved' || indent.status === 'issued',
+  );
+
+  const lowBreeds = straws.filter(row => row.qty <= LOW_PER_BREED).length;
+  const lowSupplies = consumables.filter(isLowConsumable);
+  const nitrogen = consumables.find(item => item.code === 'LN2');
+
+  const headline: Record<Tab, { title: string; subtitle: string; accent?: string }> = {
+    straws: {
+      title: t('stock.strawsHeld', { count: stock.data?.total_straws ?? 0 }),
+      subtitle: grouped
+        .map(group =>
+          t('stock.speciesCount', {
+            species: group.type ? t(`aiFlow.animalType.${group.type}`) : t('stock.unknownAnimal'),
+            count: group.rows.reduce((sum, row) => sum + row.qty, 0),
+          }),
+        )
+        .join(' · '),
+      accent: incoming.length ? t('stock.awaitingIssue', { count: incoming.length }) : undefined,
+    },
+    consumables: {
+      title: t('stock.consumablesHeld', { count: consumables.length }),
+      subtitle: t('stock.consumablesSubtitle'),
+      accent: t('stock.notPricedToYou'),
+    },
+    equipment: {
+      title: t('stock.equipmentHeld', { count: assets.length }),
+      subtitle: t('stock.equipmentSubtitle'),
+    },
   };
 
-  const animal = (code: string) => {
-    const found = config(code);
-    return found ? t(`aiFlow.animalType.${found.animal_type}`) : t('stock.unknownAnimal');
-  };
-
-  const buffalo = (code: string) => config(code)?.animal_type === 'BUFF';
+  const head = headline[tab];
+  const loading = stock.isLoading;
+  const failed = stock.isError;
 
   return (
     <View style={styles.root}>
-      <PageHero title={t('stock.title')} subtitle={t('stock.subtitle')} />
+      {/* Fixed head. The headline answers the question the tab is asking and the tabs are how
+          the question is changed, so neither may scroll away from the list they describe —
+          a Mait halfway down the flask should never have to scroll back up to find out
+          which of the three they are looking at. */}
+      {/* Full-bleed, and up under the status bar. The hero is the top of the screen rather
+            than a card sitting on it — inset on all four sides it read as one more card in a
+            list of cards, with a strip of page showing above it. Only the bottom corners are
+            rounded, which is what makes the body below look like it slides underneath. The
+            mark rides in it so a phone handed to a farmer still says whose app it is. */}
+      <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
+        <View style={styles.heroTop}>
+          <BrandMark size="small" />
 
+          {/* The route to what has been asked for. It lives in the head rather than at the
+              foot of a list because it answers "where is my stock", which is a question asked
+              from any of the three tabs and most often from the one with a low count on it.
+              Without it this screen is the only way to Indents and there is no way through. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('stock.yourIndents')}
+            onPress={onOpenIndents}
+            style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+            testID="stock-open-indents"
+          >
+            <Ionicons name="document-text-outline" size={14} color={colors.surface} />
+            {incoming.length > 0 && (
+              <View style={styles.chipDot}>
+                <Text style={styles.chipDotLabel}>{incoming.length}</Text>
+              </View>
+            )}
+          </Pressable>
+
+          <View style={styles.asOf}>
+            <Ionicons
+              name={stock.isError ? 'cloud-offline-outline' : 'time-outline'}
+              size={13}
+              color={colors.surface}
+            />
+            <Text style={styles.asOfLabel}>
+              {t('stock.asOf', { time: clock(stock.fulfilledTimeStamp) })}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.heroTitle}>{head.title}</Text>
+        {!!head.subtitle && (
+          <Text style={styles.heroSubtitle}>
+            {head.subtitle}
+            {!!head.accent && (
+              <>
+                {head.subtitle ? ' · ' : ''}
+                <Text style={styles.heroAccent}>{head.accent}</Text>
+              </>
+            )}
+          </Text>
+        )}
+      </View>
+
+      {/* One control, three answers. Always carries a value, so it reads as a thing already
+          chosen rather than a question. */}
+      <View style={styles.tabsWrap}>
+        <View style={styles.tabs}>
+          {TABS.map(key => {
+            const active = key === tab;
+            return (
+              <Pressable
+                key={key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => setTab(key)}
+                style={[styles.tab, active && styles.tabActive]}
+                testID={`stock-tab-${key}`}
+              >
+                <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1}>
+                  {t(`stock.tab.${key}`)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Only this moves. */}
       <ScrollView
         contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={stock.isFetching}
-            onRefresh={stock.refetch}
+            refreshing={stock.isFetching && !stock.isLoading}
+            onRefresh={() => {
+              stock.refetch();
+              indents.refetch();
+            }}
             tintColor={colors.primary}
           />
         }
       >
-        {stock.isLoading ? (
-          <SkeletonList rows={4} />
-        ) : stock.isError ? (
+        {loading && <SkeletonList rows={4} />}
+
+        {failed && (
           <ErrorState
             title={t('stock.errorTitle')}
             onRetry={() => stock.refetch()}
             busy={stock.isFetching}
+            testID="stock-error"
           />
-        ) : (
-          <View>
-            {/* Everything held, split the way it gets used. A Mait opening this screen is
-                asking two questions at once — can I work, and what am I carrying — so the
-                straw count keeps the emphasis and the rest is read in the same glance. */}
-            <View style={styles.summary} testID="stock-insight">
-              <Text style={styles.summaryEyebrow}>{t('stock.inventoryTitle')}</Text>
-              <Text style={styles.summaryHeadline}>
-                {everything > 0
-                  ? t('stock.thingsWithYou', { count: everything })
-                  : t('stock.nothingWithYou')}
-              </Text>
-
-              <View style={styles.stats}>
-                <View style={[styles.stat, styles.statLead]} testID="stat-semen">
-                  <Text style={styles.statLabel} numberOfLines={1}>
-                    {t('stock.semen')}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.statValue,
-                      total === 0 && styles.statValueBad,
-                      total > 0 && stock.data?.is_low_stock && styles.statValueWarn,
-                    ]}
-                  >
-                    {total}
-                  </Text>
-                  <Text style={styles.statFoot} numberOfLines={1}>
-                    {rows.length > 0 ? t('stock.acrossBreeds', { count: rows.length }) : '—'}
-                  </Text>
-                </View>
-
-                <View style={styles.stat} testID="stat-consumables">
-                  <Text style={styles.statLabel} numberOfLines={1}>
-                    {t('stock.consumables')}
-                  </Text>
-                  <Text style={[styles.statValue, styles.statValueInfo]}>{consumableUnits}</Text>
-                  <Text style={styles.statFoot} numberOfLines={1}>
-                    {consumables.length > 0
-                      ? t('stock.kinds', { count: consumables.length })
-                      : t('stock.noneHeld')}
-                  </Text>
-                </View>
-
-                <View style={styles.stat} testID="stat-assets">
-                  <Text style={styles.statLabel} numberOfLines={1}>
-                    {t('stock.assets')}
-                  </Text>
-                  <Text style={[styles.statValue, styles.statValueAsset]}>{assetUnits}</Text>
-                  <Text style={styles.statFoot} numberOfLines={1}>
-                    {assets.length > 0
-                      ? t('stock.kinds', { count: assets.length })
-                      : t('stock.noneHeld')}
-                  </Text>
-                </View>
-              </View>
-
-              {/* The verdict, spelled out under the numbers rather than left to be worked
-                  out from them — and carrying a glyph, so it is not colour alone. */}
-              <View style={styles.verdict}>
-                <Ionicons
-                  name={
-                    total === 0
-                      ? 'alert-circle'
-                      : stock.data?.is_low_stock
-                        ? 'warning'
-                        : 'checkmark-circle'
-                  }
-                  size={15}
-                  color={
-                    total === 0
-                      ? colors.error
-                      : stock.data?.is_low_stock
-                        ? colors.secondaryPressed
-                        : colors.primaryDark
-                  }
-                />
-                <Text
-                  style={[
-                    styles.verdictLabel,
-                    total === 0 && styles.verdictLabelBad,
-                    total > 0 && stock.data?.is_low_stock && styles.verdictLabelWarn,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {total === 0
-                    ? t('stock.atZero')
-                    : stock.data?.is_low_stock
-                      ? t('stock.belowThreshold')
-                      : t('stock.enoughForNow')}
-                </Text>
-                <Text style={styles.verdictMeta} numberOfLines={1}>
-                  {t('stock.usedThisMonthFoot', { count: usedThisMonth })}
-                </Text>
-              </View>
-            </View>
-
-            {/* Where a request goes after it is sent. Above the breed rows rather than under
-                the equipment at the bottom: a Mait wondering where their stock is should not
-                have to scroll past everything they already hold to find out. */}
-            <Pressable
-              accessibilityRole="button"
-              onPress={onOpenIndents}
-              style={({ pressed }) => [styles.indentsLink, pressed && styles.indentsLinkPressed]}
-              testID="stock-open-indents"
-            >
-              <View style={[styles.swatch, styles.swatchAlt]}>
-                <Ionicons name="cube-outline" size={17} color={colors.info} />
-              </View>
-              <View style={styles.rowBody}>
-                <Text style={styles.rowTitle}>{t('stock.yourIndents')}</Text>
-                <Text style={styles.rowMeta}>
-                  {openIndents > 0
-                    ? t('stock.indentsOpen', { count: openIndents })
-                    : t('stock.yourIndentsHint')}
-                </Text>
-              </View>
-              {openIndents > 0 && (
-                <View style={styles.openPill}>
-                  <Text style={styles.openPillLabel}>{openIndents}</Text>
-                </View>
-              )}
-              <Ionicons name="chevron-forward" size={16} color={colors.textDisabled} />
-            </Pressable>
-
-            <Text style={styles.section}>{t('stock.byBreed')}</Text>
-
-            {rows.length === 0 ? (
-              <EmptyState
-                title={t('stock.emptyTitle')}
-                body={t('stock.emptyBody')}
-                testID="stock-empty"
-              />
-            ) : (
-              rows.map(([code, qty]) => {
-                const low = qty <= LOW_PER_BREED;
-                return (
-                  <View
-                    key={code}
-                    style={[styles.row, low && styles.rowLow]}
-                    testID={`stock-${code}`}
-                  >
-                    <View style={[styles.swatch, buffalo(code) && styles.swatchBuffalo]}>
-                      {/* A real cow silhouette. No icon set bundled with Expo has a buffalo,
-                          so the same bovine glyph carries both and the colour tells them
-                          apart — the animal type is spelled out on the line below anyway. */}
-                      <MaterialCommunityIcons
-                        name="cow"
-                        size={18}
-                        color={buffalo(code) ? colors.ink : colors.primaryDark}
-                      />
-                    </View>
-                    <View style={styles.rowBody}>
-                      <Text style={styles.rowTitle} numberOfLines={1}>
-                        {label(code)}
-                      </Text>
-                      <Text style={styles.rowMeta} numberOfLines={1}>
-                        {animal(code)} · {t('stock.inYourFlask')}
-                      </Text>
-                    </View>
-                    <Text style={styles.rowQty}>{qty}</Text>
-                    {low && (
-                      <View style={styles.lowPill}>
-                        <Text style={styles.lowPillLabel}>{t('stock.low')}</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })
-            )}
-
-            {(stock.data?.consumables ?? []).length > 0 && (
-              <View>
-                <Text style={styles.section}>{t('stock.consumables')}</Text>
-                {(stock.data?.consumables ?? []).map(item => (
-                  <View key={item.code || item.name} style={styles.row}>
-                    <View style={[styles.swatch, styles.swatchAlt]}>
-                      <Ionicons
-                        name={PRODUCT_ICON[item.code] ?? FALLBACK_ICON}
-                        size={16}
-                        color={colors.info}
-                      />
-                    </View>
-                    <View style={styles.rowBody}>
-                      <Text style={styles.rowTitle} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.rowMeta} numberOfLines={1}>
-                        {item.unit}
-                      </Text>
-                    </View>
-                    <Text style={[styles.rowQty, styles.rowQtyInfo]}>{item.qty}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Equipment, kept apart from what runs out: a Mait replaces an AI gun when it
-                breaks, not when the number gets low. */}
-            {(stock.data?.assets ?? []).length > 0 && (
-              <View>
-                <Text style={styles.section}>{t('stock.assets')}</Text>
-                {(stock.data?.assets ?? []).map(item => (
-                  <View key={item.code || item.name} style={styles.row}>
-                    <View style={[styles.swatch, styles.swatchAsset]}>
-                      <Ionicons
-                        name={PRODUCT_ICON[item.code] ?? FALLBACK_ICON}
-                        size={16}
-                        color={colors.secondaryPressed}
-                      />
-                    </View>
-                    <View style={styles.rowBody}>
-                      <Text style={styles.rowTitle} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.rowMeta} numberOfLines={1}>
-                        {item.unit}
-                      </Text>
-                    </View>
-                    <Text style={styles.rowQty}>{item.qty}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Named rather than left to be inferred from the rows above. */}
-            {lowBreeds > 0 && (
-              <SyncBanner
-                tone="offline"
-                title={t('stock.breedsLow', { count: lowBreeds })}
-                body={t('stock.breedsLowBody')}
-                testID="stock-breeds-low"
-              />
-            )}
-            {total === 0 && (
-              <SyncBanner
-                tone="offline"
-                title={t('stock.cannotWorkTitle')}
-                body={t('stock.cannotWorkBody')}
-                testID="stock-at-zero"
-              />
-            )}
-          </View>
         )}
 
-        {/* This screen's one action, at the foot of its own content. It used to float in the
-            tab bar, where it changed job depending on which tab was open. */}
-        <Pressable
-          accessibilityRole="button"
-          onPress={onRequestStock}
-          style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
-          testID="stock-request"
-        >
-          <Ionicons name="add" size={20} color={colors.surface} />
-          <Text style={styles.actionLabel}>{t('requestStock.action')}</Text>
-        </Pressable>
+        {!loading && !failed && tab === 'straws' && (
+          <>
+            {straws.length === 0 && (
+              <EmptyState title={t('stock.emptyTitle')} body={t('stock.emptyBody')} />
+            )}
+
+            {grouped.map(group => (
+              <View key={group.type || 'unknown'}>
+                <GroupHead
+                  label={
+                    group.type ? t(`aiFlow.animalType.${group.type}`) : t('stock.unknownAnimal')
+                  }
+                  meta={t('stock.doses', {
+                    count: group.rows.reduce((sum, row) => sum + row.qty, 0),
+                  })}
+                />
+                {group.rows.map(row => (
+                  <StockRow
+                    key={row.breed}
+                    name={breedName(row.breed)}
+                    meta={t('stock.issuedUsed', {
+                      code: row.breed,
+                      issued: row.issued,
+                      used: row.used,
+                    })}
+                    value={String(row.qty)}
+                    unit={t('stock.dosesUnit')}
+                    low={row.qty <= LOW_PER_BREED}
+                    badge={
+                      row.qty <= LOW_PER_BREED ? { label: t('stock.low'), tone: 'warn' } : undefined
+                    }
+                    testID={`stock-straw-${row.breed}`}
+                  />
+                ))}
+              </View>
+            ))}
+
+            {/* Approved but not yet in hand. Tappable, because the next question is always
+                "where is it", and that is the indents screen. */}
+            {incoming.map((indent: Indent) => (
+              <Pressable
+                key={indent.id}
+                accessibilityRole="button"
+                onPress={onOpenIndents}
+                style={styles.row}
+                testID={`stock-incoming-${indent.id}`}
+              >
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowName} numberOfLines={1}>
+                    {t('stock.indentLine', {
+                      id: indent.id,
+                      item: indent.breed ? breedName(indent.breed) : indent.item,
+                      qty: indent.qty_requested,
+                    })}
+                  </Text>
+                  <Text style={styles.rowMeta} numberOfLines={1}>
+                    {indent.status === 'issued'
+                      ? t('stock.issuedNotCollected')
+                      : t('stock.approvedNotIssued')}
+                  </Text>
+                </View>
+                <View style={[styles.pill, styles.pillinfo]}>
+                  <Text style={[styles.pillLabel, styles.pillLabelinfo]}>
+                    {indent.status_display}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+
+            {lowBreeds > 0 && <Footnote text={t('stock.breedsLow', { count: lowBreeds })} />}
+          </>
+        )}
+
+        {!loading && !failed && tab === 'consumables' && (
+          <>
+            {consumables.length === 0 && (
+              <EmptyState title={t('stock.noSuppliesTitle')} body={t('stock.noSuppliesBody')} />
+            )}
+
+            {consumables.map(item => (
+              <StockRow
+                key={item.code}
+                name={item.name}
+                meta={t('stock.perUnit', {
+                  code: item.code,
+                  unit: item.unit || t('stock.piece'),
+                })}
+                value={String(item.qty)}
+                unit={item.unit ? t('stock.unitPlural', { unit: item.unit }) : t('stock.pieces')}
+                low={isLowConsumable(item)}
+                badge={isLowConsumable(item) ? { label: t('stock.low'), tone: 'warn' } : undefined}
+                testID={`stock-consumable-${item.code}`}
+              />
+            ))}
+
+            {/* Nitrogen gets a warning of its own. It is the only consumable whose running out
+                does not stop one insemination — it spoils the whole flask. */}
+            {!!nitrogen && isLowConsumable(nitrogen) && (
+              <Warning title={t('stock.nitrogenTitle')} body={t('stock.nitrogenBody')} />
+            )}
+
+            {consumables.length > 0 && (
+              <Footnote
+                text={t('stock.countsFall')}
+                action={t('stock.correctOne')}
+                onPress={onOpenIndents}
+              />
+            )}
+          </>
+        )}
+
+        {!loading && !failed && tab === 'equipment' && (
+          <>
+            {assets.length === 0 && (
+              <EmptyState title={t('stock.noEquipmentTitle')} body={t('stock.noEquipmentBody')} />
+            )}
+
+            {assets.map(item => {
+              const since = longDate(item.issued_at);
+              return (
+                <StockRow
+                  key={item.code}
+                  name={item.name}
+                  meta={
+                    since
+                      ? t('stock.issuedOn', { code: item.code, date: since })
+                      : t('stock.issuedUnknown', { code: item.code })
+                  }
+                  // Never a count. One AI gun is not "1 piece of stock" — it is a thing the
+                  // Mait either has or has to report, and a number invites reading it as
+                  // something that can run out.
+                  value=""
+                  badge={{ label: t('stock.inUse'), tone: 'good' }}
+                  testID={`stock-asset-${item.code}`}
+                />
+              );
+            })}
+
+            {assets.length > 0 && <Footnote text={t('stock.equipmentFootnote')} />}
+          </>
+        )}
+
+        {lowSupplies.length > 0 && tab === 'straws' && (
+          <Footnote text={t('stock.suppliesLowElsewhere', { count: lowSupplies.length })} />
+        )}
       </ScrollView>
+
+      {/* Fixed foot, above the tab bar. The one action out of this screen should not have to
+          be scrolled back to — a Mait who has just read a low count wants it under their
+          thumb, not at the end of a list of eleven breeds.
+
+          Equipment asks a different question, so it gets a different button rather than a
+          green one offering to order another AI gun. */}
+      {!loading && !failed && (
+        <View style={styles.foot}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={tab === 'equipment' ? onOpenIndents : onRequestStock}
+            style={({ pressed }) => [
+              styles.cta,
+              tab === 'equipment' ? styles.ctaQuiet : styles.ctaPrimary,
+              pressed && (tab === 'equipment' ? styles.ctaQuietPressed : styles.ctaPrimaryPressed),
+            ]}
+            testID="stock-cta"
+          >
+            {tab !== 'equipment' && <Ionicons name="add" size={18} color={colors.surface} />}
+            <Text
+              style={[
+                styles.ctaLabel,
+                tab === 'equipment' ? styles.ctaLabelQuiet : styles.ctaLabelPrimary,
+              ]}
+            >
+              {tab === 'equipment' ? t('stock.reportBroken') : t('stock.raiseIndent')}
+            </Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  body: { padding: spacing[5] },
+  // The scrolling band between the fixed head and the fixed foot.
+  body: { paddingHorizontal: spacing[4], paddingTop: spacing[4], paddingBottom: spacing[4] },
+  // Holds the tabs in the fixed head, on the page's own grey so the list slides behind them.
+  tabsWrap: {
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[4],
+    backgroundColor: colors.background,
+  },
+  // Opaque, and it has to be: the list scrolls behind this, and a transparent foot would show
+  // rows sliding through the button on top of them.
+  foot: {
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[3],
+    paddingBottom: spacing[3],
+    backgroundColor: colors.background,
+  },
 
-  action: {
+  // -- hero ------------------------------------------------------------------------------
+  hero: {
+    backgroundColor: colors.ink,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    paddingHorizontal: spacing[5],
+    paddingBottom: spacing[5],
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[4],
+  },
+  // Glyph-only, and pushed into the right-hand group with the clock.
+  chip: {
+    marginLeft: 'auto',
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  chipPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
+  // How many are outstanding, on the glyph — the same badge the tab bar uses for waiting work.
+  chipDot: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.secondary,
+  },
+  chipDotLabel: { ...typography.caption, fontSize: 10, lineHeight: 14, color: colors.ink },
+  asOf: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  asOfLabel: { ...typography.caption, color: colors.surface },
+  heroTitle: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
+  heroSubtitle: { ...typography.body, color: colors.surface, opacity: 0.72, marginTop: spacing[2] },
+  // Yolk on Ink, which is the one place the accent is legible as text (DESIGN_SYSTEM).
+  heroAccent: { color: colors.secondary, opacity: 1 },
+
+  // -- tabs ------------------------------------------------------------------------------
+  tabs: {
+    flexDirection: 'row',
+    gap: spacing[1],
+    padding: spacing[1],
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: spacing[2],
+    borderRadius: radius.md,
+  },
+  tabActive: { backgroundColor: colors.primary },
+  tabLabel: { ...typography.bodyStrong, fontSize: 14, color: colors.text },
+  tabLabelActive: { color: colors.surface },
+
+  // -- group heads -----------------------------------------------------------------------
+  groupHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[1],
+    marginBottom: spacing[2],
+    marginTop: spacing[2],
+  },
+  groupLabel: { ...typography.label, color: colors.textMuted, letterSpacing: 1 },
+  groupMeta: { ...typography.caption, color: colors.textMuted },
+
+  // -- rows ------------------------------------------------------------------------------
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    minHeight: MIN_TOUCH_TARGET + spacing[4],
+    padding: spacing[4],
+    marginBottom: spacing[3],
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderRadius: radius.lg,
+    ...shadows.card,
+  },
+  rowLow: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
+  rowBody: { flex: 1 },
+  rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  rowName: { ...typography.h3, color: colors.ink, flexShrink: 1 },
+  rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  rowFigure: { alignItems: 'flex-end' },
+  rowValue: { ...typography.h1, color: colors.ink },
+  rowValueLow: { color: colors.secondaryPressed },
+  rowUnit: { ...typography.caption, color: colors.textMuted },
+
+  // -- pills -----------------------------------------------------------------------------
+  pill: { paddingHorizontal: spacing[3], paddingVertical: 2, borderRadius: radius.pill },
+  pillwarn: { backgroundColor: colors.secondaryWash },
+  pillgood: { backgroundColor: colors.primaryWash },
+  pillinfo: { backgroundColor: colors.infoWash },
+  pillLabel: { ...typography.caption },
+  pillLabelwarn: { color: yolk[800] },
+  pillLabelgood: { color: colors.primaryDark },
+  pillLabelinfo: { color: colors.info },
+
+  // -- warning ---------------------------------------------------------------------------
+  warning: {
+    flexDirection: 'row',
+    gap: spacing[3],
+    padding: spacing[4],
+    marginBottom: spacing[3],
+    borderRadius: radius.lg,
+    backgroundColor: colors.secondaryWash,
+    borderWidth: 1,
+    borderColor: colors.secondary,
+  },
+  warningBody: { flex: 1 },
+  warningTitle: { ...typography.bodyStrong, color: yolk[800] },
+  warningText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+
+  // -- footnote --------------------------------------------------------------------------
+  footnote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    padding: spacing[3],
+    marginBottom: spacing[3],
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  footnoteText: { ...typography.caption, color: colors.textMuted, flex: 1 },
+  footnoteAction: { ...typography.caption, color: colors.primaryDark },
+
+  // -- call to action --------------------------------------------------------------------
+  cta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
     minHeight: 56,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    marginTop: spacing[5],
+    borderRadius: radius.lg,
   },
-  actionPressed: { backgroundColor: colors.primaryPressed },
-  actionLabel: { ...typography.bodyStrong, color: colors.surface },
-
-  summary: {
-    padding: spacing[4],
-    marginBottom: spacing[5],
+  ctaPrimary: { backgroundColor: colors.primary },
+  ctaPrimaryPressed: { backgroundColor: colors.primaryPressed },
+  ctaQuiet: {
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.card,
   },
-  summaryEyebrow: {
-    ...typography.caption,
-    color: colors.textMuted,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  summaryHeadline: { ...typography.h2, color: colors.ink, marginTop: 2 },
-
-  stats: { flexDirection: 'row', gap: spacing[2], marginTop: spacing[4] },
-  stat: {
-    flex: 1,
-    padding: spacing[3],
-    backgroundColor: colors.background,
-    borderRadius: radius.sm,
-  },
-  // The straw count is the one that decides whether the day can start, so it is tinted
-  // rather than left to sit as one of three equal boxes.
-  statLead: { backgroundColor: colors.primaryWash },
-  statLabel: { ...typography.caption, color: colors.textMuted },
-  statValue: { ...typography.h1, color: colors.primaryDark, marginVertical: 2 },
-  statValueInfo: { color: colors.info },
-  statValueAsset: { color: colors.ink },
-  statValueWarn: { color: colors.secondaryPressed },
-  statValueBad: { color: colors.error },
-  statFoot: { ...typography.caption, color: colors.textMuted },
-
-  verdict: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    marginTop: spacing[3],
-    paddingTop: spacing[3],
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  verdictLabel: { ...typography.label, color: colors.primaryDark, flexShrink: 1 },
-  verdictLabelWarn: { color: colors.secondaryPressed },
-  verdictLabelBad: { color: colors.error },
-  verdictMeta: { ...typography.caption, color: colors.textMuted, marginLeft: 'auto' },
-
-  section: { ...typography.h3, color: colors.ink, marginBottom: spacing[3] },
-
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    minHeight: MIN_TOUCH_TARGET + spacing[2],
-    padding: spacing[3],
-    marginBottom: spacing[2],
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
-  },
-  // A breed running out is tinted, so the list can be triaged without reading every number.
-  rowLow: { borderColor: colors.error, backgroundColor: colors.errorWash },
-
-  swatch: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryWash,
-  },
-  swatchBuffalo: { backgroundColor: colors.background },
-  swatchAlt: {
-    backgroundColor: colors.infoWash,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  swatchAsset: {
-    backgroundColor: colors.secondaryWash,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  indentsLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    minHeight: MIN_TOUCH_TARGET + spacing[2],
-    padding: spacing[3],
-    marginBottom: spacing[5],
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
-  },
-  indentsLinkPressed: { backgroundColor: colors.background },
-
-  openPill: {
-    minWidth: 24,
-    paddingHorizontal: spacing[2],
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    backgroundColor: colors.infoWash,
-  },
-  openPillLabel: { ...typography.label, color: colors.info },
-
-  rowBody: { flex: 1 },
-  rowTitle: { ...typography.bodyStrong, color: colors.ink },
-  rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  rowQty: { ...typography.h2, color: colors.ink },
-  rowQtyInfo: { color: colors.info },
-
-  lowPill: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-    backgroundColor: colors.errorWash,
-  },
-  lowPillLabel: { ...typography.caption, color: colors.error },
+  ctaQuietPressed: { backgroundColor: colors.background },
+  ctaLabel: { ...typography.bodyStrong, fontSize: 16 },
+  ctaLabelPrimary: { color: colors.surface },
+  ctaLabelQuiet: { color: colors.text },
 });

@@ -259,14 +259,44 @@ export interface StockLine {
   qty: number;
 }
 
+/**
+ * One line of stock, with what became of it.
+ *
+ * `qty` is what is left; `issued` and `used` come from the ledger, which has carried them all
+ * along. The pair is the difference between "2 straws" and "2 straws, because 8 of the 10 you
+ * were issued have been used" — the second is a day's work accounted for, the first is a
+ * number to worry about.
+ */
+export interface StockLot {
+  qty: number;
+  issued: number;
+  used: number;
+}
+
+export interface StrawLot extends StockLot {
+  breed: string;
+  /** Blank for a breed the administrator has retired — the straws are real either way. */
+  animal_type: AnimalTypeCode | '';
+}
+
+export interface SuppliesLot extends StockLot {
+  code: string;
+  name: string;
+  unit: string;
+  /** When it reached this Mait. What describes a piece of equipment they still hold. */
+  issued_at: string | null;
+}
+
 export interface InventorySummary {
   total_straws: number;
   is_low_stock: boolean;
   by_breed: Record<string, number>;
+  /** The same straws, grouped by species and carrying their history. */
+  straws: StrawLot[];
   /** Used up and reordered — sheaths, gloves, liquid nitrogen. */
-  consumables: StockLine[];
+  consumables: SuppliesLot[];
   /** Issued once and kept — AI gun, thawing tray. */
-  assets: StockLine[];
+  assets: SuppliesLot[];
 }
 
 /** A product a Mait can ask for. Straws are absent: those are requested by breed. */

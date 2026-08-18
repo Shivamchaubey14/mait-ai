@@ -29,6 +29,7 @@ const SUMMARY: InventorySummary = {
   total_straws: 12,
   is_low_stock: false,
   by_breed: { Murrah: 12 },
+  straws: [],
   consumables: [],
   assets: [],
 };
@@ -126,7 +127,7 @@ describe('back from the tabs', () => {
     await screen.findByTestId('home-start-ai');
 
     fireEvent.press(screen.getByTestId('tab-stock'));
-    await screen.findByTestId('stock-request');
+    await screen.findByTestId('stock-cta');
 
     expect(pressBack()).toBe(true);
     await screen.findByTestId('home-start-ai');
@@ -188,7 +189,7 @@ describe('back from the stock screens layered over Inventory', () => {
     // One press, one screen. The list and the tab under it are two separate places, and
     // collapsing both at once skips a screen the Mait was on a moment ago.
     expect(pressBack()).toBe(true);
-    await screen.findByTestId('stock-request');
+    await screen.findByTestId('stock-cta');
 
     expect(pressBack()).toBe(true);
     await screen.findByTestId('home-start-ai');
@@ -199,11 +200,11 @@ describe('back from the stock screens layered over Inventory', () => {
     await screen.findByTestId('home-start-ai');
 
     fireEvent.press(screen.getByTestId('tab-stock'));
-    fireEvent.press(await screen.findByTestId('stock-request'));
+    fireEvent.press(await screen.findByTestId('stock-cta'));
     await screen.findByText('Request stock');
 
     expect(pressBack()).toBe(true);
 
-    await waitFor(() => expect(screen.getByTestId('stock-request')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('stock-cta')).toBeTruthy());
   });
 });

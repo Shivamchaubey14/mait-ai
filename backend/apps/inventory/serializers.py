@@ -134,6 +134,11 @@ class InventorySummarySerializer(serializers.Serializer):
     total_straws = serializers.IntegerField()
     is_low_stock = serializers.BooleanField()
     by_breed = serializers.DictField(child=serializers.IntegerField())
+    # The same straws as `by_breed`, with the species and the history alongside — what the
+    # stock screen groups cow from buffalo by, and what lets a row say `issued 10 · used 8`
+    # rather than a bare 2. `by_breed` is untouched because the capture flow and Home gate on
+    # it, and changing a shape two screens depend on to serve a third is how those two break.
+    straws = serializers.ListField(child=serializers.DictField())
     # Split apart: what runs out and gets reordered, and what is issued once and kept.
     consumables = serializers.ListField(child=serializers.DictField())
     assets = serializers.ListField(child=serializers.DictField())

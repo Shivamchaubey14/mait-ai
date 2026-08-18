@@ -4338,6 +4338,11 @@ components:
           type: object
           additionalProperties:
             type: integer
+        straws:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
         consumables:
           type: array
           items:
@@ -4353,6 +4358,7 @@ components:
       - by_breed
       - consumables
       - is_low_stock
+      - straws
       - total_straws
     LedgerEntry:
       type: object

@@ -21,6 +21,7 @@ const SUMMARY: InventorySummary = {
   total_straws: 32,
   is_low_stock: false,
   by_breed: { 'HF Cross': 18, Sahiwal: 12, Murrah: 2 },
+  straws: [],
   consumables: [],
   assets: [],
 };

@@ -10,7 +10,7 @@ happened.
 from __future__ import annotations
 
 from django.conf import settings
-from django.db.models import Sum
+from django.db.models import Min, Q, Sum
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, viewsets
@@ -19,6 +19,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.animals.models import BreedConfig
 from apps.core.exceptions import (
     BreedRequired,
     InsufficientStock,
@@ -150,6 +151,44 @@ def build_summary(mait) -> dict:
     straw_ids = [line.product_ref_id for line in lines if line.product_type == ProductType.STRAW]
     batches = SemenBatch.objects.in_bulk(straw_ids)
 
+    # -- what the ledger already knows ------------------------------------------------------
+    #
+    # The balances say what is left. They do not say what a Mait started with, and on the stock
+    # screen that is the difference between "2 straws" and "2 straws, because 8 of the 10 you
+    # were issued have been used" — the second is a day's work accounted for, the first is a
+    # number to worry about. The ledger has carried both all along; nothing asked it.
+    #
+    # One grouped query for the whole of a Mait's stock, read before anything is built, so no
+    # row is assembled twice and nothing has to be matched back up afterwards.
+    movements = (
+        MaitInventoryLedger.objects.filter(inventory__mait=mait)
+        .values("inventory__product_type", "inventory__product_ref_id")
+        .annotate(
+            credited=Sum("qty", filter=Q(qty__gt=0)),
+            debited=Sum("qty", filter=Q(qty__lt=0)),
+            first_issued_at=Min("created_at", filter=Q(qty__gt=0)),
+        )
+    )
+    history = {
+        (row["inventory__product_type"], row["inventory__product_ref_id"]): {
+            "issued": row["credited"] or 0,
+            # Debits are stored negative, which is right for summing to a balance and wrong
+            # for reading on a card.
+            "used": abs(row["debited"] or 0),
+            "issued_at": row["first_issued_at"],
+        }
+        for row in movements
+    }
+
+    def movement_for(line) -> dict:
+        # A line with no ledger behind it predates the ledger, or was seeded directly. Treating
+        # what is in hand as what was issued is the honest reading — nothing is known to have
+        # been used.
+        return history.get(
+            (line.product_type, line.product_ref_id),
+            {"issued": line.qty_available, "used": 0, "issued_at": None},
+        )
+
     by_breed: dict[str, int] = {}
     for line in lines:
         # The product_type check is not redundant. `product_ref_id` means SemenBatch.id for
@@ -176,22 +215,65 @@ def build_summary(mait) -> dict:
         if line.product_type != ProductType.CONSUMABLE:
             continue
         product = products.get(line.product_ref_id)
+        moved = movement_for(line)
         row = {
             "code": getattr(product, "code", ""),
             "name": getattr(product, "name", "Unknown"),
             "unit": getattr(product, "unit", ""),
             "qty": line.qty_available,
+            "issued": moved["issued"],
+            "used": moved["used"],
+            # When it reached this Mait. Equipment is the case that needs it — a thing held
+            # until the dairy asks for it back is described by how long it has been held.
+            "issued_at": moved["issued_at"],
         }
         if getattr(product, "category", "consumable") == Consumable.Category.ASSET:
             assets.append(row)
         else:
             consumables.append(row)
 
+    # -- straws, as rows rather than a bare tally -------------------------------------------
+    #
+    # `by_breed` stays exactly as it is: the capture flow and Home gate on it, and changing a
+    # shape two screens depend on to add a field a third one wants is how those two break.
+    # This is the same information with the species and the history alongside, so the stock
+    # screen can group cow from buffalo without a second call and say what became of what.
+    species = {
+        config.code: config.animal_type
+        for config in BreedConfig.objects.only("code", "animal_type")
+    }
+    breed_history: dict[str, dict] = {}
+    for line in lines:
+        if line.product_type != ProductType.STRAW:
+            continue
+        batch = batches.get(line.product_ref_id)
+        if batch is None:
+            continue
+        moved = movement_for(line)
+        slot = breed_history.setdefault(batch.breed, {"issued": 0, "used": 0})
+        slot["issued"] += moved["issued"]
+        slot["used"] += moved["used"]
+
+    straws = [
+        {
+            "breed": breed,
+            # Blank rather than guessed for a breed the administrator has since retired: the
+            # straws are real and still in the flask, and filing them under the wrong species
+            # is worse than filing them under none.
+            "animal_type": species.get(breed, ""),
+            "qty": qty,
+            "issued": breed_history.get(breed, {}).get("issued", qty),
+            "used": breed_history.get(breed, {}).get("used", 0),
+        }
+        for breed, qty in sorted(by_breed.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
     total = sum(by_breed.values())
     return {
         "total_straws": total,
         "is_low_stock": total <= settings.LOW_STOCK_THRESHOLD,
         "by_breed": by_breed,
+        "straws": straws,
         "consumables": consumables,
         "assets": assets,
     }

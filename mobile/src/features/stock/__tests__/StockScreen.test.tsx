@@ -1,109 +1,243 @@
 /**
- * Stock insight tests (SRS §6.5).
+ * Inventory (M15).
  *
- * The card answers "can I work" and "what am I carrying" in one glance, and both answers are
- * arithmetic over three lists. The risk is a total that quietly counts the wrong things —
- * a Mait who trusts a number that includes equipment will set out with too few straws.
+ * Three tabs because a Mait acts on the three kinds differently, and the tests follow that
+ * split. What is defended here is the reading rather than the layout: a straw count is what
+ * decides whether the day can start, `issued 10 · used 8` is what turns a low balance into a
+ * day's work accounted for, and a piece of equipment is a thing held rather than a quantity —
+ * putting a number on it invites reading it as something that can run out.
  */
 
 import React from 'react';
-import { screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import StockScreen from '../StockScreen';
 import type { InventorySummary } from '@api/types';
 import { jsonResponse, renderWithStore } from '@/test-utils';
 
+const BREEDS = [
+  { code: 'HF', name: 'HF Cross', name_hi: '', animal_type: 'COW', display_order: 1 },
+  { code: 'SAHIWAL', name: 'Sahiwal', name_hi: '', animal_type: 'COW', display_order: 2 },
+  { code: 'MURRAH', name: 'Murrah', name_hi: '', animal_type: 'BUFF', display_order: 3 },
+];
+
 const SUMMARY: InventorySummary = {
-  total_straws: 24,
+  total_straws: 32,
   is_low_stock: false,
-  by_breed: { MURRAH: 18, SAHIWAL: 6, GIR: 0 },
-  consumables: [
-    { code: 'SHEATH', name: 'Sheaths', unit: 'piece', qty: 40 },
-    { code: 'GLOVES', name: 'Gloves', unit: 'pair', qty: 6 },
+  by_breed: { HF: 18, SAHIWAL: 12, MURRAH: 2 },
+  straws: [
+    { breed: 'HF', animal_type: 'COW', qty: 18, issued: 20, used: 2 },
+    { breed: 'SAHIWAL', animal_type: 'COW', qty: 12, issued: 12, used: 0 },
+    { breed: 'MURRAH', animal_type: 'BUFF', qty: 2, issued: 10, used: 8 },
   ],
-  assets: [{ code: 'AI_GUN', name: 'AI gun', unit: 'piece', qty: 1 }],
+  consumables: [
+    {
+      code: 'SHEATH',
+      name: 'AI sheaths',
+      unit: '',
+      qty: 46,
+      issued: 50,
+      used: 4,
+      issued_at: '2026-03-14T09:00:00Z',
+    },
+    {
+      code: 'GLOVES',
+      name: 'Gloves',
+      unit: 'pair',
+      qty: 38,
+      issued: 40,
+      used: 2,
+      issued_at: '2026-03-14T09:00:00Z',
+    },
+    {
+      code: 'LN2',
+      name: 'Liquid nitrogen',
+      unit: 'litre',
+      qty: 2,
+      issued: 10,
+      used: 8,
+      issued_at: '2026-03-14T09:00:00Z',
+    },
+  ],
+  assets: [
+    {
+      code: 'AI_GUN',
+      name: 'AI gun',
+      unit: 'piece',
+      qty: 1,
+      issued: 1,
+      used: 0,
+      issued_at: '2026-03-14T09:00:00Z',
+    },
+    {
+      code: 'THAWING_TRAY',
+      name: 'Thawing tray',
+      unit: 'piece',
+      qty: 1,
+      issued: 1,
+      used: 0,
+      issued_at: null,
+    },
+  ],
 };
 
-/**
- * Every screen query answers from the same mock. Only the inventory summary carries the
- * numbers under test; the rest answer empty. The config endpoints return a bare array rather
- * than a page — handing those a paginated envelope makes the screen call `.find` on an object
- * and throw, which surfaces as a missing element rather than as the type error it is.
- */
-function mockApi(summary: InventorySummary) {
-  (global.fetch as jest.Mock).mockImplementation((input: string | Request) => {
+const INDENT = {
+  id: 2318,
+  breed: 'MURRAH',
+  item: 'Murrah',
+  qty_requested: 20,
+  qty_issued: 0,
+  status: 'approved',
+  status_display: 'Approved',
+  sync_status: 'synced',
+  sync_status_display: 'Synced',
+  requested_at: '2026-08-14T09:00:00Z',
+  issued_at: null,
+  received_at: null,
+  note: '',
+};
+
+function mockApi(summary: InventorySummary = SUMMARY, indents: unknown[] = []) {
+  (global.fetch as jest.Mock).mockImplementation(async (input: string | Request) => {
     const url = typeof input === 'string' ? input : input.url;
-    if (url.includes('/mait/inventory/')) {
-      return Promise.resolve(jsonResponse(summary));
+    if (url.includes('/config/breeds/')) {
+      return jsonResponse(BREEDS);
     }
-    if (url.includes('/config/')) {
-      return Promise.resolve(jsonResponse([]));
+    if (url.includes('/indents/')) {
+      return jsonResponse({ count: indents.length, next: null, previous: null, results: indents });
     }
-    return Promise.resolve(jsonResponse({ count: 0, next: null, previous: null, results: [] }));
+    return jsonResponse(summary);
   });
 }
 
-describe('StockScreen insight', () => {
-  const onOpenIndents = jest.fn();
-  const onRequestStock = jest.fn();
+function render() {
+  return renderWithStore(
+    <StockScreen onOpenIndents={jest.fn()} onRequestStock={jest.fn()} />,
+  );
+}
 
+describe('StockScreen', () => {
   beforeEach(() => {
     global.fetch = jest.fn() as jest.Mock;
   });
 
   afterEach(() => jest.resetAllMocks());
 
-  const renderScreen = () =>
-    renderWithStore(<StockScreen onOpenIndents={onOpenIndents} onRequestStock={onRequestStock} />);
+  it('opens on straws, which is what decides whether the day can start', async () => {
+    mockApi();
+    render();
 
-  it('sums straws, consumable units and equipment into one total', async () => {
-    mockApi(SUMMARY);
-    renderScreen();
-
-    // 24 straws + 46 consumable units + 1 gun.
-    await waitFor(() => expect(screen.getByText('71 things with you')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('32 straws held')).toBeTruthy());
+    // Split by species, because that is how the flask is packed.
+    expect(screen.getByText(/Cow 30/)).toBeTruthy();
+    expect(screen.getByText(/Buffalo 2/)).toBeTruthy();
   });
 
-  it('keeps the semen count separate from the other products', async () => {
-    mockApi(SUMMARY);
-    renderScreen();
+  it('carries the mark, so a phone handed to a farmer says whose app it is', async () => {
+    mockApi();
+    render();
 
-    await waitFor(() => screen.getByTestId('stat-semen'));
-
-    expect(screen.getByTestId('stat-semen')).toHaveTextContent(/24/);
-    expect(screen.getByTestId('stat-consumables')).toHaveTextContent(/46/);
-    expect(screen.getByTestId('stat-assets')).toHaveTextContent(/1/);
+    await waitFor(() => expect(screen.getByText('MAIT AI')).toBeTruthy());
   });
 
-  it('counts only the breeds actually held', async () => {
-    mockApi(SUMMARY);
-    renderScreen();
+  it('says what became of a breed, not just what is left', async () => {
+    // Two straws with eight of ten used is a day accounted for. A bare 2 is a number to
+    // worry about, and the ledger has always known the difference.
+    mockApi();
+    render();
 
-    // GIR sits at zero in the summary and must not be counted as a breed in hand.
-    await waitFor(() => expect(screen.getByTestId('stat-semen')).toHaveTextContent(/2 breeds/));
+    await waitFor(() => expect(screen.getByText('MURRAH · issued 10 · used 8')).toBeTruthy());
+    expect(screen.getByText('HF · issued 20 · used 2')).toBeTruthy();
   });
 
-  it('says the round can go on when there is enough', async () => {
-    mockApi(SUMMARY);
-    renderScreen();
+  it('flags a breed that is nearly out on its own row', async () => {
+    mockApi();
+    render();
 
-    await waitFor(() => expect(screen.getByText('Enough for now')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('stock-straw-MURRAH')).toBeTruthy());
+    expect(screen.getByText('Low')).toBeTruthy();
   });
 
-  it('leads with the blocker when the flask is empty', async () => {
-    mockApi({ ...SUMMARY, total_straws: 0, by_breed: {}, is_low_stock: true });
-    renderScreen();
+  it('shows what is approved but not yet in hand', async () => {
+    // It changes what a low count means: two straws with twenty approved is a delivery to
+    // chase, two with nothing behind them is a round that cannot happen.
+    mockApi(SUMMARY, [INDENT]);
+    render();
 
-    // Consumables are still carried, so the total is not zero — the verdict has to come from
-    // the straw count alone, or an empty flask reads as a stocked one.
-    await waitFor(() => expect(screen.getByText('You cannot record an AI')).toBeTruthy());
-    expect(screen.getByTestId('stat-semen')).toHaveTextContent(/0/);
+    await waitFor(() => expect(screen.getByTestId('stock-incoming-2318')).toBeTruthy());
+    expect(screen.getByText('IND-2318 · Murrah × 20')).toBeTruthy();
+    expect(screen.getByText('Approved — not issued to you yet')).toBeTruthy();
   });
 
-  it('states plainly when nothing has been issued at all', async () => {
-    mockApi({ total_straws: 0, is_low_stock: true, by_breed: {}, consumables: [], assets: [] });
-    renderScreen();
+  it('counts consumables in their own units', async () => {
+    mockApi();
+    render();
 
-    await waitFor(() => expect(screen.getByText('Nothing issued to you yet')).toBeTruthy());
+    fireEvent.press(await screen.findByTestId('stock-tab-consumables'));
+
+    await waitFor(() => expect(screen.getByText('3 consumables')).toBeTruthy());
+    expect(screen.getByText('GLOVES · per pair')).toBeTruthy();
+    expect(screen.getByTestId('stock-consumable-LN2')).toBeTruthy();
+  });
+
+  it('warns about nitrogen, which spoils the flask rather than one insemination', async () => {
+    mockApi();
+    render();
+
+    fireEvent.press(await screen.findByTestId('stock-tab-consumables'));
+
+    await waitFor(() => expect(screen.getByTestId('stock-warning')).toBeTruthy());
+    expect(screen.getByText('Nitrogen runs the flask, not the round')).toBeTruthy();
+  });
+
+  it('describes equipment by when it was issued, and never as a quantity', async () => {
+    mockApi();
+    render();
+
+    fireEvent.press(await screen.findByTestId('stock-tab-equipment'));
+
+    await waitFor(() => expect(screen.getByText('2 items with you')).toBeTruthy());
+    expect(screen.getByText('AI_GUN · issued 14 Mar 2026')).toBeTruthy();
+    // Held, not counted. A number here reads as something that can run out.
+    expect(screen.getAllByText('In use').length).toBe(2);
+    expect(screen.queryByText('1 piece')).toBeNull();
+  });
+
+  it('admits when an issue date was never recorded', async () => {
+    mockApi();
+    render();
+
+    fireEvent.press(await screen.findByTestId('stock-tab-equipment'));
+
+    await waitFor(() =>
+      expect(screen.getByText('THAWING_TRAY · issue date not recorded')).toBeTruthy(),
+    );
+  });
+
+  it('offers a different action on equipment than on the things that run out', async () => {
+    mockApi();
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('stock-cta')).toBeTruthy());
+    expect(screen.getByText('Raise an indent')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('stock-tab-equipment'));
+    // Ordering another AI gun is not the answer to a broken one.
+    await waitFor(() => expect(screen.getByText('Report lost or broken')).toBeTruthy());
+    expect(screen.queryByText('Raise an indent')).toBeNull();
+  });
+
+  it('says the flask is empty rather than showing a zero', async () => {
+    mockApi({
+      total_straws: 0,
+      is_low_stock: true,
+      by_breed: {},
+      straws: [],
+      consumables: [],
+      assets: [],
+    });
+    render();
+
+    await waitFor(() => expect(screen.getByText('Nothing in your flask')).toBeTruthy());
   });
 });
