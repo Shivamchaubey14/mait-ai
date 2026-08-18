@@ -22,7 +22,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
 /**
  * The keys are the app's own names for these screens; the labels a Mait reads come from
@@ -56,41 +56,62 @@ export default function BottomNav({
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.bar, { paddingBottom: insets.bottom + spacing[2] }]}>
-      {TABS.map(({ key, icon, activeIcon }) => {
-        const isActive = key === active;
-        return (
-          <Pressable
-            key={key}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: isActive }}
-            accessibilityLabel={t(`nav.${key}`)}
-            onPress={() => onChange(key)}
-            style={styles.tab}
-            testID={`tab-${key}`}
-          >
-            <View>
-              <Ionicons
-                name={isActive ? activeIcon : icon}
-                size={22}
-                color={isActive ? colors.primary : colors.textMuted}
-              />
+    // Floated clear of the screen's own edge rather than welded to it. Android draws its
+    // back and home controls along the bottom on most of these handsets, and a bar sitting
+    // flush under them puts the app's Home tab a few pixels from the system's — which on a
+    // phone held one-handed in a yard is a mis-tap that leaves the capture flow.
+    //
+    // The inset is the gap, not padding inside the bar: the system reserves that space for
+    // its own controls, so honouring it as a margin is what actually keeps the two apart.
+    <View
+      style={[
+        styles.wrap,
+        {
+          // The extra unit is so there is still a lift on a handset with hardware keys below
+          // the screen, where the inset is zero and the bar would otherwise sit flush again.
+          paddingBottom: insets.bottom + spacing[3],
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        },
+      ]}
+      pointerEvents="box-none"
+    >
+      <View style={styles.bar}>
+        {TABS.map(({ key, icon, activeIcon }) => {
+          const isActive = key === active;
+          return (
+            <Pressable
+              key={key}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={t(`nav.${key}`)}
+              onPress={() => onChange(key)}
+              style={styles.tab}
+              testID={`tab-${key}`}
+            >
+              <View>
+                <Ionicons
+                  name={isActive ? activeIcon : icon}
+                  size={22}
+                  color={isActive ? colors.primary : colors.textMuted}
+                />
 
-              {/* On AI events rather than Home: the count is of records waiting to sync, and
+                {/* On AI events rather than Home: the count is of records waiting to sync, and
                   that is the screen a Mait goes to when they want to look at them. */}
-              {key === 'history' && pending > 0 && (
-                <View style={styles.badge} testID="nav-pending">
-                  <Text style={styles.badgeLabel}>{pending > 9 ? '9+' : pending}</Text>
-                </View>
-              )}
-            </View>
+                {key === 'history' && pending > 0 && (
+                  <View style={styles.badge} testID="nav-pending">
+                    <Text style={styles.badgeLabel}>{pending > 9 ? '9+' : pending}</Text>
+                  </View>
+                )}
+              </View>
 
-            <Text style={[styles.label, isActive && styles.labelActive]} numberOfLines={1}>
-              {t(`nav.${key}`)}
-            </Text>
-          </Pressable>
-        );
-      })}
+              <Text style={[styles.label, isActive && styles.labelActive]} numberOfLines={1}>
+                {t(`nav.${key}`)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -98,14 +119,29 @@ export default function BottomNav({
 const styles = StyleSheet.create({
   // Flat and full width, welded to the bottom edge. It is chrome, and chrome that floats
   // takes up room the content below it could have used.
+  // Holds the gap. Transparent and `box-none`, so the space it reserves under the bar is the
+  // system's to draw in and taps pass straight through it.
+  wrap: {
+    paddingHorizontal: spacing[3],
+    backgroundColor: 'transparent',
+  },
+  // A card now, not a band welded to the bottom edge: rounded on all four corners, with the
+  // border all the way round rather than a rule across the top, so it reads as an object
+  // floating over the page the way every other surface in this app does.
   bar: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingTop: spacing[3],
+    paddingBottom: spacing[3],
     paddingHorizontal: spacing[2],
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.xl,
+    // `card`, not `raised`. Raised is an 18pt drop built for a sheet rising over a page; on a
+    // bar already sitting near the bottom edge it throws its shadow off the screen and reads
+    // as a smudge. This is the same lift every other card in the app has.
+    ...shadows.card,
   },
   tab: {
     flex: 1,

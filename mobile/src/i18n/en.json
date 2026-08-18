@@ -322,7 +322,7 @@
     "mppCount_one": "{{count}} MPP",
     "mppCount_other": "{{count}} MPPs",
     "today": "Today",
-    "inseminationsRecorded": "inseminations recorded",
+    "inseminationsRecorded": "inseminations",
     "eventsToSync": "events to sync",
     "strawsWithYou": "Straws with you",
     "totalStraws": "{{count}} total",

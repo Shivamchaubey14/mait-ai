@@ -164,7 +164,9 @@ export default function HomeScreen({
             ) : (
               <Text style={[styles.tileValue, styles.tileValueDone]}>{today.length}</Text>
             )}
-            <Text style={styles.tileFoot}>{t('home.inseminationsRecorded')}</Text>
+            <Text style={styles.tileFoot} numberOfLines={1}>
+              {t('home.inseminationsRecorded')}
+            </Text>
           </View>
 
           <Pressable
@@ -180,7 +182,7 @@ export default function HomeScreen({
               </Text>
             </View>
             <Text style={[styles.tileValue, styles.tileValueWaiting]}>{pending}</Text>
-            <Text style={styles.tileFoot}>
+            <Text style={styles.tileFoot} numberOfLines={1}>
               {pending > 0
                 ? t('home.eventsToSync')
                 : lastSyncAt
@@ -325,15 +327,24 @@ const styles = StyleSheet.create({
   offlineLabel: { ...typography.label, color: colors.surface },
 
   tiles: { flexDirection: 'row', gap: spacing[3], marginBottom: spacing[4] },
+  // Centred, the way the portal's stat tile is. Two figures read as a pair are scanned left
+  // to right, and centring puts them on one sightline instead of two ragged left edges — and
+  // the number is the thing being read, so it belongs under the middle of its own card.
   tile: {
     flex: 1,
+    alignItems: 'center',
     padding: spacing[4],
     borderRadius: radius.md,
     borderWidth: 1,
   },
   tileDone: { backgroundColor: colors.successWash, borderColor: colors.primary },
   tileWaiting: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
-  tileHead: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  tileHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+  },
   tileIcon: {
     width: 18,
     height: 18,
@@ -345,10 +356,12 @@ const styles = StyleSheet.create({
   tileLabel: { ...typography.caption, color: colors.textMuted },
   // Two figures, two colours, both already meaning this elsewhere in the product: green is
   // done, yellow is pending.
-  tileValue: { ...typography.display, marginTop: spacing[2] },
+  tileValue: { ...typography.display, marginTop: spacing[2], textAlign: 'center' },
   tileValueDone: { color: colors.primaryDark },
   tileValueWaiting: { color: colors.secondaryPressed },
-  tileFoot: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  // One line, always. Wrapped to two it made one tile taller than the other, so a pair meant
+  // to be read side by side sat at different heights.
+  tileFoot: { ...typography.caption, color: colors.textMuted, marginTop: 2, textAlign: 'center' },
   tileSkeleton: {
     width: 48,
     height: 36,

@@ -322,7 +322,7 @@
     "mppCount_one": "{{count}} MPP",
     "mppCount_other": "{{count}} MPP",
     "today": "आज",
-    "inseminationsRecorded": "गर्भाधान दर्ज",
+    "inseminationsRecorded": "गर्भाधान",
     "eventsToSync": "भेजना बाकी",
     "strawsWithYou": "आपके पास स्ट्रॉ",
     "totalStraws": "कुल {{count}}",
