@@ -80,15 +80,23 @@
   }
 
   /**
-   * A worked example, shown until the first query runs.
+   * A worked example, for a database that has nothing to show yet.
    *
    * Six empty columns and "Run a query to preview it" says nothing about what an operator is
-   * about to get, and on a fresh install — where no AI event exists yet — running the query
-   * says the same nothing. So the table opens with a filled-in shape of the answer.
+   * about to get, and on a fresh install — where no AI event exists — running the query says
+   * the same nothing. So the table falls back to a filled-in shape of the answer.
+   *
+   * It used to be what the screen *opened* on, before any query ran, which stopped making
+   * sense the moment there were real events to show: an operator arriving at Reports was met
+   * by five invented rows about villages that do not exist, and had to press a button to find
+   * out what was actually in the system. The screen runs the query itself now, and this is
+   * only reached when the answer is genuinely empty and nothing has been filtered — because
+   * "no rows match these filters" is a result, and covering it with an example would read as
+   * the result.
    *
    * It is unmistakably not data: the head carries a Sample badge, the rows are greyed, the
-   * event codes are not links, and the first real query replaces the lot. Nothing here is ever
-   * exported — the download is streamed from the API, which has never heard of these.
+   * event codes are not links. Nothing here is ever exported — the download is streamed from
+   * the API, which has never heard of these.
    */
   const SAMPLE = [
     {
@@ -168,11 +176,21 @@
 
   function runQuery() {
     MaitAI.shell.clearAlert();
-    const params = $.extend({ limit: PREVIEW_ROWS, offset: 0 }, filters());
+    const chosen = filters();
+    const filtered = Object.keys(chosen).length > 0;
+    const params = $.extend({ limit: PREVIEW_ROWS, offset: 0 }, chosen);
 
     MaitAI.api
       .aiEvents(params)
       .done(function (page) {
+        // An empty answer to a *filtered* query is a real answer and says so. An empty answer
+        // to no filters at all means the database has nothing yet, which is the one case the
+        // worked example is for.
+        if (!page.count && !filtered) {
+          showSample();
+          return;
+        }
+
         // Off for good the moment a real answer arrives, even an empty one — "no rows match"
         // is a result, and leaving the example under it would read as the result.
         $('#preview').removeClass('preview--sample');
@@ -185,6 +203,9 @@
       })
       .fail(function (problem) {
         MaitAI.shell.alert(problem.detail);
+        // The example is not a stand-in for a failed request — that would present invented
+        // rows as though the query had answered.
+        ui.rows($('#rows'), [], row, 'Could not load the preview.', 6);
       });
   }
 
@@ -235,7 +256,10 @@
       return;
     }
     MaitAI.shell.mount();
-    showSample();
+    // Live on open. The screen is "build a query, preview it, export it", and the unfiltered
+    // query is the honest starting point of that — the most recent events, which is what an
+    // operator is checking against before they narrow anything.
+    runQuery();
 
     MaitAI.api.mpps({ limit: 200 }).done(function (page) {
       $('#filter-mpp').append(
