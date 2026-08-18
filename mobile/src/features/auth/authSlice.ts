@@ -95,6 +95,31 @@ const authSlice = createSlice({
       state.assignedMppCodes = action.payload.assignedMppCodes;
     },
 
+    /**
+     * The signed-in user's own details, re-read from the server.
+     *
+     * A restored session is whatever was written to disk the day the Mait signed in, and it
+     * is replayed verbatim for as long as the refresh token lives — which is weeks. So a
+     * field the app learned to store later is simply absent on every session that predates
+     * it, and no amount of reopening the app brings it back: the Sahayak code arrived this
+     * way and left Home with nothing to print under "MAIT". It also means a Mait whose MPPs
+     * were reassigned, or whose name was corrected, goes on seeing the old ones.
+     *
+     * Refreshing on launch fixes both, and costs one request behind a screen that is already
+     * waiting on fonts. Tokens are untouched — this is about who the session belongs to, not
+     * whether it is still valid.
+     */
+    profileRefreshed: (
+      state,
+      action: PayloadAction<{ user: AuthUser; assignedMppCodes: string[] }>,
+    ) => {
+      if (!state.accessToken) {
+        return;
+      }
+      state.user = action.payload.user;
+      state.assignedMppCodes = action.payload.assignedMppCodes;
+    },
+
     tokensRefreshed: (state, action: PayloadAction<{ access: string; refresh?: string }>) => {
       state.accessToken = action.payload.access;
       // Refresh tokens rotate (SRS §16), so the response may carry a new one.
@@ -107,5 +132,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { loggedIn, tokensRefreshed, sessionRestored, loggedOut } = authSlice.actions;
+export const { loggedIn, tokensRefreshed, sessionRestored, profileRefreshed, loggedOut } =
+  authSlice.actions;
 export default authSlice.reducer;

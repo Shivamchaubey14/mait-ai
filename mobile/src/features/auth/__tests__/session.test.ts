@@ -11,7 +11,13 @@ import * as SecureStore from 'expo-secure-store';
 
 import { clearQueue, enqueue, pendingCount } from '@api/queue';
 
-import authReducer, { loggedIn, loggedOut, sessionRestored, tokensRefreshed } from '../authSlice';
+import authReducer, {
+  loggedIn,
+  loggedOut,
+  profileRefreshed,
+  sessionRestored,
+  tokensRefreshed,
+} from '../authSlice';
 import { sessionPersistence } from '../persistence';
 import { clearSession, loadSession, saveSession } from '../session';
 
@@ -160,5 +166,63 @@ describe('signing out', () => {
 
     await new Promise(resolve => setImmediate(resolve));
     expect(await pendingCount()).toBe(1);
+  });
+});
+
+describe('a restored session catches up with the server', () => {
+  /**
+   * What comes off disk is whatever was written the day the Mait signed in, and the refresh
+   * token keeps it alive for weeks. Without a re-read, a detail the app learned to store
+   * later is absent on every older session and reopening the app never brings it back — the
+   * Sahayak code arrived exactly that way, leaving Home with nothing to print under "MAIT".
+   */
+  const OLD = {
+    id: 4,
+    fullName: 'Rohit Kumar',
+    role: 'mait' as const,
+    mobileNo: '5500000054',
+    maitId: 60,
+    // A session written before the app knew about the vendor code.
+    sahayakVendorCode: null,
+  };
+
+  const FRESH = { ...OLD, fullName: 'ROHIT KUMAR', sahayakVendorCode: '5500000054' };
+
+  it('takes the details the server sends, without touching the tokens', () => {
+    let state = authReducer(
+      undefined,
+      sessionRestored({
+        access: 'access-token',
+        refresh: 'refresh-token',
+        user: OLD,
+        assignedMppCodes: ['001302'],
+      }),
+    );
+
+    state = authReducer(
+      state,
+      profileRefreshed({ user: FRESH, assignedMppCodes: ['001302', '001308'] }),
+    );
+
+    expect(state.user?.sahayakVendorCode).toBe('5500000054');
+    // A reassignment has the same shape as a missing field: the stored copy goes stale and
+    // nothing on the handset corrects it.
+    expect(state.assignedMppCodes).toEqual(['001302', '001308']);
+    // The session itself is untouched — this is about who it belongs to, not whether it is
+    // still valid.
+    expect(state.accessToken).toBe('access-token');
+    expect(state.refreshToken).toBe('refresh-token');
+  });
+
+  it('is ignored when nobody is signed in', () => {
+    // The request can land after a sign-out. Writing a user back onto a cleared session would
+    // put a signed-out Mait's name on the login screen.
+    const state = authReducer(
+      undefined,
+      profileRefreshed({ user: FRESH, assignedMppCodes: ['001302'] }),
+    );
+
+    expect(state.user).toBeNull();
+    expect(state.accessToken).toBeNull();
   });
 });

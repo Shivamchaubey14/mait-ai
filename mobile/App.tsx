@@ -14,7 +14,8 @@ import { Quicksand_600SemiBold, Quicksand_700Bold, useFonts } from '@expo-google
 import { NunitoSans_400Regular, NunitoSans_600SemiBold } from '@expo-google-fonts/nunito-sans';
 
 import '@/i18n';
-import { sessionRestored } from '@/features/auth/authSlice';
+import { maitaiApi } from '@api/endpoints';
+import { profileRefreshed, sessionRestored } from '@/features/auth/authSlice';
 import { loadSession } from '@/features/auth/session';
 import SplashScreen from '@/features/auth/SplashScreen';
 import RootNavigator from '@/navigation';
@@ -55,7 +56,7 @@ export default function App(): React.JSX.Element {
   // expires in fifteen minutes and refreshes itself, so the session lasts as long as the
   // refresh token does rather than as long as the app happens to stay in memory.
   useEffect(() => {
-    loadSession().then(session => {
+    loadSession().then(async session => {
       store.dispatch(
         sessionRestored(
           session
@@ -68,6 +69,46 @@ export default function App(): React.JSX.Element {
             : null,
         ),
       );
+
+      if (!session) {
+        return;
+      }
+
+      /**
+       * Then ask the server who this is.
+       *
+       * What comes off disk is whatever was written the day the Mait signed in, and the
+       * refresh token keeps that alive for weeks — so a detail the app learned to store later
+       * is absent on every older session, and reopening the app never brings it back. The
+       * Sahayak code arrived exactly that way. Reassignment has the same shape: a Mait moved
+       * to different MPPs goes on being shown the old ones until they happen to sign out.
+       *
+       * Deliberately not awaited before the app renders, and deliberately swallowed on
+       * failure. The stored session is enough to work with — this app is built to run in a
+       * village with no signal, and a launch that hung on a network call, or signed a Mait
+       * out because one failed, would be a far worse bug than a stale name.
+       */
+      try {
+        const me = await store
+          .dispatch(maitaiApi.endpoints.getCurrentUser.initiate(session.accessToken))
+          .unwrap();
+
+        store.dispatch(
+          profileRefreshed({
+            user: {
+              id: me.id,
+              fullName: me.full_name,
+              role: me.role,
+              mobileNo: me.mobile_no,
+              maitId: me.mait_id,
+              sahayakVendorCode: me.sahayak_vendor_code,
+            },
+            assignedMppCodes: me.assigned_mpp_codes,
+          }),
+        );
+      } catch {
+        // Offline, or the server is down. The session on disk still signs every request.
+      }
     });
   }, []);
 

@@ -11,11 +11,11 @@ import type { Middleware } from '@reduxjs/toolkit';
 
 import { clearQueue } from '@api/queue';
 
-import { loggedIn, loggedOut, tokensRefreshed } from './authSlice';
+import { loggedIn, loggedOut, profileRefreshed, tokensRefreshed } from './authSlice';
 import { clearSession, saveSession } from './session';
 
 /** Actions that change what should be on disk. */
-const WRITES: string[] = [loggedIn.type, tokensRefreshed.type];
+const WRITES: string[] = [loggedIn.type, tokensRefreshed.type, profileRefreshed.type];
 
 export const sessionPersistence: Middleware = store => next => action => {
   const result = next(action);
