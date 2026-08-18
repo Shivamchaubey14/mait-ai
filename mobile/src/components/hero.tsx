@@ -14,7 +14,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BrandWordmark } from '@/components/brand';
+import { BrandMark } from '@/components/brand';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
 export default function PageHero({
@@ -34,9 +34,16 @@ export default function PageHero({
   return (
     <View style={[styles.hero, { paddingTop: insets.top + spacing[3] }]}>
       {/* The mark rides on every screen, not just Home. A Mait hands this phone to a farmer
-          to read an OTP off, and the app should say whose app it is wherever they are. */}
+          to read an OTP off, and the app should say whose app it is wherever they are.
+
+          The white tile, not the bare wordmark. Bare is right on the splash and the sign-in
+          hero, where the mark is the only thing in the room and a card would be a box drawn
+          around it — here it shares a row with an avatar and a language toggle, and set as
+          plain text it read as a heading rather than as a mark. It is the same object the
+          admin portal pins to the top of its sidebar, so the two halves of the product are
+          recognisably one. */}
       <View style={styles.top}>
-        <BrandWordmark size="small" />
+        <BrandMark size="small" />
         {!!top && <View style={styles.topRight}>{top}</View>}
       </View>
 

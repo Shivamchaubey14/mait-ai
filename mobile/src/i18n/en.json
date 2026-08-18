@@ -318,7 +318,7 @@
     "tryAgain": "Try again"
   },
   "home": {
-    "maitCode": "MAIT {{id}}",
+    "maitCode": "MAIT {{code}}",
     "mppCount_one": "{{count}} MPP",
     "mppCount_other": "{{count}} MPPs",
     "today": "Today",

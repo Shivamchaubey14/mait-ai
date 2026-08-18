@@ -39,6 +39,7 @@ const USER: AuthUser = {
   role: 'mait',
   mobileNo: '5500000054',
   maitId: 1,
+  sahayakVendorCode: '5500000054',
 };
 
 /**
@@ -79,7 +80,12 @@ function mockApi() {
 function renderApp() {
   const store = makeStore();
   store.dispatch(
-    loggedIn({ access: 'access-token', refresh: 'refresh-token', user: USER, assignedMppCodes: [] }),
+    loggedIn({
+      access: 'access-token',
+      refresh: 'refresh-token',
+      user: USER,
+      assignedMppCodes: [],
+    }),
   );
   return renderWithStore(<RootNavigator />, { store });
 }

@@ -14,6 +14,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import HomeScreen from '../HomeScreen';
 import type { AIEvent, InventorySummary } from '@api/types';
 import { loggedIn } from '@/features/auth/authSlice';
+import type { AuthUser } from '@/features/auth/authSlice';
 import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
 
 const SUMMARY: InventorySummary = {
@@ -72,21 +73,34 @@ const props = {
 };
 
 /** Signed in, because the hero reads its name and MPP count off the session. */
-function signedInStore() {
+function signedInStore(user: Partial<AuthUser> = {}) {
   const store = makeStore();
   store.dispatch(
     loggedIn({
       access: 'a',
       refresh: 'r',
-      user: { id: 1, fullName: 'Sunil Kumar', role: 'mait', mobileNo: '9876543210', maitId: 341 },
+      user: {
+        id: 1,
+        fullName: 'Sunil Kumar',
+        role: 'mait',
+        mobileNo: '9876543210',
+        maitId: 341,
+        sahayakVendorCode: '5500000054',
+        ...user,
+      },
       assignedMppCodes: ['001303', '001305', '001307'],
     }),
   );
   return store;
 }
 
-function render(overrides: Partial<React.ComponentProps<typeof HomeScreen>> = {}) {
-  return renderWithStore(<HomeScreen {...props} {...overrides} />, { store: signedInStore() });
+function render(
+  overrides: Partial<React.ComponentProps<typeof HomeScreen>> = {},
+  user: Partial<AuthUser> = {},
+) {
+  return renderWithStore(<HomeScreen {...props} {...overrides} />, {
+    store: signedInStore(user),
+  });
 }
 
 describe('HomeScreen', () => {
@@ -103,8 +117,35 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Sunil Kumar')).toBeTruthy();
     // The identity and the scope, not a greeting — this line is what a Mait checks when
     // handed a phone that may not be theirs.
-    expect(screen.getByText(/MAIT 341/)).toBeTruthy();
+    //
+    // The Sahayak vendor code, which is what they are known by on their paperwork, in the
+    // portal and in SAP. It used to print `maitId` — a row id meaning nothing outside this
+    // database — under the same "MAIT" label, so a Mait reading it out to the office would
+    // be read back a blank look.
+    expect(screen.getByText(/MAIT 5500000054/)).toBeTruthy();
+    expect(screen.queryByText(/MAIT 341/)).toBeNull();
     expect(screen.getByText(/3 MPPs/)).toBeTruthy();
+  });
+
+  it('says nothing rather than a row id when the code is missing', () => {
+    // An account with no Sahayak code behind it. Showing the row id as a fallback would be
+    // worse than showing nothing — it looks like an answer.
+    mockApi(SUMMARY, []);
+    render({}, { sahayakVendorCode: null });
+
+    // `MAIT` followed by digits is a code; the bare word is the brand mark in the hero.
+    expect(screen.queryByText(/MAIT \d/)).toBeNull();
+    expect(screen.getByText(/3 MPPs/)).toBeTruthy();
+  });
+
+  it('carries the brand mark, the same one the portal pins to its sidebar', () => {
+    // A Mait hands this phone to a farmer to read a code off it, so the app has to say whose
+    // app it is. It was a bare wordmark that read as a heading rather than a mark.
+    mockApi(SUMMARY, []);
+    render();
+
+    expect(screen.getByText('MAIT AI')).toBeTruthy();
+    expect(screen.getByText('FIELD CAPTURE')).toBeTruthy();
   });
 
   it('flags the breeds that are nearly out, not just the flask total', async () => {

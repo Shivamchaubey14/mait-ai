@@ -318,7 +318,7 @@
     "tryAgain": "दोबारा कोशिश करें"
   },
   "home": {
-    "maitCode": "MAIT {{id}}",
+    "maitCode": "MAIT {{code}}",
     "mppCount_one": "{{count}} MPP",
     "mppCount_other": "{{count}} MPP",
     "today": "आज",

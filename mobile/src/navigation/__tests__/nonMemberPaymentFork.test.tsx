@@ -73,6 +73,7 @@ const USER: AuthUser = {
   role: 'mait',
   mobileNo: '5500000054',
   maitId: 1,
+  sahayakVendorCode: '5500000054',
 };
 
 const MPP = {

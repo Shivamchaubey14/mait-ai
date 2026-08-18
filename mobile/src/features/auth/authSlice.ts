@@ -16,6 +16,15 @@ export interface AuthUser {
   role: UserRole;
   mobileNo: string;
   maitId: number | null;
+  /**
+   * The Sahayak vendor code — what a Mait is known by everywhere else.
+   *
+   * Not the same thing as `maitId`, which is a row id and means nothing outside this
+   * database. Home used to print that row id under a "MAIT" label, so a Mait signing in with
+   * their mobile number was shown a number that matches nothing on their paperwork, in the
+   * portal, or in SAP.
+   */
+  sahayakVendorCode: string | null;
 }
 
 interface AuthState {

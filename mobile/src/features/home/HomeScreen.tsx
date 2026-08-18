@@ -103,8 +103,13 @@ export default function HomeScreen({
   const byBreed = Object.entries(stock.data?.by_breed ?? {}).sort((a, b) => b[1] - a[1]);
   const totalStraws = stock.data?.total_straws ?? 0;
 
+  // The Sahayak vendor code, which is what a Mait is known by on their paperwork, in the
+  // portal and in SAP. This used to print `maitId` — a row id that matches nothing anywhere
+  // outside this database — under a "MAIT" label, which is worse than showing nothing: a Mait
+  // reading it out to the office would be read back a blank look. Falls back to nothing at
+  // all rather than to the row id.
   const meta = [
-    user?.maitId ? t('home.maitCode', { id: user.maitId }) : null,
+    user?.sahayakVendorCode ? t('home.maitCode', { code: user.sahayakVendorCode }) : null,
     t('home.mppCount', { count: mppCodes.length }),
   ]
     .filter(Boolean)

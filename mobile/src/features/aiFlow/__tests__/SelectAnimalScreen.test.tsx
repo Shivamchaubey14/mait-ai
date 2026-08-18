@@ -207,7 +207,7 @@ describe('SelectAnimalScreen', () => {
     // exit animation and renders nothing of its own once that has played out. The window is
     // generous on purpose — what is being asserted is that it goes, not how fast.
     await waitFor(() => expect(screen.queryByTestId('animal-ear-tag')).toBeNull(), {
-      timeout: 3000,
+      timeout: 15000,
     });
     expect(onSelect).not.toHaveBeenCalled();
   });

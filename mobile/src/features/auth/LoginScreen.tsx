@@ -199,6 +199,7 @@ export default function LoginScreen(): React.JSX.Element {
             role: user.role,
             mobileNo: user.mobile_no,
             maitId: user.mait_id,
+            sahayakVendorCode: user.sahayak_vendor_code,
           },
           assignedMppCodes: user.assigned_mpp_codes,
         }),

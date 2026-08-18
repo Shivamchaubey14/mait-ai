@@ -21,6 +21,7 @@ const USER = {
   role: 'mait' as const,
   mobileNo: '9999999999',
   maitId: 60,
+  sahayakVendorCode: '5500000054',
 };
 
 const SESSION = {

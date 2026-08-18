@@ -164,8 +164,11 @@ describe('the sheet arrives and leaves', () => {
     // Still there for the moment the exit is playing — torn out instantly it would vanish
     // rather than leave.
     expect(screen.queryByTestId('add-animal-sheet')).not.toBeNull();
+    // A generous window on purpose. The exit is a 220ms timer, but the whole suite runs in
+    // parallel and a starved runner has taken seconds to get back to it — what is asserted is
+    // that the sheet goes, not how fast. It still fails outright if it never unmounts.
     await waitFor(() => expect(screen.queryByTestId('add-animal-sheet')).toBeNull(), {
-      timeout: 3000,
+      timeout: 15000,
     });
   });
 });

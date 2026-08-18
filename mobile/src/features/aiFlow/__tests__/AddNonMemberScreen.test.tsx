@@ -33,7 +33,10 @@ jest.mock('../FlowCamera', () => {
     }) =>
       Actual.createElement(
         Pressable,
-        { testID: `${testIDPrefix}-stub`, onPress: () => onCaptured(`file:///${testIDPrefix}.jpg`) },
+        {
+          testID: `${testIDPrefix}-stub`,
+          onPress: () => onCaptured(`file:///${testIDPrefix}.jpg`),
+        },
         Actual.createElement(Text, null, 'capture'),
       ),
   };
