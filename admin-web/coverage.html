@@ -36,7 +36,14 @@
               </svg>
               ← MPPs
             </a>
+            <!-- Seven days is offered here and opens the screen, to match the dashboard and
+                 the leaderboard. Read the bands with the window in mind: `coverage.js` grades
+                 against fixed thresholds — 40% green, 20% amber, zero called out as a
+                 structural problem — and those were chosen for a month. Over a week almost
+                 every village sits under them, which is arithmetic rather than a network in
+                 trouble. -->
             <select class="select" id="period" aria-label="Period">
+              <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
             </select>

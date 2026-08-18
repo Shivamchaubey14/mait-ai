@@ -18,9 +18,12 @@
             <p class="topbar__meta"><span id="period-label">—</span> · AI count and collections</p>
           </div>
           <div class="topbar__actions">
+            <!-- Shortest first, and so the one the screen opens on: this is a "who is
+                 working" board, and the week just gone is the question it is usually opened
+                 with. The JS reads whatever is selected at load. -->
             <select class="select" id="period" aria-label="Period">
-              <option value="30">Last 30 days</option>
               <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
             </select>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
