@@ -75,11 +75,6 @@ function longDate(iso: string | null): string | null {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function clock(at: number | undefined): string {
-  const d = at ? new Date(at) : new Date();
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
 // --------------------------------------------------------------------------------------
 // Pieces
 // --------------------------------------------------------------------------------------
@@ -281,38 +276,11 @@ export default function StockScreen({
             rounded, which is what makes the body below look like it slides underneath. The
             mark rides in it so a phone handed to a farmer still says whose app it is. */}
       <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
+        {/* The mark and nothing else, the way every other tab screen wears it. The count of
+            what is on its way is already in the subtitle under this row and again on the rows
+            themselves, so a badge up here was the same number said a third time. */}
         <View style={styles.heroTop}>
           <BrandMark size="small" />
-
-          {/* The route to what has been asked for. It lives in the head rather than at the
-              foot of a list because it answers "where is my stock", which is a question asked
-              from any of the three tabs and most often from the one with a low count on it.
-              Without it this screen is the only way to Indents and there is no way through. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('stock.yourIndents')}
-            onPress={onOpenIndents}
-            style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-            testID="stock-open-indents"
-          >
-            <Ionicons name="document-text-outline" size={14} color={colors.surface} />
-            {incoming.length > 0 && (
-              <View style={styles.chipDot}>
-                <Text style={styles.chipDotLabel}>{incoming.length}</Text>
-              </View>
-            )}
-          </Pressable>
-
-          <View style={styles.asOf}>
-            <Ionicons
-              name={stock.isError ? 'cloud-offline-outline' : 'time-outline'}
-              size={13}
-              color={colors.surface}
-            />
-            <Text style={styles.asOfLabel}>
-              {t('stock.asOf', { time: clock(stock.fulfilledTimeStamp) })}
-            </Text>
-          </View>
         </View>
 
         <Text style={styles.heroTitle}>{head.title}</Text>
@@ -593,41 +561,6 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     marginBottom: spacing[4],
   },
-  // Glyph-only, and pushed into the right-hand group with the clock.
-  chip: {
-    marginLeft: 'auto',
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  chipPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
-  // How many are outstanding, on the glyph — the same badge the tab bar uses for waiting work.
-  chipDot: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 3,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.secondary,
-  },
-  chipDotLabel: { ...typography.caption, fontSize: 10, lineHeight: 14, color: colors.ink },
-  asOf: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  asOfLabel: { ...typography.caption, color: colors.surface },
   heroTitle: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
   heroSubtitle: { ...typography.body, color: colors.surface, opacity: 0.72, marginTop: spacing[2] },
   // Yolk on Ink, which is the one place the accent is legible as text (DESIGN_SYSTEM).

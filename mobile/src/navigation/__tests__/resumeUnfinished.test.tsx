@@ -95,6 +95,8 @@ function unfinished(over: Record<string, unknown> = {}) {
 }
 
 let events: Record<string, unknown>[] = [];
+/** Every completion the app sent, so a close-off can be asserted rather than assumed. */
+let completed: string[] = [];
 
 function mockApi() {
   (global.fetch as jest.Mock) = jest.fn(async (input: string | Request) => {
@@ -113,6 +115,10 @@ function mockApi() {
       return jsonResponse([
         { code: 'MURRAH', name: 'Murrah', name_hi: '', animal_type: 'BUFF', display_order: 1 },
       ]);
+    }
+    if (url.includes('/complete/')) {
+      completed.push(url);
+      return jsonResponse({ ...events[0], status: 'completed' });
     }
     if (url.includes('/ai-events/')) {
       return jsonResponse({ count: events.length, next: null, previous: null, results: events });
@@ -148,6 +154,7 @@ describe('the unfinished list', () => {
   beforeEach(async () => {
     await clearQueue();
     events = [];
+    completed = [];
     mockApi();
     (NetInfo.addEventListener as jest.Mock).mockReturnValue(() => {});
     jest
@@ -243,6 +250,56 @@ describe('the unfinished list', () => {
 
     await waitFor(() => expect(screen.getByTestId('payment-save')).toBeTruthy());
     expect(screen.getByText(/paid online/i)).toBeTruthy();
+  });
+
+  it('closes a confirmed payment off instead of asking for its code again', async () => {
+    // The event whose payment is verified and whose completion never ran — a connection that
+    // died at the last step. It used to resume at the code screen, where her spent OTP could
+    // never be re-entered and the button stayed disabled forever, so the record sat in the
+    // list saying "Needs attention" however many times a Mait opened it.
+    events = [
+      unfinished({
+        status: 'payment_pending',
+        payment: {
+          amount: '300.00',
+          mode: 'COD',
+          mode_display: 'Cash',
+          status: 'verified',
+          status_display: 'Verified',
+          is_verified: true,
+        },
+      }),
+    ];
+    await openTheOnlyRow();
+
+    // The one call that had not been made.
+    await waitFor(() => expect(completed).toHaveLength(1));
+    expect(completed[0]).toContain('/ai-events/44/complete/');
+
+    // And no code screen anywhere in it.
+    expect(screen.queryByTestId('payment-code-input')).toBeNull();
+    expect(screen.queryByTestId('payment-save')).toBeNull();
+  });
+
+  it('says what is missing without claiming a confirmed code is outstanding', async () => {
+    events = [
+      unfinished({
+        status: 'payment_pending',
+        payment: {
+          amount: '300.00',
+          mode: 'COD',
+          mode_display: 'Cash',
+          status: 'verified',
+          status_display: 'Verified',
+          is_verified: true,
+        },
+      }),
+    ];
+    renderApp();
+    fireEvent.press(await screen.findByTestId('resume-unfinished'));
+
+    await screen.findByText('Not closed off');
+    expect(screen.queryByText('Code not confirmed')).toBeNull();
   });
 
   it('says so plainly when nothing is outstanding', async () => {

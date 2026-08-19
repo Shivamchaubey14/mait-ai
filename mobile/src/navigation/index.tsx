@@ -24,6 +24,7 @@ import {
   useGetMemberQuery,
   useGetNonMemberQuery,
   useInitiatePaymentMutation,
+  useListAiEventsQuery,
   useVerifyPaymentOtpMutation,
 } from '@api/endpoints';
 import { enqueue, pendingCount, readQueue } from '@api/queue';
@@ -32,6 +33,7 @@ import { drainQueue } from '@api/sync';
 import type { SyncProgress } from '@api/sync';
 import type { AIEvent, Animal, Member, MPP, NonMember, NonMemberSummary } from '@api/types';
 import BottomNav, { Tab } from '@/components/BottomNav';
+import { Toast } from '@/components/toast';
 import AddNonMemberScreen from '@/features/aiFlow/AddNonMemberScreen';
 import CapturePhotoScreen from '@/features/aiFlow/CapturePhotoScreen';
 import CaptureDoneScreen from '@/features/aiFlow/CaptureDoneScreen';
@@ -45,10 +47,11 @@ import SelectFarmerScreen from '@/features/aiFlow/SelectFarmerScreen';
 import SelectMppScreen from '@/features/aiFlow/SelectMppScreen';
 import SelectNonMemberScreen from '@/features/aiFlow/SelectNonMemberScreen';
 import UnfinishedScreen from '@/features/aiFlow/UnfinishedScreen';
-import { resumePoint } from '@/features/aiFlow/resume';
+import { resumePoint, whatIsMissing } from '@/features/aiFlow/resume';
 import OwnerTypeScreen, { OwnerType } from '@/features/aiFlow/OwnerTypeScreen';
 import LoginScreen from '@/features/auth/LoginScreen';
-import HistoryScreen from '@/features/history/HistoryScreen';
+import AiEventDetailScreen from '@/features/history/AiEventDetailScreen';
+import AiEventsScreen from '@/features/history/AiEventsScreen';
 import SyncQueueScreen, { toCaptures } from '@/features/history/SyncQueueScreen';
 import HomeScreen from '@/features/home/HomeScreen';
 import SettingsScreen from '@/features/settings/SettingsScreen';
@@ -99,6 +102,17 @@ export default function RootNavigator(): React.JSX.Element {
   const [queueOpen, setQueueOpen] = useState(false);
   /** The list of captures still owed a finish, opened from Home. */
   const [unfinishedOpen, setUnfinishedOpen] = useState(false);
+  /**
+   * The AI event being read, or null for the list.
+   *
+   * Held here rather than inside the AI events screen because opening one can *leave* that
+   * screen: an unfinished event resumes into the capture flow, and a screen cannot navigate
+   * out of itself in a shell that is a state machine of `if`s.
+   */
+  const [eventView, setEventView] = useState<number | null>(null);
+  /** A close-off in flight, and the server's reason if it refused one. */
+  const [closing, setClosing] = useState(false);
+  const [closeProblem, setCloseProblem] = useState<string | null>(null);
   const [queueJobs, setQueueJobs] = useState<QueuedJob[]>([]);
   const [draining, setDraining] = useState(false);
   /** How far the running drain has got, and which capture is on the wire. */
@@ -124,6 +138,24 @@ export default function RootNavigator(): React.JSX.Element {
   const [uploading, setUploading] = useState(false);
   const [pending, setPending] = useState(0);
   const [online, setOnline] = useState(true);
+
+  /**
+   * What the badge on AI events counts.
+   *
+   * Two things are waiting, not one. A capture sitting in the offline queue has not reached
+   * the server; a capture the server has but that stopped short of `completed` — no photo, no
+   * payment — reached it and is still not done. Both are work the Mait has to come back to,
+   * and the badge counted only the first, so on a handset with a good signal it was almost
+   * always zero while the AI events screen listed rows needing attention.
+   *
+   * The same query Home runs, so RTK Query serves it from cache rather than fetching twice.
+   */
+  const allEvents = useListAiEventsQuery();
+  const waiting =
+    pending +
+    (allEvents.data?.results ?? []).filter(
+      recorded => !['completed', 'cancelled'].includes(recorded.status),
+    ).length;
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
 
   const [initiatePayment] = useInitiatePaymentMutation();
@@ -270,6 +302,13 @@ export default function RootNavigator(): React.JSX.Element {
       return true;
     }
 
+    // The detail is layered over the AI events tab, so back closes it rather than leaving
+    // the tab — the list is where it was opened from.
+    if (eventView !== null) {
+      setEventView(null);
+      return true;
+    }
+
     if (tab !== 'home') {
       setTab('home');
       return true;
@@ -278,7 +317,17 @@ export default function RootNavigator(): React.JSX.Element {
     // Home is the bottom of the stack. Left unhandled on purpose, so back there still closes
     // the app the way every other Android app does.
     return false;
-  }, [queueOpen, unfinishedOpen, step, farmer, ownerType, requestingStock, indentView, tab]);
+  }, [
+    queueOpen,
+    unfinishedOpen,
+    step,
+    farmer,
+    ownerType,
+    requestingStock,
+    indentView,
+    eventView,
+    tab,
+  ]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', goBack);
@@ -342,7 +391,7 @@ export default function RootNavigator(): React.JSX.Element {
    * `client_uuid` is restored with it — minting a new one here would make the retry a second
    * insemination as far as the server is concerned (ADR 0003).
    */
-  const resumeCapture = (unfinished: AIEvent) => {
+  const resumeCapture = async (unfinished: AIEvent) => {
     const point = resumePoint(unfinished);
 
     setEvent(unfinished);
@@ -376,6 +425,57 @@ export default function RootNavigator(): React.JSX.Element {
       breed: unfinished.breed,
       ear_tag_no: unfinished.ear_tag_no,
     } as Animal);
+
+    /**
+     * A payment already confirmed has nothing left to ask for.
+     *
+     * `payment_pending` covers two different situations. Usually her code never came back,
+     * and the resume below is right: the screen asks for it. But the same status also holds
+     * the event whose payment *is* verified and whose completion never ran — a connection
+     * that died at the last step, which is a common way for a round to end.
+     *
+     * Sending that one to the code screen was a dead end with no way out of it. Her OTP was
+     * spent when it was verified, so no new one is coming; the screen's button stays disabled
+     * until six digits are typed, and there are no six digits to type. A Mait could open that
+     * record every day for a week and it would still say "Needs attention" afterwards.
+     *
+     * So it is closed here instead, which is all it ever needed: the completion is the only
+     * call that has not been made.
+     */
+    if (whatIsMissing(unfinished) === 'notClosed') {
+      setClosing(true);
+      setCloseProblem(null);
+
+      const outcome = await completeEvent(unfinished.id, unfinished.client_uuid, accessToken, {
+        farmer: unfinished.owner_name,
+        kind: unfinished.owner_type === 'member' ? 'member' : 'nonMember',
+        amount: unfinished.amount_due,
+        at: clockTime(),
+        eventId: unfinished.id,
+      });
+      setPending(outcome.remaining);
+      setClosing(false);
+
+      // Refused, not merely unsent: nothing is queued and no retry will help, so the Mait is
+      // told why — in the server's own words, which name the actual obstacle — and left on
+      // the record rather than shown a screen saying it was saved.
+      if (!outcome.sent && !outcome.queued) {
+        setCloseProblem(outcome.problem ?? t('aiEvent.couldNotClose'));
+        return;
+      }
+
+      if (outcome.sent) {
+        setLastSyncAt(clockTime());
+        inventory.refetch();
+      }
+      // Either way the lists are out of date: completed on the server, or queued on the phone
+      // and now belonging to the handset's own count rather than to the work still owed.
+      eventsChanged();
+      setEventView(null);
+      setUnfinishedOpen(false);
+      setStep('done');
+      return;
+    }
 
     // A payment already started is waiting on her code, so the screen has to ask for one.
     //
@@ -513,17 +613,23 @@ export default function RootNavigator(): React.JSX.Element {
   const withTabs = (screen: React.JSX.Element, active: Tab = 'home') => (
     <View style={styles.flex}>
       <View style={styles.flex}>{screen}</View>
+      <Toast
+        message={closeProblem}
+        onDismiss={() => setCloseProblem(null)}
+        testID="close-off-error"
+      />
       <BottomNav
         active={active}
-        pending={pending}
+        pending={waiting}
         onChange={next => {
           setStep(null);
           // The waiting list is layered over the tabs like the capture flow is, so it has to be
           // closed here too. Without this a tab press left it open and every destination drew
-          // the queue instead — the bar moved and the screen did not. The unfinished list is
-          // layered the same way and needs the same closing.
+          // the queue instead — the bar moved and the screen did not. The unfinished list and
+          // the event being read are layered the same way and need the same closing.
           setQueueOpen(false);
           setUnfinishedOpen(false);
+          setEventView(null);
           setTab(next);
         }}
       />
@@ -848,12 +954,7 @@ export default function RootNavigator(): React.JSX.Element {
       <View style={styles.flex}>
         {/* Keeps the bar, unlike the capture flow: asking for stock is a form a Mait can
             abandon by tapping another tab, not a sequence they can strand halfway. */}
-        {requestingStock && (
-          <RequestStockScreen
-            onDone={() => setRequestingStock(false)}
-            onBack={() => setRequestingStock(false)}
-          />
-        )}
+        {requestingStock && <RequestStockScreen onDone={() => setRequestingStock(false)} />}
 
         {!requestingStock && tab === 'home' && (
           <HomeScreen
@@ -894,23 +995,46 @@ export default function RootNavigator(): React.JSX.Element {
         {!requestingStock && tab === 'stock' && !!indentView && (
           <IndentDetailScreen indentId={indentView} onBack={() => setIndentView(0)} />
         )}
-        {!requestingStock && tab === 'history' && <HistoryScreen />}
+        {!requestingStock && tab === 'history' && eventView === null && (
+          <AiEventsScreen onOpen={opened => setEventView(opened.id)} />
+        )}
+        {!requestingStock && tab === 'history' && eventView !== null && (
+          <AiEventDetailScreen
+            eventId={eventView}
+            onBack={() => setEventView(null)}
+            // An unfinished event is picked up at the step it stopped on, by the same
+            // function the Unfinished list uses — so what the detail screen's button promises
+            // and where it lands cannot drift apart.
+            onResume={resumeCapture}
+            busy={closing}
+          />
+        )}
         {!requestingStock && tab === 'settings' && (
           <SettingsScreen pending={pending} onSync={sync} online={online} />
         )}
       </View>
+
+      {/* A close-off the server refused. Anchored to the top of the app rather than put in
+          the screen below, because it is about the request rather than about anything on the
+          page — and the page is a record, which must not start looking like a form. */}
+      <Toast
+        message={closeProblem}
+        onDismiss={() => setCloseProblem(null)}
+        testID="close-off-error"
+      />
 
       {/* Destinations only. Each screen's own action lives at the foot of that screen's
           content — "Start new AI" on Home, "Request stock" on Inventory — where it is next to
           the thing it acts on rather than in the furniture. */}
       <BottomNav
         active={tab}
-        pending={pending}
+        pending={waiting}
         onChange={next => {
           // Switching tabs leaves the form. Nothing is lost that was worth keeping — an
           // unsent indent is a decision not yet made.
           setRequestingStock(false);
           setIndentView(null);
+          setEventView(null);
           setTab(next);
         }}
       />

@@ -10,6 +10,7 @@ import type {
   AadhaarImages,
   AIEvent,
   AIEventDraft,
+  AIEventTimelineEntry,
   Animal,
   AnimalDraft,
   AnimalTypeCode,
@@ -350,6 +351,29 @@ export const maitaiApi = api.injectEndpoints({
       }),
       providesTags: ['AIEvent'],
     }),
+
+    /**
+     * One event, read fresh rather than picked out of the list.
+     *
+     * The list is capped at a page and is filtered; an event opened from a notification, or
+     * from a row cached before a payment landed, has to be able to ask for itself. Tagged
+     * `AIEvent` like the list, so completing a capture invalidates both together.
+     */
+    getAiEvent: builder.query<AIEvent, number>({
+      query: id => `/ai-events/${id}/`,
+      providesTags: ['AIEvent'],
+    }),
+
+    /**
+     * The step-by-step trail behind one event.
+     *
+     * Its own request because it is its own thing: the record renders without it, and on a
+     * village connection a trail that failed to load must not take the event down with it.
+     */
+    getAiEventTimeline: builder.query<AIEventTimelineEntry[], number>({
+      query: id => `/ai-events/${id}/timeline/`,
+      providesTags: ['AIEvent'],
+    }),
   }),
 });
 
@@ -378,6 +402,8 @@ export const {
   useLazyValidateStrawQuery,
   useCreateAiEventMutation,
   useListAiEventsQuery,
+  useGetAiEventQuery,
+  useGetAiEventTimelineQuery,
   useCreateIndentMutation,
   useListIndentsQuery,
   useGetIndentQuery,

@@ -38,6 +38,27 @@ export interface ResumePoint {
 }
 
 /**
+ * What a capture that stopped is actually missing, as a suffix each screen builds its own
+ * strings from.
+ *
+ * The status alone does not answer it. `payment_pending` normally means her code never came
+ * back — but it also covers the event whose payment *is* verified and whose completion never
+ * ran, which is what a connection dying at the last step leaves behind. Reading those two as
+ * the same thing sends a Mait to a farmer to ask for a code the system already has, and — far
+ * worse — sends them to a screen that cannot close the record at all, because her OTP was
+ * spent when it was verified and the button there waits for six digits that will never come.
+ */
+export type MissingKey =
+  'draft' | 'straw_verified' | 'photo_captured' | 'payment_pending' | 'notClosed';
+
+export function whatIsMissing(event: AIEvent): MissingKey {
+  if (event.status === 'payment_pending' && event.payment?.is_verified) {
+    return 'notClosed';
+  }
+  return event.status as MissingKey;
+}
+
+/**
  * A member owes nothing in the yard and a non-member pays on the spot, so the same status
  * resumes at two different screens depending on who the farmer is — which is the reason this
  * takes the whole event rather than just its status.
@@ -62,8 +83,17 @@ export function resumePoint(event: AIEvent): ResumePoint {
 
     case 'payment_pending':
       // A payment was started and her code never came back. This is the one a Mait is most
-      // likely to be holding cash against.
-      return { step: 'recordPayment', missingKey: 'unfinished.missingCode', done: 6 };
+      // likely to be holding cash against — unless the code did come back and only the
+      // completion never ran, in which case nothing is owed by anybody and the row should not
+      // say a code is outstanding. The navigator closes that one off without a screen.
+      return {
+        step: 'recordPayment',
+        missingKey:
+          whatIsMissing(event) === 'notClosed'
+            ? 'unfinished.missingCloseOff'
+            : 'unfinished.missingCode',
+        done: 6,
+      };
 
     case 'straw_verified':
     default:

@@ -183,7 +183,10 @@ describe('back from the stock screens layered over Inventory', () => {
     await screen.findByTestId('home-start-ai');
 
     fireEvent.press(screen.getByTestId('tab-stock'));
-    fireEvent.press(await screen.findByTestId('stock-open-indents'));
+    // Equipment is the tab whose foot button goes to the indent list rather than to a new
+    // one — a piece of kit is held, not reordered.
+    fireEvent.press(await screen.findByTestId('stock-tab-equipment'));
+    fireEvent.press(screen.getByTestId('stock-cta'));
     await screen.findByText('Your requests');
 
     // One press, one screen. The list and the tab under it are two separate places, and
@@ -201,10 +204,88 @@ describe('back from the stock screens layered over Inventory', () => {
 
     fireEvent.press(screen.getByTestId('tab-stock'));
     fireEvent.press(await screen.findByTestId('stock-cta'));
-    await screen.findByText('Request stock');
+    await screen.findByText('Raise an indent');
 
     expect(pressBack()).toBe(true);
 
     await waitFor(() => expect(screen.getByTestId('stock-cta')).toBeTruthy());
+  });
+});
+
+describe('back from an AI event opened out of the list', () => {
+  /** One completed event, so the AI events tab has a row to open. */
+  const EVENT = {
+    id: 30,
+    client_uuid: 'uuid-30',
+    status: 'completed',
+    status_display: 'Completed',
+    mpp: 1,
+    mpp_code: '001302',
+    mpp_name: 'Barsana MPP',
+    owner_type: 'member',
+    member: 4,
+    member_code: 'MEM00000412',
+    non_member: null,
+    owner_name: 'Kavita Devi',
+    animal: 7,
+    animal_type: 'COW',
+    breed: 'HF_CROSS',
+    ear_tag_no: '4821',
+    semen_breed: 'HF_CROSS',
+    amount_due: '50.00',
+    payment: null,
+    straw_unique_no: '',
+    ai_photo_url: '',
+    gps_lat: null,
+    gps_lng: null,
+    performed_at: new Date().toISOString(),
+    completed_at: new Date().toISOString(),
+    cancelled_reason: '',
+    created_at: new Date().toISOString(),
+  };
+
+  function mockWithEvent() {
+    (global.fetch as jest.Mock) = jest.fn((input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('/mait/inventory/')) {
+        return Promise.resolve(jsonResponse(SUMMARY));
+      }
+      if (url.includes('/config/')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+      if (url.includes('/timeline/')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+      // The detail route — `/ai-events/30/` — answers with the event itself rather than a page
+      // of them, which is what tells the two apart here.
+      if (/\/ai-events\/\d+\/$/.test(url)) {
+        return Promise.resolve(jsonResponse(EVENT));
+      }
+      if (url.includes('/ai-events/')) {
+        return Promise.resolve(
+          jsonResponse({ count: 1, next: null, previous: null, results: [EVENT] }),
+        );
+      }
+      return Promise.resolve(jsonResponse({ count: 0, next: null, previous: null, results: [] }));
+    });
+  }
+
+  it('closes the event to the list, then the list to Home', async () => {
+    mockWithEvent();
+    renderApp();
+    await screen.findByTestId('home-start-ai');
+
+    fireEvent.press(screen.getByTestId('tab-history'));
+    fireEvent.press(await screen.findByTestId('ai-event-30'));
+    await screen.findByTestId('ai-event-back');
+
+    // The detail is layered over the tab it was opened from. One press closes it back onto the
+    // list — a press that jumped straight to Home would lose the Mait their place in a day's
+    // events, which is the whole reason they were scrolling it.
+    expect(pressBack()).toBe(true);
+    await screen.findByTestId('ai-events-headline');
+
+    expect(pressBack()).toBe(true);
+    await screen.findByTestId('home-start-ai');
   });
 });

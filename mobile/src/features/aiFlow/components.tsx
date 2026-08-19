@@ -42,6 +42,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import { BrandMark } from '@/components/brand';
 import { AI_FLOW_STEPS } from '@/config/env';
 import {
   colors,
@@ -297,6 +298,14 @@ interface FlowScreenProps {
    * most of an empty row between the button and the bar.
    */
   tabBarBelow?: boolean;
+  /**
+   * Weld the hero to the top of the screen instead of floating it on the page.
+   *
+   * For a screen that is a place rather than a step. The floating card reads as one of six
+   * being dealt and replaced, which is right inside the capture flow and wrong for a form a
+   * Mait arrives at from a tab — there is no deck, so the gutter is just a gap.
+   */
+  fullBleed?: boolean;
 }
 
 export function FlowScreen({
@@ -315,6 +324,7 @@ export function FlowScreen({
   stickyTop,
   refresh,
   tabBarBelow = false,
+  fullBleed = false,
 }: FlowScreenProps): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -324,6 +334,23 @@ export function FlowScreen({
     stepLabel ??
     (step === null ? '' : t('aiFlow.stepOf', { current: step + 1, total: AI_FLOW_STEPS.length }));
 
+  const backControl = done ? (
+    <View style={[styles.backButton, styles.doneMark]}>
+      <Ionicons name="checkmark" size={20} color={colors.surface} />
+    </View>
+  ) : (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('common.back')}
+      onPress={onBack}
+      disabled={!onBack}
+      style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+      testID="flow-back"
+    >
+      <Ionicons name="arrow-back" size={20} color={colors.surface} />
+    </Pressable>
+  );
+
   /* The inset is a margin rather than a SafeAreaView: that component measures its own frame,
      and the measurement is unreliable in a column that also holds a ScrollView. */
   const hero = (
@@ -331,32 +358,47 @@ export function FlowScreen({
       style={[
         styles.hero,
         tone === 'good' && styles.heroGood,
-        {
-          marginTop: insets.top + spacing[2],
-          marginLeft: spacing[3] + insets.left,
-          marginRight: spacing[3] + insets.right,
-        },
+        fullBleed
+          ? [
+              styles.heroFullBleed,
+              {
+                // Padding rather than margin: the Ink has to reach behind the status bar,
+                // and the text has to start below it.
+                paddingTop: insets.top + spacing[4],
+                paddingLeft: spacing[5] + insets.left,
+                paddingRight: spacing[5] + insets.right,
+              },
+            ]
+          : {
+              marginTop: insets.top + spacing[2],
+              marginLeft: spacing[3] + insets.left,
+              marginRight: spacing[3] + insets.right,
+            },
       ]}
     >
-      <View style={styles.heroTop}>
-        {done ? (
-          <View style={[styles.backButton, styles.doneMark]}>
-            <Ionicons name="checkmark" size={20} color={colors.surface} />
-          </View>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-            onPress={onBack}
-            disabled={!onBack}
-            style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
-            testID="flow-back"
-          >
-            <Ionicons name="arrow-back" size={20} color={colors.surface} />
-          </Pressable>
-        )}
-        {!!(eyebrow ?? label) && <Text style={styles.stepLabel}>{eyebrow ?? label}</Text>}
-      </View>
+      {/* Two rows, because a welded header is a place and a floating one is a step.
+
+          A place wears the row every `PageHero` screen wears: the mark on the left, and
+          whatever control the screen needs on the right. A Mait hands this phone to a farmer
+          to read an OTP off, and the app should say whose app it is wherever they are — so
+          the mark leads, and it is in the same spot on every screen that has one.
+
+          A step leads with the way out and labels itself "3 of 6". It gets no mark: inside
+          the flow the hero is a card being dealt and replaced, and stamping the same tile on
+          each of six in turn is not branding, it is noise. */}
+      {fullBleed ? (
+        <View style={styles.heroTop}>
+          <BrandMark size="small" />
+          {/* Omitted rather than greyed when the screen has no way back. A dead circle where
+              every other screen keeps a live one reads as a broken button. */}
+          {(!!onBack || done) && <View style={styles.heroTopRight}>{backControl}</View>}
+        </View>
+      ) : (
+        <View style={styles.heroTop}>
+          {backControl}
+          {!!(eyebrow ?? label) && <Text style={styles.stepLabel}>{eyebrow ?? label}</Text>}
+        </View>
+      )}
 
       {(step !== null || done) && (
         <ProgressSegments step={done ? AI_FLOW_STEPS.length : (step ?? -1)} />
@@ -369,9 +411,15 @@ export function FlowScreen({
 
   return (
     <View style={styles.root}>
-      {/* The hero no longer reaches the top of the screen, so the status bar sits on the
-          page's own grey and its glyphs have to be dark to be legible on it. */}
-      <StatusBar style="dark" backgroundColor={colors.background} />
+      {/* Whatever the glyphs are actually sitting on. Floated, the hero stops short of the
+          top and they are dark on the page's own grey; welded, they are light on Ink. Get
+          this the wrong way round and the clock disappears into the header. */}
+      <StatusBar
+        style={fullBleed ? 'light' : 'dark'}
+        backgroundColor={
+          fullBleed ? (tone === 'good' ? colors.primaryDark : colors.ink) : colors.background
+        }
+      />
 
       {/* Fixed. The step number, the progress and the question are the frame the body is
           answered inside — they have to stay put while the list under them moves, or a Mait
@@ -1414,6 +1462,13 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
     overflow: 'hidden',
   },
+  // Welded to the top instead. Only the bottom corners round, because the other two would be
+  // rounding against the edge of the screen.
+  heroFullBleed: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    paddingBottom: spacing[5],
+  },
   heroGood: { backgroundColor: colors.primaryDark },
   heroTop: {
     flexDirection: 'row',
@@ -1421,6 +1476,7 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     marginBottom: spacing[3],
   },
+  heroTopRight: { marginLeft: 'auto' },
   backButton: {
     width: 36,
     height: 36,

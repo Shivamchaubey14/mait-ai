@@ -80,6 +80,8 @@ const MPP_FIXTURE: MPP = {
   id: 1,
   mpp_code: 'MPP0004120',
   mpp_name: 'Barsana MPP',
+  plant_code: '2001',
+  plant_name: 'BARSANA',
   district_code: '048',
   tehsil_code: '04803',
   village_code: '06081400',

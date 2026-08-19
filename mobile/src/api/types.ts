@@ -40,6 +40,13 @@ export interface MPP {
   id: number;
   mpp_code: string;
   mpp_name: string;
+  /**
+   * The dairy this collection point reports into, and the only name the app has for where a
+   * Mait's indent goes. There is no plant master — the code and the name ride on every MPP
+   * row in the SAP export — so the app reads it off the MPPs it already loaded.
+   */
+  plant_code: string;
+  plant_name: string;
   district_code: string;
   tehsil_code: string;
   village_code: string;
@@ -389,6 +396,23 @@ export interface AIEvent {
   performed_at: string | null;
   completed_at: string | null;
   cancelled_reason: string;
+  created_at: string;
+}
+
+/**
+ * One step of an event's audit trail, from `GET /ai-events/{id}/timeline/`.
+ *
+ * Written by the server at each transition and never edited afterwards — which is the whole
+ * point of it. The app renders `note`, the sentence the server wrote at the time; the two
+ * statuses are carried so a note that was never written still has something to show.
+ */
+export interface AIEventTimelineEntry {
+  id: number;
+  from_status: string;
+  to_status: string;
+  note: string;
+  /** Blank where the step was the handset's own doing rather than a person's. */
+  actor_name: string;
   created_at: string;
 }
 

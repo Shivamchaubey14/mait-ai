@@ -18,9 +18,37 @@ import type { QueuedLabel } from './queue';
 import { drainQueue } from './sync';
 
 export interface CaptureOutcome {
-  /** True when the server took it now; false when it is queued on the handset. */
+  /** True when the server took it now. */
   sent: boolean;
+  /**
+   * True when it went onto the queue instead, because there was no network.
+   *
+   * `sent: false, queued: false` is the third outcome and the one that used to be
+   * indistinguishable from the second: the server was reached and it *refused*. Nothing is
+   * waiting, no retry will help, and a caller that reads the pair as "it will go later" tells
+   * a Mait their work is safe when it is nowhere at all.
+   */
+  queued: boolean;
+  /** The server's own words when it refused. Only ever set on a refusal. */
+  problem?: string;
   remaining: number;
+}
+
+/**
+ * Why the server said no, in its own words.
+ *
+ * Every refusal here is RFC 7807 (SRS §9.11), and `detail` is written to be read by the person
+ * holding the phone — "This breed has no rate set for this kind of farmer" tells a Mait what to
+ * do; "could not save" tells them to tap again. Absent or unreadable, the caller falls back to
+ * its own sentence rather than showing an empty one.
+ */
+async function refusal(response: Response): Promise<{ problem?: string }> {
+  try {
+    const body = (await response.json()) as { detail?: string };
+    return body?.detail ? { problem: body.detail } : {};
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -53,7 +81,7 @@ export async function attachPhoto(
 
   if (!accessToken) {
     await enqueue('attachPhoto', clientUuid, payload, label);
-    return { sent: false, remaining: await pendingCount() };
+    return { sent: false, queued: true, remaining: await pendingCount() };
   }
 
   const form = new FormData();
@@ -82,20 +110,25 @@ export async function attachPhoto(
       // A successful write is the best signal there is that the network is back, so this is
       // where the backlog gets its chance.
       const result = await drainQueue(accessToken);
-      return { sent: true, remaining: result.remaining };
+      return { sent: true, queued: false, remaining: result.remaining };
     }
 
     // 4xx means the server refuses this photo and will refuse it again. Queuing it would
     // retry forever; it is surfaced instead.
     if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-      return { sent: false, remaining: await pendingCount() };
+      return {
+        sent: false,
+        queued: false,
+        remaining: await pendingCount(),
+        ...(await refusal(response)),
+      };
     }
   } catch {
     // Network. Fall through to the queue.
   }
 
   await enqueue('attachPhoto', clientUuid, payload, label);
-  return { sent: false, remaining: await pendingCount() };
+  return { sent: false, queued: true, remaining: await pendingCount() };
 }
 
 /** Ask the server to complete the event, or queue the request. */
@@ -108,7 +141,7 @@ export async function completeEvent(
 ): Promise<CaptureOutcome> {
   if (!accessToken) {
     await enqueue('completeEvent', clientUuid, { eventId }, label);
-    return { sent: false, remaining: await pendingCount() };
+    return { sent: false, queued: true, remaining: await pendingCount() };
   }
 
   try {
@@ -122,19 +155,24 @@ export async function completeEvent(
 
     if (response.ok) {
       const result = await drainQueue(accessToken);
-      return { sent: true, remaining: result.remaining };
+      return { sent: true, queued: false, remaining: result.remaining };
     }
 
     // As on the photo: a 4xx is a refusal, not a dropped connection, and it will be refused
     // again on every retry. Queuing one put the capture on the waiting list for good — it sat
     // there claiming to need a network it already had, and no amount of signal could clear it.
     if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-      return { sent: false, remaining: await pendingCount() };
+      return {
+        sent: false,
+        queued: false,
+        remaining: await pendingCount(),
+        ...(await refusal(response)),
+      };
     }
   } catch {
     // Network. Queue it.
   }
 
   await enqueue('completeEvent', clientUuid, { eventId }, label);
-  return { sent: false, remaining: await pendingCount() };
+  return { sent: false, queued: true, remaining: await pendingCount() };
 }

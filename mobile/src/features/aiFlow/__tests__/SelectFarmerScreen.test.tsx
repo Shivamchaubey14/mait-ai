@@ -17,6 +17,8 @@ const MPP_FIXTURE: MPP = {
   id: 1,
   mpp_code: '001303',
   mpp_name: 'BAROLI',
+  plant_code: '2001',
+  plant_name: 'AKBARPUR',
   district_code: '048',
   tehsil_code: '04803',
   village_code: '06081400',

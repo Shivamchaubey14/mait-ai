@@ -58,38 +58,42 @@ export function Sheet({
       visible={visible}
       transparent
       animationType="slide"
+      // Without this the modal's window stops at the status bar on Android, and the sheet
+      // is measured against a screen that is shorter than the one behind it.
+      statusBarTranslucent
       onRequestClose={onClose}
       testID={testID}
     >
-      {/* Barely tinted rather than dimmed. A dark scrim reads as the screen having gone
-          wrong, and the sheet is already separated by its rounded top and its shadow.
-          Tapping here closes it; on Android the hardware back button does too. */}
-      <Pressable style={styles.scrim} onPress={onClose} testID="sheet-scrim" />
+      <View style={styles.root}>
+        {/* Untinted, and behind the sheet rather than stacked above it. Tapping here closes
+            the sheet; on Android the hardware back button does too. */}
+        <Pressable style={styles.scrim} onPress={onClose} testID="sheet-scrim" />
 
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing[4] }]}>
-        <View style={styles.grabber} />
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing[4] }]}>
+          <View style={styles.grabber} />
 
-        <View style={styles.head}>
-          <View style={styles.headText}>
-            <Text style={styles.title}>{title}</Text>
-            {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          <View style={styles.head}>
+            <View style={styles.headText}>
+              <Text style={styles.title}>{title}</Text>
+              {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.cancel')}
+              onPress={onClose}
+              style={styles.close}
+              testID="sheet-close"
+            >
+              <Ionicons name="close" size={20} color={colors.textMuted} />
+            </Pressable>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('common.cancel')}
-            onPress={onClose}
-            style={styles.close}
-            testID="sheet-close"
-          >
-            <Ionicons name="close" size={20} color={colors.textMuted} />
-          </Pressable>
+
+          <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+            {children}
+          </ScrollView>
+
+          {footer}
         </View>
-
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-          {children}
-        </ScrollView>
-
-        {footer}
       </View>
     </Modal>
   );
@@ -122,87 +126,101 @@ export default function BottomSheet({
       visible={visible}
       transparent
       animationType="slide"
+      // Without this the modal's window stops at the status bar on Android, and the sheet
+      // is measured against a screen that is shorter than the one behind it.
+      statusBarTranslucent
       onRequestClose={onClose}
       testID={testID}
     >
-      {/* Barely tinted rather than dimmed. A dark scrim reads as the screen having gone
-          wrong, and the sheet is already separated by its rounded top and its shadow.
-          Tapping here closes it; on Android the hardware back button does too, via
-          onRequestClose — a sheet with no way out is a trapped Mait. */}
-      <Pressable style={styles.scrim} onPress={onClose} testID="sheet-scrim" />
+      <View style={styles.root}>
+        {/* Untinted, and behind the sheet rather than stacked above it. Tapping here closes
+            the sheet; on Android the hardware back button does too, via onRequestClose — a
+            sheet with no way out is a trapped Mait. */}
+        <Pressable style={styles.scrim} onPress={onClose} testID="sheet-scrim" />
 
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing[4] }]}>
-        <View style={styles.grabber} />
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing[4] }]}>
+          <View style={styles.grabber} />
 
-        <View style={styles.head}>
-          <View style={styles.headText}>
-            <Text style={styles.title}>{title}</Text>
-            {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('common.cancel')}
-            onPress={onClose}
-            style={styles.close}
-            testID="sheet-close"
-          >
-            <Ionicons name="close" size={20} color={colors.textMuted} />
-          </Pressable>
-        </View>
-
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-          {sections.map(section => (
-            <View key={section.title}>
-              <Text style={styles.section}>{section.title}</Text>
-              {section.options.map(option => {
-                const isSelected = option.value === selected;
-                return (
-                  <Pressable
-                    key={option.value}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected, disabled: option.disabled }}
-                    onPress={() => {
-                      onSelect(option.value);
-                      onClose();
-                    }}
-                    disabled={option.disabled}
-                    style={({ pressed }) => [
-                      styles.option,
-                      isSelected && styles.optionSelected,
-                      option.disabled && styles.optionDisabled,
-                      pressed && !option.disabled && styles.optionPressed,
-                    ]}
-                    testID={`sheet-option-${option.value}`}
-                  >
-                    <View style={styles.optionBody}>
-                      <Text style={styles.optionLabel}>{option.label}</Text>
-                      {!!option.meta && <Text style={styles.optionMeta}>{option.meta}</Text>}
-                    </View>
-                    {!!option.badge && (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeLabel}>{option.badge}</Text>
-                      </View>
-                    )}
-                    {isSelected && (
-                      <Ionicons name="checkmark" size={18} color={colors.primaryDark} />
-                    )}
-                  </Pressable>
-                );
-              })}
+          <View style={styles.head}>
+            <View style={styles.headText}>
+              <Text style={styles.title}>{title}</Text>
+              {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
             </View>
-          ))}
-        </ScrollView>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.cancel')}
+              onPress={onClose}
+              style={styles.close}
+              testID="sheet-close"
+            >
+              <Ionicons name="close" size={20} color={colors.textMuted} />
+            </Pressable>
+          </View>
+
+          <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+            {sections.map(section => (
+              <View key={section.title}>
+                <Text style={styles.section}>{section.title}</Text>
+                {section.options.map(option => {
+                  const isSelected = option.value === selected;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected, disabled: option.disabled }}
+                      onPress={() => {
+                        onSelect(option.value);
+                        onClose();
+                      }}
+                      disabled={option.disabled}
+                      style={({ pressed }) => [
+                        styles.option,
+                        isSelected && styles.optionSelected,
+                        option.disabled && styles.optionDisabled,
+                        pressed && !option.disabled && styles.optionPressed,
+                      ]}
+                      testID={`sheet-option-${option.value}`}
+                    >
+                      <View style={styles.optionBody}>
+                        <Text style={styles.optionLabel}>{option.label}</Text>
+                        {!!option.meta && <Text style={styles.optionMeta}>{option.meta}</Text>}
+                      </View>
+                      {!!option.badge && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeLabel}>{option.badge}</Text>
+                        </View>
+                      )}
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={18} color={colors.primaryDark} />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  scrim: { flex: 1, backgroundColor: 'rgba(37,61,78,0.08)' },
+  /* The sheet is placed by this container rather than by flexing against the scrim.
+     As siblings the scrim was a filled rectangle ending exactly at the sheet's top edge, so
+     its straight bottom ran on behind the sheet's rounded corners and drew the square
+     shoulder that made the sheet look like it had a second, flat card behind it. */
+  root: { flex: 1, justifyContent: 'flex-end' },
+
+  /* No tint. The sheet is separated from the page by its own white and its rounded top, and
+     a wash over everything else only made the screen look like it had gone wrong. It still
+     fills the screen, because it is what a tap outside the sheet lands on. */
+  scrim: { ...StyleSheet.absoluteFillObject },
 
   // Rounded top corners and nothing else behind them. Both an elevation shadow and a
   // partial border get drawn from a rectangular outline on Android, and either one squares
-  // off the curve into what looks like a second card sitting behind the sheet.
+  // off the curve into what looks like a second card sitting behind the sheet — so the
+  // elevation is pinned at zero rather than merely left unset.
   sheet: {
     maxHeight: '78%',
     paddingHorizontal: spacing[5],
@@ -210,6 +228,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
+    elevation: 0,
     overflow: 'hidden',
   },
   grabber: {
