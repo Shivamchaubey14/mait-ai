@@ -105,6 +105,11 @@ export default function SelectFarmerScreen({
             key={member.member_code}
             swatchLabel={initials(member.member_name)}
             round
+            // Stretched like the two steps before it. It costs about one row per screenful on
+            // a long roster, which is the trade — but a Mait picking the wrong Kavita is a
+            // capture recorded against the wrong household, and the name and the code both
+            // have room to be read here rather than skimmed.
+            size="roomy"
             title={member.member_name}
             subtitle={
               member.mobile_no

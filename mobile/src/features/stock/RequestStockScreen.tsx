@@ -337,7 +337,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
         subtitle={t('requestStock.sentSubtitle', { count: sent })}
         onBack={onDone}
         tabBarBelow
-        fullBleed
+        place
       >
         <FlowNotice
           tone="info"
@@ -362,9 +362,9 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
       // handled in the navigator, and the tab bar under this screen is a way out on any
       // handset. An unsent indent is a decision not yet made, so there is nothing to lose.
       tabBarBelow
-      // Reached from a tab rather than dealt as one of six steps, so the header is the top of
-      // the screen rather than a card floating on it.
-      fullBleed
+      // Reached from a tab rather than dealt as one of six steps, so the header wears the
+      // mark rather than a step count.
+      place
       footerNote={
         <View style={styles.footerNote}>
           <Text style={styles.footerCount} testID="indent-count">

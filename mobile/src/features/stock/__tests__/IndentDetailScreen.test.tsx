@@ -33,7 +33,21 @@ function indent(overrides: Partial<Indent> = {}): Indent {
 }
 
 function mockIndent(value: Indent) {
-  (global.fetch as jest.Mock).mockResolvedValue(jsonResponse(value));
+  (global.fetch as jest.Mock).mockImplementation(async (input: string | Request) => {
+    const url = typeof input === 'string' ? input : input.url;
+    // The config endpoints answer with a bare array and the MPPs with a page. Handing either
+    // an indent makes the screen call `.find` on an object and throw, which surfaces here as
+    // the screen never rendering rather than as the type error it is.
+    if (url.includes('/config/')) {
+      return jsonResponse([
+        { code: 'MURRAH', name: 'Murrah', name_hi: '', animal_type: 'BUFF', display_order: 1 },
+      ]);
+    }
+    if (url.includes('/mpp/')) {
+      return jsonResponse({ count: 0, next: null, previous: null, results: [] });
+    }
+    return jsonResponse(value);
+  });
 }
 
 describe('IndentDetailScreen', () => {

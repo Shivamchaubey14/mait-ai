@@ -111,7 +111,7 @@ function mockApi(summary: InventorySummary = SUMMARY, indents: unknown[] = []) {
 }
 
 function render() {
-  return renderWithStore(<StockScreen onOpenIndents={jest.fn()} onRequestStock={jest.fn()} />);
+  return renderWithStore(<StockScreen onRequestStock={jest.fn()} />);
 }
 
 describe('StockScreen', () => {
@@ -156,15 +156,18 @@ describe('StockScreen', () => {
     expect(screen.getByText('Low')).toBeTruthy();
   });
 
-  it('shows what is approved but not yet in hand', async () => {
-    // It changes what a low count means: two straws with twenty approved is a delivery to
-    // chase, two with nothing behind them is a round that cannot happen.
+  it('lists only what is in the flask, never what is still on its way', async () => {
+    // An indent is by definition stock that is not in the Mait's hands. Listed among the
+    // straws it reads as stock, and a round started on straws still sitting at the depot is
+    // an animal served against a count that was never real. They live on Profile, which can
+    // say what is outstanding on each of them.
     mockApi(SUMMARY, [INDENT]);
     render();
 
-    await waitFor(() => expect(screen.getByTestId('stock-incoming-2318')).toBeTruthy());
-    expect(screen.getByText('IND-2318 · Murrah × 20')).toBeTruthy();
-    expect(screen.getByText('Approved — not issued to you yet')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('stock-straw-HF')).toBeTruthy());
+    expect(screen.queryByTestId('stock-incoming-2318')).toBeNull();
+    expect(screen.queryByText(/IND-2318/)).toBeNull();
+    expect(screen.queryByText(/not issued/i)).toBeNull();
   });
 
   it('counts consumables in their own units', async () => {
@@ -212,7 +215,7 @@ describe('StockScreen', () => {
     );
   });
 
-  it('offers a different action on equipment than on the things that run out', async () => {
+  it('offers no action at all on equipment', async () => {
     mockApi();
     render();
 
@@ -220,9 +223,11 @@ describe('StockScreen', () => {
     expect(screen.getByText('Raise an indent')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('stock-tab-equipment'));
-    // Ordering another AI gun is not the answer to a broken one.
-    await waitFor(() => expect(screen.getByText('Report lost or broken')).toBeTruthy());
-    expect(screen.queryByText('Raise an indent')).toBeNull();
+
+    // Equipment is issued once and held until the dairy asks for it back: nothing to order,
+    // nothing to correct. The button here used to say "Report lost or broken" and open the
+    // indent list, which is neither.
+    await waitFor(() => expect(screen.queryByTestId('stock-cta')).toBeNull());
   });
 
   it('says the flask is empty rather than showing a zero', async () => {

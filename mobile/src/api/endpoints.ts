@@ -340,13 +340,18 @@ export const maitaiApi = api.injectEndpoints({
      */
     listAiEvents: builder.query<
       Paginated<AIEvent>,
-      { status?: string; unfinished?: boolean } | void
+      { status?: string; unfinished?: boolean; dateFrom?: string; dateTo?: string } | void
     >({
       query: args => ({
         url: '/ai-events/',
         params: {
           ...(args?.status ? { status: args.status } : {}),
           ...(args?.unfinished ? { unfinished: true, limit: 50 } : {}),
+          // `YYYY-MM-DD`, both inclusive. A month's total is read off `count` rather than by
+          // pulling the rows: Profile wants the number, and a Mait who has done two hundred
+          // inseminations should not be made to download two hundred records to see it.
+          ...(args?.dateFrom ? { date_from: args.dateFrom } : {}),
+          ...(args?.dateTo ? { date_to: args.dateTo } : {}),
         },
       }),
       providesTags: ['AIEvent'],

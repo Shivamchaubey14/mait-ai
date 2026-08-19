@@ -72,7 +72,7 @@ export function BrandWordmark({ size = 'large' }: { size?: 'large' | 'small' }) 
 export function LanguageToggle({
   variant = 'segmented',
 }: {
-  variant?: 'segmented' | 'inline' | 'compact';
+  variant?: 'segmented' | 'inline' | 'compact' | 'light';
 }) {
   const { i18n } = useTranslation();
   const current = i18n.language.startsWith('hi') ? 'hi' : 'en';
@@ -93,6 +93,38 @@ export function LanguageToggle({
       >
         <Text style={styles.toggleLabel}>{current === 'en' ? 'EN' : 'हिं'}</Text>
       </Pressable>
+    );
+  }
+
+  // The same control for a white card, where the dark-surface one is invisible: its track is
+  // a white wash and its labels are white, so on Profile the unselected language and the
+  // track both disappeared and the only readable option was the one already in use.
+  //
+  // Green fills the selected half here rather than white, because on white there is nothing
+  // else that reads as "this one". It is the only place in the app where green is not an
+  // action — and a language switch is close enough to one that it does not fight the rule.
+  if (variant === 'light') {
+    return (
+      <View style={styles.toggleLight}>
+        {(['en', 'hi'] as const).map(code => {
+          const active = current === code;
+          return (
+            <Pressable
+              key={code}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={code === 'en' ? 'English' : 'हिन्दी'}
+              onPress={() => i18n.changeLanguage(code)}
+              style={[styles.toggleOption, active && styles.toggleOptionLight]}
+              testID={`language-${code}`}
+            >
+              <Text style={[styles.toggleLabelDark, active && styles.toggleLabelOnGreen]}>
+                {code === 'en' ? 'EN' : 'हिन्दी'}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     );
   }
 
@@ -212,6 +244,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   compactPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
+
+  toggleLight: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: radius.pill,
+    padding: 3,
+  },
+  toggleOptionLight: { backgroundColor: colors.primary },
+  toggleLabelDark: { ...typography.label, color: colors.textMuted },
+  toggleLabelOnGreen: { color: colors.surface },
 
   toggleInline: {
     alignItems: 'center',

@@ -1,35 +1,44 @@
 /**
- * Indents — what a Mait has asked for and where it has got to.
+ * Your indents — what has been asked for, and what is waiting at the depot (M22).
  *
- * Two statuses that routinely disagree are collapsed into one line here, because a Mait does
- * not care which system is holding it up. What they need to know is whether stock is coming
- * and whether anything is waiting on them: an indent sitting approved for a week is not
- * moving on its own, and one marked issued is a trip to the MPP.
+ * Reached from Profile. It used to hang off Inventory, which was the wrong place for it:
+ * Inventory answers "what is in my flask right now", and an indent is by definition stock
+ * that is not in it yet. Two lists of things that look like stock, one of which is not, on
+ * one tab.
  *
- * Searching and filtering happen on the rows already fetched rather than by asking the
- * server. `/indents/` returns one Mait's own requests — tens of rows, not thousands — so a
- * round trip per keystroke would buy nothing, and the filter keeps working in a yard with no
- * signal, which is where this screen gets read.
+ * The screen answers one question — is anything waiting for me to collect — and the headline
+ * answers it before a single row is read. Every row then says what was asked for, where it
+ * has got to, and what the Mait should do about it in words rather than in a status code.
+ *
+ * **Issued is not received.** The dairy's system marks an indent issued when the depot packs
+ * it; the stock becomes the Mait's when they pick it up and confirm, and only then does the
+ * count on Inventory move. A Mait who reads "issued" as "in my flask" will start a round they
+ * cannot finish, so the screen says the difference at the foot rather than leaving it to be
+ * learned once, expensively.
+ *
+ * The search box and the status filters are gone. A Mait has tens of indents, not hundreds,
+ * and the two controls cost more room than the rows they were filtering.
  */
 
-import React, { useMemo, useState } from 'react';
-import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import React from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
-import { useListIndentsQuery } from '@api/endpoints';
-import type { Indent, IndentStatus } from '@api/types';
-import PageHero from '@/components/hero';
+import { useListBreedsQuery, useListIndentsQuery } from '@api/endpoints';
+import type { Indent } from '@api/types';
 import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
-import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
+import {
+  colors,
+  MIN_TOUCH_TARGET,
+  radius,
+  shadows,
+  spacing,
+  typography,
+  yolk,
+} from '@theme/tokens';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -38,7 +47,7 @@ export function shortDate(iso: string): string {
   if (isNaN(d.getTime())) {
     return '—';
   }
-  return `${String(d.getDate()).padStart(2, '0')} ${MONTHS[d.getMonth()]}`;
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
 /** 24-hour, because a Mait reading a timeline wants the order, not the am/pm puzzle. */
@@ -61,34 +70,29 @@ export function statusTone(indent: Indent): { label: string; tone: 'good' | 'war
   return { label: indent.status_display, tone: 'info' };
 }
 
-const FILTERS: { key: IndentStatus | 'all'; labelKey: string }[] = [
-  { key: 'all', labelKey: 'indents.filterAll' },
-  { key: 'requested', labelKey: 'indents.filterRequested' },
-  { key: 'approved', labelKey: 'indents.filterApproved' },
-  { key: 'issued', labelKey: 'indents.filterIssued' },
-  { key: 'rejected', labelKey: 'indents.filterRejected' },
-];
-
 /**
- * Matched against the number, the breed and the status word.
+ * What is outstanding on this indent, in the words a Mait would use.
  *
- * The number is matched with and without its `IND-` prefix: a Mait reading the code off the
- * detail screen types what they see, and one reading it off a depot slip types the digits.
+ * The status word alone says who is holding it; this says what happens next and who has to
+ * do it. "Issued" is the one that matters — it reads like an ending and is a trip to the
+ * depot.
  */
-export function matches(indent: Indent, query: string): boolean {
-  const needle = query.trim().toLowerCase();
-  if (!needle) {
-    return true;
+function nextStep(indent: Indent, t: TFunction): string {
+  if (indent.received_at) {
+    return t('indents.lineCollected', { date: shortDate(indent.received_at) });
   }
-  return [
-    `ind-${indent.id}`,
-    String(indent.id),
-    indent.item,
-    indent.breed,
-    indent.status,
-    indent.status_display,
-    indent.note,
-  ].some(field => (field ?? '').toLowerCase().includes(needle));
+  switch (indent.status) {
+    case 'issued':
+      return t('indents.lineIssued', {
+        date: shortDate(indent.issued_at ?? indent.requested_at),
+      });
+    case 'approved':
+      return t('indents.lineApproved', { date: shortDate(indent.requested_at) });
+    case 'rejected':
+      return t('indents.lineRejected', { date: shortDate(indent.requested_at) });
+    default:
+      return t('indents.lineRequested', { date: shortDate(indent.requested_at) });
+  }
 }
 
 export default function IndentsScreen({
@@ -98,120 +102,60 @@ export default function IndentsScreen({
   onOpen: (indent: Indent) => void;
   onBack: () => void;
 }): React.JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const insets = useSafeAreaInsets();
+
   const indents = useListIndentsQuery();
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<IndentStatus | 'all'>('all');
+  const breeds = useListBreedsQuery();
 
-  const all = useMemo(() => indents.data?.results ?? [], [indents.data]);
-  const rows = useMemo(
-    () =>
-      all.filter(
-        indent => (status === 'all' || indent.status === status) && matches(indent, search),
-      ),
-    [all, search, status],
-  );
+  const hindi = i18n.language.startsWith('hi');
+  const breedName = (code: string): string => {
+    const config = (breeds.data ?? []).find(item => item.code === code);
+    return (hindi && config?.name_hi) || config?.name || code;
+  };
 
-  const narrowed = rows.length !== all.length;
+  const rows = indents.data?.results ?? [];
+  /** The only count worth a headline: what a Mait could go and fetch today. */
+  const waiting = rows.filter(indent => indent.status === 'issued' && !indent.received_at).length;
 
   return (
     <View style={styles.root}>
-      <PageHero
-        title={t('indents.title')}
-        subtitle={t('indents.subtitle', { count: indents.data?.count ?? 0 })}
-        top={
+      <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
+        <View style={styles.heroTop}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}
             onPress={onBack}
-            style={styles.back}
+            style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
             testID="indents-back"
           >
-            <Ionicons name="arrow-back" size={18} color={colors.surface} />
+            <Ionicons name="arrow-back" size={20} color={colors.surface} />
           </Pressable>
-        }
-      />
+          {/* Where this was opened from, so a Mait three screens deep knows which way is out. */}
+          <Text style={styles.eyebrow}>{t('nav.settings')}</Text>
+        </View>
+
+        <Text style={styles.heroTitle}>{t('indents.title')}</Text>
+        <Text style={styles.heroSubtitle} testID="indents-headline">
+          {waiting > 0
+            ? t('indents.waitingToCollect', { count: waiting })
+            : rows.length
+              ? t('indents.nothingToCollect', { count: rows.length })
+              : ''}
+        </Text>
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.body}
-        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={indents.isFetching}
+            refreshing={indents.isFetching && !indents.isLoading}
             onRefresh={indents.refetch}
             tintColor={colors.primary}
           />
         }
       >
-        {/* Hidden while the first load is still running: filtering nothing is a control that
-            does nothing, and a Mait tapping it learns the screen is broken. */}
-        {!indents.isLoading && !indents.isError && all.length > 0 && (
-          <View>
-            <View style={styles.search}>
-              <Ionicons name="search" size={16} color={colors.textMuted} />
-              <TextInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder={t('indents.searchHint')}
-                placeholderTextColor={colors.textMuted}
-                accessibilityLabel={t('common.search')}
-                autoCorrect={false}
-                autoCapitalize="characters"
-                style={styles.searchInput}
-                testID="indent-search"
-              />
-              {search.length > 0 && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('indents.clearSearch')}
-                  onPress={() => setSearch('')}
-                  style={styles.clear}
-                  testID="indent-search-clear"
-                >
-                  <Ionicons name="close" size={14} color={colors.surface} />
-                </Pressable>
-              )}
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chips}
-              keyboardShouldPersistTaps="handled"
-            >
-              {FILTERS.map(filter => {
-                const active = status === filter.key;
-                // Counted off the unfiltered list, so a chip showing 0 tells the Mait there
-                // is nothing in that state rather than nothing matching the other chip.
-                const count =
-                  filter.key === 'all'
-                    ? all.length
-                    : all.filter(indent => indent.status === filter.key).length;
-                return (
-                  <Pressable
-                    key={filter.key}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    onPress={() => setStatus(filter.key)}
-                    style={[styles.chip, active && styles.chipActive]}
-                    testID={`indent-filter-${filter.key}`}
-                  >
-                    <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
-                      {t(filter.labelKey)} · {count}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {narrowed && (
-              <Text style={styles.count} testID="indent-match-count">
-                {t('indents.matchCount', { count: rows.length, total: all.length })}
-              </Text>
-            )}
-          </View>
-        )}
-
         {indents.isLoading ? (
           <SkeletonList rows={4} />
         ) : indents.isError ? (
@@ -220,55 +164,55 @@ export default function IndentsScreen({
             onRetry={() => indents.refetch()}
             busy={indents.isFetching}
           />
-        ) : all.length === 0 ? (
-          <EmptyState title={t('indents.emptyTitle')} body={t('indents.emptyBody')} />
         ) : rows.length === 0 ? (
-          // Distinct from having raised nothing at all. "No requests yet" in front of a Mait
-          // who has raised six of them reads as lost data.
-          <EmptyState
-            title={t('indents.noMatchTitle')}
-            body={t('indents.noMatchBody')}
-            testID="indent-no-match"
-          />
+          <EmptyState title={t('indents.emptyTitle')} body={t('indents.emptyBody')} />
         ) : (
           rows.map(indent => {
-            const status_ = statusTone(indent);
+            const status = statusTone(indent);
+            const collectable = indent.status === 'issued' && !indent.received_at;
             return (
               <Pressable
                 key={indent.id}
                 accessibilityRole="button"
+                accessibilityLabel={`IND-${indent.id} · ${status.label}`}
                 onPress={() => onOpen(indent)}
                 style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                 testID={`indent-${indent.id}`}
               >
                 <View style={styles.rowBody}>
-                  <Text style={styles.rowTitle}>IND-{indent.id}</Text>
-                  <Text style={styles.rowMeta} numberOfLines={1}>
-                    {indent.item} · {t('indents.raised', { date: shortDate(indent.requested_at) })}
+                  <Text style={styles.rowTitle} numberOfLines={1}>
+                    {t('stock.indentLine', {
+                      id: indent.id,
+                      item: indent.breed ? breedName(indent.breed) : indent.item,
+                      qty: indent.qty_requested,
+                    })}
+                  </Text>
+                  <Text
+                    style={[styles.rowMeta, collectable && styles.rowMetaWaiting]}
+                    numberOfLines={2}
+                  >
+                    {nextStep(indent, t)}
                   </Text>
                 </View>
 
-                <View
-                  style={[
-                    styles.pill,
-                    status_.tone === 'good' && styles.pillGood,
-                    status_.tone === 'warn' && styles.pillWarn,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.pillLabel,
-                      status_.tone === 'good' && styles.pillLabelGood,
-                      status_.tone === 'warn' && styles.pillLabelWarn,
-                    ]}
-                  >
-                    {status_.label}
+                <View style={[styles.pill, styles[`pill_${status.tone}`]]}>
+                  <Text style={[styles.pillLabel, styles[`pillLabel_${status.tone}`]]}>
+                    {status.label}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textDisabled} />
+
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </Pressable>
             );
           })
+        )}
+
+        {/* The sentence this whole screen exists to prevent somebody learning the hard way. */}
+        {rows.length > 0 && (
+          <View style={styles.footnote} testID="indents-footnote">
+            <Ionicons name="warning-outline" size={17} color={colors.secondaryPressed} />
+            <Text style={styles.footnoteText}>{t('indents.issuedIsNotReceived')}</Text>
+          </View>
         )}
       </ScrollView>
     </View>
@@ -277,90 +221,79 @@ export default function IndentsScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  body: { padding: spacing[5] },
 
-  back: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.22)',
+  // -- hero ------------------------------------------------------------------------------
+  hero: {
+    backgroundColor: colors.ink,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    paddingHorizontal: spacing[5],
+    paddingBottom: spacing[5],
   },
-
-  search: {
+  heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: spacing[3],
-    marginBottom: spacing[3],
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: spacing[3],
+    marginBottom: spacing[4],
   },
-  searchInput: {
-    flex: 1,
-    ...typography.body,
-    color: colors.ink,
-    // Android centres short text oddly without this, leaving the caret high in the box.
-    paddingVertical: spacing[2],
-  },
-  clear: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+  back: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.textDisabled,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  backPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
+  eyebrow: { ...typography.label, color: colors.surface, opacity: 0.72 },
+  heroTitle: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
+  heroSubtitle: {
+    ...typography.body,
+    color: colors.surface,
+    opacity: 0.72,
+    marginTop: spacing[1],
   },
 
-  chips: { gap: spacing[2], paddingRight: spacing[2] },
-  chip: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipLabel: { ...typography.label, color: colors.textMuted },
-  chipLabelActive: { color: colors.surface },
-
-  count: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: spacing[3],
-    marginBottom: spacing[1],
-  },
-
+  // -- rows ------------------------------------------------------------------------------
+  body: { padding: spacing[4] },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    minHeight: MIN_TOUCH_TARGET + spacing[2],
-    padding: spacing[3],
-    marginTop: spacing[2],
+    minHeight: MIN_TOUCH_TARGET + spacing[3],
+    padding: spacing[4],
+    marginBottom: spacing[3],
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
     ...shadows.card,
   },
   rowPressed: { backgroundColor: colors.background },
   rowBody: { flex: 1 },
-  rowTitle: { ...typography.bodyStrong, color: colors.ink },
+  rowTitle: { ...typography.h3, color: colors.ink },
   rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  // Amber, not red: something is waiting for them, and nothing is wrong.
+  rowMetaWaiting: { color: yolk[800] },
 
-  pill: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-    backgroundColor: colors.infoWash,
+  pill: { paddingHorizontal: spacing[3], paddingVertical: 3, borderRadius: radius.pill },
+  pill_good: { backgroundColor: colors.primaryWash },
+  pill_info: { backgroundColor: colors.infoWash },
+  pill_warn: { backgroundColor: colors.errorWash },
+  pillLabel: { ...typography.caption },
+  pillLabel_good: { color: colors.primaryDark },
+  pillLabel_info: { color: colors.info },
+  pillLabel_warn: { color: colors.error },
+
+  footnote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    backgroundColor: colors.secondaryWash,
+    borderWidth: 1,
+    borderColor: colors.secondary,
   },
-  pillGood: { backgroundColor: colors.primaryWash },
-  pillWarn: { backgroundColor: colors.secondaryWash },
-  pillLabel: { ...typography.caption, color: colors.info },
-  pillLabelGood: { color: colors.primaryDark },
-  pillLabelWarn: { color: colors.secondaryPressed },
+  footnoteText: { ...typography.caption, color: colors.textMuted, flex: 1 },
 });

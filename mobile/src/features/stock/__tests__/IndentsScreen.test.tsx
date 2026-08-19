@@ -1,9 +1,14 @@
 /**
- * Indent list tests (SRS §6.6).
+ * Your indents (M22).
  *
- * The filter is the part worth covering. It narrows a list the Mait already has, so the two
- * failure modes are silent: a search that hides rows it should have matched, and an empty
- * result that reads like the requests are gone rather than like nothing matched.
+ * The screen exists to answer one question — is anything waiting for me to collect — and to
+ * stop a Mait reading "issued" as "in my flask". That is the failure this list is built
+ * around: the dairy marks an indent issued when the depot packs it, the stock becomes the
+ * Mait's only when they collect and confirm, and a Mait who confuses the two starts a round
+ * on straws that are still sitting at the depot.
+ *
+ * So every row says what to do about it in words, the headline counts only what can actually
+ * be fetched today, and the difference is spelled out at the foot.
  */
 
 import React from 'react';
@@ -31,22 +36,37 @@ function indent(overrides: Partial<Indent> & Pick<Indent, 'id'>): Indent {
   };
 }
 
-const MURRAH = indent({ id: 2291 });
-const SAHIWAL = indent({
-  id: 2304,
-  breed: 'SAHIWAL',
-  item: '10 SAHIWAL',
-  qty_requested: 10,
+const WAITING = indent({
+  id: 2291,
   status: 'issued',
   status_display: 'Issued',
-  qty_issued: 10,
-  issued_at: '2026-08-06T14:40:00Z',
+  qty_issued: 25,
+  issued_at: '2026-08-19T09:12:00Z',
 });
 
+const STILL_WITH_THE_STORE = indent({ id: 2304, breed: 'SAHIWAL', item: '10 SAHIWAL' });
+
+const COLLECTED = indent({
+  id: 2210,
+  status: 'issued',
+  status_display: 'Issued',
+  qty_issued: 25,
+  issued_at: '2026-08-11T09:12:00Z',
+  received_at: '2026-08-12T09:12:00Z',
+});
+
+const BREEDS = [
+  { code: 'MURRAH', name: 'Murrah', name_hi: '', animal_type: 'BUFF', display_order: 1 },
+];
+
 function mockIndents(results: Indent[]) {
-  (global.fetch as jest.Mock).mockResolvedValue(
-    jsonResponse({ count: results.length, next: null, previous: null, results }),
-  );
+  (global.fetch as jest.Mock).mockImplementation(async (input: string | Request) => {
+    const url = typeof input === 'string' ? input : input.url;
+    if (url.includes('/config/breeds/')) {
+      return jsonResponse(BREEDS);
+    }
+    return jsonResponse({ count: results.length, next: null, previous: null, results });
+  });
 }
 
 describe('IndentsScreen', () => {
@@ -59,96 +79,76 @@ describe('IndentsScreen', () => {
 
   afterEach(() => jest.resetAllMocks());
 
-  const renderScreen = () => renderWithStore(<IndentsScreen onOpen={onOpen} onBack={onBack} />);
+  const render = () => renderWithStore(<IndentsScreen onOpen={onOpen} onBack={onBack} />);
 
-  it('lists what the Mait has asked for', async () => {
-    mockIndents([MURRAH, SAHIWAL]);
-    renderScreen();
+  it('counts only what can actually be collected today', async () => {
+    mockIndents([WAITING, STILL_WITH_THE_STORE, COLLECTED]);
+    render();
 
-    await waitFor(() => expect(screen.getByText('IND-2291')).toBeTruthy());
-    expect(screen.getByText('IND-2304')).toBeTruthy();
+    // Three indents, one trip to the depot. A headline counting all three would send a Mait
+    // to fetch something the store has not even approved.
+    await waitFor(() =>
+      expect(screen.getByTestId('indents-headline')).toHaveTextContent(
+        /One issued and waiting for you to collect/,
+      ),
+    );
+  });
+
+  it('says what each one needs, not just where it is', async () => {
+    mockIndents([WAITING, STILL_WITH_THE_STORE, COLLECTED]);
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('indent-2291')).toBeTruthy());
+
+    expect(screen.getByTestId('indent-2291')).toHaveTextContent(/collect it from the depot/);
+    expect(screen.getByTestId('indent-2304')).toHaveTextContent(/waiting for the store/);
+    expect(screen.getByTestId('indent-2210')).toHaveTextContent(/it is in your stock/);
+  });
+
+  it('names the breed the way the rest of the app does', async () => {
+    mockIndents([WAITING]);
+    render();
+
+    // "Murrah" from the admin's own breed list, not the MURRAH code off the indent row.
+    await waitFor(() => expect(screen.getByTestId('indent-2291')).toHaveTextContent(/Murrah/));
+  });
+
+  it('warns that issued is not received', async () => {
+    mockIndents([WAITING]);
+    render();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('indents-footnote')).toHaveTextContent(
+        /stock rises only when you confirm collection/,
+      ),
+    );
   });
 
   it('opens the one that was tapped', async () => {
-    mockIndents([MURRAH, SAHIWAL]);
-    renderScreen();
+    mockIndents([WAITING, STILL_WITH_THE_STORE]);
+    render();
 
-    await waitFor(() => screen.getByTestId('indent-2291'));
-    fireEvent.press(screen.getByTestId('indent-2291'));
+    await waitFor(() => screen.getByTestId('indent-2304'));
+    fireEvent.press(screen.getByTestId('indent-2304'));
 
-    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 2291 }));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 2304 }));
   });
 
-  it('searches by breed', async () => {
-    mockIndents([MURRAH, SAHIWAL]);
-    renderScreen();
-
-    await waitFor(() => screen.getByTestId('indent-search'));
-    fireEvent.changeText(screen.getByTestId('indent-search'), 'sahiwal');
-
-    expect(screen.queryByText('IND-2291')).toBeNull();
-    expect(screen.getByText('IND-2304')).toBeTruthy();
-  });
-
-  it('searches by number, with or without the IND- prefix', async () => {
-    mockIndents([MURRAH, SAHIWAL]);
-    renderScreen();
-
-    await waitFor(() => screen.getByTestId('indent-search'));
-
-    fireEvent.changeText(screen.getByTestId('indent-search'), 'IND-2291');
-    expect(screen.getByText('IND-2291')).toBeTruthy();
-    expect(screen.queryByText('IND-2304')).toBeNull();
-
-    fireEvent.changeText(screen.getByTestId('indent-search'), '2304');
-    expect(screen.getByText('IND-2304')).toBeTruthy();
-    expect(screen.queryByText('IND-2291')).toBeNull();
-  });
-
-  it('filters by status', async () => {
-    mockIndents([MURRAH, SAHIWAL]);
-    renderScreen();
-
-    await waitFor(() => screen.getByTestId('indent-filter-issued'));
-    fireEvent.press(screen.getByTestId('indent-filter-issued'));
-
-    expect(screen.getByText('IND-2304')).toBeTruthy();
-    expect(screen.queryByText('IND-2291')).toBeNull();
-
-    fireEvent.press(screen.getByTestId('indent-filter-all'));
-    expect(screen.getByText('IND-2291')).toBeTruthy();
-  });
-
-  it('says nothing matched rather than nothing exists', async () => {
-    mockIndents([MURRAH, SAHIWAL]);
-    renderScreen();
-
-    await waitFor(() => screen.getByTestId('indent-search'));
-    fireEvent.changeText(screen.getByTestId('indent-search'), 'GIR');
-
-    // The distinction matters: "No requests yet" in front of a Mait who raised two of them
-    // reads as lost data.
-    expect(screen.getByTestId('indent-no-match')).toBeTruthy();
-    expect(screen.queryByTestId('empty-state')).toBeNull();
-  });
-
-  it('clears the search back to the full list', async () => {
-    mockIndents([MURRAH, SAHIWAL]);
-    renderScreen();
-
-    await waitFor(() => screen.getByTestId('indent-search'));
-    fireEvent.changeText(screen.getByTestId('indent-search'), 'sahiwal');
-    fireEvent.press(screen.getByTestId('indent-search-clear'));
-
-    expect(screen.getByText('IND-2291')).toBeTruthy();
-    expect(screen.getByText('IND-2304')).toBeTruthy();
-  });
-
-  it('offers no filter at all when nothing has been raised', async () => {
+  it('says nothing has been raised rather than showing an empty page', async () => {
     mockIndents([]);
-    renderScreen();
+    render();
 
     await waitFor(() => expect(screen.getByTestId('empty-state')).toBeTruthy());
-    expect(screen.queryByTestId('indent-search')).toBeNull();
+    // No footnote either: there is nothing for it to be a warning about.
+    expect(screen.queryByTestId('indents-footnote')).toBeNull();
+  });
+
+  it('goes back to where it was opened from', async () => {
+    mockIndents([WAITING]);
+    render();
+
+    fireEvent.press(await screen.findByTestId('indents-back'));
+
+    expect(onBack).toHaveBeenCalled();
   });
 });

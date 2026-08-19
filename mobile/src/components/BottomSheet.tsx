@@ -17,6 +17,8 @@ import { useTranslation } from 'react-i18next';
 
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
+import { useKeyboardOverlap } from './keyboard';
+
 export interface SheetOption {
   value: string;
   label: string;
@@ -52,6 +54,15 @@ export function Sheet({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  /**
+   * A sheet with a field in it has to clear the keyboard, and it is anchored to the very edge
+   * the keyboard comes up over. Nothing else can do this for it: the sheet sits in a modal
+   * over the layout, so there is no parent for `KeyboardAvoidingView` to shrink. The whole
+   * sheet moves up by the overlap instead, which keeps the field, its label and the button
+   * under it together — a sheet that scrolled internally would put the button out of reach at
+   * the very moment it is wanted.
+   */
+  const overlap = useKeyboardOverlap();
 
   return (
     <Modal
@@ -69,7 +80,18 @@ export function Sheet({
             the sheet; on Android the hardware back button does too. */}
         <Pressable style={styles.scrim} onPress={onClose} testID="sheet-scrim" />
 
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing[4] }]}>
+        <View
+          // The surface itself, named apart from the modal around it: this is the thing that
+          // moves when the keyboard opens.
+          testID={testID ? `${testID}-surface` : undefined}
+          style={[
+            styles.sheet,
+            // The inset is the system's own gap, and it is only owed when the keyboard is not
+            // already standing in it.
+            { paddingBottom: overlap ? spacing[4] : insets.bottom + spacing[4] },
+            !!overlap && { marginBottom: overlap },
+          ]}
+        >
           <View style={styles.grabber} />
 
           <View style={styles.head}>

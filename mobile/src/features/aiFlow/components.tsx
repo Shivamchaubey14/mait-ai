@@ -21,9 +21,7 @@ import React, {
   useState,
 } from 'react';
 import {
-  Dimensions,
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -43,6 +41,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { BrandMark } from '@/components/brand';
+import { useKeyboardOverlap } from '@/components/keyboard';
 import { AI_FLOW_STEPS } from '@/config/env';
 import {
   colors,
@@ -80,46 +79,6 @@ const ARROW_SIZE = 18;
 // --------------------------------------------------------------------------------------
 // Keyboard
 // --------------------------------------------------------------------------------------
-/**
- * How much of the window the keyboard is covering, in points.
- *
- * `KeyboardAvoidingView` is no use to a sheet: it pads a view inside the layout, and a sheet
- * is positioned absolutely over the top of one, so there is nothing for the padding to push.
- * This measures the overlap directly — the window's bottom edge minus where the keyboard
- * starts — which is the one number that is right under both of Android's soft-input modes and
- * under iOS.
- *
- * Read fresh on each event rather than captured once: the window is a different height in
- * landscape, and on a resizing Android window it is a different height with the keyboard up.
- *
- * Not exported. Every caller wants the reveal built on top of it, and one that only wanted the
- * number would be a screen doing its own keyboard handling — which is exactly what left the
- * sheet with a hand-written `scrollToEnd` on the one field somebody noticed.
- */
-function useKeyboardOverlap(): number {
-  const [overlap, setOverlap] = useState(0);
-
-  useEffect(() => {
-    const show = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      event => {
-        const windowHeight = Dimensions.get('window').height;
-        setOverlap(Math.max(0, windowHeight - event.endCoordinates.screenY));
-      },
-    );
-    const hide = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => setOverlap(0),
-    );
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-
-  return overlap;
-}
-
 /**
  * Bringing the field a Mait just tapped above the keyboard.
  *
@@ -299,13 +258,13 @@ interface FlowScreenProps {
    */
   tabBarBelow?: boolean;
   /**
-   * Weld the hero to the top of the screen instead of floating it on the page.
+   * This screen is a place a Mait arrives at, not a step in the capture.
    *
-   * For a screen that is a place rather than a step. The floating card reads as one of six
-   * being dealt and replaced, which is right inside the capture flow and wrong for a form a
-   * Mait arrives at from a tab — there is no deck, so the gutter is just a gap.
+   * It changes the top row only. A place wears the mark, the way every tab screen does; a
+   * step leads with the way out and labels itself "3 of 6". The hero's shape is the same
+   * either way — welded to the top of the screen, full width.
    */
-  fullBleed?: boolean;
+  place?: boolean;
 }
 
 export function FlowScreen({
@@ -324,7 +283,7 @@ export function FlowScreen({
   stickyTop,
   refresh,
   tabBarBelow = false,
-  fullBleed = false,
+  place = false,
 }: FlowScreenProps): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -334,11 +293,7 @@ export function FlowScreen({
     stepLabel ??
     (step === null ? '' : t('aiFlow.stepOf', { current: step + 1, total: AI_FLOW_STEPS.length }));
 
-  const backControl = done ? (
-    <View style={[styles.backButton, styles.doneMark]}>
-      <Ionicons name="checkmark" size={20} color={colors.surface} />
-    </View>
-  ) : (
+  const backControl = (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={t('common.back')}
@@ -351,32 +306,31 @@ export function FlowScreen({
     </Pressable>
   );
 
-  /* The inset is a margin rather than a SafeAreaView: that component measures its own frame,
-     and the measurement is unreliable in a column that also holds a ScrollView. */
+  /* Welded to the top of the screen and running the full width of it, with only the bottom
+     corners rounded — the shape every other hero in this app wears, so the flow does not
+     arrive looking like a different product.
+
+     It used to float on the page, inset on all four sides. That was drawn as a card being
+     dealt and replaced, one of six, which reads well on paper and less well on a handset: the
+     strip of grey above it wasted the scarcest room on the screen, the status bar sat on the
+     page's own colour while every other screen had it on Ink, and the gutters made the hero a
+     narrower column than the cards underneath it.
+
+     The insets are padding rather than margin, because the Ink has to reach behind the status
+     bar while the text starts below it. */
   const hero = (
     <View
       style={[
         styles.hero,
         tone === 'good' && styles.heroGood,
-        fullBleed
-          ? [
-              styles.heroFullBleed,
-              {
-                // Padding rather than margin: the Ink has to reach behind the status bar,
-                // and the text has to start below it.
-                paddingTop: insets.top + spacing[4],
-                paddingLeft: spacing[5] + insets.left,
-                paddingRight: spacing[5] + insets.right,
-              },
-            ]
-          : {
-              marginTop: insets.top + spacing[2],
-              marginLeft: spacing[3] + insets.left,
-              marginRight: spacing[3] + insets.right,
-            },
+        {
+          paddingTop: insets.top + spacing[4],
+          paddingLeft: spacing[5] + insets.left,
+          paddingRight: spacing[5] + insets.right,
+        },
       ]}
     >
-      {/* Two rows, because a welded header is a place and a floating one is a step.
+      {/* Two rows, because a place and a step are answering different questions.
 
           A place wears the row every `PageHero` screen wears: the mark on the left, and
           whatever control the screen needs on the right. A Mait hands this phone to a farmer
@@ -384,14 +338,24 @@ export function FlowScreen({
           the mark leads, and it is in the same spot on every screen that has one.
 
           A step leads with the way out and labels itself "3 of 6". It gets no mark: inside
-          the flow the hero is a card being dealt and replaced, and stamping the same tile on
-          each of six in turn is not branding, it is noise. */}
-      {fullBleed ? (
+          the flow the hero is one of six being replaced, and stamping the same tile on each
+          of them in turn is not branding, it is noise. */}
+      {done ? (
+        // Nothing to go back to and no step to count: the capture is over. What is left is
+        // the one fact the Mait came here for, so the tick leads and everything under it is
+        // centred on it. A back arrow in the corner of this screen would offer to undo an
+        // insemination that has already been recorded.
+        <View style={styles.heroDone}>
+          <View style={styles.doneDisc}>
+            <Ionicons name="checkmark" size={30} color={colors.surface} />
+          </View>
+        </View>
+      ) : place ? (
         <View style={styles.heroTop}>
           <BrandMark size="small" />
           {/* Omitted rather than greyed when the screen has no way back. A dead circle where
               every other screen keeps a live one reads as a broken button. */}
-          {(!!onBack || done) && <View style={styles.heroTopRight}>{backControl}</View>}
+          {!!onBack && <View style={styles.heroTopRight}>{backControl}</View>}
         </View>
       ) : (
         <View style={styles.heroTop}>
@@ -400,25 +364,23 @@ export function FlowScreen({
         </View>
       )}
 
-      {(step !== null || done) && (
-        <ProgressSegments step={done ? AI_FLOW_STEPS.length : (step ?? -1)} />
-      )}
+      {/* Six full segments on a screen that has finished are six segments nobody reads. */}
+      {step !== null && !done && <ProgressSegments step={step ?? -1} />}
 
-      <Text style={styles.heroTitle}>{title}</Text>
-      {!!subtitle && <Text style={styles.heroSubtitle}>{subtitle}</Text>}
+      <Text style={[styles.heroTitle, done && styles.heroCentred]}>{title}</Text>
+      {!!subtitle && (
+        <Text style={[styles.heroSubtitle, done && styles.heroCentred]}>{subtitle}</Text>
+      )}
     </View>
   );
 
   return (
     <View style={styles.root}>
-      {/* Whatever the glyphs are actually sitting on. Floated, the hero stops short of the
-          top and they are dark on the page's own grey; welded, they are light on Ink. Get
-          this the wrong way round and the clock disappears into the header. */}
+      {/* Whatever the glyphs are actually sitting on, which is now always the hero. Get this
+          the wrong way round and the clock disappears into the header. */}
       <StatusBar
-        style={fullBleed ? 'light' : 'dark'}
-        backgroundColor={
-          fullBleed ? (tone === 'good' ? colors.primaryDark : colors.ink) : colors.background
-        }
+        style="light"
+        backgroundColor={tone === 'good' ? colors.primaryDark : colors.ink}
       />
 
       {/* Fixed. The step number, the progress and the question are the frame the body is
@@ -570,7 +532,25 @@ const SWATCH_TINT: Record<Tone, string> = {
 
 interface OptionCardProps {
   title: string;
-  subtitle?: string;
+  /**
+   * A string, or the same sentence with one part of it picked out.
+   *
+   * It renders inside a `Text`, so a nested `Text` is all a caller needs to colour the figure
+   * that carries the row's meaning — what she pays — without the component having to know
+   * which part of which sentence that is in each language.
+   */
+  subtitle?: React.ReactNode;
+  /**
+   * How much room the row takes.
+   *
+   * `compact` is the default and is what a list wants: a roster of fifty members, a flask of
+   * eleven breeds, where every extra point of height is a row that has to be scrolled to.
+   *
+   * `roomy` is for a screen whose whole body is two or three choices. There the tight row
+   * looks like an item pulled out of a list that is not there, and the space it saves is
+   * space nothing else was going to use — so the card grows to meet the reader instead.
+   */
+  size?: 'compact' | 'roomy';
   /** Drawn inside the swatch. Without one the swatch is a plain colour block. */
   icon?: React.ComponentProps<typeof Ionicons>['name'];
   /** For the few glyphs Ionicons has no equivalent of. Wins over `icon` when both are set. */
@@ -631,6 +611,7 @@ interface OptionCardProps {
 export function OptionCard({
   title,
   subtitle,
+  size = 'compact',
   icon,
   iconNode,
   swatchLabel,
@@ -656,6 +637,7 @@ export function OptionCard({
       disabled={blocked || !onPress}
       style={({ pressed }) => [
         styles.card,
+        size === 'roomy' && styles.cardRoomy,
         selected && styles.cardSelected,
         blocked && styles.cardBlocked,
         pressed && !blocked && !selected && styles.cardPressed,
@@ -665,6 +647,7 @@ export function OptionCard({
       <View
         style={[
           styles.swatch,
+          size === 'roomy' && styles.swatchRoomy,
           { backgroundColor: blocked ? colors.disabledFill : SWATCH[tone] },
           round && styles.swatchRound,
           selected && !blocked && styles.swatchSelected,
@@ -694,7 +677,14 @@ export function OptionCard({
       </View>
 
       <View style={styles.cardBody}>
-        <Text style={[styles.cardTitle, blocked && styles.blockedText]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.cardTitle,
+            size === 'roomy' && styles.cardTitleRoomy,
+            blocked && styles.blockedText,
+          ]}
+          numberOfLines={1}
+        >
           {title}
         </Text>
         {blocked ? (
@@ -1381,6 +1371,7 @@ export function FlowNotice({
   tone,
   title,
   body,
+  pill,
   /** Overrides the tone's default glyph when the notice means something more specific. */
   icon,
   testID,
@@ -1389,6 +1380,14 @@ export function FlowNotice({
   /** Omit it for a notice that is one plain sentence — a heading over nothing is furniture. */
   title?: string;
   body?: string;
+  /**
+   * One word on the right, naming the state the notice is describing.
+   *
+   * For the notice that is reporting rather than instructing — "saved on this phone" is a
+   * sentence about a record, and `Queued` is what that record's row will say everywhere else
+   * in the app. The pill is what ties the two together.
+   */
+  pill?: string;
   icon?: React.ComponentProps<typeof Ionicons>['name'];
   testID?: string;
 }): React.JSX.Element {
@@ -1416,7 +1415,11 @@ export function FlowNotice({
   }[tone];
 
   return (
-    <View style={[styles.notice, { backgroundColor: wash }]} testID={testID}>
+    // Outlined as well as washed. The wash alone is a very pale tint — on a cheap screen in
+    // daylight it reads as white, and a notice that cannot be seen to be a notice is just a
+    // paragraph. The border is the tone's own colour, so the card says which of the four
+    // kinds it is from across the room.
+    <View style={[styles.notice, { backgroundColor: wash, borderColor: swatch }]} testID={testID}>
       {/* A glyph, not a blank square. A coloured block asks the reader to remember what the
           colour meant; a warning triangle does not. */}
       <View style={[styles.noticeSwatch, { backgroundColor: swatch }]}>
@@ -1428,6 +1431,12 @@ export function FlowNotice({
           <Text style={[styles.cardSubtitle, !title && styles.noticeBodyAlone]}>{body}</Text>
         )}
       </View>
+
+      {!!pill && (
+        <View style={[styles.noticePill, { borderColor: swatch }]}>
+          <Text style={styles.noticePillLabel}>{pill}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -1454,20 +1463,15 @@ const styles = StyleSheet.create({
   // A card that floats on the page rather than a band welded to the top of the screen. The
   // grey gutter above and beside it is what makes the six steps read as one card being dealt
   // and replaced, and it leaves the status bar on the page's own colour instead of on Ink.
+  // Only the bottom corners round: the other two would be rounding against the edge of the
+  // screen, which is a gap rather than a curve.
   hero: {
     backgroundColor: colors.ink,
-    borderRadius: radius.xl,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
     paddingHorizontal: spacing[5],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[4],
-    overflow: 'hidden',
-  },
-  // Welded to the top instead. Only the bottom corners round, because the other two would be
-  // rounding against the edge of the screen.
-  heroFullBleed: {
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
     paddingBottom: spacing[5],
+    overflow: 'hidden',
   },
   heroGood: { backgroundColor: colors.primaryDark },
   heroTop: {
@@ -1486,13 +1490,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
-  doneMark: { backgroundColor: colors.primary },
+
+  heroDone: { alignItems: 'center', marginBottom: spacing[4] },
+  doneDisc: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCentred: { textAlign: 'center' },
   stepLabel: { ...typography.label, color: colors.surface },
 
   track: { flexDirection: 'row', gap: spacing[2], marginBottom: spacing[5] },
   segment: {
     flex: 1,
-    height: 3,
+    height: 4,
     borderRadius: radius.pill,
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
@@ -1524,11 +1538,24 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_TARGET + spacing[4],
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'transparent',
+    // Outlined even when it is not the chosen one. A transparent edge left the card leaning
+    // on its shadow alone, which on a cheap screen in daylight is nothing at all — and it is
+    // the same hairline every other card in the app now carries.
+    borderColor: colors.border,
     borderRadius: radius.lg,
     ...shadows.card,
     padding: spacing[4],
     marginBottom: spacing[3],
+  },
+  // Stretched for a screen that holds two of them and nothing else. The height comes from the
+  // padding rather than from a fixed number, so a subtitle that wraps in Hindi still has its
+  // room instead of being squeezed against the edges of a box sized for English.
+  cardRoomy: {
+    minHeight: MIN_TOUCH_TARGET + spacing[6],
+    paddingVertical: spacing[5],
+    paddingHorizontal: spacing[5],
+    gap: spacing[4],
+    marginBottom: spacing[4],
   },
   cardSelected: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
   cardPressed: { backgroundColor: colors.background },
@@ -1542,6 +1569,7 @@ const styles = StyleSheet.create({
   },
   // On a chosen card the wash has already tinted the whole row, so the tile has to go white
   // or it dissolves into the card behind it.
+  swatchRoomy: { width: 46, height: 46, borderRadius: radius.md },
   swatchSelected: { backgroundColor: colors.surface },
   swatchRound: { borderRadius: 20 },
   swatchLabel: { ...typography.label, fontFamily: fonts.headingBold },
@@ -1549,6 +1577,7 @@ const styles = StyleSheet.create({
   // Collapsed rather than absent, so one component draws both kinds of row.
   swatchOff: { display: 'none' },
   cardBody: { flex: 1 },
+  cardTitleRoomy: { ...typography.h2, fontSize: 19, lineHeight: 26 },
 
   // A dashed outline of the same card, so it holds the column without claiming to be a
   // record. No fill: a white card here would be indistinguishable from a real animal.
@@ -1718,14 +1747,17 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3],
     marginBottom: spacing[3],
   },
+  // 46 rather than 52, and closer to the name under it. This card has to sit whole on a
+  // 5-inch screen alongside two notices and a button once her phone has answered, and every
+  // point the disc gives back is a point the facts under it do not have to scroll for.
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: colors.primaryWash,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing[3],
+    marginBottom: spacing[2],
   },
   avatarLabel: { ...typography.h3, color: colors.primaryDark },
   identityName: { ...typography.h2, color: colors.ink, textAlign: 'center' },
@@ -1736,10 +1768,10 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     height: 1,
     backgroundColor: colors.border,
-    marginTop: spacing[4],
+    marginTop: spacing[3],
   },
   facts: { flexDirection: 'row', flexWrap: 'wrap', alignSelf: 'stretch' },
-  fact: { width: '50%', paddingTop: spacing[2], paddingRight: spacing[3] },
+  fact: { width: '50%', paddingTop: spacing[3], paddingRight: spacing[3] },
   factLabel: { ...typography.caption, color: colors.textMuted },
   factValue: { ...typography.bodyStrong, color: colors.ink, marginTop: 2 },
 
@@ -1876,11 +1908,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
     padding: spacing[3],
     marginTop: spacing[2],
     marginBottom: spacing[3],
   },
+  // White inside the wash, outlined in the tone: it has to read as a label on the card rather
+  // than as a second block of the same colour.
+  noticePill: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
+  },
+  noticePillLabel: { ...typography.caption, color: colors.ink },
   noticeSwatch: {
     width: 28,
     height: 28,

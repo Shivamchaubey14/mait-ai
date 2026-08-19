@@ -249,7 +249,10 @@ async function walkToThePhoto() {
   fireEvent.press(screen.getByTestId('non-member-save'));
 
   // Her number is proved before the flow acts on it — a Mait typed it a moment ago.
+  // The verification runs in a sheet now: the screen's button opens it on her number, and
+  // the sheet's own button is what sends the code.
   fireEvent.press(await screen.findByTestId('farmer-verify'));
+  fireEvent.press(await screen.findByTestId('farmer-send-code'));
   fireEvent.changeText(await screen.findByTestId('farmer-otp-input'), '123456');
   fireEvent.press(screen.getByTestId('farmer-check-code'));
   fireEvent.press(await screen.findByTestId('farmer-confirm'));

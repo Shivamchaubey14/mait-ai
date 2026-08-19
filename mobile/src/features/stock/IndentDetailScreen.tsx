@@ -15,14 +15,26 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { useConfirmIndentCollectionMutation, useGetIndentQuery } from '@api/endpoints';
+import {
+  useConfirmIndentCollectionMutation,
+  useGetIndentQuery,
+  useListBreedsQuery,
+  useListMppsQuery,
+} from '@api/endpoints';
 import type { Indent } from '@api/types';
-import { Button } from '@/components';
-import PageHero from '@/components/hero';
 import { ErrorState, SkeletonList } from '@/components/states';
 import { Toast } from '@/components/toast';
 import { FlowNotice } from '@/features/aiFlow/components';
@@ -69,8 +81,11 @@ export default function IndentDetailScreen({
   indentId: number;
   onBack: () => void;
 }): React.JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const insets = useSafeAreaInsets();
   const query = useGetIndentQuery(indentId);
+  const breeds = useListBreedsQuery();
+  const mpps = useListMppsQuery();
   const indent = query.data;
   const [confirmCollection, confirmation] = useConfirmIndentCollectionMutation();
   const [error, setError] = useState<string | null>(null);
@@ -86,22 +101,26 @@ export default function IndentDetailScreen({
     }
   };
 
-  const back = (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t('common.back')}
-      onPress={onBack}
-      style={styles.back}
-      testID="indent-back"
-    >
-      <Ionicons name="arrow-back" size={18} color={colors.surface} />
-    </Pressable>
+  /** Back, and the name of the list this was opened from. The same shape that list wears. */
+  const heroTop = (
+    <View style={styles.heroTop}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('common.back')}
+        onPress={onBack}
+        style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
+        testID="indent-back"
+      >
+        <Ionicons name="arrow-back" size={20} color={colors.surface} />
+      </Pressable>
+      <Text style={styles.eyebrow}>{t('indents.title')}</Text>
+    </View>
   );
 
   if (query.isLoading || !indent) {
     return (
       <View style={styles.root}>
-        <PageHero title={t('indents.one')} top={back} />
+        <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>{heroTop}</View>
         <ScrollView contentContainerStyle={styles.body}>
           {query.isError ? (
             <ErrorState title={t('indents.errorTitle')} onRetry={() => query.refetch()} />
@@ -114,6 +133,27 @@ export default function IndentDetailScreen({
   }
 
   const status = statusTone(indent);
+
+  /**
+   * The breed as the rest of the app spells it, and where the goods are actually waiting.
+   *
+   * `item` comes back from the server as "25 MURRAH" — the code, not the name a Mait reads on
+   * every other screen. The depot is the plant the Mait's MPPs report into; there is no plant
+   * on the indent itself and no plant master to look one up in, so it is read off the MPPs and
+   * left unnamed rather than guessed at when they span more than one.
+   */
+  const hindi = i18n.language.startsWith('hi');
+  const breedConfig = (breeds.data ?? []).find(config => config.code === indent.breed);
+  const breedLabel = (hindi && breedConfig?.name_hi) || breedConfig?.name || indent.breed;
+  const item = indent.breed ? `${indent.qty_requested} ${breedLabel}` : indent.item;
+
+  const plants = Array.from(
+    new Set((mpps.data?.results ?? []).map(mpp => mpp.plant_name).filter(Boolean)),
+  );
+  const depot =
+    plants.length === 1
+      ? t('indents.collectAtNamed', { plant: plants[0] })
+      : t('indents.collectAtMpp');
 
   // The server keeps no separate approved quantity: approval is of the whole request, so an
   // indent past `requested` had all of it approved. Shown as a dash until then rather than
@@ -167,27 +207,22 @@ export default function IndentDetailScreen({
     <View style={styles.root}>
       <Toast message={error} onDismiss={() => setError(null)} testID="indent-confirm-error" />
 
-      <PageHero
-        title={`IND-${indent.id}`}
-        subtitle={t('indents.raisedOn', {
-          item: indent.item,
-          date: shortDate(indent.requested_at),
-        })}
-        top={back}
-      >
-        {/* The status rides in the hero, where the mockup puts it: it is the answer to the
-            question that brought the Mait to this screen. */}
-        <View style={styles.heroPill} testID="indent-status">
-          <View
-            style={[
-              styles.heroDot,
-              status.tone === 'good' && styles.heroDotGood,
-              status.tone === 'warn' && styles.heroDotWarn,
-            ]}
-          />
-          <Text style={styles.heroPillLabel}>{status.label}</Text>
+      <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
+        {heroTop}
+
+        {/* The status sits beside the number rather than under it: it is the answer to the
+            question that brought the Mait here, and the number is only how they found it. */}
+        <View style={styles.heroTitleRow}>
+          <Text style={styles.heroTitle}>{`IND-${indent.id}`}</Text>
+          <View style={styles.heroPill} testID="indent-status">
+            <Text style={styles.heroPillLabel}>{status.label}</Text>
+          </View>
         </View>
-      </PageHero>
+
+        <Text style={styles.heroSubtitle}>
+          {t('indents.raisedOn', { item, date: shortDate(indent.requested_at) })}
+        </Text>
+      </View>
 
       {/* The timeline moves when the office acts, not when the Mait does, so this screen goes
           stale while it is being read. Pulling is the gesture they already use on the list. */}
@@ -235,7 +270,7 @@ export default function IndentDetailScreen({
         <View style={styles.qtyRow} testID="indent-qty-requested">
           <View style={styles.qtyBody}>
             <Text style={styles.qtyLabel}>{t('indents.requested')}</Text>
-            <Text style={styles.qtyMeta}>{indent.breed || indent.item}</Text>
+            <Text style={styles.qtyMeta}>{breedLabel || indent.item}</Text>
           </View>
           <Text style={styles.qtyValue}>{indent.qty_requested}</Text>
         </View>
@@ -244,7 +279,7 @@ export default function IndentDetailScreen({
           <View style={styles.qtyBody}>
             <Text style={styles.qtyLabel}>{t('indents.approved')}</Text>
             <Text style={styles.qtyMeta}>
-              {approvedReached ? indent.breed || indent.item : t('indents.notApprovedYet')}
+              {approvedReached ? breedLabel || indent.item : t('indents.notApprovedYet')}
             </Text>
           </View>
           <Text style={[styles.qtyValue, !approvedReached && styles.qtyValueMuted]}>
@@ -258,7 +293,7 @@ export default function IndentDetailScreen({
         >
           <View style={styles.qtyBody}>
             <Text style={styles.qtyLabel}>{t('indents.issuedSoFar')}</Text>
-            <Text style={styles.qtyMeta}>{t('indents.collectAtMpp')}</Text>
+            <Text style={styles.qtyMeta}>{depot}</Text>
           </View>
           <Text style={[styles.qtyValue, indent.qty_issued === 0 && styles.qtyValueWaiting]}>
             {indent.qty_issued}
@@ -299,14 +334,30 @@ export default function IndentDetailScreen({
       {/* Pinned rather than left at the end of the scroll: the step that is the Mait's own
           stays in view however long the timeline runs. Nothing competes with it here — the
           tab bar carries no action on this screen. */}
-      <View style={styles.action}>
-        <Button
-          label={indent.received_at ? t('indents.collectedLabel') : t('indents.confirmCollection')}
+      <View style={[styles.action, { paddingBottom: spacing[3] + insets.bottom }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !collectable || confirming, busy: confirming }}
           onPress={confirm}
           disabled={!collectable || confirming}
-          loading={confirming}
+          style={({ pressed }) => [
+            styles.cta,
+            collectable ? styles.ctaReady : styles.ctaInert,
+            pressed && collectable && styles.ctaPressed,
+          ]}
           testID="indent-confirm-collection"
-        />
+        >
+          {confirming ? (
+            <ActivityIndicator color={colors.surface} />
+          ) : (
+            <>
+              {collectable && <Ionicons name="checkmark" size={18} color={colors.surface} />}
+              <Text style={[styles.ctaLabel, !collectable && styles.ctaLabelInert]}>
+                {indent.received_at ? t('indents.collectedLabel') : t('indents.confirmCollection')}
+              </Text>
+            </>
+          )}
+        </Pressable>
       </View>
     </View>
   );
@@ -316,26 +367,58 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   body: { padding: spacing[5] },
 
+  hero: {
+    backgroundColor: colors.ink,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    paddingHorizontal: spacing[5],
+    paddingBottom: spacing[5],
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    marginBottom: spacing[4],
+  },
   back: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  backPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
+  eyebrow: { ...typography.label, color: colors.surface, opacity: 0.72 },
+  heroTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  heroTitle: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
+  heroSubtitle: {
+    ...typography.body,
+    color: colors.surface,
+    opacity: 0.72,
+    marginTop: spacing[1],
   },
 
   heroPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    alignSelf: 'flex-start',
-    marginTop: spacing[3],
     paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
+    paddingVertical: 3,
     borderRadius: radius.pill,
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
+
+  cta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    minHeight: 56,
+    borderRadius: radius.lg,
+  },
+  ctaReady: { backgroundColor: colors.primary },
+  ctaPressed: { backgroundColor: colors.primaryPressed },
+  ctaInert: { backgroundColor: colors.disabledFill },
+  ctaLabel: { ...typography.bodyStrong, fontSize: 16, color: colors.surface },
+  ctaLabelInert: { color: colors.textDisabled },
   // A glyph-free dot would carry the state in colour alone, so the label always says it too.
   heroDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.surface },
   heroDotGood: { backgroundColor: colors.primaryWash },

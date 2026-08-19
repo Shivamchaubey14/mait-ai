@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { Keyboard, StyleSheet } from 'react-native';
+import { Dimensions, Keyboard, StyleSheet } from 'react-native';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import AddAnimalSheet from '../AddAnimalSheet';
@@ -74,32 +74,59 @@ jest.mock('react-native/Libraries/Components/ScrollView/ScrollView', () => {
   return Mock;
 });
 
-/** The keyboard listeners the components registered, by event name. */
-const listeners = new Map<string, (event: unknown) => void>();
+/**
+ * Every keyboard listener the components registered, by event name.
+ *
+ * All of them, not the last one: a screen with a sheet over it has two things watching the
+ * keyboard — the body that scrolls and the sheet that rises — and keeping only the most
+ * recent registration meant firing the event moved one of them and quietly ignored the other.
+ * The real `Keyboard` notifies every subscriber, so the mock does too.
+ */
+const listeners = new Map<string, ((event: unknown) => void)[]>();
 
 function captureKeyboardListeners() {
   jest.spyOn(Keyboard, 'addListener').mockImplementation(((
     event: string,
     handler: (payload: unknown) => void,
   ) => {
-    listeners.set(event, handler);
+    listeners.set(event, [...(listeners.get(event) ?? []), handler]);
     return { remove: jest.fn() };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }) as any);
 }
 
 /** Raise the keyboard the way the OS does, so the reveal's second pass runs. */
+/**
+ * Raise the keyboard the way the platform would.
+ *
+ * Both spellings, because the components listen for `keyboardWillShow` on iOS and
+ * `keyboardDidShow` on Android — and under Jest the platform is iOS, so a helper firing only
+ * the Android event raised nothing at all. Every test here still passed, because the reveal
+ * also fires on focus; what went untested was the part that reads how much of the screen the
+ * keyboard actually covers.
+ *
+ * The top edge is measured off the window the components measure against, rather than a
+ * hardcoded 800: a keyboard reported below the bottom of the window covers nothing, which is
+ * exactly what anything reading the overlap correctly concludes.
+ */
 function raiseKeyboard(height = 300) {
+  const screenY = Dimensions.get('window').height - height;
   act(() => {
-    listeners.get('keyboardDidShow')?.({
-      endCoordinates: { screenY: 800 - height, height, width: 400, screenX: 0 },
-    });
+    ['keyboardWillShow', 'keyboardDidShow'].forEach(event =>
+      listeners
+        .get(event)
+        ?.forEach(handler =>
+          handler({ endCoordinates: { screenY, height, width: 400, screenX: 0 } }),
+        ),
+    );
   });
 }
 
 function dropKeyboard() {
   act(() => {
-    listeners.get('keyboardDidHide')?.({});
+    ['keyboardWillHide', 'keyboardDidHide'].forEach(event =>
+      listeners.get(event)?.forEach(handler => handler({})),
+    );
   });
 }
 
@@ -206,10 +233,11 @@ describe('a focused field is brought above the keyboard', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  it('scrolls the code field into view on "Is this her?"', async () => {
-    // The step the report came from. The identity card above the code box is deliberately
-    // large — it is the last chance to catch a mis-tapped member — which is exactly why the
-    // box under it ends up behind the keyboard.
+  it('lifts the code sheet clear of the keyboard on "Is this her?"', async () => {
+    // The step this test was written for. The code box used to sit in the page under a
+    // deliberately large identity card, which is exactly what put it behind the keyboard; it
+    // is in a sheet now, and a sheet is anchored to the edge the keyboard comes up over — so
+    // the whole sheet has to move rather than the body scrolling under it.
     renderWithStore(
       <ConfirmFarmerScreen
         farmer={{ kind: 'member', memberCode: MEMBER.member_code }}
@@ -219,16 +247,20 @@ describe('a focused field is brought above the keyboard', () => {
     );
 
     fireEvent.press(await screen.findByTestId('farmer-verify'));
-    fireEvent(await screen.findByTestId('farmer-otp-input'), 'focus');
+    fireEvent.press(await screen.findByTestId('farmer-send-code'));
+    const field = await screen.findByTestId('farmer-otp-input');
+    fireEvent(field, 'focus');
     raiseKeyboard();
 
-    await waitFor(() => expect(mockScrollTo).toHaveBeenCalled());
-    // Stopped short of the field, so its label rides up with it — a box that arrives without
-    // the words naming it is a box a Mait has to guess at.
-    expect(mockScrollTo).toHaveBeenLastCalledWith(
-      expect.objectContaining({ y: expect.any(Number) }),
+    // The sheet carries the keyboard's own height as a margin, so the field and the button
+    // under it are both above it. Nothing here relies on a scroll: the sheet is short enough
+    // that moving it is the whole answer.
+    const surface = screen.getByTestId('farmer-otp-surface');
+    await waitFor(() =>
+      expect(StyleSheet.flatten(surface.props.style)).toEqual(
+        expect.objectContaining({ marginBottom: expect.any(Number) }),
+      ),
     );
-    expect(mockScrollTo.mock.calls.at(-1)?.[0].y).toBeLessThan(FIELD_TOP);
   });
 
   it('scrolls a field in the bottom sheet too, not only the flow screens', async () => {

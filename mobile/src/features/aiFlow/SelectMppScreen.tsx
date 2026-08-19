@@ -18,7 +18,14 @@ import { useListAiEventsQuery, useListMppsQuery } from '@api/endpoints';
 import type { MPP } from '@api/types';
 import { colors, spacing, typography } from '@theme/tokens';
 
-import { FlowNotice, FlowScreen, FlowSpacer, OptionCard, SearchField } from './components';
+import {
+  FlowNotice,
+  FlowScreen,
+  FlowSpacer,
+  initials,
+  OptionCard,
+  SearchField,
+} from './components';
 
 interface Props {
   onSelect: (mpp: MPP) => void;
@@ -120,10 +127,19 @@ export default function SelectMppScreen({ onSelect, onBack }: Props): React.JSX.
           // The code identifies it, the member count sizes it — together they tell a Mait
           // covering several which of two similarly named villages this is.
           subtitle={`${mpp.mpp_code} · ${t('aiFlow.mppMembers', { count: mpp.member_count })}`}
-          icon="storefront-outline"
+          // Its initials rather than a storefront glyph. Three collection points drawn with
+          // the same icon are three identical rows a Mait reads word by word; BA, NA and KO
+          // are told apart at a glance, and it is the same tile the farmer list uses one step
+          // later. Square, not round: a village is a place, and the circles in this flow are
+          // people.
+          swatchLabel={initials(mpp.mpp_name)}
+          tone="neutral"
+          size="roomy"
           pill={mpp.mpp_code === lastUsed ? t('aiFlow.lastUsed') : undefined}
           selected={selected === mpp.mpp_code}
-          radio
+          // A tick on the chosen row and nothing on the others, as on every other choice in
+          // the flow. An empty ring on each unchosen row is four controls asking to be read.
+          check
           onPress={() => setSelected(mpp.mpp_code)}
           testID={`mpp-${mpp.mpp_code}`}
         />

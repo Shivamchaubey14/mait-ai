@@ -193,6 +193,17 @@ export interface BreedConfig {
   name: string;
   name_hi: string;
   animal_type: AnimalTypeCode;
+  /**
+   * What one insemination of this breed costs, as decimal strings.
+   *
+   * Two rates for one service, because they are settled in different worlds: a member's comes
+   * out of a milk payment the dairy already owes her, a non-member's is cash handed to a Mait
+   * in a yard. Served here so the steps asked *before* a breed is chosen can still say what
+   * she will pay — see `features/aiFlow/rates.ts`. Null where nobody has priced it, which is
+   * not zero and must never reach a farmer as free.
+   */
+  rate: string | null;
+  non_member_rate: string | null;
   display_order: number;
 }
 

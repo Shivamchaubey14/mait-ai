@@ -57,6 +57,23 @@ function mockApi(record: unknown, over: { send?: Response; check?: Response } = 
     if (href.includes('/farmers/otp/verify/')) {
       return over.check ?? jsonResponse({ verified: true, mobile_no: '••••• 43210' });
     }
+    // The breed list, which the screen reads for the one rate every breed shares — that is
+    // where "she owes nothing today, it comes off her milk" gets its figure. A bare array,
+    // like the endpoint's own answer: handed a record instead, the screen calls `.map` on an
+    // object and throws.
+    if (href.includes('/config/breeds/')) {
+      return jsonResponse([
+        {
+          code: 'MURRAH',
+          name: 'Murrah',
+          name_hi: '',
+          animal_type: 'BUFF',
+          rate: '50.00',
+          non_member_rate: '100.00',
+          display_order: 1,
+        },
+      ]);
+    }
     return jsonResponse(record);
   });
 }
@@ -91,10 +108,24 @@ describe('ConfirmFarmerScreen', () => {
     );
   }
 
+  /**
+   * Open the sheet and send her the code.
+   *
+   * Two taps rather than one: the screen's button opens the sheet, which shows the number the
+   * code is about to go to, and the sheet's own button sends it. The number is read back
+   * before anything leaves, because it is the one part of this a Mait can check against the
+   * woman standing in front of them.
+   */
+  async function askForTheCode() {
+    fireEvent.press(screen.getByTestId('farmer-verify'));
+    await waitFor(() => expect(screen.getByTestId('farmer-send-code')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('farmer-send-code'));
+    await waitFor(() => expect(screen.getByTestId('farmer-otp-input')).toBeTruthy());
+  }
+
   /** Send the code and answer it, as a Mait would with the farmer beside them. */
   async function verify() {
-    fireEvent.press(screen.getByTestId('farmer-verify'));
-    await waitFor(() => expect(screen.getByTestId('farmer-otp-input')).toBeTruthy());
+    await askForTheCode();
     fireEvent.changeText(screen.getByTestId('farmer-otp-input'), '123456');
     fireEvent.press(screen.getByTestId('farmer-check-code'));
     await waitFor(() => expect(screen.getByTestId('farmer-verified')).toBeTruthy());
@@ -128,9 +159,8 @@ describe('ConfirmFarmerScreen', () => {
     renderMember();
 
     await waitFor(() => screen.getByText('KAVITA DEVI'));
-    fireEvent.press(screen.getByTestId('farmer-verify'));
+    await askForTheCode();
 
-    await waitFor(() => expect(screen.getByTestId('farmer-otp-input')).toBeTruthy());
     const call = (global.fetch as jest.Mock).mock.calls.find(([input]) => {
       const href = typeof input === 'string' ? input : input.url;
       return href.includes('/farmers/otp/send/');
@@ -162,13 +192,12 @@ describe('ConfirmFarmerScreen', () => {
     renderMember();
 
     await waitFor(() => screen.getByText('KAVITA DEVI'));
-    fireEvent.press(screen.getByTestId('farmer-verify'));
-    await waitFor(() => screen.getByTestId('farmer-otp-input'));
+    await askForTheCode();
     fireEvent.changeText(screen.getByTestId('farmer-otp-input'), '000000');
     fireEvent.press(screen.getByTestId('farmer-check-code'));
 
     await waitFor(() => expect(screen.getByText(/not right/i)).toBeTruthy());
-    // Still on the code, not sent back to the start.
+    // Still in the sheet, on the code, not sent back to the start.
     expect(screen.getByTestId('farmer-otp-input')).toBeTruthy();
     expect(onConfirm).not.toHaveBeenCalled();
   });
@@ -178,13 +207,13 @@ describe('ConfirmFarmerScreen', () => {
     renderMember();
 
     await waitFor(() => screen.getByText('KAVITA DEVI'));
-    fireEvent.press(screen.getByTestId('farmer-verify'));
-    await waitFor(() => screen.getByTestId('farmer-otp-input'));
+    await askForTheCode();
     fireEvent.changeText(screen.getByTestId('farmer-otp-input'), '000000');
     fireEvent.press(screen.getByTestId('farmer-check-code'));
 
-    await waitFor(() => expect(screen.getByText(/Too many wrong codes/i)).toBeTruthy());
-    expect(screen.getByTestId('farmer-verify')).toBeTruthy();
+    // Back to the number, where the only thing left to do is send a fresh code.
+    await waitFor(() => expect(screen.getByTestId('farmer-send-code')).toBeTruthy());
+    expect(screen.getByText(/Too many wrong codes/i)).toBeTruthy();
   });
 
   it('says a farmer with no number cannot be verified at all', async () => {
@@ -194,6 +223,8 @@ describe('ConfirmFarmerScreen', () => {
     await waitFor(() => expect(screen.getByTestId('farmer-no-mobile')).toBeTruthy());
     fireEvent.press(screen.getByTestId('farmer-verify'));
 
+    // The button is inert, so the sheet never opens and no code is ever asked for.
+    expect(screen.queryByTestId('farmer-send-code')).toBeNull();
     expect(screen.queryByTestId('farmer-otp-input')).toBeNull();
   });
 

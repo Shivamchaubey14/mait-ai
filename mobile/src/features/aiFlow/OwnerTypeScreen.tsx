@@ -15,10 +15,10 @@ import { StyleSheet, Text } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 
-import { NON_MEMBER_FEE } from '@/config/env';
 import { colors, spacing, typography } from '@theme/tokens';
 
 import { FlowScreen, FlowSpacer, OptionCard } from './components';
+import { useServiceRate } from './rates';
 
 export type OwnerType = 'member' | 'nonMember';
 
@@ -31,6 +31,34 @@ export default function OwnerTypeScreen({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const [choice, setChoice] = useState<OwnerType>('member');
+  const rate = useServiceRate('nonMember');
+
+  /**
+   * "You collect ₹ 100 today", with the figure picked out.
+   *
+   * The amount is the only part of this row that decides anything — it is what the Mait will
+   * be holding and what the farmer will be handing over — so it carries the colour and the
+   * rest of the sentence stays quiet. Split on the rendered figure rather than assembled from
+   * two strings, so a translation is free to put it wherever the sentence needs it.
+   */
+  const nonMemberSubtitle = () => {
+    if (rate === null) {
+      return t('aiFlow.nonMemberSubtitlePlain');
+    }
+    const amount = `₹ ${rate}`;
+    const sentence = t('aiFlow.nonMemberSubtitle', { amount: rate });
+    const at = sentence.indexOf(amount);
+    if (at === -1) {
+      return sentence;
+    }
+    return (
+      <>
+        {sentence.slice(0, at)}
+        <Text style={styles.amount}>{amount}</Text>
+        {sentence.slice(at + amount.length)}
+      </>
+    );
+  };
 
   return (
     <FlowScreen
@@ -50,30 +78,35 @@ export default function OwnerTypeScreen({
       <OptionCard
         title={t('aiFlow.member')}
         subtitle={t('aiFlow.memberSubtitle')}
+        // Two choices and a whole screen to make them in. A list-tight row here reads as an
+        // item lifted out of a list that is not on the page, and the question deserves the
+        // room — everything after this step is built on the answer.
+        size="roomy"
         iconNode={
           <MaterialCommunityIcons name="account-check-outline" size={22} color={colors.primary} />
         }
         selected={choice === 'member'}
-        radio
+        // A tick on the chosen card and nothing on the other, which is how every other choice
+        // in this flow is drawn. An empty ring beside the option a Mait did not pick is a
+        // control asking to be read; the answer is already on the card that is filled.
+        check
         onPress={() => setChoice('member')}
         testID="owner-member"
       />
 
       <OptionCard
         title={t('aiFlow.nonMember')}
-        // The figure is only named when the build has one configured. Quoting a price the
-        // system cannot charge is worse than not quoting one — the farmer hears it as final.
-        subtitle={
-          NON_MEMBER_FEE === null
-            ? t('aiFlow.nonMemberSubtitlePlain')
-            : t('aiFlow.nonMemberSubtitle', { amount: NON_MEMBER_FEE })
-        }
+        // Named from the dairy's own rates, and only where every breed shares one. Quoting a
+        // price the system cannot charge is worse than not quoting one — the farmer hears it
+        // as final.
+        subtitle={nonMemberSubtitle()}
+        size="roomy"
         iconNode={
           <MaterialCommunityIcons name="account-outline" size={22} color={colors.textMuted} />
         }
         tone="neutral"
         selected={choice === 'nonMember'}
-        radio
+        check
         onPress={() => setChoice('nonMember')}
         testID="owner-non-member"
       />
@@ -91,4 +124,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing[4],
   },
+  amount: { color: colors.primaryDark, fontFamily: typography.bodyStrong.fontFamily },
 });

@@ -71,6 +71,9 @@ export default function CaptureDoneScreen({
           tone="accent"
           title={t('done.savedOnThisPhone')}
           body={t('done.willGoOnItsOwn')}
+          // The same word the waiting list and the AI events row use for this record. A Mait
+          // who reads "Queued" here and "Queued" there is reading about one thing.
+          pill={t('done.queued')}
           icon="time-outline"
           testID="done-queued"
         />
@@ -116,15 +119,19 @@ export default function CaptureDoneScreen({
 
 const styles = StyleSheet.create({
   tiles: { flexDirection: 'row', gap: spacing[3], marginBottom: spacing[3] },
+  // Outlined, like every other card in the app. On a screen that is mostly white space the
+  // wash alone left two figures floating on the page rather than sitting in anything.
   tile: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: spacing[4],
   },
   // The straw count is green because it is the number a Mait acts on: it decides whether they
   // can keep working or need to raise an indent tonight.
-  tileGood: { backgroundColor: colors.primaryWash },
+  tileGood: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
   tileLabel: { ...typography.caption, color: colors.textMuted },
   tileLabelGood: { color: colors.primaryDark },
   tileValue: { ...typography.h1, color: colors.ink, marginTop: 2 },
@@ -138,6 +145,8 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
     ...shadows.card,
     padding: spacing[4],
   },

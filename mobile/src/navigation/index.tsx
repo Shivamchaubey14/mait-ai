@@ -966,7 +966,7 @@ export default function RootNavigator(): React.JSX.Element {
             abandon by tapping another tab, not a sequence they can strand halfway. */}
         {requestingStock && <RequestStockScreen onDone={() => setRequestingStock(false)} />}
 
-        {!requestingStock && tab === 'home' && (
+        {!requestingStock && tab === 'home' && indentView === null && (
           <HomeScreen
             onOpenStock={() => setTab('stock')}
             onStartCapture={startCapture}
@@ -987,28 +987,30 @@ export default function RootNavigator(): React.JSX.Element {
             lastSyncAt={lastSyncAt}
           />
         )}
+        {/* The indents are layered over whichever tab opened them — Inventory, where stock is
+            asked for, and Profile, where "where is my order" is asked. Back closes them onto
+            the tab that was lit rather than moving the Mait somewhere they never chose. */}
+        {!requestingStock && indentView === 0 && (
+          <IndentsScreen
+            onOpen={indent => setIndentView(indent.id)}
+            onBack={() => setIndentView(null)}
+          />
+        )}
+        {!requestingStock && !!indentView && (
+          <IndentDetailScreen indentId={indentView} onBack={() => setIndentView(0)} />
+        )}
         {!requestingStock && tab === 'stock' && indentView === null && (
           <StockScreen
-            onOpenIndents={() => setIndentView(0)}
             onRequestStock={() => {
               setIndentView(null);
               setRequestingStock(true);
             }}
           />
         )}
-        {!requestingStock && tab === 'stock' && indentView === 0 && (
-          <IndentsScreen
-            onOpen={indent => setIndentView(indent.id)}
-            onBack={() => setIndentView(null)}
-          />
-        )}
-        {!requestingStock && tab === 'stock' && !!indentView && (
-          <IndentDetailScreen indentId={indentView} onBack={() => setIndentView(0)} />
-        )}
-        {!requestingStock && tab === 'history' && eventView === null && (
+        {!requestingStock && tab === 'history' && indentView === null && eventView === null && (
           <AiEventsScreen onOpen={opened => setEventView(opened.id)} />
         )}
-        {!requestingStock && tab === 'history' && eventView !== null && (
+        {!requestingStock && tab === 'history' && indentView === null && eventView !== null && (
           <AiEventDetailScreen
             eventId={eventView}
             onBack={() => setEventView(null)}
@@ -1019,8 +1021,14 @@ export default function RootNavigator(): React.JSX.Element {
             busy={closing}
           />
         )}
-        {!requestingStock && tab === 'settings' && (
-          <SettingsScreen pending={pending} onSync={sync} online={online} />
+        {!requestingStock && tab === 'settings' && indentView === null && (
+          <SettingsScreen
+            pending={pending}
+            onSync={sync}
+            online={online}
+            lastSyncAt={lastSyncAt}
+            onOpenIndents={() => setIndentView(0)}
+          />
         )}
       </View>
 

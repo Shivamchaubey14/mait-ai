@@ -14,6 +14,12 @@
  * Every row says what became of the stock, not just what is left. `issued 10 · used 8` beside
  * a balance of 2 is a day's work accounted for; a bare 2 is a number to worry about. The
  * ledger has carried that all along and nothing had ever asked it for it.
+ *
+ * **Only what is in the flask.** Indents used to be listed here too — approved and issued ones,
+ * as rows among the stock and as a line under the headline. They are neither: an indent is by
+ * definition stock that is not in a Mait's hands, and rows that look like stock while not
+ * being stock are the fastest way to start a round on straws that are still at the depot.
+ * They live on Profile now, on a screen that can say what is outstanding on each of them.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -22,12 +28,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import {
-  useGetInventorySummaryQuery,
-  useListBreedsQuery,
-  useListIndentsQuery,
-} from '@api/endpoints';
-import type { Indent, StrawLot, SuppliesLot } from '@api/types';
+import { useGetInventorySummaryQuery, useListBreedsQuery } from '@api/endpoints';
+import type { StrawLot, SuppliesLot } from '@api/types';
 import { BrandMark } from '@/components/brand';
 import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
 import {
@@ -181,10 +183,8 @@ function Footnote({
 // Screen
 // --------------------------------------------------------------------------------------
 export default function StockScreen({
-  onOpenIndents,
   onRequestStock,
 }: {
-  onOpenIndents: () => void;
   onRequestStock: () => void;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation();
@@ -193,7 +193,6 @@ export default function StockScreen({
 
   const stock = useGetInventorySummaryQuery();
   const breeds = useListBreedsQuery();
-  const indents = useListIndentsQuery();
 
   const hindi = i18n.language.startsWith('hi');
 
@@ -221,17 +220,6 @@ export default function StockScreen({
     return groups;
   }, [straws]);
 
-  /**
-   * What has been approved but is not in the Mait's hands yet.
-   *
-   * It belongs on this screen because it changes what a low count means: two straws with
-   * twenty already approved is a delivery to chase, and two with nothing behind them is a
-   * round that cannot happen.
-   */
-  const incoming = (indents.data?.results ?? []).filter(
-    indent => indent.status === 'approved' || indent.status === 'issued',
-  );
-
   const lowBreeds = straws.filter(row => row.qty <= LOW_PER_BREED).length;
   const lowSupplies = consumables.filter(isLowConsumable);
   const nitrogen = consumables.find(item => item.code === 'LN2');
@@ -247,7 +235,6 @@ export default function StockScreen({
           }),
         )
         .join(' · '),
-      accent: incoming.length ? t('stock.awaitingIssue', { count: incoming.length }) : undefined,
     },
     consumables: {
       title: t('stock.consumablesHeld', { count: consumables.length }),
@@ -328,10 +315,7 @@ export default function StockScreen({
         refreshControl={
           <RefreshControl
             refreshing={stock.isFetching && !stock.isLoading}
-            onRefresh={() => {
-              stock.refetch();
-              indents.refetch();
-            }}
+            onRefresh={() => stock.refetch()}
             tintColor={colors.primary}
           />
         }
@@ -384,38 +368,6 @@ export default function StockScreen({
               </View>
             ))}
 
-            {/* Approved but not yet in hand. Tappable, because the next question is always
-                "where is it", and that is the indents screen. */}
-            {incoming.map((indent: Indent) => (
-              <Pressable
-                key={indent.id}
-                accessibilityRole="button"
-                onPress={onOpenIndents}
-                style={styles.row}
-                testID={`stock-incoming-${indent.id}`}
-              >
-                <View style={styles.rowBody}>
-                  <Text style={styles.rowName} numberOfLines={1}>
-                    {t('stock.indentLine', {
-                      id: indent.id,
-                      item: indent.breed ? breedName(indent.breed) : indent.item,
-                      qty: indent.qty_requested,
-                    })}
-                  </Text>
-                  <Text style={styles.rowMeta} numberOfLines={1}>
-                    {indent.status === 'issued'
-                      ? t('stock.issuedNotCollected')
-                      : t('stock.approvedNotIssued')}
-                  </Text>
-                </View>
-                <View style={[styles.pill, styles.pillinfo]}>
-                  <Text style={[styles.pillLabel, styles.pillLabelinfo]}>
-                    {indent.status_display}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-
             {lowBreeds > 0 && <Footnote text={t('stock.breedsLow', { count: lowBreeds })} />}
           </>
         )}
@@ -448,13 +400,7 @@ export default function StockScreen({
               <Warning title={t('stock.nitrogenTitle')} body={t('stock.nitrogenBody')} />
             )}
 
-            {consumables.length > 0 && (
-              <Footnote
-                text={t('stock.countsFall')}
-                action={t('stock.correctOne')}
-                onPress={onOpenIndents}
-              />
-            )}
+            {consumables.length > 0 && <Footnote text={t('stock.countsFall')} />}
           </>
         )}
 
@@ -498,29 +444,23 @@ export default function StockScreen({
           be scrolled back to — a Mait who has just read a low count wants it under their
           thumb, not at the end of a list of eleven breeds.
 
-          Equipment asks a different question, so it gets a different button rather than a
-          green one offering to order another AI gun. */}
-      {!loading && !failed && (
+          Equipment has none. It is issued once and held until the dairy asks for it back, so
+          there is nothing to order and nothing to correct; a button there would have to
+          invent a job for itself. */}
+      {!loading && !failed && tab !== 'equipment' && (
         <View style={styles.foot}>
           <Pressable
             accessibilityRole="button"
-            onPress={tab === 'equipment' ? onOpenIndents : onRequestStock}
+            onPress={onRequestStock}
             style={({ pressed }) => [
               styles.cta,
-              tab === 'equipment' ? styles.ctaQuiet : styles.ctaPrimary,
-              pressed && (tab === 'equipment' ? styles.ctaQuietPressed : styles.ctaPrimaryPressed),
+              styles.ctaPrimary,
+              pressed && styles.ctaPrimaryPressed,
             ]}
             testID="stock-cta"
           >
-            {tab !== 'equipment' && <Ionicons name="add" size={18} color={colors.surface} />}
-            <Text
-              style={[
-                styles.ctaLabel,
-                tab === 'equipment' ? styles.ctaLabelQuiet : styles.ctaLabelPrimary,
-              ]}
-            >
-              {tab === 'equipment' ? t('stock.reportBroken') : t('stock.raiseIndent')}
-            </Text>
+            <Ionicons name="add" size={18} color={colors.surface} />
+            <Text style={[styles.ctaLabel, styles.ctaLabelPrimary]}>{t('stock.raiseIndent')}</Text>
           </Pressable>
         </View>
       )}

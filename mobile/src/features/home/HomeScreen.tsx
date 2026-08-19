@@ -139,16 +139,16 @@ export default function HomeScreen({
         </View>
       )}
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        refreshControl={
-          <RefreshControl
-            refreshing={events.isFetching}
-            onRefresh={refresh}
-            tintColor={colors.primary}
-          />
-        }
-      >
+      {/* The page does not scroll. Everything on it is something a Mait reads before starting
+          a round — how the day is going, whether the work has gone up, whether they hold
+          enough straws to begin — and the button that begins it. A screen where the button
+          moves off the bottom as soon as a twelfth breed arrives is a screen where the answer
+          to "can I start" depends on how far you have scrolled.
+
+          So the frame is fixed and the one part that grows is the part that can afford to:
+          the flask. Its card takes what is left after the tiles, the unfinished row and the
+          button have had theirs, and the breeds scroll inside it. */}
+      <View style={styles.body}>
         <View style={styles.tiles}>
           <View style={[styles.tile, styles.tileDone]}>
             <View style={styles.tileHead}>
@@ -201,40 +201,55 @@ export default function HomeScreen({
             )}
           </View>
 
-          {stock.isLoading ? (
-            <SkeletonList rows={3} />
-          ) : stock.isError ? (
-            // Worth its own state: a Mait who cannot see their balance does not know whether
-            // they can work, and the answer to that is not "reload the app".
-            <ErrorState
-              title={t('home.stockErrorTitle')}
-              onRetry={() => stock.refetch()}
-              busy={stock.isFetching}
-              testID="stock-error"
-            />
-          ) : byBreed.length === 0 ? (
-            <EmptyState title={t('home.noStrawsTitle')} body={t('home.noStrawsBody')} />
-          ) : (
-            byBreed.map(([breed, count]) => {
-              // Per breed, not against the flask total: eight straws is a comfortable day
-              // unless they are the only Murrah left and the next three farmers keep buffalo.
-              const low = count <= LOW_BREED_STRAWS;
-              return (
-                <View key={breed} style={styles.breedRow} testID={`breed-${breed}`}>
-                  <View style={[styles.dot, low && styles.dotLow]} />
-                  <Text style={styles.breedName} numberOfLines={1}>
-                    {breed}
-                  </Text>
-                  {low && (
-                    <View style={styles.lowBadge}>
-                      <Text style={styles.lowLabel}>{t('home.low')}</Text>
-                    </View>
-                  )}
-                  <Text style={styles.breedCount}>{count}</Text>
-                </View>
-              );
-            })
-          )}
+          {/* The only scrolling thing on the screen, and where pull-to-refresh now lives —
+              the gesture belongs to the list it reloads. */}
+          <ScrollView
+            style={styles.breeds}
+            contentContainerStyle={styles.breedsContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={events.isFetching}
+                onRefresh={refresh}
+                tintColor={colors.primary}
+              />
+            }
+          >
+            {stock.isLoading ? (
+              <SkeletonList rows={3} />
+            ) : stock.isError ? (
+              // Worth its own state: a Mait who cannot see their balance does not know whether
+              // they can work, and the answer to that is not "reload the app".
+              <ErrorState
+                title={t('home.stockErrorTitle')}
+                onRetry={() => stock.refetch()}
+                busy={stock.isFetching}
+                testID="stock-error"
+              />
+            ) : byBreed.length === 0 ? (
+              <EmptyState title={t('home.noStrawsTitle')} body={t('home.noStrawsBody')} />
+            ) : (
+              byBreed.map(([breed, count]) => {
+                // Per breed, not against the flask total: eight straws is a comfortable day
+                // unless they are the only Murrah left and the next three farmers keep buffalo.
+                const low = count <= LOW_BREED_STRAWS;
+                return (
+                  <View key={breed} style={styles.breedRow} testID={`breed-${breed}`}>
+                    <View style={[styles.dot, low && styles.dotLow]} />
+                    <Text style={styles.breedName} numberOfLines={1}>
+                      {breed}
+                    </Text>
+                    {low && (
+                      <View style={styles.lowBadge}>
+                        <Text style={styles.lowLabel}>{t('home.low')}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.breedCount}>{count}</Text>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
         </View>
 
         {unfinished.length > 0 && (
@@ -263,11 +278,6 @@ export default function HomeScreen({
           />
         )}
 
-        {/* Takes up whatever the content leaves over, so the button sits just above the tab
-            bar on a short day instead of stranding a screen of empty grey beneath it. It
-            collapses to nothing once the breed list is long enough to scroll. */}
-        <View style={styles.spacer} />
-
         {/* The screen's one action, at the foot of the screen's own content rather than
             floating in the tab bar. Disabled at zero straws, because the flow would stop dead
             at the scan step with an animal already served. */}
@@ -291,7 +301,7 @@ export default function HomeScreen({
             {totalStraws === 0 && !stock.isLoading ? t('home.seeStock') : t('home.startNewAi')}
           </Text>
         </Pressable>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -301,8 +311,7 @@ const LOW_BREED_STRAWS = 2;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  body: { flexGrow: 1, padding: spacing[5], paddingBottom: spacing[4] },
-  spacer: { flexGrow: 1, minHeight: spacing[2] },
+  body: { flex: 1, padding: spacing[5], paddingBottom: spacing[4] },
 
   avatar: {
     width: 36,
@@ -370,13 +379,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
 
+  // `flexShrink`, never `flexGrow`: with three breeds the card is the height of three breeds,
+  // and with fifteen it is as tall as the space left and no taller. Growing it would strand a
+  // white pane of nothing under a short flask.
   card: {
+    flexShrink: 1,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing[4],
+    marginBottom: spacing[4],
   },
+  // Also shrink-only, and it is what gives the ScrollView inside a bounded height to scroll
+  // against — without it the list reports its full content height and nothing ever scrolls.
+  breeds: { flexShrink: 1 },
+  breedsContent: { flexGrow: 1 },
   cardHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -409,6 +427,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
     marginTop: spacing[4],
+    marginBottom: spacing[4],
     padding: spacing[4],
     borderRadius: radius.md,
     borderWidth: 1,
@@ -426,7 +445,11 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     minHeight: 56,
     borderRadius: radius.md,
-    marginTop: spacing[4],
+    // `auto` on top, so the button sits just above the tab bar whatever is above it: it takes
+    // the slack on a day with three breeds, and takes none on a day with fifteen because the
+    // flask has already used it. This is what the old spacer view did, without the view. The
+    // gap over it belongs to the cards above, which still have theirs when the slack is zero.
+    marginTop: 'auto',
   },
   ctaReady: { backgroundColor: colors.primary },
   // Not greyed out: at zero straws the button still has somewhere useful to send them.

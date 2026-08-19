@@ -177,27 +177,7 @@ describe('back inside the capture flow', () => {
   });
 });
 
-describe('back from the stock screens layered over Inventory', () => {
-  it('closes the indent list to Inventory, then Inventory to Home', async () => {
-    renderApp();
-    await screen.findByTestId('home-start-ai');
-
-    fireEvent.press(screen.getByTestId('tab-stock'));
-    // Equipment is the tab whose foot button goes to the indent list rather than to a new
-    // one — a piece of kit is held, not reordered.
-    fireEvent.press(await screen.findByTestId('stock-tab-equipment'));
-    fireEvent.press(screen.getByTestId('stock-cta'));
-    await screen.findByText('Your requests');
-
-    // One press, one screen. The list and the tab under it are two separate places, and
-    // collapsing both at once skips a screen the Mait was on a moment ago.
-    expect(pressBack()).toBe(true);
-    await screen.findByTestId('stock-cta');
-
-    expect(pressBack()).toBe(true);
-    await screen.findByTestId('home-start-ai');
-  });
-
+describe('back from the stock request form', () => {
   it('closes the stock request form without leaving Inventory', async () => {
     renderApp();
     await screen.findByTestId('home-start-ai');
@@ -209,6 +189,25 @@ describe('back from the stock screens layered over Inventory', () => {
     expect(pressBack()).toBe(true);
 
     await waitFor(() => expect(screen.getByTestId('stock-cta')).toBeTruthy());
+  });
+});
+
+describe('back from the indents opened out of Profile', () => {
+  it('returns to Profile rather than to Inventory', async () => {
+    renderApp();
+    await screen.findByTestId('home-start-ai');
+
+    fireEvent.press(screen.getByTestId('tab-settings'));
+    fireEvent.press(await screen.findByTestId('profile-indents'));
+    await screen.findByTestId('indents-back');
+
+    // The list is layered over whichever tab opened it. Sending this one back to Inventory —
+    // the tab it used to belong to — would move a Mait to a screen they never asked for.
+    expect(pressBack()).toBe(true);
+    await screen.findByTestId('profile-indents');
+
+    expect(pressBack()).toBe(true);
+    await screen.findByTestId('home-start-ai');
   });
 });
 

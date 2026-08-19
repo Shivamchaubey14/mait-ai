@@ -205,7 +205,12 @@ export default function SelectBreedScreen({
       {rows.map(({ breed, straws }) => (
         <OptionCard
           key={breed.code}
+          // No swatch: a breed is a word, and a coloured tile beside each of eleven of them
+          // is eleven blocks of nothing. The row is stretched instead, like the steps before
+          // it — the count under the name is what a Mait is really reading here, and it has
+          // to be legible at arm's length with a flask in the other hand.
           swatch={false}
+          size="roomy"
           title={label(breed)}
           subtitle={t('aiFlow.strawsWithYou', { count: straws })}
           blockedReason={straws === 0 ? t('aiFlow.noneInStock') : undefined}

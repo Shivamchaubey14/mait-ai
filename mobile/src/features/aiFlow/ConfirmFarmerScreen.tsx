@@ -23,7 +23,8 @@
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import { ErrorCode, errorCodeOf } from '@api/client';
@@ -34,10 +35,12 @@ import {
   useVerifyFarmerOtpMutation,
 } from '@api/endpoints';
 import type { Animal, FarmerKey } from '@api/types';
-import { AI_FLOW_STEPS, NON_MEMBER_FEE, OTP_LENGTH } from '@/config/env';
-import { colors, spacing, typography } from '@theme/tokens';
+import { Sheet } from '@/components/BottomSheet';
+import { AI_FLOW_STEPS, OTP_LENGTH } from '@/config/env';
+import { colors, radius, spacing, typography } from '@theme/tokens';
 
 import { FlowNotice, FlowScreen, groupedMobile, IdentityCard, LabelledField } from './components';
+import { useServiceRate } from './rates';
 
 /** Zero-based index of the step this screen is the second half of. */
 const FARMER_STEP = AI_FLOW_STEPS.indexOf('selectFarmer');
@@ -57,6 +60,7 @@ export default function ConfirmFarmerScreen({
   onSearchAgain,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
+  const memberRate = useServiceRate('member');
 
   const isMember = farmer.kind === 'member';
   const key: FarmerKey = isMember
@@ -74,6 +78,15 @@ export default function ConfirmFarmerScreen({
   const [code, setCode] = useState('');
   const [verified, setVerified] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  /**
+   * The verification runs in a sheet over this screen rather than in the page under it.
+   *
+   * Inline, the card a Mait is checking her against scrolled away the moment the code field
+   * appeared — so the screen asking "is this her" no longer showed her. The sheet keeps the
+   * card visible behind it, holds the two steps that belong to the phone in her hand, and
+   * closes when they are done, leaving the screen to do the one thing it is for.
+   */
+  const [asking, setAsking] = useState(false);
 
   // -- what the card says ------------------------------------------------------------------
   const record = source.data;
@@ -127,6 +140,9 @@ export default function ConfirmFarmerScreen({
     try {
       await checkOtp({ ...key, otp: code.trim() }).unwrap();
       setVerified(true);
+      // Her phone has answered, and there is nothing else in here to do. The screen behind
+      // takes it from here: the card, now confirmed, and the one button that moves on.
+      setAsking(false);
     } catch (err) {
       // Wrong, expired and out of attempts each need a different action from a Mait standing
       // in a yard, so they are told apart rather than collapsed into "invalid".
@@ -145,28 +161,44 @@ export default function ConfirmFarmerScreen({
     }
   };
 
-  // The button is one of three things, in order: send her a code, check the code, go on.
-  const cta = !sentTo
+  /**
+   * Two states, not three. The middle one moved into the sheet.
+   *
+   * Before her phone has answered the only thing this screen offers is the way to ask it;
+   * afterwards, the way on. A button that changed its job three times while a Mait read one
+   * card was the control they had to keep re-reading.
+   */
+  /**
+   * What a member owes today, which is nothing in the yard.
+   *
+   * Read once and used in two places, because after her phone answers the two green cards
+   * become one: "her phone answered" and "there is nothing to collect" are both good news
+   * about the same woman, and stacked they said it twice in the same colour while pushing the
+   * card that proves who she is off the screen.
+   */
+  const nothingToCollect =
+    // Her own rate, which is not the non-member's — the dairy prices the two apart because
+    // they are settled in different worlds. It used to read a build constant that was null in
+    // every build, so this sentence never named a figure at all.
+    memberRate === null
+      ? t('aiFlow.nothingToCollectPlain')
+      : t('aiFlow.nothingToCollect', { amount: memberRate });
+
+  const cta = verified
     ? {
-        label: t('aiFlow.verifyFarmer'),
-        onPress: send,
-        disabled: !record || !mobile,
-        busy: sending,
-        testID: 'farmer-verify',
+        label: t('aiFlow.yesContinue'),
+        onPress: () => onConfirm(animals),
+        testID: 'farmer-confirm',
       }
-    : !verified
-      ? {
-          label: t('aiFlow.checkCode'),
-          onPress: check,
-          disabled: code.trim().length < OTP_LENGTH,
-          busy: checking,
-          testID: 'farmer-check-code',
-        }
-      : {
-          label: t('aiFlow.yesContinue'),
-          onPress: () => onConfirm(animals),
-          testID: 'farmer-confirm',
-        };
+    : {
+        label: t('aiFlow.verifyFarmer'),
+        onPress: () => {
+          setProblem(null);
+          setAsking(true);
+        },
+        disabled: !record || !mobile,
+        testID: 'farmer-verify',
+      };
 
   return (
     <FlowScreen
@@ -216,54 +248,133 @@ export default function ConfirmFarmerScreen({
         />
       )}
 
-      {!!sentTo && !verified && (
-        <View testID="farmer-otp">
-          <Text style={styles.sentTo}>{t('aiFlow.codeSentTo', { mobile: sentTo })}</Text>
-          <LabelledField
-            label={t('aiFlow.enterHerCode')}
-            tone="primary"
-            placeholder={t('aiFlow.otpPlaceholder')}
-            value={code}
-            onChangeText={text => setCode(text.replace(/\D/g, '').slice(0, OTP_LENGTH))}
-            keyboardType="number-pad"
-            maxLength={OTP_LENGTH}
-            testID="farmer-otp-input"
-          />
-          <Text style={styles.resend} onPress={send} testID="farmer-otp-resend">
-            {t('aiFlow.sendAgain')}
-          </Text>
-        </View>
-      )}
-
       {verified && (
         <FlowNotice
           tone="good"
           title={t('aiFlow.verified')}
-          body={t('aiFlow.verifiedBody')}
+          body={isMember ? nothingToCollect : t('aiFlow.verifiedBody')}
           testID="farmer-verified"
         />
       )}
 
-      {!!problem && <FlowNotice tone="error" title={problem} testID="farmer-otp-problem" />}
+      {/* A refusal that happened inside the sheet is repeated here, because the sheet closes
+          on the ones it cannot recover from — an expired code, the attempts run out — and a
+          Mait would otherwise be left on a screen that simply had not moved. */}
+      {!verified && !!problem && !asking && (
+        <FlowNotice tone="error" title={problem} testID="farmer-otp-problem" />
+      )}
 
       {/* A statement, not a step. A member owes nothing today whatever this screen does next,
-          and saying so here stops a Mait asking her for cash she has already paid in milk. */}
-      {!!record && isMember && (
-        <FlowNotice
-          tone="good"
-          body={
-            NON_MEMBER_FEE === null
-              ? t('aiFlow.nothingToCollectPlain')
-              : t('aiFlow.nothingToCollect', { amount: NON_MEMBER_FEE })
-          }
-          testID="member-nothing-to-collect"
-        />
+          and saying so here stops a Mait asking her for cash she has already paid in milk.
+          Once her phone has answered it moves into the card above, so the screen still holds
+          one green card rather than two. */}
+      {!!record && isMember && !verified && (
+        <FlowNotice tone="good" body={nothingToCollect} testID="member-nothing-to-collect" />
       )}
+      {/* The two steps that belong to the phone in her hand, in the order they happen. Her
+          number is never typed here and never chosen here — it is read off her record and
+          shown, because a Mait who could nominate where the code goes could nominate their
+          own phone, and a check a Mait can satisfy alone checks nothing. */}
+      <Sheet
+        visible={asking}
+        title={sentTo ? t('aiFlow.enterHerCode') : t('aiFlow.verifyFarmer')}
+        subtitle={sentTo ? t('aiFlow.codeSentTo', { mobile: sentTo }) : t('aiFlow.codeGoesToHer')}
+        onClose={() => setAsking(false)}
+        testID="farmer-otp"
+        footer={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{
+              busy: sending || checking,
+              disabled: !!sentTo && code.trim().length < OTP_LENGTH,
+            }}
+            onPress={sentTo ? check : send}
+            disabled={sending || checking || (!!sentTo && code.trim().length < OTP_LENGTH)}
+            style={({ pressed }) => [
+              styles.sheetCta,
+              !!sentTo && code.trim().length < OTP_LENGTH && styles.sheetCtaInert,
+              pressed && styles.sheetCtaPressed,
+            ]}
+            testID={sentTo ? 'farmer-check-code' : 'farmer-send-code'}
+          >
+            {sending || checking ? (
+              <ActivityIndicator color={colors.surface} />
+            ) : (
+              <>
+                <Text style={styles.sheetCtaLabel}>
+                  {sentTo ? t('aiFlow.checkCode') : t('aiFlow.sendTheCode')}
+                </Text>
+                <Ionicons name="arrow-forward" size={18} color={colors.surface} />
+              </>
+            )}
+          </Pressable>
+        }
+      >
+        {!sentTo ? (
+          <View style={styles.number} testID="farmer-otp-number">
+            <Text style={styles.numberLabel}>{t('aiFlow.mobileLabel')}</Text>
+            <Text style={styles.numberValue}>{mobile ? groupedMobile(mobile) : ''}</Text>
+            <Text style={styles.numberNote}>{t('aiFlow.codeGoesToHerBody')}</Text>
+          </View>
+        ) : (
+          <View>
+            <LabelledField
+              label={t('aiFlow.enterHerCode')}
+              tone="primary"
+              placeholder={t('aiFlow.otpPlaceholder')}
+              value={code}
+              onChangeText={text => setCode(text.replace(/\D/g, '').slice(0, OTP_LENGTH))}
+              keyboardType="number-pad"
+              maxLength={OTP_LENGTH}
+              autoFocus
+              testID="farmer-otp-input"
+            />
+            <Text style={styles.resend} onPress={send} testID="farmer-otp-resend">
+              {t('aiFlow.sendAgain')}
+            </Text>
+          </View>
+        )}
+
+        {!!problem && <FlowNotice tone="error" title={problem} testID="farmer-otp-sheet-problem" />}
+      </Sheet>
     </FlowScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  sentTo: { ...typography.caption, color: colors.textMuted, marginBottom: spacing[3] },
-  resend: { ...typography.bodyStrong, color: colors.primaryDark, paddingVertical: spacing[2] },
+  resend: { ...typography.bodyStrong, color: colors.primaryDark, paddingVertical: spacing[3] },
+
+  // Her number, read back at the size a number is read back at. It is the one thing in this
+  // sheet a Mait can check against the woman standing in front of them.
+  number: {
+    alignItems: 'center',
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[4],
+    borderRadius: radius.lg,
+    backgroundColor: colors.primaryWash,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  numberLabel: { ...typography.caption, color: colors.textMuted },
+  numberValue: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.ink },
+  numberNote: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing[2],
+  },
+
+  sheetCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    minHeight: 56,
+    marginTop: spacing[3],
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary,
+  },
+  sheetCtaPressed: { backgroundColor: colors.primaryPressed },
+  sheetCtaInert: { backgroundColor: colors.disabledFill },
+  sheetCtaLabel: { ...typography.bodyStrong, fontSize: 16, color: colors.surface },
 });

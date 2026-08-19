@@ -131,14 +131,4 @@ export const AI_FLOW_STEPS = [
  */
 export const LOW_STRAWS_PER_BREED = 5;
 
-/**
- * What a non-member pays on the spot, in rupees.
- *
- * Set it in `app.json` under `extra.nonMemberFee`. Null means the fork says a payment is
- * collected without naming a figure — quoting a price the system cannot charge is worse than
- * saying "you collect payment today", because the farmer hears the number as final.
- */
-export const NON_MEMBER_FEE =
-  (Constants.expoConfig?.extra?.nonMemberFee as number | undefined) ?? null;
-
 export type AIFlowStep = (typeof AI_FLOW_STEPS)[number];
