@@ -1271,7 +1271,9 @@ paths:
       description: |-
         The only endpoint that moves inventory. Deduction and completion happen in one transaction with the inventory row locked, so two concurrent calls cannot both consume one straw (ADR 0002).
 
-        Fails closed: `409` if the payment is not verified, and the straw is untouched. Completing an event that is already complete is a no-op rather than an error — a retry whose first response was lost lands here, and the honest answer is that it is done.
+        Fails closed: `409` if the payment is not verified or the straw is no longer in the Mait's stock, and nothing is touched. Completing an event that is already complete is a no-op rather than an error — a retry whose first response was lost lands here, and the honest answer is that it is done.
+
+        `close_without_stock` is for the record that is stuck: its straw has already left the holding, the insemination happened, and no further straw should be spent on it. Sent only from the app's *Close this off*, where the Mait has been shown what the record is missing. It is a permission rather than an instruction — a straw still in stock is deducted as normal — and where it does apply the event comes back with `stock_deducted: false` and a line on its audit trail.
 
         Send `Idempotency-Key` from the offline queue.
       summary: Complete the event and deduct the straw
@@ -1284,6 +1286,17 @@ paths:
         required: true
       tags:
       - ai-events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIEventCompleteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIEventCompleteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIEventCompleteRequest'
       security:
       - jwtAuth: []
       responses:
@@ -1300,6 +1313,8 @@ paths:
         Multipart: `photo`, `gps_lat`, `gps_lng`, and optionally `performed_at`.
 
         `performed_at` is the device's clock, not the server's. An event captured offline may not arrive for hours, and the report must show when the insemination happened rather than when the phone found signal.
+
+        `photo_source` says whether the picture came from the app's camera or the handset's gallery, and `gps_source` whether the pin is the handset's own position or what was written into the photograph. Both default to the live answer, and both are recorded on the event and its audit trail — a chosen photograph is accepted, never quietly passed off as a live one.
 
         Only valid from `straw_verified`: a photo without a checked straw is a photograph of an animal, not evidence of an insemination.
       summary: Attach the proof photo
@@ -3050,9 +3065,27 @@ components:
           readOnly: true
           description: Denormalised from the batch so history survives any master-data
             cleanup.
+        stock_deducted:
+          type: boolean
+          readOnly: true
+          description: False on a record closed without a stock movement, because
+            the straw it holds had already left the Mait's holding — used by another
+            event, or corrected away underneath it. The insemination happened and
+            the straw is spent either way; what this says is that the count cannot
+            account for this event, so a report comparing straws against completions
+            has the answer on the record.
         ai_photo_url:
           type: string
           readOnly: true
+        photo_source:
+          allOf:
+          - $ref: '#/components/schemas/PhotoSourceEnum'
+          readOnly: true
+          description: |-
+            Whether the proof photo was taken through the app's own camera or chosen from the handset's gallery. A live capture is evidence that this animal was served at this place and time; a chosen one is a photograph of something, and the record has to be able to tell an auditor which it is holding.
+
+            * `camera` - Taken on the handset
+            * `gallery` - Chosen from the gallery
         gps_lat:
           type: string
           format: decimal
@@ -3065,6 +3098,15 @@ components:
           pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
           readOnly: true
           nullable: true
+        gps_source:
+          allOf:
+          - $ref: '#/components/schemas/GpsSourceEnum'
+          readOnly: true
+          description: |-
+            Where the pin came from: the handset's own position at the moment of capture, or the coordinates written into a chosen photograph's EXIF. The second can be anywhere and any time, so it is never quietly presented as the first.
+
+            * `device` - The handset's own position
+            * `photo` - Written into the photograph
         performed_at:
           type: string
           format: date-time
@@ -3097,6 +3139,7 @@ components:
       - ear_tag_no
       - gps_lat
       - gps_lng
+      - gps_source
       - id
       - mait
       - mait_code
@@ -3111,10 +3154,26 @@ components:
       - owner_type
       - payment
       - performed_at
+      - photo_source
       - semen_breed
       - status
       - status_display
+      - stock_deducted
       - straw_unique_no
+    AIEventCompleteRequest:
+      type: object
+      description: |-
+        The one decision a completion can carry.
+
+        Empty on every ordinary completion, which is why the body is optional: the capture flow
+        closes an event it has just walked through, and there is nothing to say about it.
+      properties:
+        close_without_stock:
+          type: boolean
+          default: false
+          description: Close a record whose straw has already left the Mait's stock,
+            without spending another one on it. The straw is still deducted where
+            it is there to deduct.
     AIEventCreateRequest:
       type: object
       description: |-
@@ -4134,6 +4193,14 @@ components:
           maxLength: 10
       required:
       - otp
+    GpsSourceEnum:
+      enum:
+      - device
+      - photo
+      type: string
+      description: |-
+        * `device` - The handset's own position
+        * `photo` - Written into the photograph
     Indent:
       type: object
       description: |-
@@ -5516,6 +5583,14 @@ components:
         performed_at:
           type: string
           format: date-time
+        photo_source:
+          allOf:
+          - $ref: '#/components/schemas/PhotoSourceEnum'
+          default: camera
+        gps_source:
+          allOf:
+          - $ref: '#/components/schemas/GpsSourceEnum'
+          default: device
     PatchedAdminUserUpdateRequest:
       type: object
       description: Activate, deactivate or amend an account (SRS §6.8.1).
@@ -5853,6 +5928,14 @@ components:
       - mode_display
       - status
       - status_display
+    PhotoSourceEnum:
+      enum:
+      - camera
+      - gallery
+      type: string
+      description: |-
+        * `camera` - Taken on the handset
+        * `gallery` - Chosen from the gallery
     ProductTypeEnum:
       enum:
       - straw

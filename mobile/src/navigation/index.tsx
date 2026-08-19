@@ -446,13 +446,23 @@ export default function RootNavigator(): React.JSX.Element {
       setClosing(true);
       setCloseProblem(null);
 
-      const outcome = await completeEvent(unfinished.id, unfinished.client_uuid, accessToken, {
-        farmer: unfinished.owner_name,
-        kind: unfinished.owner_type === 'member' ? 'member' : 'nonMember',
-        amount: unfinished.amount_due,
-        at: clockTime(),
-        eventId: unfinished.id,
-      });
+      const outcome = await completeEvent(
+        unfinished.id,
+        unfinished.client_uuid,
+        accessToken,
+        {
+          farmer: unfinished.owner_name,
+          kind: unfinished.owner_type === 'member' ? 'member' : 'nonMember',
+          amount: unfinished.amount_due,
+          at: clockTime(),
+          eventId: unfinished.id,
+        },
+        // The straw this record holds may already have gone — used by another event back when
+        // the picker could hand the same one to two captures. The insemination happened and
+        // that straw is spent, so the server may close this without taking a second one. It
+        // deducts as normal wherever the straw is still there.
+        { withoutStock: true },
+      );
       setPending(outcome.remaining);
       setClosing(false);
 

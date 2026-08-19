@@ -390,9 +390,27 @@ export interface AIEvent {
     is_verified: boolean;
   } | null;
   straw_unique_no: string;
+  /**
+   * False on a record closed without a stock movement.
+   *
+   * The straw it holds had already left the Mait's holding, so no further one was spent on
+   * it: the insemination happened and that straw is gone whatever the count says. The audit
+   * trail carries the same fact in words.
+   */
+  stock_deducted: boolean;
   ai_photo_url: string;
+  /**
+   * Whether the proof photo was taken through the app's camera or chosen from the gallery.
+   *
+   * A live capture is evidence that this animal was served at this place and time; a chosen
+   * one is a photograph. The record screen says which, because somebody settling a dispute
+   * six months later cannot tell them apart by looking.
+   */
+  photo_source: 'camera' | 'gallery';
   gps_lat: string | null;
   gps_lng: string | null;
+  /** Whose pin it is: the handset's own position, or what was written into the photograph. */
+  gps_source: 'device' | 'photo';
   performed_at: string | null;
   completed_at: string | null;
   cancelled_reason: string;

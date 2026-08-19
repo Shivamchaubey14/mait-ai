@@ -76,6 +76,7 @@ function event(over: Partial<AIEvent> = {}): AIEvent {
       is_verified: true,
     },
     straw_unique_no: '',
+    stock_deducted: true,
     ai_photo_url: '/media/ai-photos/30.jpg',
     gps_lat: '26.7524000',
     gps_lng: '82.1408000',

@@ -80,6 +80,75 @@ class TestPhoto:
         assert response.json()["ai_photo_url"]
         assert response.json()["gps_lat"] == "28.3670000"
 
+    def test_a_gallery_photo_is_accepted_and_recorded_as_one(
+        self, mait_client, mpp, member, animal, stocked_mait
+    ):
+        """
+        A chosen photograph is taken, and never quietly passed off as a live capture.
+
+        A Mait whose camera will not open has to be able to finish the round, so the platform
+        accepts it. What it must not do is let the record claim the picture proves this animal
+        was served at this place and time, because a photograph out of a gallery is a
+        photograph of something, somewhere, once. Both the event and its audit trail say so.
+        """
+        straw = stocked_mait(1)[0]
+        event = mait_client.post(
+            f"{BASE}/",
+            {
+                "client_uuid": "44444444-4444-4444-8444-444444444444",
+                "mpp_code": mpp.mpp_code,
+                "member_code": member.member_code,
+                "animal_id": animal.id,
+                "straw_unique_no": straw.unique_straw_no,
+            },
+            format="json",
+        ).json()
+
+        response = mait_client.patch(
+            f"{BASE}/{event['id']}/photo/",
+            {
+                "photo": a_photo(),
+                "gps_lat": "28.3670000",
+                "gps_lng": "79.4304000",
+                "photo_source": "gallery",
+                "gps_source": "photo",
+            },
+            format="multipart",
+        )
+
+        assert response.status_code == 200, response.json()
+        assert response.json()["photo_source"] == "gallery"
+        assert response.json()["gps_source"] == "photo"
+
+        trail = mait_client.get(f"{BASE}/{event['id']}/timeline/").json()
+        assert any("gallery" in step["note"] for step in trail)
+
+    def test_a_photo_that_says_nothing_is_read_as_a_live_capture(
+        self, mait_client, mpp, member, animal, stocked_mait
+    ):
+        """The app as it shipped before the gallery existed sends neither field."""
+        straw = stocked_mait(1)[0]
+        event = mait_client.post(
+            f"{BASE}/",
+            {
+                "client_uuid": "55555555-5555-4555-8555-555555555555",
+                "mpp_code": mpp.mpp_code,
+                "member_code": member.member_code,
+                "animal_id": animal.id,
+                "straw_unique_no": straw.unique_straw_no,
+            },
+            format="json",
+        ).json()
+
+        response = mait_client.patch(
+            f"{BASE}/{event['id']}/photo/",
+            {"photo": a_photo(), "gps_lat": "28.3670000", "gps_lng": "79.4304000"},
+            format="multipart",
+        )
+
+        assert response.json()["photo_source"] == "camera"
+        assert response.json()["gps_source"] == "device"
+
     def test_the_device_clock_decides_when_it_happened(
         self, mait_client, mpp, member, animal, stocked_mait
     ):

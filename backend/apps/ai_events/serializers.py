@@ -105,9 +105,12 @@ class AIEventSerializer(serializers.ModelSerializer):
             "semen_breed",
             "amount_due",
             "straw_unique_no",
+            "stock_deducted",
             "ai_photo_url",
+            "photo_source",
             "gps_lat",
             "gps_lng",
+            "gps_source",
             "performed_at",
             "completed_at",
             "cancelled_reason",
@@ -152,6 +155,24 @@ class AIEventSerializer(serializers.ModelSerializer):
         return PaymentSummarySerializer(payment).data
 
 
+class AIEventCompleteSerializer(serializers.Serializer):
+    """
+    The one decision a completion can carry.
+
+    Empty on every ordinary completion, which is why the body is optional: the capture flow
+    closes an event it has just walked through, and there is nothing to say about it.
+    """
+
+    close_without_stock = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text=(
+            "Close a record whose straw has already left the Mait's stock, without spending "
+            "another one on it. The straw is still deducted where it is there to deduct."
+        ),
+    )
+
+
 class AIEventPhotoSerializer(serializers.Serializer):
     """
     The proof photo and where and when it was taken (SRS §6.3 step 5).
@@ -169,6 +190,18 @@ class AIEventPhotoSerializer(serializers.Serializer):
     gps_lat = serializers.DecimalField(max_digits=10, decimal_places=7)
     gps_lng = serializers.DecimalField(max_digits=10, decimal_places=7)
     performed_at = serializers.DateTimeField(required=False)
+    # Both default to the honest answer for a client that says nothing, which is the app as it
+    # shipped before the gallery existed: a live capture, pinned by the handset.
+    photo_source = serializers.ChoiceField(
+        choices=AIEvent.PhotoSource.choices,
+        required=False,
+        default=AIEvent.PhotoSource.CAMERA,
+    )
+    gps_source = serializers.ChoiceField(
+        choices=AIEvent.GpsSource.choices,
+        required=False,
+        default=AIEvent.GpsSource.DEVICE,
+    )
 
     def validate_photo(self, value):
         if value.size > MAX_PHOTO_BYTES:

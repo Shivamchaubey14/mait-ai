@@ -164,9 +164,7 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
   if (camera) {
     return (
       <FlowCamera
-        instruction={
-          camera === 'front' ? t('aiFlow.frameCardFront') : t('aiFlow.frameCardBack')
-        }
+        instruction={camera === 'front' ? t('aiFlow.frameCardFront') : t('aiFlow.frameCardBack')}
         permissionBody={t('aiFlow.aadhaarPhotoBody')}
         guide="card"
         testIDPrefix={`aadhaar-camera-${camera}`}
@@ -197,9 +195,7 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
          a notice above the name field is off-screen at the exact moment it is needed, which
          is indistinguishable from the button having done nothing. */
       footerNote={
-        refusal ? (
-          <FlowNotice tone="error" title={refusal} testID="non-member-error" />
-        ) : undefined
+        refusal ? <FlowNotice tone="error" title={refusal} testID="non-member-error" /> : undefined
       }
     >
       <LabelledField

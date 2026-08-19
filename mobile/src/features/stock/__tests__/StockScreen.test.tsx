@@ -111,9 +111,7 @@ function mockApi(summary: InventorySummary = SUMMARY, indents: unknown[] = []) {
 }
 
 function render() {
-  return renderWithStore(
-    <StockScreen onOpenIndents={jest.fn()} onRequestStock={jest.fn()} />,
-  );
+  return renderWithStore(<StockScreen onOpenIndents={jest.fn()} onRequestStock={jest.fn()} />);
 }
 
 describe('StockScreen', () => {

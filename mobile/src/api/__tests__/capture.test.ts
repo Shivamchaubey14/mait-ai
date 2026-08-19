@@ -28,6 +28,8 @@ const PHOTO: CapturedPhoto = {
   gpsLng: 79.4304,
   accuracy: 12,
   performedAt: '2026-08-14T10:42:00.000Z',
+  source: 'camera',
+  gpsSource: 'device',
 };
 
 beforeEach(async () => {
@@ -97,6 +99,44 @@ describe('completing an event', () => {
 
     const call = (global.fetch as jest.Mock).mock.calls[0];
     expect(call[1].headers['Idempotency-Key']).toBe('uuid-abc');
+  });
+});
+
+describe('closing a record whose straw has already gone', () => {
+  /**
+   * The flag that lets the server skip a stock movement, and the fact that an ordinary
+   * completion never carries it.
+   *
+   * Both halves matter. Without the flag the stuck record cannot be closed at all; with it
+   * sent by default, a completion that met a missing straw would shrug — and a straw that can
+   * be shrugged at is a straw that serves two animals.
+   */
+  it('asks to close without a stock movement only when told to', async () => {
+    (global.fetch as jest.Mock).mockImplementation(() => status(200));
+
+    await completeEvent(7, 'uuid-abc', TOKEN, LABEL, { withoutStock: true });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.close_without_stock).toBe(true);
+  });
+
+  it('never asks for it on an ordinary completion', async () => {
+    (global.fetch as jest.Mock).mockImplementation(() => status(200));
+
+    await completeEvent(7, 'uuid-abc', TOKEN, LABEL);
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.close_without_stock).toBe(false);
+  });
+
+  it('carries the decision through the offline queue', async () => {
+    // A close-off pressed in a village goes out hours later, and it has to still be a
+    // close-off when it does — nothing on the server can work that out for itself.
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('Network request failed'));
+
+    await completeEvent(7, 'uuid-1', TOKEN, LABEL, { withoutStock: true });
+
+    expect((await readQueue())[0]?.payload.closeWithoutStock).toBe(true);
   });
 });
 

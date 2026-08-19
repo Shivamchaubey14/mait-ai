@@ -1,9 +1,22 @@
 ﻿/**
  * Step 5 of the AI capture flow â€” the proof photo (SRS Â§6.3 step 5, M9).
  *
- * Camera only. There is deliberately no gallery picker: a photo chosen from the roll proves
- * nothing about this animal at this time, and the entire point of this step is that the
- * insemination can be shown to have happened.
+ * The camera is the way this step is meant to be answered, and it is what the screen opens
+ * on: a photo taken here, now, with the pin and the clock attached, is the only kind that
+ * shows the insemination happened.
+ *
+ * A photo can also be chosen from the gallery, under the button rather than beside the
+ * shutter. A camera that will not open, a handset that has run out of patience, a round
+ * written up an hour later — those happen, and a Mait who cannot finish the record at all is
+ * worse than a record that says how it was made. What the app never does is blur the two: a
+ * chosen photo is sent as chosen, the event carries `photo_source`, the audit trail says so
+ * in words, and the record screen repeats it.
+ *
+ * The pin follows the same rule. A live shot is pinned by the handset, which is standing in
+ * the yard. A chosen one takes the pin the camera wrote into the file, because a photo taken
+ * an hour ago in another village must not be filed against wherever the phone happens to be
+ * now — and where the file carries none, the handset's own position is used and the record
+ * says that is what happened.
  *
  * The GPS fix and the device clock are captured with the shot, not at upload. An event taken
  * in a yard with no signal may not reach the server for hours, and both facts have to describe
@@ -13,6 +26,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StatusBar } from 'expo-status-bar';
@@ -23,6 +37,7 @@ import { AI_FLOW_STEPS } from '@/config/env';
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
 import { FlowNotice, FlowScreen } from './components';
+import { exifCoords } from './exif';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -38,6 +53,10 @@ export interface CapturedPhoto {
   gpsLng: number | null;
   accuracy: number | null;
   performedAt: string;
+  /** How the picture was got. Recorded on the event, never inferred by the server. */
+  source: 'camera' | 'gallery';
+  /** Whose pin this is — the handset's own, or the one inside the photograph. */
+  gpsSource: 'device' | 'photo';
 }
 
 interface Props {
@@ -54,6 +73,8 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
   const [permission, requestPermission] = useCameraPermissions();
   const [shot, setShot] = useState<CapturedPhoto | null>(null);
   const [taking, setTaking] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [galleryDenied, setGalleryDenied] = useState(false);
   const [fix, setFix] = useState<Location.LocationObject | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
@@ -109,10 +130,59 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
           gpsLng: fix?.coords.longitude ?? null,
           accuracy: fix?.coords.accuracy ?? null,
           performedAt: new Date().toISOString(),
+          source: 'camera',
+          gpsSource: 'device',
         });
       }
     } finally {
       setTaking(false);
+    }
+  };
+
+  /**
+   * Take the photo from the gallery instead.
+   *
+   * `performedAt` stays the moment the record is being made, never the photograph's own date.
+   * The event is when the insemination is being recorded; backdating it to whenever the file
+   * was created would move a day's work into a month that has already been reported on.
+   *
+   * The pin is the other way round: the photograph's own is preferred, because that is where
+   * the picture was taken and the handset may be somewhere else entirely by now.
+   */
+  const pickFromGallery = async () => {
+    if (picking) {
+      return;
+    }
+    setPicking(true);
+    try {
+      const allowed = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!allowed.granted) {
+        setGalleryDenied(true);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.6,
+        exif: true,
+      });
+      const asset = result.canceled ? null : result.assets[0];
+      if (!asset) {
+        return;
+      }
+
+      const written = exifCoords(asset.exif as Record<string, unknown> | null);
+      setShot({
+        uri: asset.uri,
+        gpsLat: written?.lat ?? fix?.coords.latitude ?? null,
+        gpsLng: written?.lng ?? fix?.coords.longitude ?? null,
+        accuracy: written ? null : (fix?.coords.accuracy ?? null),
+        performedAt: new Date().toISOString(),
+        source: 'gallery',
+        gpsSource: written ? 'photo' : 'device',
+      });
+    } finally {
+      setPicking(false);
     }
   };
 
@@ -172,15 +242,34 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
         <View style={styles.stamp}>
           <Ionicons name="location-outline" size={16} color={colors.textMuted} />
           <Text style={styles.stampText}>
-            {shot.gpsLat != null
-              ? t('aiFlow.pinAt', {
-                  lat: shot.gpsLat.toFixed(4),
-                  lng: shot.gpsLng?.toFixed(4),
-                  accuracy: Math.round(shot.accuracy ?? 0),
-                })
-              : t('aiFlow.noPin')}
+            {shot.gpsLat == null
+              ? t('aiFlow.noPin')
+              : shot.gpsSource === 'photo'
+                ? // No accuracy figure: it is the photograph's pin, not a fix this handset
+                  // took, and quoting a ±metres it never measured would be inventing one.
+                  t('aiFlow.pinFromPhoto', {
+                    lat: shot.gpsLat.toFixed(4),
+                    lng: shot.gpsLng?.toFixed(4),
+                  })
+                : t('aiFlow.pinAt', {
+                    lat: shot.gpsLat.toFixed(4),
+                    lng: shot.gpsLng?.toFixed(4),
+                    accuracy: Math.round(shot.accuracy ?? 0),
+                  })}
           </Text>
         </View>
+
+        {/* Said before it is sent, not discovered on the record afterwards. A Mait who meant
+            to take a photo and picked one by mistake finds out here, where retake is one tap
+            away. */}
+        {shot.source === 'gallery' && (
+          <FlowNotice
+            tone="info"
+            title={t('aiFlow.chosenTitle')}
+            body={shot.gpsSource === 'photo' ? t('aiFlow.chosenWithPin') : t('aiFlow.chosenNoPin')}
+            testID="photo-from-gallery"
+          />
+        )}
 
         {shot.gpsLat == null && (
           <FlowNotice
@@ -301,16 +390,52 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
         </Pressable>
       </View>
 
-      {/* No gallery button, on purpose (SRS §6.3 step 5). */}
-      <Text style={[styles.cameraOnly, { paddingBottom: insets.bottom }]}>
-        {t('aiFlow.cameraOnly')}
-      </Text>
+      {/* Under the shutter rather than beside it, and in words rather than as a third round
+          button: taking the photo is what this step is for, and the two are not equal
+          choices. */}
+      <View style={[styles.gallery, { paddingBottom: insets.bottom + spacing[2] }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ busy: picking }}
+          onPress={pickFromGallery}
+          disabled={picking}
+          style={({ pressed }) => [styles.galleryButton, pressed && styles.galleryButtonPressed]}
+          testID="photo-gallery"
+        >
+          {picking ? (
+            <ActivityIndicator color={colors.surface} />
+          ) : (
+            <>
+              <Ionicons name="images-outline" size={16} color={colors.surface} />
+              <Text style={styles.galleryLabel}>{t('aiFlow.chooseFromGallery')}</Text>
+            </>
+          )}
+        </Pressable>
+
+        <Text style={styles.cameraOnly}>
+          {galleryDenied ? t('aiFlow.galleryDenied') : t('aiFlow.chosenIsMarked')}
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.ink },
+
+  gallery: { alignItems: 'center', gap: spacing[2], paddingHorizontal: spacing[5] },
+  galleryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: spacing[5],
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  galleryButtonPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
+  galleryLabel: { ...typography.bodyStrong, color: colors.surface },
 
   header: { paddingHorizontal: spacing[5], paddingBottom: spacing[4] },
   headerTop: {
@@ -410,7 +535,6 @@ const styles = StyleSheet.create({
     color: colors.surface,
     opacity: 0.6,
     textAlign: 'center',
-    paddingTop: spacing[3],
   },
 
   preview: {

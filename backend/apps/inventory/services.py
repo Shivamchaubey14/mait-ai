@@ -146,6 +146,14 @@ def take_straw_of_breed(mait, breed: str) -> SemenBatch:
 
     Oldest first, by received date: semen is perishable, and a flask worked front-to-back
     would leave the oldest straws to expire at the bottom.
+
+    **A straw already held by an unfinished capture is not offered again.** Nothing is
+    deducted until completion, so for a while the only record that a straw is spoken for is
+    the open event holding it — and without this the picker handed the same oldest straw to
+    every capture started before any of them closed. The first to complete consumed it and
+    every other one was refused for want of stock *forever*: an insemination that happened,
+    with a record that could never be closed, however many times the Mait opened it. The count
+    is the gate, and this is what makes the count mean anything.
     """
     code = (breed or "").strip().upper()
     if not code:
@@ -155,14 +163,33 @@ def take_straw_of_breed(mait, breed: str) -> SemenBatch:
         mait=mait, product_type=ProductType.STRAW, qty_available__gt=0
     ).values_list("product_ref_id", flat=True)
 
-    straw = (
-        SemenBatch.objects.filter(id__in=list(holdings), breed=code, is_consumed=False)
-        .order_by("received_date", "id")
-        .first()
+    in_stock = SemenBatch.objects.filter(id__in=list(holdings), breed=code, is_consumed=False)
+
+    # Imported here rather than at module scope: the AI event services import this module, and
+    # naming them at the top would close the loop.
+    from apps.ai_events.models import AIEvent
+
+    spoken_for = set(
+        AIEvent.objects.filter(
+            mait=mait,
+            status__in=AIEvent.UNFINISHED_STATUSES,
+            semen_batch__isnull=False,
+        ).values_list("semen_batch_id", flat=True)
     )
-    if straw is None:
-        raise InsufficientStock(f"You are not carrying any {code} straws. Raise a new indent.")
-    return straw
+
+    straw = in_stock.exclude(id__in=spoken_for).order_by("received_date", "id").first()
+    if straw is not None:
+        return straw
+
+    # Nothing free. Which of the two reasons it is decides what the Mait should do about it,
+    # so they are not collapsed into one sentence: raising an indent does not help somebody
+    # whose straws are all held by captures sitting on their own phone.
+    if in_stock.exists():
+        raise InsufficientStock(
+            f"Your {code} straws are all held by captures you have not finished. "
+            f"Finish one from AI events, then try again."
+        )
+    raise InsufficientStock(f"You are not carrying any {code} straws. Raise a new indent.")
 
 
 def consume_straw(*, mait, straw: SemenBatch, ai_event_id: int, actor=None) -> MaitInventory:

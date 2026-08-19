@@ -75,7 +75,10 @@ function event(over: Partial<AIEvent> = {}): AIEvent {
       is_verified: true,
     },
     straw_unique_no: '',
+    stock_deducted: true,
     ai_photo_url: '/media/ai-photos/30.jpg',
+    photo_source: 'camera',
+    gps_source: 'device',
     gps_lat: '26.7524000',
     gps_lng: '82.1408000',
     performed_at: '2026-08-18T10:43:00Z',
@@ -219,6 +222,17 @@ describe('AiEventDetailScreen', () => {
     expect(screen.getByTestId('ai-event-alert')).toHaveTextContent(/never closed off/);
     expect(screen.queryByText(/payment code was never entered/)).toBeNull();
     expect(screen.getByTestId('ai-event-resume')).toHaveTextContent(/Close this off/);
+  });
+
+  it('says on the record when the photo was chosen rather than taken', async () => {
+    // The difference between evidence and a photograph. The app accepts both — a Mait whose
+    // camera will not open still has to finish the round — and somebody settling a dispute
+    // six months later cannot tell them apart by looking, so the record says which.
+    mockApi(event({ photo_source: 'gallery', gps_source: 'photo' }));
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByText(/Chosen from the gallery/)).toBeTruthy());
+    expect(screen.getByTestId('tile-location')).toHaveTextContent(/From the photo itself/);
   });
 
   it('goes back to the list', async () => {

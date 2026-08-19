@@ -40,6 +40,12 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Mait AI can take the proof photo from your gallery when the camera cannot be used. The record says which photos were chosen rather than taken."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Mait AI stamps the AI photo with where it was taken, so the event can be tied to the right village."

@@ -72,7 +72,10 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
   if (job.kind === 'completeEvent') {
     return fetch(`${API_BASE_URL}/ai-events/${job.payload.eventId}/complete/`, {
       method: 'POST',
-      headers,
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      // Defaulted false for a job queued by an older build, and for every ordinary capture:
+      // only a close-off may ask to skip the stock movement.
+      body: JSON.stringify({ close_without_stock: job.payload.closeWithoutStock === true }),
     });
   }
 
@@ -87,6 +90,10 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
   form.append('gps_lat', String(job.payload.gpsLat));
   form.append('gps_lng', String(job.payload.gpsLng));
   form.append('performed_at', String(job.payload.performedAt));
+  // Defaulted for a job queued by an older build of the app, where the only way to get a
+  // photo was to take one.
+  form.append('photo_source', String(job.payload.source ?? 'camera'));
+  form.append('gps_source', String(job.payload.gpsSource ?? 'device'));
 
   return fetch(`${API_BASE_URL}/ai-events/${job.payload.eventId}/photo/`, {
     method: 'PATCH',

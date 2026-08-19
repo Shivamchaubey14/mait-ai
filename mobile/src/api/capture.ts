@@ -77,6 +77,11 @@ export async function attachPhoto(
     gpsLat: photo.gpsLat,
     gpsLng: photo.gpsLng,
     performedAt: photo.performedAt,
+    // Carried through the queue as well as the live send. A photo chosen from the gallery
+    // that syncs three hours later must still arrive marked as chosen — the one thing the
+    // server cannot work out for itself.
+    source: photo.source,
+    gpsSource: photo.gpsSource,
   };
 
   if (!accessToken) {
@@ -95,6 +100,8 @@ export async function attachPhoto(
     form.append('gps_lng', String(photo.gpsLng));
   }
   form.append('performed_at', photo.performedAt);
+  form.append('photo_source', photo.source);
+  form.append('gps_source', photo.gpsSource);
 
   try {
     const response = await fetch(`${API_BASE_URL}/ai-events/${eventId}/photo/`, {
@@ -131,16 +138,30 @@ export async function attachPhoto(
   return { sent: false, queued: true, remaining: await pendingCount() };
 }
 
-/** Ask the server to complete the event, or queue the request. */
+/**
+ * Ask the server to complete the event, or queue the request.
+ *
+ * `withoutStock` is only ever set by *Close this off* — the button offered on a record whose
+ * straw has already left the Mait's holding. The insemination happened and that straw is
+ * spent; deducting a different one would charge the flask twice for one animal, so the server
+ * is told it may close this without a stock movement. It is a permission rather than an
+ * instruction: a straw still in stock is deducted exactly as always.
+ *
+ * The ordinary completion at the end of a capture never sends it, and must not — a completion
+ * that shrugged at a missing straw is how one straw comes to serve two animals.
+ */
 export async function completeEvent(
   eventId: number,
   clientUuid: string,
   accessToken: string | null,
   /** As on `attachPhoto`: what the waiting list needs to name this record. */
   label?: QueuedLabel,
+  { withoutStock = false }: { withoutStock?: boolean } = {},
 ): Promise<CaptureOutcome> {
+  const body = { close_without_stock: withoutStock };
+
   if (!accessToken) {
-    await enqueue('completeEvent', clientUuid, { eventId }, label);
+    await enqueue('completeEvent', clientUuid, { eventId, closeWithoutStock: withoutStock }, label);
     return { sent: false, queued: true, remaining: await pendingCount() };
   }
 
@@ -150,7 +171,9 @@ export async function completeEvent(
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Idempotency-Key': clientUuid,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify(body),
     });
 
     if (response.ok) {
@@ -173,6 +196,6 @@ export async function completeEvent(
     // Network. Queue it.
   }
 
-  await enqueue('completeEvent', clientUuid, { eventId }, label);
+  await enqueue('completeEvent', clientUuid, { eventId, closeWithoutStock: withoutStock }, label);
   return { sent: false, queued: true, remaining: await pendingCount() };
 }

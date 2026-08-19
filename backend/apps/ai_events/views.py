@@ -27,6 +27,7 @@ from apps.core.services import record_audit
 
 from .models import AIEvent
 from .serializers import (
+    AIEventCompleteSerializer,
     AIEventCreateSerializer,
     AIEventPhotoSerializer,
     AIEventSerializer,
@@ -238,6 +239,11 @@ class AIEventViewSet(
             "`performed_at` is the device's clock, not the server's. An event captured "
             "offline may not arrive for hours, and the report must show when the "
             "insemination happened rather than when the phone found signal.\n\n"
+            "`photo_source` says whether the picture came from the app's camera or the "
+            "handset's gallery, and `gps_source` whether the pin is the handset's own "
+            "position or what was written into the photograph. Both default to the live "
+            "answer, and both are recorded on the event and its audit trail — a chosen "
+            "photograph is accepted, never quietly passed off as a live one.\n\n"
             "Only valid from `straw_verified`: a photo without a checked straw is a "
             "photograph of an animal, not evidence of an insemination."
         ),
@@ -263,6 +269,8 @@ class AIEventViewSet(
             gps_lat=data["gps_lat"],
             gps_lng=data["gps_lng"],
             performed_at=data.get("performed_at"),
+            photo_source=data["photo_source"],
+            gps_source=data["gps_source"],
             actor=request.user,
         )
         return Response(AIEventSerializer(event).data)
@@ -273,13 +281,19 @@ class AIEventViewSet(
             "The only endpoint that moves inventory. Deduction and completion happen in one "
             "transaction with the inventory row locked, so two concurrent calls cannot both "
             "consume one straw (ADR 0002).\n\n"
-            "Fails closed: `409` if the payment is not verified, and the straw is untouched. "
-            "Completing an event that is already complete is a no-op rather than an error — "
-            "a retry whose first response was lost lands here, and the honest answer is that "
-            "it is done.\n\n"
+            "Fails closed: `409` if the payment is not verified or the straw is no longer in "
+            "the Mait's stock, and nothing is touched. Completing an event that is already "
+            "complete is a no-op rather than an error — a retry whose first response was lost "
+            "lands here, and the honest answer is that it is done.\n\n"
+            "`close_without_stock` is for the record that is stuck: its straw has already "
+            "left the holding, the insemination happened, and no further straw should be "
+            "spent on it. Sent only from the app's *Close this off*, where the Mait has been "
+            "shown what the record is missing. It is a permission rather than an instruction "
+            "— a straw still in stock is deducted as normal — and where it does apply the "
+            "event comes back with `stock_deducted: false` and a line on its audit trail.\n\n"
             "Send `Idempotency-Key` from the offline queue."
         ),
-        request=None,
+        request=AIEventCompleteSerializer,
         responses={200: AIEventSerializer},
     )
     @idempotent(endpoint="ai-events.complete")
@@ -288,7 +302,14 @@ class AIEventViewSet(
         event = self.get_object()
         self._assert_own(event, request)
 
-        event = complete_ai_event(event, actor=request.user)
+        options = AIEventCompleteSerializer(data=request.data or {})
+        options.is_valid(raise_exception=True)
+
+        event = complete_ai_event(
+            event,
+            actor=request.user,
+            without_stock=options.validated_data["close_without_stock"],
+        )
         return Response(AIEventSerializer(event).data)
 
     def _assert_own(self, event, request):

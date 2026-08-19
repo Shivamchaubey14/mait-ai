@@ -49,6 +49,14 @@ class AIEvent(TimeStampedModel):
         MEMBER = "member", "Member"
         NON_MEMBER = "non_member", "Non-member"
 
+    class PhotoSource(models.TextChoices):
+        CAMERA = "camera", "Taken on the handset"
+        GALLERY = "gallery", "Chosen from the gallery"
+
+    class GpsSource(models.TextChoices):
+        DEVICE = "device", "The handset's own position"
+        PHOTO = "photo", "Written into the photograph"
+
     # Client-generated UUID, also the Idempotency-Key for this event's writes (ADR 0003).
     client_uuid = models.UUIDField(
         unique=True,
@@ -90,9 +98,41 @@ class AIEvent(TimeStampedModel):
         help_text="Denormalised from the batch so history survives any master-data cleanup.",
     )
 
+    stock_deducted = models.BooleanField(
+        default=True,
+        help_text=(
+            "False on a record closed without a stock movement, because the straw it holds "
+            "had already left the Mait's holding — used by another event, or corrected away "
+            "underneath it. The insemination happened and the straw is spent either way; "
+            "what this says is that the count cannot account for this event, so a report "
+            "comparing straws against completions has the answer on the record."
+        ),
+    )
+
     ai_photo_url = models.CharField(max_length=255, blank=True)
+    photo_source = models.CharField(
+        max_length=10,
+        choices=PhotoSource.choices,
+        default=PhotoSource.CAMERA,
+        help_text=(
+            "Whether the proof photo was taken through the app's own camera or chosen from "
+            "the handset's gallery. A live capture is evidence that this animal was served "
+            "at this place and time; a chosen one is a photograph of something, and the "
+            "record has to be able to tell an auditor which it is holding."
+        ),
+    )
     gps_lat = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     gps_lng = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    gps_source = models.CharField(
+        max_length=10,
+        choices=GpsSource.choices,
+        default=GpsSource.DEVICE,
+        help_text=(
+            "Where the pin came from: the handset's own position at the moment of capture, "
+            "or the coordinates written into a chosen photograph's EXIF. The second can be "
+            "anywhere and any time, so it is never quietly presented as the first."
+        ),
+    )
 
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.DRAFT, db_index=True

@@ -37,7 +37,15 @@ import { BrandMark } from '@/components/brand';
 import { ErrorState, SkeletonList } from '@/components/states';
 import { whatIsMissing } from '@/features/aiFlow/resume';
 import { mediaUrl } from '@/config/env';
-import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
+import {
+  colors,
+  MIN_TOUCH_TARGET,
+  radius,
+  shadows,
+  spacing,
+  typography,
+  yolk,
+} from '@theme/tokens';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -256,6 +264,15 @@ export default function AiEventDetailScreen({
 
   const located = !!event.gps_lat && !!event.gps_lng;
   const photo = mediaUrl(event.ai_photo_url);
+  /**
+   * A photo chosen from the gallery rather than taken here.
+   *
+   * Said on the record because it changes what the record is worth: a live capture shows this
+   * animal was served at this place and time, and a chosen photograph shows an animal. The
+   * app accepts both — a Mait whose camera will not open still has to finish the round — and
+   * the difference is never left for a reader to guess at.
+   */
+  const chosen = event.photo_source === 'gallery';
 
   const trailRows = trail.data ?? [];
 
@@ -348,7 +365,13 @@ export default function AiEventDetailScreen({
                 ? `${Number(event.gps_lat).toFixed(4)}, ${Number(event.gps_lng).toFixed(4)}`
                 : t('aiEvent.noLocation')
             }
-            note={located ? t('aiEvent.fromTheHandset') : undefined}
+            note={
+              located
+                ? event.gps_source === 'photo'
+                  ? t('aiEvent.fromThePhoto')
+                  : t('aiEvent.fromTheHandset')
+                : undefined
+            }
             tone={located ? 'info' : 'plain'}
             testID="tile-location"
           />
@@ -382,12 +405,16 @@ export default function AiEventDetailScreen({
               </View>
             )}
           </View>
-          <Text style={styles.photoCaption}>
-            {photo
-              ? t('aiEvent.photoCaption', {
-                  when: shortStamp(event.performed_at ?? event.created_at),
-                })
-              : t('aiEvent.photoPending')}
+          <Text style={[styles.photoCaption, chosen && styles.photoCaptionChosen]}>
+            {!photo
+              ? t('aiEvent.photoPending')
+              : chosen
+                ? t('aiEvent.photoChosen', {
+                    when: shortStamp(event.performed_at ?? event.created_at),
+                  })
+                : t('aiEvent.photoCaption', {
+                    when: shortStamp(event.performed_at ?? event.created_at),
+                  })}
           </Text>
         </View>
 
@@ -562,6 +589,9 @@ const styles = StyleSheet.create({
   photoEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing[2] },
   photoEmptyLabel: { ...typography.caption, color: colors.surface, opacity: 0.8 },
   photoCaption: { ...typography.caption, color: colors.textMuted, padding: spacing[3] },
+  // Not red — a chosen photo is allowed, not an error. Amber is this product's "read this
+  // before you rely on it", which is exactly what the line is for.
+  photoCaptionChosen: { color: yolk[800], backgroundColor: colors.secondaryWash },
 
   // -- trail -----------------------------------------------------------------------------
   trailToggle: {

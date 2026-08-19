@@ -16,7 +16,13 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
-from apps.core.exceptions import InvalidStateTransition, MPPNotAssigned, PaymentNotVerified
+from apps.core.exceptions import (
+    InsufficientStock,
+    InvalidStateTransition,
+    MPPNotAssigned,
+    PaymentNotVerified,
+    StrawAlreadyConsumed,
+)
 from apps.core.services import record_audit
 from apps.inventory.services import consume_straw, get_straw_for_mait, take_straw_of_breed
 
@@ -178,6 +184,8 @@ def attach_photo(
     gps_lat=None,
     gps_lng=None,
     performed_at=None,
+    photo_source: str = AIEvent.PhotoSource.CAMERA,
+    gps_source: str = AIEvent.GpsSource.DEVICE,
     actor=None,
 ) -> AIEvent:
     """
@@ -186,17 +194,35 @@ def attach_photo(
     ``performed_at`` comes from the device rather than the server clock, because an event
     captured offline may not reach us for hours and the report must show when the
     insemination actually happened.
+
+    ``photo_source`` says whether the picture came through the app's own camera or out of the
+    handset's gallery, and ``gps_source`` says whether the pin is where the handset was or
+    what was written into the photograph. Both are recorded rather than assumed, and both go
+    on the audit trail: a live capture is evidence that this animal was served at this place
+    and time, and a chosen photograph is a photograph. The platform still accepts it — a Mait
+    whose camera will not open has to be able to finish the round — but nobody reading the
+    record later should have to guess which of the two they are holding.
     """
-    _transition(event, AIEvent.Status.PHOTO_CAPTURED, actor=actor, note="AI proof photo captured")
+    chosen = photo_source == AIEvent.PhotoSource.GALLERY
+    _transition(
+        event,
+        AIEvent.Status.PHOTO_CAPTURED,
+        actor=actor,
+        note=("AI proof photo chosen from the gallery" if chosen else "AI proof photo captured"),
+    )
     event.ai_photo_url = photo_url
+    event.photo_source = photo_source
     event.gps_lat = gps_lat
     event.gps_lng = gps_lng
+    event.gps_source = gps_source
     event.performed_at = performed_at or timezone.now()
     event.save(
         update_fields=[
             "ai_photo_url",
+            "photo_source",
             "gps_lat",
             "gps_lng",
+            "gps_source",
             "performed_at",
             "status",
             "updated_at",
@@ -218,8 +244,57 @@ def mark_payment_pending(event: AIEvent, *, actor=None) -> AIEvent:
     return event
 
 
+def _deduct_a_straw(event: AIEvent, *, actor=None, without_stock: bool = False) -> None:
+    """
+    Take this event's straw out of the Mait's stock.
+
+    Normally that is all this is, and it is the only place stock moves for an insemination. A
+    straw that cannot be deducted refuses the completion, and it has to: two events holding
+    one straw arriving together is exactly the case where one straw would otherwise serve two
+    animals, which is the thing this platform exists to prevent (ADR 0002).
+
+    ``without_stock`` is the one exception, and it is never inferred — it comes from a person
+    pressing *Close this off* on a record the app has already told them is stuck. Then a straw
+    that has already gone stops being a refusal: the animal was served, that straw was
+    inserted into it, and the flask is one short whatever the system does next. Deducting a
+    *different* straw would charge the holding twice for one insemination, and could refuse
+    the record all over again for want of a straw that was never this event's to spend. So the
+    completion does the one thing actually outstanding — it closes the event — and the record
+    carries ``stock_deducted=False`` and a line on the audit trail saying so.
+
+    Even then the flag is a permission rather than an instruction: where the straw *is* still
+    in stock it is deducted exactly as always. And what keeps the exception from becoming a
+    hole is the picker, which no longer offers a straw that an unfinished capture is holding
+    (``take_straw_of_breed``) — two of a Mait's events can no longer come to share one straw
+    in the first place. This path is for the records that already did.
+    """
+    try:
+        consume_straw(mait=event.mait, straw=event.semen_batch, ai_event_id=event.id, actor=actor)
+        return
+    except (InsufficientStock, StrawAlreadyConsumed) as gone:
+        if not without_stock:
+            raise
+
+        event.stock_deducted = False
+        AIEventTimeline.objects.create(
+            ai_event=event,
+            from_status=event.status,
+            to_status=event.status,
+            note=f"Closed without a stock movement — {gone}"[:255],
+            actor=actor,
+        )
+        logger.info(
+            "AI event closed without a stock movement",
+            extra={
+                "ai_event_id": event.id,
+                "mait_id": event.mait_id,
+                "straw": event.straw_unique_no,
+            },
+        )
+
+
 @transaction.atomic
-def complete_ai_event(event: AIEvent, *, actor=None) -> AIEvent:
+def complete_ai_event(event: AIEvent, *, actor=None, without_stock: bool = False) -> AIEvent:
     """
     Finalise an AI event: deduct the straw and close it, atomically (SRS §6.4.3).
 
@@ -246,18 +321,13 @@ def complete_ai_event(event: AIEvent, *, actor=None) -> AIEvent:
     if event.semen_batch_id is None:
         raise InvalidStateTransition("This event has no verified straw to deduct.")
 
-    consume_straw(
-        mait=event.mait,
-        straw=event.semen_batch,
-        ai_event_id=event.id,
-        actor=actor,
-    )
+    _deduct_a_straw(event, actor=actor, without_stock=without_stock)
 
     _transition(
         event, AIEvent.Status.COMPLETED, actor=actor, note="Payment initiated, straw deducted"
     )
     event.completed_at = timezone.now()
-    event.save(update_fields=["status", "completed_at", "updated_at"])
+    event.save(update_fields=["status", "completed_at", "stock_deducted", "updated_at"])
 
     record_audit(
         action="state_change",
@@ -267,6 +337,7 @@ def complete_ai_event(event: AIEvent, *, actor=None) -> AIEvent:
         meta={
             "to": AIEvent.Status.COMPLETED,
             "straw": event.straw_unique_no,
+            "stock_deducted": event.stock_deducted,
             "mait_id": event.mait_id,
             "mpp_code": event.mpp.mpp_code,
         },
