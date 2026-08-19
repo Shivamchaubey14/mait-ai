@@ -24,6 +24,7 @@ from apps.core.idempotency import idempotent
 from apps.core.models import AuditLog
 from apps.core.permissions import IsMait
 from apps.core.services import record_audit
+from apps.core.timeframe import end_of_day, start_of_day
 
 from .models import AIEvent
 from .serializers import (
@@ -65,8 +66,13 @@ class AIEventFilter(django_filters.FilterSet):
 
     mpp = django_filters.CharFilter(field_name="mpp__mpp_code")
     mait = django_filters.NumberFilter(field_name="mait_id")
-    date_from = django_filters.DateFilter(field_name="created_at", lookup_expr="date__gte")
-    date_to = django_filters.DateFilter(field_name="created_at", lookup_expr="date__lte")
+    # Compared against instants, never against `created_at__date`. On a MySQL without the
+    # timezone tables loaded that lookup compiles to a CONVERT_TZ returning NULL, and a NULL
+    # comparison matches nothing — so every date-filtered request answered zero on a day full
+    # of events, and nothing in the answer said the filter was the problem rather than the
+    # data. See `apps.core.timeframe`, which the dashboard already goes through.
+    date_from = django_filters.DateFilter(method="filter_date_from")
+    date_to = django_filters.DateFilter(method="filter_date_to")
     search = django_filters.CharFilter(method="filter_search")
     unfinished = django_filters.BooleanFilter(method="filter_unfinished")
 
@@ -76,6 +82,14 @@ class AIEventFilter(django_filters.FilterSet):
 
     def filter_search(self, queryset, name, value):
         return search_events(queryset, value)
+
+    def filter_date_from(self, queryset, name, value):
+        return queryset.filter(created_at__gte=start_of_day(value)) if value else queryset
+
+    def filter_date_to(self, queryset, name, value):
+        # Half-open: everything up to the instant the next local day begins, which includes
+        # the last microsecond of `date_to` without the off-by-one `__lte` on a date invites.
+        return queryset.filter(created_at__lt=end_of_day(value)) if value else queryset
 
     def filter_unfinished(self, queryset, name, value):
         """

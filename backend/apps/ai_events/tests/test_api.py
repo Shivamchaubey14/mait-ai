@@ -11,8 +11,10 @@ take two straws out of stock for one service.
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -340,6 +342,82 @@ class TestReading:
         body = mait_client.get(f"{BASE}/{event_id}/").json()
         assert body["owner_name"] == member.member_name
         assert body["breed"] == "GIR"
+
+
+class TestDateWindow:
+    """
+    The filter that answered zero on a month full of events.
+
+    `created_at__date__gte` compiles to a CONVERT_TZ on an aware column, and on a MySQL whose
+    `mysql.time_zone*` tables were never loaded that returns NULL. A NULL comparison matches
+    nothing, so every date-filtered request — the app's own month figure, the admin list, the
+    CSV export — came back empty and said nothing about why. Nothing tested it, which is how
+    it shipped.
+
+    These run against the same MySQL the app does, so a return to `__date` fails here.
+    """
+
+    def _event(self, mait, mpp, member, animal, straw, when):
+        event = AIEvent.objects.create(
+            client_uuid=uuid.uuid4(),
+            mait=mait,
+            mpp=mpp,
+            owner_type=AIEvent.OwnerType.MEMBER,
+            member=member,
+            animal=animal,
+            semen_batch=straw,
+            straw_unique_no=straw.unique_straw_no,
+            status=AIEvent.Status.COMPLETED,
+            completed_at=when,
+        )
+        # `auto_now_add` wins over anything passed to create(), so the stamp is set after.
+        AIEvent.objects.filter(pk=event.pk).update(created_at=when)
+        return event
+
+    def test_todays_events_come_back_for_todays_date(
+        self, mait_client, mait, mpp, member, animal, stocked_mait
+    ):
+        now = timezone.now()
+        self._event(mait, mpp, member, animal, stocked_mait(1)[0], now)
+        today = timezone.localtime(now).date().isoformat()
+
+        response = mait_client.get(f"{BASE}/?date_from={today}&date_to={today}")
+
+        assert response.status_code == 200
+        assert response.json()["count"] == 1
+
+    def test_the_window_includes_its_last_day_to_the_last_second(
+        self, mait_client, mait, mpp, member, animal, stocked_mait
+    ):
+        # Late enough that a half-open window built on the wrong day would drop it, which is
+        # the off-by-one this filter is written to avoid.
+        now = timezone.localtime(timezone.now())
+        late = now.replace(hour=23, minute=59, second=30, microsecond=0)
+        self._event(mait, mpp, member, animal, stocked_mait(1)[0], late)
+        day = late.date().isoformat()
+
+        assert mait_client.get(f"{BASE}/?date_to={day}").json()["count"] == 1
+
+    def test_an_older_event_is_left_out(self, mait_client, mait, mpp, member, animal, stocked_mait):
+        now = timezone.now()
+        self._event(mait, mpp, member, animal, stocked_mait(1)[0], now - timedelta(days=40))
+        today = timezone.localtime(now).date().isoformat()
+
+        assert mait_client.get(f"{BASE}/?date_from={today}").json()["count"] == 0
+
+    def test_the_month_figure_the_app_asks_for(
+        self, mait_client, mait, mpp, member, animal, stocked_mait
+    ):
+        """Exactly the request Profile makes: this month's completions, counted server-side."""
+        now = timezone.localtime(timezone.now())
+        straws = stocked_mait(2)
+        self._event(mait, mpp, member, animal, straws[0], now)
+        self._event(mait, mpp, member, animal, straws[1], now - timedelta(days=40))
+        month_start = now.replace(day=1).date().isoformat()
+
+        response = mait_client.get(f"{BASE}/?status=completed&date_from={month_start}")
+
+        assert response.json()["count"] == 1
 
 
 class TestUnfinished:

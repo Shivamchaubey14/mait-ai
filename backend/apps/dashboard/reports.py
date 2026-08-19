@@ -26,6 +26,7 @@ from apps.ai_events.views import search_events
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin
 from apps.core.services import record_audit
+from apps.core.timeframe import end_of_day, start_of_day
 
 MAX_ROWS = 100_000
 
@@ -115,10 +116,13 @@ def export_csv(request):
     params = request.query_params
     date_from = _parse_date(params.get("date_from"))
     date_to = _parse_date(params.get("date_to"))
+    # Instants, for the same reason the list filter uses them: `created_at__date` is a
+    # CONVERT_TZ that returns NULL on a MySQL without timezone tables, and the export would
+    # hand back an empty file for a month that had four hundred events in it.
     if date_from:
-        queryset = queryset.filter(created_at__date__gte=date_from)
+        queryset = queryset.filter(created_at__gte=start_of_day(date_from))
     if date_to:
-        queryset = queryset.filter(created_at__date__lte=date_to)
+        queryset = queryset.filter(created_at__lt=end_of_day(date_to))
     if params.get("mpp"):
         queryset = queryset.filter(mpp__mpp_code=params["mpp"])
     if params.get("mait"):
