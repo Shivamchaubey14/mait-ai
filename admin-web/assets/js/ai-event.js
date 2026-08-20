@@ -49,13 +49,22 @@
       ].join(' · ')
     );
 
-    $('#straw-no').text(event.straw_unique_no || 'Not scanned');
+    /* The tile leads with the doses rather than the number, because that is what the flask is
+       short of: an insemination on a difficult animal takes two straws, and a tile reading one
+       number said nothing about the second. The number itself stays underneath, where it is
+       still the thing a depot slip is checked against. */
+    const doses = event.doses || 1;
+    $('#straw-no').text(doses === 1 ? '1 dose' : doses + ' doses');
     $('#straw-foot').text(
-      event.status === 'completed'
-        ? event.breed + ' · deducted'
-        : event.straw_unique_no
-          ? event.breed + ' · held, not yet deducted'
-          : 'The event has not reached step 4'
+      [
+        event.semen_breed || event.breed,
+        event.straw_unique_no || 'no number read',
+        event.status === 'completed'
+          ? event.stock_deducted === false
+            ? 'closed without a deduction'
+            : 'deducted'
+          : 'held, not yet deducted',
+      ].join(' · ')
     );
 
     // Money is green once it is verified and yellow while it is not, the same way the
@@ -93,8 +102,59 @@
     tone($('#status-tile'), statusTone);
     $('#status-icon').html(MaitAI.shell.icon(TONE_ICON[statusTone] || 'info'));
 
+    renderUsed(event);
     renderProof(event);
     renderMap(event);
+  }
+
+  /**
+   * Everything that came off the Mait's stock for this event.
+   *
+   * The semen first, because it is what the event is; then the sheaths and the gloves, which
+   * are what a month-end count actually goes missing on. An event captured before the app
+   * asked for consumables has none, and the panel says that rather than pretending the visit
+   * used nothing.
+   */
+  function renderUsed(event) {
+    const doses = event.doses || 1;
+    const breed = event.semen_breed || event.breed || 'Semen';
+
+    const rows = [
+      {
+        name: breed,
+        meta: event.straw_unique_no ? 'Straw ' + event.straw_unique_no : 'By breed, no number read',
+        qty: doses === 1 ? '1 dose' : doses + ' doses',
+      },
+    ];
+
+    (event.consumables || []).forEach(function (line) {
+      rows.push({
+        name: line.name,
+        meta: line.code,
+        qty: line.qty + ' ' + line.unit + (line.qty === 1 ? '' : 's'),
+      });
+    });
+
+    const $list = $('#used').empty();
+    rows.forEach(function (row) {
+      $('<li>')
+        .addClass('used__row')
+        .append(
+          $('<span>')
+            .addClass('used__name')
+            .text(row.name)
+            .append($('<span>').addClass('used__meta').text(row.meta))
+        )
+        .append($('<span>').addClass('used__qty').text(row.qty))
+        .appendTo($list);
+    });
+
+    if (!(event.consumables || []).length) {
+      $('<li>')
+        .addClass('used__none')
+        .text('No consumables recorded against this event.')
+        .appendTo($list);
+    }
   }
 
   /**

@@ -65,6 +65,8 @@ function event(over: Partial<AIEvent> = {}): AIEvent {
     breed: 'HF_CROSS',
     ear_tag_no: '4821',
     semen_breed: 'HF_CROSS',
+    doses: 1,
+    consumables: [],
     amount_due: '50.00',
     payment: {
       amount: '50.00',
@@ -233,6 +235,91 @@ describe('AiEventDetailScreen', () => {
 
     await waitFor(() => expect(screen.getByText(/Chosen from the gallery/)).toBeTruthy());
     expect(screen.getByTestId('tile-location')).toHaveTextContent(/From the photo itself/);
+  });
+
+  it('says what came off the stock besides the semen', async () => {
+    // The sheath and the gloves are what a month-end count actually goes missing on, and
+    // until they were recorded there was nowhere to read them.
+    mockApi(
+      event({
+        doses: 2,
+        consumables: [
+          { code: 'SHEATH', name: 'AI sheaths', unit: 'piece', qty: 2 },
+          { code: 'GLOVES', name: 'Gloves', unit: 'pair', qty: 1 },
+        ],
+      }),
+    );
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('ai-event-used')).toBeTruthy());
+    expect(screen.getByTestId('ai-event-used')).toHaveTextContent(/AI sheaths/);
+    expect(screen.getByTestId('ai-event-used')).toHaveTextContent(/2 piece/);
+    expect(screen.getByTestId('ai-event-used')).toHaveTextContent(/Gloves/);
+    // And the semen is counted on its own tile, in doses.
+    expect(screen.getByTestId('tile-breed')).toHaveTextContent(/2 doses/);
+  });
+
+  it('shows no card at all for a capture recorded before consumables existed', async () => {
+    mockApi(event());
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('tile-breed')).toHaveTextContent(/1 dose/));
+    expect(screen.queryByTestId('ai-event-used')).toBeNull();
+  });
+
+  it('opens the proof photo whole when the card is tapped', async () => {
+    // The card crops the photograph to a 180pt band, and the ear tag a farmer is being asked
+    // to recognise is as often as not in the part the crop took. Settling a dispute means
+    // being able to see the whole frame.
+    mockApi(event());
+    renderScreen();
+
+    await waitFor(() => screen.getByTestId('ai-event-photo-open'));
+    expect(screen.queryByTestId('ai-event-photo-full')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('ai-event-photo-open'));
+
+    expect(screen.getByTestId('ai-event-photo-full')).toBeTruthy();
+    // `contain`, never `cover`: a viewer that crops to fill the screen has made the same cut
+    // the card already made, and opening it would have achieved nothing.
+    expect(screen.getByTestId('ai-event-photo-full').props.resizeMode).toBe('contain');
+  });
+
+  it('carries the photo caption into the viewer, so proof is never shown unqualified', async () => {
+    // Whether it was taken here or chosen from the gallery is the first question asked of a
+    // photograph offered as proof, and the full-size view is where it is examined hardest.
+    mockApi(event({ photo_source: 'gallery' }));
+    renderScreen();
+
+    await waitFor(() => screen.getByTestId('ai-event-photo-open'));
+    fireEvent.press(screen.getByTestId('ai-event-photo-open'));
+
+    expect(screen.getByTestId('ai-event-photo-viewer-caption')).toHaveTextContent(
+      /Chosen from the gallery/,
+    );
+  });
+
+  it('closes the viewer again', async () => {
+    mockApi(event());
+    renderScreen();
+
+    await waitFor(() => screen.getByTestId('ai-event-photo-open'));
+    fireEvent.press(screen.getByTestId('ai-event-photo-open'));
+    fireEvent.press(screen.getByTestId('ai-event-photo-close'));
+
+    expect(screen.queryByTestId('ai-event-photo-full')).toBeNull();
+  });
+
+  it('has nothing to open on a capture whose photo was never taken', async () => {
+    // The frame is still there — it says the photo is missing — but tapping it must not open
+    // a black screen with nothing in it.
+    mockApi(event({ ai_photo_url: '', status: 'straw_verified', payment: null }));
+    renderScreen();
+
+    await waitFor(() => screen.getByTestId('ai-event-photo-empty'));
+    fireEvent.press(screen.getByTestId('ai-event-photo-open'));
+
+    expect(screen.queryByTestId('ai-event-photo-full')).toBeNull();
   });
 
   it('goes back to the list', async () => {

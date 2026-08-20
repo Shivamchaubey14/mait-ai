@@ -55,6 +55,13 @@ const COLLECTED = indent({
   received_at: '2026-08-12T09:12:00Z',
 });
 
+const REJECTED = indent({
+  id: 2188,
+  status: 'rejected',
+  status_display: 'Rejected',
+  note: 'Need it before Friday · Rejected: No Murrah left in the depot',
+});
+
 const BREEDS = [
   { code: 'MURRAH', name: 'Murrah', name_hi: '', animal_type: 'BUFF', display_order: 1 },
 ];
@@ -124,6 +131,67 @@ describe('IndentsScreen', () => {
     );
   });
 
+  it('calls a collected indent collected, not issued', async () => {
+    // The server is still right to call it `issued` — issuing is the last thing it did. But
+    // the row was showing "Issued" over a line reading "Collected 12 Aug · it is in your
+    // stock", and the status word is what gets scanned down a list of twenty.
+    mockIndents([COLLECTED]);
+    renderWithStore(<IndentsScreen onOpen={onOpen} onBack={onBack} />);
+
+    await waitFor(() => expect(screen.getByTestId('indent-2210')).toBeTruthy());
+    expect(screen.getByTestId('indent-2210')).toHaveTextContent(/Collected/);
+    expect(screen.getByTestId('indent-2210')).not.toHaveTextContent(/Issued/);
+  });
+
+  it('filters the list down to one status', async () => {
+    mockIndents([WAITING, STILL_WITH_THE_STORE, COLLECTED]);
+    renderWithStore(<IndentsScreen onOpen={onOpen} onBack={onBack} />);
+
+    await waitFor(() => expect(screen.getByTestId('indent-2291')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('indent-filter-collected'));
+
+    expect(screen.getByTestId('indent-2210')).toBeTruthy();
+    expect(screen.queryByTestId('indent-2291')).toBeNull();
+    expect(screen.queryByTestId('indent-2304')).toBeNull();
+  });
+
+  it('counts each status on its own chip, so the common question needs no tap', async () => {
+    // "Was anything turned down" is the reason to reach for a status filter at all, and a
+    // chip that answers it without being tapped has saved the tap.
+    mockIndents([WAITING, STILL_WITH_THE_STORE, COLLECTED]);
+    renderWithStore(<IndentsScreen onOpen={onOpen} onBack={onBack} />);
+
+    await waitFor(() => expect(screen.getByTestId('indent-filter-all')).toBeTruthy());
+    expect(screen.getByTestId('indent-filter-all')).toHaveTextContent(/3/);
+    expect(screen.getByTestId('indent-filter-collected')).toHaveTextContent(/1/);
+    // Nothing was rejected, so the chip carries no nought — a row of greyed zeroes beside
+    // every unused status is a report nobody asked for.
+    expect(screen.getByTestId('indent-filter-rejected')).not.toHaveTextContent(/0/);
+  });
+
+  it('offers the way back when a filter empties the list', async () => {
+    // "You have never raised one" and "none of yours are in this state" are different
+    // nothings, and only one of them has a way out.
+    mockIndents([WAITING]);
+    renderWithStore(<IndentsScreen onOpen={onOpen} onBack={onBack} />);
+
+    await waitFor(() => expect(screen.getByTestId('indent-2291')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('indent-filter-rejected'));
+
+    expect(screen.getByTestId('empty-state')).toHaveTextContent(/Tap All/);
+  });
+
+  it('counts the headline off the whole list, not the chip in force', async () => {
+    mockIndents([WAITING, STILL_WITH_THE_STORE, COLLECTED]);
+    renderWithStore(<IndentsScreen onOpen={onOpen} onBack={onBack} />);
+
+    await waitFor(() => expect(screen.getByTestId('indents-headline')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('indent-filter-collected'));
+
+    expect(screen.getByTestId('indents-headline')).toHaveTextContent(/waiting for you to collect/);
+  });
+
   it('opens the one that was tapped', async () => {
     mockIndents([WAITING, STILL_WITH_THE_STORE]);
     render();
@@ -132,6 +200,14 @@ describe('IndentsScreen', () => {
     fireEvent.press(screen.getByTestId('indent-2304'));
 
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 2304 }));
+  });
+
+  it('shows a turned-down request as refused rather than as still coming', async () => {
+    mockIndents([REJECTED]);
+    renderWithStore(<IndentsScreen onOpen={onOpen} onBack={onBack} />);
+
+    await waitFor(() => expect(screen.getByTestId('indent-2188')).toBeTruthy());
+    expect(screen.getByTestId('indent-2188')).toHaveTextContent(/Rejected/);
   });
 
   it('says nothing has been raised rather than showing an empty page', async () => {

@@ -9,7 +9,7 @@
 import React from 'react';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
-import IndentDetailScreen from '../IndentDetailScreen';
+import IndentDetailScreen, { rejectionReason } from '../IndentDetailScreen';
 import type { Indent } from '@api/types';
 import { jsonResponse, renderWithStore } from '@/test-utils';
 
@@ -49,6 +49,9 @@ function mockIndent(value: Indent) {
     return jsonResponse(value);
   });
 }
+
+/** Exactly the shape `reject_indent` leaves behind: the Mait's note, then the office's. */
+const REJECTED_NOTE = 'Need it before Friday · Rejected: No Murrah left in the depot';
 
 describe('IndentDetailScreen', () => {
   const onBack = jest.fn();
@@ -165,6 +168,71 @@ describe('IndentDetailScreen', () => {
     await waitFor(() =>
       expect((global.fetch as jest.Mock).mock.calls.length).toBeGreaterThan(before),
     );
+  });
+
+  it('parses the reason back out of the note the office appended it to', () => {
+    // `reject_indent` writes "<the Mait's own note> · Rejected: <reason>" into one field
+    // rather than keeping a column for it, so this is string surgery on a format owned by
+    // another codebase — the kind of thing that breaks quietly when that codebase changes.
+    expect(rejectionReason('Need it before Friday · Rejected: No Murrah left')).toBe(
+      'No Murrah left',
+    );
+    expect(rejectionReason('Just a note from me')).toBeNull();
+    // Rejected with no reason typed. There is nothing to show, and an empty string shown as
+    // "Reason: " is worse than saying none was given.
+    expect(rejectionReason('Something · Rejected:')).toBeNull();
+    // The Mait wrote the word themselves. The office's copy is the last one.
+    expect(rejectionReason('Rejected: mine · Rejected: theirs')).toBe('theirs');
+  });
+
+  it('stops the trail at the refusal instead of promising the rest', async () => {
+    // The bug this fixes: a rejected indent still showed "Approved by store · Waiting on the
+    // store" and "Issued · Not packed yet" underneath a status reading Rejected — the screen
+    // telling a Mait to keep waiting for something that is never coming.
+    mockIndent(indent({ status: 'rejected', status_display: 'Rejected', note: REJECTED_NOTE }));
+    renderWithStore(<IndentDetailScreen indentId={2291} onBack={onBack} />);
+
+    await waitFor(() => expect(screen.getByTestId('indent-status')).toHaveTextContent(/Rejected/));
+    expect(screen.getByText(/Turned down by store/)).toBeTruthy();
+    expect(screen.queryByText(/Waiting on the store/)).toBeNull();
+    expect(screen.queryByText(/Not packed yet/)).toBeNull();
+    expect(screen.queryByText(/Confirmed when you collect/)).toBeNull();
+  });
+
+  it('puts the reason on the trail, where it can be read back to the office', async () => {
+    mockIndent(indent({ status: 'rejected', status_display: 'Rejected', note: REJECTED_NOTE }));
+    renderWithStore(<IndentDetailScreen indentId={2291} onBack={onBack} />);
+
+    await waitFor(() => expect(screen.getByText(/No Murrah left in the depot/)).toBeTruthy());
+    expect(screen.getByTestId('indent-rejected')).toBeTruthy();
+    expect(screen.queryByTestId('indent-collection')).toBeNull();
+  });
+
+  it('says so plainly when a refusal carries no reason', async () => {
+    mockIndent(indent({ status: 'rejected', status_display: 'Rejected', note: '' }));
+    renderWithStore(<IndentDetailScreen indentId={2291} onBack={onBack} />);
+
+    await waitFor(() => expect(screen.getByText(/No reason was given/)).toBeTruthy());
+  });
+
+  it('does not offer to confirm a collection that will never happen', async () => {
+    mockIndent(indent({ status: 'rejected', status_display: 'Rejected', note: REJECTED_NOTE }));
+    renderWithStore(<IndentDetailScreen indentId={2291} onBack={onBack} />);
+
+    await waitFor(() => screen.getByTestId('indent-confirm-collection'));
+    const cta = screen.getByTestId('indent-confirm-collection');
+    expect(cta.props.accessibilityState.disabled).toBe(true);
+    expect(cta).toHaveTextContent(/Turned down/);
+    expect(cta).not.toHaveTextContent(/Confirm collection/);
+  });
+
+  it('stops promising a depot trip on a refused indent', async () => {
+    // Amber and a depot name both say "go and fetch this", and there is nothing to fetch.
+    mockIndent(indent({ status: 'rejected', status_display: 'Rejected', note: REJECTED_NOTE }));
+    renderWithStore(<IndentDetailScreen indentId={2291} onBack={onBack} />);
+
+    await waitFor(() => screen.getByTestId('indent-qty-issued'));
+    expect(screen.getByTestId('indent-qty-issued')).toHaveTextContent(/Nothing will be issued/);
   });
 
   it('flags an indent Indent Easy never received', async () => {

@@ -377,6 +377,10 @@ export interface AIEvent {
   ear_tag_no: string | null;
   /** The breed of straw held for this event. */
   semen_breed: string;
+  /** How many straws of it the insemination used. One, unless the animal was difficult. */
+  doses: number;
+  /** What else came out of the Mait's bag for this visit. */
+  consumables: { code: string; name: string; unit: string; qty: number }[];
   /**
    * What this insemination costs, in rupees, decided by the server.
    *
@@ -464,6 +468,15 @@ export interface AIEventDraft {
    * in more than one breed — the number alone cannot say which bundle it came from.
    */
   semen_breed?: string;
+  /**
+   * How many straws of that breed this insemination used.
+   *
+   * Two in one visit is ordinary practice on a difficult animal, and both come off the flask.
+   * Omitted means one, which is what every build before this one meant.
+   */
+  doses?: number;
+  /** What else the visit took, by catalogue code — sheaths, gloves. Never charged to her. */
+  consumables?: { code: string; qty: number }[];
 }
 
 /** RFC 7807 problem details — the shape of every API error (SRS §9.11). */

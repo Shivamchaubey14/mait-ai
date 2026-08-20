@@ -11,11 +11,43 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BrandMark } from '@/components/brand';
 import { colors, radius, spacing, typography } from '@theme/tokens';
+
+/** The size the title is set at when it fits, and the smallest it is allowed to be measured to. */
+const TITLE_MAX = 26;
+const TITLE_MIN = 16;
+
+/**
+ * How wide one character runs as a fraction of the font size, for the bold heading face.
+ * Names reach this hero uppercase from the roster and capitals are the wide case, so the
+ * figure is deliberately generous: overestimating costs a point of font size, underestimating
+ * costs the end of somebody's name.
+ */
+const HEADING_CHAR_RATIO = 0.62;
+
+/**
+ * The largest size at which `title` still fits on one line in `available` points.
+ *
+ * A Mait's full name is the one word on this screen that is theirs, and a two-line name pushed
+ * the Ink card taller on exactly the handsets that have the least room — while a name broken
+ * across lines reads as two people. So the title is set to fit instead of to a fixed size, and
+ * the card is as tall as a one-line name needs and no taller.
+ *
+ * Exported for the test: this is arithmetic, and arithmetic is worth checking without a
+ * renderer in the way.
+ */
+export function fitTitleSize(title: string, available: number): number {
+  const chars = title.trim().length;
+  if (chars === 0) {
+    return TITLE_MAX;
+  }
+  const fitted = Math.floor(available / (chars * HEADING_CHAR_RATIO));
+  return Math.max(TITLE_MIN, Math.min(TITLE_MAX, fitted));
+}
 
 export default function PageHero({
   title,
@@ -30,6 +62,9 @@ export default function PageHero({
   children?: React.ReactNode;
 }): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+
+  const fontSize = fitTitleSize(title, width - spacing[5] * 2);
 
   return (
     <View style={[styles.hero, { paddingTop: insets.top + spacing[3] }]}>
@@ -47,8 +82,22 @@ export default function PageHero({
         {!!top && <View style={styles.topRight}>{top}</View>}
       </View>
 
-      <Text style={styles.title}>{title}</Text>
-      {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+      {/* `adjustsFontSizeToFit` behind the measurement, not instead of it: the estimate above
+          is a character count and cannot know that a particular name is all M's and W's, so
+          the renderer gets the last word. `numberOfLines` is what actually holds the line. */}
+      <Text
+        style={[styles.title, { fontSize, lineHeight: Math.round(fontSize * 1.25) }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+      >
+        {title}
+      </Text>
+      {!!subtitle && (
+        <Text style={styles.subtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      )}
       {children}
     </View>
   );
@@ -60,17 +109,18 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radius.xl,
     borderBottomRightRadius: radius.xl,
     paddingHorizontal: spacing[5],
-    paddingBottom: spacing[5],
+    paddingBottom: spacing[4],
     overflow: 'hidden',
   },
   top: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing[4],
+    marginBottom: spacing[3],
   },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginLeft: 'auto' },
-  title: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
+  // Size and line height are set per title by `fitTitleSize`; what is left here is the face.
+  title: { ...typography.display, color: colors.surface },
   subtitle: {
     ...typography.body,
     color: colors.surface,

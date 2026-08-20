@@ -41,7 +41,28 @@ import { FlowNotice } from '@/features/aiFlow/components';
 import { shortDate, shortTime, statusTone } from '@/features/stock/IndentsScreen';
 import { colors, radius, shadows, spacing, typography } from '@theme/tokens';
 
-type StepState = 'done' | 'current' | 'waiting';
+type StepState = 'done' | 'current' | 'waiting' | 'refused';
+
+/**
+ * The reason the office gave, pulled back out of the note.
+ *
+ * `reject_indent` appends it to the indent's note as "… · Rejected: <reason>" rather than
+ * keeping a field of its own, so the app has to undo that to show it. Read from the last
+ * occurrence, because the Mait's own note is in front of it and there is nothing stopping
+ * them having written the word themselves.
+ *
+ * Exported for the test: this is string surgery on a format owned by another codebase, which
+ * is exactly the kind of thing that breaks quietly.
+ */
+export function rejectionReason(note: string): string | null {
+  const marker = 'Rejected:';
+  const at = note.lastIndexOf(marker);
+  if (at === -1) {
+    return null;
+  }
+  const reason = note.slice(at + marker.length).trim();
+  return reason || null;
+}
 
 function stateOf(indent: Indent, step: number): StepState {
   // requested → approved → issued → received. Collection is the Mait's own step, and the
@@ -132,7 +153,17 @@ export default function IndentDetailScreen({
     );
   }
 
-  const status = statusTone(indent);
+  const status = statusTone(indent, t);
+
+  /**
+   * A refused indent is a different shape of screen, not the same one with a red word on it.
+   *
+   * Nothing after "requested" is ever going to happen to it, and a timeline still offering
+   * "Approved by store · Waiting on the store" underneath a status reading Rejected is the
+   * screen telling a Mait to keep waiting for something that is not coming.
+   */
+  const rejected = indent.status === 'rejected';
+  const reason = rejectionReason(indent.note);
 
   /**
    * The breed as the rest of the app spells it, and where the goods are actually waiting.
@@ -160,46 +191,72 @@ export default function IndentDetailScreen({
   // as a number the office has not agreed to.
   const approvedReached = indent.status === 'approved' || indent.status === 'issued';
 
-  const steps: { key: string; label: string; meta: string }[] = [
-    {
-      key: 'requested',
-      label: t('indents.stepRequested'),
-      meta: [
-        stamp(indent.requested_at),
-        t('indents.stepRequestedMeta', { qty: indent.qty_requested }),
+  const steps: { key: string; label: string; meta: string; state?: StepState }[] = rejected
+    ? [
+        {
+          key: 'requested',
+          label: t('indents.stepRequested'),
+          meta: [
+            stamp(indent.requested_at),
+            t('indents.stepRequestedMeta', { qty: indent.qty_requested }),
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          state: 'done',
+        },
+        {
+          key: 'rejected',
+          label: t('indents.stepRejected'),
+          // The reason, on the trail, at the step it belongs to — not tucked into a note
+          // field further down the page. It is the only thing on this screen a Mait might
+          // have to read back to the office over the phone.
+          meta: reason
+            ? t('indents.stepRejectedMeta', { reason })
+            : t('indents.stepRejectedNoReason'),
+          state: 'refused',
+        },
       ]
-        .filter(Boolean)
-        .join(' · '),
-    },
-    {
-      key: 'approved',
-      label: t('indents.stepApproved'),
-      meta: approvedReached
-        ? t('indents.stepApprovedMeta', { qty: indent.qty_requested })
-        : t('indents.stepApprovedWaiting'),
-    },
-    {
-      key: 'issued',
-      label: t('indents.stepIssued'),
-      meta:
-        indent.status === 'issued'
-          ? [stamp(indent.issued_at), t('indents.stepIssuedMeta', { qty: indent.qty_issued })]
-              .filter(Boolean)
-              .join(' · ')
-          : t('indents.stepIssuedWaiting'),
-    },
-    {
-      key: 'received',
-      label: t('indents.stepReceived'),
-      meta: indent.received_at
-        ? (stamp(indent.received_at) ?? t('indents.stepReceivedDone'))
-        : indent.status === 'issued'
-          ? t('indents.stepReceivedReady')
-          : t('indents.stepReceivedWaiting'),
-    },
-  ];
+    : [
+        {
+          key: 'requested',
+          label: t('indents.stepRequested'),
+          meta: [
+            stamp(indent.requested_at),
+            t('indents.stepRequestedMeta', { qty: indent.qty_requested }),
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        },
+        {
+          key: 'approved',
+          label: t('indents.stepApproved'),
+          meta: approvedReached
+            ? t('indents.stepApprovedMeta', { qty: indent.qty_requested })
+            : t('indents.stepApprovedWaiting'),
+        },
+        {
+          key: 'issued',
+          label: t('indents.stepIssued'),
+          meta:
+            indent.status === 'issued'
+              ? [stamp(indent.issued_at), t('indents.stepIssuedMeta', { qty: indent.qty_issued })]
+                  .filter(Boolean)
+                  .join(' · ')
+              : t('indents.stepIssuedWaiting'),
+        },
+        {
+          key: 'received',
+          label: t('indents.stepReceived'),
+          meta: indent.received_at
+            ? (stamp(indent.received_at) ?? t('indents.stepReceivedDone'))
+            : indent.status === 'issued'
+              ? t('indents.stepReceivedReady')
+              : t('indents.stepReceivedWaiting'),
+        },
+      ];
 
   const collectable = indent.status === 'issued' && !indent.received_at;
+  const issuedPending = indent.qty_issued === 0 && !rejected;
 
   const confirming = confirmation.isLoading;
 
@@ -239,7 +296,8 @@ export default function IndentDetailScreen({
       >
         <View style={styles.timeline}>
           {steps.map((step, index) => {
-            const state = stateOf(indent, index + 1);
+            // The refused trail carries its own states; the ordinary one is derived.
+            const state = step.state ?? stateOf(indent, index + 1);
             const last = index === steps.length - 1;
             return (
               <View key={step.key} style={styles.step}>
@@ -249,16 +307,25 @@ export default function IndentDetailScreen({
                       styles.dot,
                       state === 'done' && styles.dotDone,
                       state === 'current' && styles.dotCurrent,
+                      state === 'refused' && styles.dotRefused,
                     ]}
                   />
                   {!last && <View style={[styles.line, state === 'done' && styles.lineDone]} />}
                 </View>
 
                 <View style={styles.stepBody}>
-                  <Text style={[styles.stepLabel, state === 'waiting' && styles.stepLabelWaiting]}>
+                  <Text
+                    style={[
+                      styles.stepLabel,
+                      state === 'waiting' && styles.stepLabelWaiting,
+                      state === 'refused' && styles.stepLabelRefused,
+                    ]}
+                  >
                     {step.label}
                   </Text>
-                  <Text style={styles.stepMeta}>{step.meta}</Text>
+                  <Text style={[styles.stepMeta, state === 'refused' && styles.stepMetaRefused]}>
+                    {step.meta}
+                  </Text>
                 </View>
               </View>
             );
@@ -288,38 +355,52 @@ export default function IndentDetailScreen({
         </View>
 
         <View
-          style={[styles.qtyRow, indent.qty_issued === 0 && styles.qtyRowWaiting]}
+          style={[styles.qtyRow, issuedPending && styles.qtyRowWaiting]}
           testID="indent-qty-issued"
         >
           <View style={styles.qtyBody}>
             <Text style={styles.qtyLabel}>{t('indents.issuedSoFar')}</Text>
-            <Text style={styles.qtyMeta}>{depot}</Text>
+            {/* Where to go and get it — except when there is nothing to go and get. Amber and
+                a depot name on a refused indent are both promises of a delivery. */}
+            <Text style={styles.qtyMeta}>{rejected ? t('indents.nothingToIssue') : depot}</Text>
           </View>
-          <Text style={[styles.qtyValue, indent.qty_issued === 0 && styles.qtyValueWaiting]}>
+          <Text style={[styles.qtyValue, issuedPending && styles.qtyValueWaiting]}>
             {indent.qty_issued}
           </Text>
         </View>
 
         {/* Whichever it is, said in words. A button that cannot be pressed with nothing
             explaining why reads as a broken screen. */}
-        <FlowNotice
-          tone={collectable ? 'accent' : 'info'}
-          title={
-            indent.received_at
-              ? t('indents.collectedTitle')
-              : collectable
-                ? t('indents.collectionReadyTitle')
-                : t('indents.collectionTitle')
-          }
-          body={
-            indent.received_at
-              ? t('indents.collectedBody')
-              : collectable
-                ? t('indents.collectionReadyBody')
-                : t('indents.collectionBody')
-          }
-          testID="indent-collection"
-        />
+        {rejected ? (
+          <FlowNotice
+            tone="error"
+            title={t('indents.rejectedTitle')}
+            // The reason is on the trail and only on the trail. Repeating it here put the
+            // same sentence on the screen twice, six inches apart, which reads as two
+            // separate refusals rather than as one said clearly.
+            body={t('indents.rejectedBody')}
+            testID="indent-rejected"
+          />
+        ) : (
+          <FlowNotice
+            tone={collectable ? 'accent' : 'info'}
+            title={
+              indent.received_at
+                ? t('indents.collectedTitle')
+                : collectable
+                  ? t('indents.collectionReadyTitle')
+                  : t('indents.collectionTitle')
+            }
+            body={
+              indent.received_at
+                ? t('indents.collectedBody')
+                : collectable
+                  ? t('indents.collectionReadyBody')
+                  : t('indents.collectionBody')
+            }
+            testID="indent-collection"
+          />
+        )}
 
         {indent.sync_status === 'failed' && (
           <FlowNotice
@@ -353,7 +434,11 @@ export default function IndentDetailScreen({
             <>
               {collectable && <Ionicons name="checkmark" size={18} color={colors.surface} />}
               <Text style={[styles.ctaLabel, !collectable && styles.ctaLabelInert]}>
-                {indent.received_at ? t('indents.collectedLabel') : t('indents.confirmCollection')}
+                {indent.received_at
+                  ? t('indents.collectedLabel')
+                  : rejected
+                    ? t('indents.rejectedLabel')
+                    : t('indents.confirmCollection')}
               </Text>
             </>
           )}
@@ -439,13 +524,17 @@ const styles = StyleSheet.create({
   dotDone: { backgroundColor: colors.primary, borderColor: colors.primary },
   // Hollow yellow: this is the step the indent is sitting on, not one that has happened.
   dotCurrent: { borderColor: colors.secondary, backgroundColor: colors.surface },
+  // Solid red, and the trail stops here. A hollow dot would read as a step still to come.
+  dotRefused: { backgroundColor: colors.error, borderColor: colors.error },
   line: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
   lineDone: { backgroundColor: colors.primary },
 
   stepBody: { flex: 1, paddingBottom: spacing[4] },
   stepLabel: { ...typography.bodyStrong, color: colors.ink },
   stepLabelWaiting: { color: colors.textMuted },
+  stepLabelRefused: { color: colors.error },
   stepMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  stepMetaRefused: { color: colors.error },
 
   section: { ...typography.h3, color: colors.ink, marginBottom: spacing[3] },
 

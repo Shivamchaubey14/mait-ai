@@ -240,7 +240,7 @@ export default function HomeScreen({
                       {breed}
                     </Text>
                     {low && (
-                      <View style={styles.lowBadge}>
+                      <View style={[styles.lowBadge, styles.lowBadgeOnWash]}>
                         <Text style={styles.lowLabel}>{t('home.low')}</Text>
                       </View>
                     )}
@@ -378,16 +378,28 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: colors.surface,
   },
+  // The breed rows sit on the wash now, so the "Low" badge needs a ground of its own to stay
+  // legible — amber on pale blue is a badge that has stopped being a badge.
+  lowBadgeOnWash: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.secondary,
+  },
 
   // `flexShrink`, never `flexGrow`: with three breeds the card is the height of three breeds,
   // and with fifteen it is as tall as the space left and no taller. Growing it would strand a
   // white pane of nothing under a short flask.
   card: {
     flexShrink: 1,
-    backgroundColor: colors.surface,
+    // The same light blue the location card on an AI event wears. Blue is this product's
+    // "here is a fact about your situation" colour — green is the action, amber is what is
+    // waiting on you, red is what is wrong — and the flask is exactly that: not a thing to do,
+    // but the fact everything else on this screen depends on. On white it was furniture, and
+    // sat flat between two coloured tiles above it and a green button below.
+    backgroundColor: colors.infoWash,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.info,
     padding: spacing[4],
     marginBottom: spacing[4],
   },

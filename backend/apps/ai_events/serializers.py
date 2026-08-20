@@ -16,6 +16,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.animals.models import Animal
+from apps.inventory.models import Consumable
 from apps.masterdata.models import MPP, Member, NonMember
 from apps.payments.models import Payment
 from apps.payments.pricing import price_for
@@ -52,6 +53,15 @@ class AIEventTimelineSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class AIEventConsumableSerializer(serializers.Serializer):
+    """One consumable a visit used, named the way the catalogue names it."""
+
+    code = serializers.CharField(source="consumable.code", read_only=True)
+    name = serializers.CharField(source="consumable.name", read_only=True)
+    unit = serializers.CharField(source="consumable.unit", read_only=True)
+    qty = serializers.IntegerField(read_only=True)
+
+
 class AIEventSerializer(serializers.ModelSerializer):
     """
     Read shape for an AI event.
@@ -77,6 +87,7 @@ class AIEventSerializer(serializers.ModelSerializer):
     breed = serializers.CharField(source="animal.breed", read_only=True)
     ear_tag_no = serializers.CharField(source="animal.ear_tag_no", read_only=True)
     semen_breed = serializers.CharField(source="semen_batch.breed", read_only=True, default="")
+    consumables = AIEventConsumableSerializer(many=True, read_only=True)
     amount_due = serializers.SerializerMethodField()
 
     class Meta:
@@ -103,6 +114,8 @@ class AIEventSerializer(serializers.ModelSerializer):
             "breed",
             "ear_tag_no",
             "semen_breed",
+            "doses",
+            "consumables",
             "amount_due",
             "straw_unique_no",
             "stock_deducted",
@@ -243,12 +256,37 @@ class AIEventCreateSerializer(serializers.Serializer):
     the event stays a ``draft`` the Mait can come back to.
     """
 
+    class ConsumableLine(serializers.Serializer):
+        """A catalogue code and how many of it the visit took."""
+
+        code = serializers.CharField(max_length=30)
+        qty = serializers.IntegerField(min_value=1, max_value=99)
+
     client_uuid = serializers.UUIDField()
     mpp_code = serializers.CharField(max_length=20)
     member_code = serializers.CharField(max_length=20, required=False, allow_blank=True)
     non_member_id = serializers.IntegerField(required=False, allow_null=True)
     animal_id = serializers.IntegerField()
     straw_unique_no = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    doses = serializers.IntegerField(
+        required=False,
+        default=1,
+        min_value=1,
+        max_value=5,
+        help_text=(
+            "How many straws of the breed this insemination used. Two in one visit is "
+            "ordinary practice on a difficult animal; every one of them comes off the Mait's "
+            "flask, and the capture is refused if the flask cannot cover them."
+        ),
+    )
+    consumables = ConsumableLine(
+        many=True,
+        required=False,
+        help_text=(
+            "What else the visit took — sheaths, gloves — by catalogue code. Deducted at "
+            "completion alongside the straws, and never charged to the farmer."
+        ),
+    )
     semen_breed = serializers.CharField(
         max_length=30,
         required=False,
@@ -307,6 +345,24 @@ class AIEventCreateSerializer(serializers.Serializer):
                 {"animal_id": "This animal is not registered to that farmer."}
             )
         attrs["animal"] = animal
+
+        # -- Consumables: real catalogue codes, and one line each ---------------------------
+        lines = attrs.get("consumables") or []
+        codes = [line["code"].strip().upper() for line in lines]
+        if len(set(codes)) != len(codes):
+            raise serializers.ValidationError(
+                {"consumables": "Each consumable may be listed once, with its total."}
+            )
+
+        found = {item.code: item for item in Consumable.objects.filter(code__in=codes)}
+        missing = [code for code in codes if code not in found]
+        if missing:
+            raise serializers.ValidationError(
+                {"consumables": f"No such consumable: {', '.join(missing)}."}
+            )
+        attrs["consumable_lines"] = [
+            (found[code], line["qty"]) for code, line in zip(codes, lines, strict=True)
+        ]
 
         return attrs
 

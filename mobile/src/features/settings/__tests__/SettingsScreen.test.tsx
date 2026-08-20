@@ -181,6 +181,17 @@ describe('SettingsScreen', () => {
     expect(screen.getByTestId('profile-cash')).toHaveTextContent(/2 collections today/);
   });
 
+  it('holds a long name to one line rather than wrapping the card taller', async () => {
+    // It used to wrap to two lines, which both grew the ink card on exactly the handsets with
+    // the least room and broke one person's name across two rows. Measured to fit instead —
+    // the same rule Home's hero uses, less the avatar's share of the width.
+    mockApi({});
+    render();
+
+    await waitFor(() => expect(screen.getByText(USER.fullName)).toBeTruthy());
+    expect(screen.getByText(USER.fullName).props.numberOfLines).toBe(1);
+  });
+
   it('names the MPPs and opens the rest of them', async () => {
     mockApi();
     render();

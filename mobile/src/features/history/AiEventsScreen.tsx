@@ -35,6 +35,7 @@ import { useListAiEventsQuery, useListBreedsQuery } from '@api/endpoints';
 import { readQueue } from '@api/queue';
 import type { AIEvent } from '@api/types';
 import { BrandMark } from '@/components/brand';
+import DateRangeSheet, { formatRange } from '@/components/dateRange';
 import { whatIsMissing } from '@/features/aiFlow/resume';
 import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
 import {
@@ -169,7 +170,28 @@ export default function AiEventsScreen({
   const insets = useSafeAreaInsets();
   const [range, setRange] = useState<Range>('today');
 
+  /**
+   * A range of dates, which is a fourth answer to the same question the chips answer — so
+   * choosing one puts the chips out and choosing a chip puts this out. Two filters both
+   * claiming to say what the list is showing is a list nobody can read.
+   */
+  const [dates, setDates] = useState<{ from: string; to: string } | null>(null);
+  const [datesOpen, setDatesOpen] = useState(false);
+
   const events = useListAiEventsQuery();
+  /**
+   * The same list, asked for again with the dates on it.
+   *
+   * Filtered by the server rather than here, because the chips and the dates reach for
+   * different things: `today` and `week` are always inside the page the app already holds,
+   * and a range is not — somebody asking for last March is asking for rows this handset has
+   * never seen. Skipped entirely until a range exists, so the ordinary case still makes one
+   * request.
+   */
+  const ranged = useListAiEventsQuery(
+    { dateFrom: dates?.from, dateTo: dates?.to },
+    { skip: !dates },
+  );
   const breeds = useListBreedsQuery();
 
   /**
@@ -190,6 +212,8 @@ export default function AiEventsScreen({
   useEffect(() => {
     readQueued();
   }, [readQueued]);
+
+  const months = t('calendar.months', { returnObjects: true }) as string[];
 
   const hindi = i18n.language.startsWith('hi');
   const breedName = (code: string): string => {
@@ -219,13 +243,22 @@ export default function AiEventsScreen({
     return state === 'attention' || state === 'queued';
   }).length;
 
-  const shown = results.filter(event =>
-    range === 'today'
-      ? isToday(event.created_at)
-      : range === 'week'
-        ? isThisWeek(event.created_at)
-        : true,
-  );
+  /**
+   * The rows on screen — off the dated request when there is one, off the page already held
+   * when there is not. Never both: a range and a chip are two answers to one question.
+   */
+  const shown = dates
+    ? (ranged.data?.results ?? [])
+    : results.filter(event =>
+        range === 'today'
+          ? isToday(event.created_at)
+          : range === 'week'
+            ? isThisWeek(event.created_at)
+            : true,
+      );
+
+  /** Whichever request the rows came from is the one whose loading and errors are shown. */
+  const source = dates ? ranged : events;
 
   /** Grouped by day, so a week's scroll reads as days rather than as forty rows. */
   const days: { label: string; rows: AIEvent[] }[] = [];
@@ -269,11 +302,13 @@ export default function AiEventsScreen({
     return `${at} · ${breed} · ₹ ${collected}`;
   };
 
-  const empty = {
-    today: { title: t('history.emptyTodayTitle'), body: t('history.emptyTodayBody') },
-    week: { title: t('history.emptyWeekTitle'), body: t('history.emptyWeekBody') },
-    all: { title: t('history.emptyTitle'), body: t('history.emptyBody') },
-  }[range];
+  const empty = dates
+    ? { title: t('history.emptyRangeTitle'), body: t('history.emptyRangeBody') }
+    : {
+        today: { title: t('history.emptyTodayTitle'), body: t('history.emptyTodayBody') },
+        week: { title: t('history.emptyWeekTitle'), body: t('history.emptyWeekBody') },
+        all: { title: t('history.emptyTitle'), body: t('history.emptyBody') },
+      }[range];
 
   return (
     <View style={styles.root}>
@@ -292,18 +327,32 @@ export default function AiEventsScreen({
         </Text>
       </View>
 
-      {/* One control, three answers, always carrying a value — a thing already chosen rather
-          than a question waiting to be answered. */}
+      {/* One control, four answers, always carrying a value — a thing already chosen rather
+          than a question waiting to be answered.
+
+          The three chips share the row equally. They were content-width before, which set
+          "Today" narrower than "This week" and left a ragged gap after "All" — three answers
+          to one question, drawn as three different sizes, reading as a sentence that had been
+          cut off. Equal thirds say they are alternatives.
+
+          The dates button is the exception and is meant to look like one: it is not a fixed
+          answer but the way to ask for another, so it keeps to its content and sits at the end
+          of the row. */}
       <View style={styles.rangeWrap}>
         <View style={styles.ranges}>
           {RANGES.map(key => {
-            const active = key === range;
+            // A chosen range of dates puts all three out: the list is showing neither today,
+            // nor the week, nor everything.
+            const active = !dates && key === range;
             return (
               <Pressable
                 key={key}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                onPress={() => setRange(key)}
+                onPress={() => {
+                  setRange(key);
+                  setDates(null);
+                }}
                 style={[styles.range, active && styles.rangeActive]}
                 testID={`ai-events-range-${key}`}
               >
@@ -316,6 +365,26 @@ export default function AiEventsScreen({
               </Pressable>
             );
           })}
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: !!dates }}
+            accessibilityLabel={t('history.dateRangeTitle')}
+            onPress={() => setDatesOpen(true)}
+            style={[styles.dateChip, !!dates && styles.rangeActive]}
+            testID="ai-events-range-dates"
+          >
+            {/* The glyph or the dates, never both. They say the same thing, and this chip
+                shares a row with three others that have to stay readable — the twenty-odd
+                points a redundant calendar icon costs come straight out of "This week". */}
+            {dates ? (
+              <Text style={[styles.rangeLabel, styles.rangeLabelActive]} numberOfLines={1}>
+                {formatRange(dates.from, dates.to, months)}
+              </Text>
+            ) : (
+              <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
+            )}
+          </Pressable>
         </View>
       </View>
 
@@ -324,22 +393,28 @@ export default function AiEventsScreen({
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={events.isFetching && !events.isLoading}
+            refreshing={source.isFetching && !source.isLoading}
             onRefresh={() => {
+              // Both, always: the headline counts come off the unfiltered request even while
+              // the rows come off the dated one, and a pull that refreshed only what is on
+              // screen would leave the two numbers at the top stale.
               events.refetch();
+              if (dates) {
+                ranged.refetch();
+              }
               readQueued();
             }}
             tintColor={colors.primary}
           />
         }
       >
-        {events.isLoading ? (
+        {source.isLoading ? (
           <SkeletonList rows={5} />
-        ) : events.isError ? (
+        ) : source.isError ? (
           <ErrorState
             title={t('history.errorTitle')}
-            onRetry={() => events.refetch()}
-            busy={events.isFetching}
+            onRetry={() => source.refetch()}
+            busy={source.isFetching}
           />
         ) : shown.length === 0 ? (
           <EmptyState title={empty.title} body={empty.body} />
@@ -348,7 +423,7 @@ export default function AiEventsScreen({
             <View key={day.label} style={styles.day}>
               {/* Dropped when the filter is already one day: "Today" under a chip that says
                   Today is the same word twice. */}
-              {range !== 'today' && (
+              {(!!dates || range !== 'today') && (
                 <View style={styles.dayHead}>
                   <Text style={styles.dayLabel}>{day.label}</Text>
                   <Text style={styles.dayCount}>{day.rows.length}</Text>
@@ -371,6 +446,23 @@ export default function AiEventsScreen({
           ))
         )}
       </ScrollView>
+
+      <DateRangeSheet
+        visible={datesOpen}
+        from={dates?.from ?? null}
+        to={dates?.to ?? null}
+        onClose={() => setDatesOpen(false)}
+        onApply={(from, to) => {
+          setDates({ from, to });
+          setDatesOpen(false);
+        }}
+        onClear={() => {
+          // Back to the chip that was on before the dates were chosen, rather than to a list
+          // showing nothing while it waits to be told what to show.
+          setDates(null);
+          setDatesOpen(false);
+        }}
+      />
     </View>
   );
 }
@@ -396,11 +488,31 @@ const styles = StyleSheet.create({
 
   // -- range chips -----------------------------------------------------------------------
   rangeWrap: { paddingHorizontal: spacing[4], paddingTop: spacing[4] },
-  ranges: { flexDirection: 'row', gap: spacing[2] },
+  ranges: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  // Equal thirds of whatever the dates chip leaves, so the three read as one control with
+  // three settings rather than as three labels that happen to be next to each other.
   range: {
-    paddingHorizontal: spacing[4],
+    flex: 1,
+    paddingHorizontal: spacing[2],
     minHeight: MIN_TOUCH_TARGET - 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  // Content-width, and deliberately not `flex: 1`: it is the way to ask a different question,
+  // not a fourth answer to this one. Shrinkable so a long range cannot crush the three.
+  dateChip: {
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    // Icon-only it would otherwise be the smallest target on the screen, and it is tapped
+    // with the same cold or gloved hands as everything else.
+    minWidth: MIN_TOUCH_TARGET,
+    paddingHorizontal: spacing[3],
+    minHeight: MIN_TOUCH_TARGET - 12,
     justifyContent: 'center',
     borderRadius: radius.pill,
     backgroundColor: colors.surface,

@@ -167,13 +167,14 @@ def take_straw_of_breed(mait, breed: str) -> SemenBatch:
 
     # Imported here rather than at module scope: the AI event services import this module, and
     # naming them at the top would close the loop.
-    from apps.ai_events.models import AIEvent
+    #
+    # Every straw held by an open capture comes from the rows that hold them — an event using
+    # two doses holds two, and reading only `semen_batch` would offer the second one away.
+    from apps.ai_events.models import AIEvent, AIEventStraw
 
     spoken_for = set(
-        AIEvent.objects.filter(
-            mait=mait,
-            status__in=AIEvent.UNFINISHED_STATUSES,
-            semen_batch__isnull=False,
+        AIEventStraw.objects.filter(
+            ai_event__mait=mait, ai_event__status__in=AIEvent.UNFINISHED_STATUSES
         ).values_list("semen_batch_id", flat=True)
     )
 
@@ -250,6 +251,60 @@ def consume_straw(*, mait, straw: SemenBatch, ai_event_id: int, actor=None) -> M
         extra={
             "mait_id": mait.id,
             "ai_event_id": ai_event_id,
+            "balance_after": inventory.qty_available,
+        },
+    )
+    return inventory
+
+
+def consume_supply(*, mait, consumable, qty: int, ai_event_id: int, actor=None) -> MaitInventory:
+    """
+    Take a consumable off a Mait's stock — sheaths, gloves, whatever the visit used.
+
+    The same rules as a straw and for the same reason: **must run inside an open transaction**,
+    so the deduction and the event that caused it commit together, and the row is locked so two
+    completions arriving at once cannot both spend the last sheath.
+
+    Unlike a straw it is a quantity rather than an identity — there is no row per glove — so
+    the guard is the balance, and the check runs after the lock rather than before it.
+    """
+    if qty <= 0:
+        raise ValueError("consume_supply requires a positive quantity.")
+    if not transaction.get_connection().in_atomic_block:
+        raise RuntimeError("consume_supply() must run inside a transaction — see ADR 0002.")
+
+    try:
+        inventory = MaitInventory.objects.select_for_update().get(
+            mait=mait, product_type=ProductType.CONSUMABLE, product_ref_id=consumable.id
+        )
+    except MaitInventory.DoesNotExist:
+        raise InsufficientStock(f"You are not carrying any {consumable.name}.") from None
+
+    if inventory.qty_available < qty:
+        raise InsufficientStock(
+            f"You have {inventory.qty_available} {consumable.name} left, not {qty}."
+        )
+
+    inventory.qty_available -= qty
+    inventory.save(update_fields=["qty_available", "updated_at"])
+
+    MaitInventoryLedger.objects.create(
+        inventory=inventory,
+        txn_type=MaitInventoryLedger.TxnType.CONSUME,
+        qty=-qty,
+        balance_after=inventory.qty_available,
+        ref_type=MaitInventoryLedger.RefType.AI_EVENT,
+        ref_id=ai_event_id,
+        created_by=actor,
+    )
+
+    logger.info(
+        "Consumable used",
+        extra={
+            "mait_id": mait.id,
+            "ai_event_id": ai_event_id,
+            "consumable": consumable.code,
+            "qty": qty,
             "balance_after": inventory.qty_available,
         },
     )

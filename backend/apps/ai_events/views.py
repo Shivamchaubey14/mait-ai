@@ -229,6 +229,8 @@ class AIEventViewSet(
             client_uuid=data["client_uuid"],
             straw_unique_no=data.get("straw_unique_no", ""),
             semen_breed=data.get("semen_breed", ""),
+            doses=data.get("doses", 1),
+            consumables=data.get("consumable_lines", []),
             actor=request.user,
         )
 
@@ -241,6 +243,7 @@ class AIEventViewSet(
                 "status": event.status,
                 "mpp_code": event.mpp.mpp_code,
                 "straw": event.straw_unique_no,
+                "doses": event.doses,
             },
         )
         return Response(AIEventSerializer(event).data, status=status.HTTP_201_CREATED)

@@ -16,11 +16,15 @@
  * cannot finish, so the screen says the difference at the foot rather than leaving it to be
  * learned once, expensively.
  *
- * The search box and the status filters are gone. A Mait has tens of indents, not hundreds,
- * and the two controls cost more room than the rows they were filtering.
+ * The search box is gone and the status chips are back. The two were removed together on one
+ * argument — a Mait has tens of indents, not hundreds, and the controls cost more room than
+ * the rows they filtered — but that argument only ever held for the search box. Status is the
+ * axis this screen is actually asked about ("was anything turned down", "what have I already
+ * collected"), the chips carry their counts so the common questions are answered without a
+ * tap, and the row scrolls sideways instead of taking a second line.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,15 +63,58 @@ export function shortTime(iso: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-/** The one thing the Mait should read off the row. */
-export function statusTone(indent: Indent): { label: string; tone: 'good' | 'warn' | 'info' } {
-  if (indent.status === 'issued') {
-    return { label: indent.status_display, tone: 'good' };
-  }
-  if (indent.status === 'rejected') {
-    return { label: indent.status_display, tone: 'warn' };
-  }
-  return { label: indent.status_display, tone: 'info' };
+/**
+ * Where an indent has actually got to, from the Mait's side.
+ *
+ * Five states, not the server's four. `received_at` is the difference: once a Mait has
+ * collected, the server still calls the indent `issued` — correctly, since issuing is the last
+ * thing *it* did — and the row was saying "Issued" underneath a line reading "Collected 18 Aug
+ * · it is in your stock". The status word is the thing being scanned down a list of twenty, so
+ * it has to be the one that is true.
+ */
+export type IndentState = 'requested' | 'approved' | 'issued' | 'collected' | 'rejected';
+
+export const INDENT_STATES: IndentState[] = [
+  'requested',
+  'approved',
+  'issued',
+  'collected',
+  'rejected',
+];
+
+export function indentState(indent: Indent): IndentState {
+  return indent.received_at ? 'collected' : indent.status;
+}
+
+/**
+ * The colour a state wears, in this product's own vocabulary.
+ *
+ * Green is done, amber is waiting on you, blue is a fact about where it has got to, red is
+ * refused, grey is nothing has happened yet. `issued` is amber rather than green for the
+ * reason the footnote at the bottom of this screen exists: issued is a trip to the depot, not
+ * an ending, and drawing it in the colour of "finished" is the exact mistake being warned
+ * against.
+ */
+export type IndentTone = 'plain' | 'info' | 'waiting' | 'good' | 'bad';
+
+const TONES: Record<IndentState, IndentTone> = {
+  requested: 'plain',
+  approved: 'info',
+  issued: 'waiting',
+  collected: 'good',
+  rejected: 'bad',
+};
+
+/**
+ * The state as a word and a colour, ready to draw.
+ *
+ * Translated rather than taken from the server's `status_display`, which is English-only and
+ * has no word at all for the state the app adds. A screen that says "Issued" in the middle of
+ * a Hindi sentence is a screen that has given up halfway.
+ */
+export function statusTone(indent: Indent, t: TFunction): { label: string; tone: IndentTone } {
+  const state = indentState(indent);
+  return { label: t(`indents.state_${state}`), tone: TONES[state] };
 }
 
 /**
@@ -104,6 +151,7 @@ export default function IndentsScreen({
 }): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const [filter, setFilter] = useState<IndentState | 'all'>('all');
 
   const indents = useListIndentsQuery();
   const breeds = useListBreedsQuery();
@@ -114,9 +162,23 @@ export default function IndentsScreen({
     return (hindi && config?.name_hi) || config?.name || code;
   };
 
-  const rows = indents.data?.results ?? [];
+  const all = indents.data?.results ?? [];
   /** The only count worth a headline: what a Mait could go and fetch today. */
-  const waiting = rows.filter(indent => indent.status === 'issued' && !indent.received_at).length;
+  const waiting = all.filter(indent => indentState(indent) === 'issued').length;
+
+  /**
+   * How many indents sit in each state, counted once off the whole list.
+   *
+   * On the chips rather than left to be discovered by tapping: the reason to filter by
+   * "Rejected" at all is to find out whether anything was, and a chip that answers that
+   * without being tapped has saved the tap.
+   */
+  const counts = all.reduce<Record<string, number>>((tally, indent) => {
+    const state = indentState(indent);
+    return { ...tally, [state]: (tally[state] ?? 0) + 1 };
+  }, {});
+
+  const rows = filter === 'all' ? all : all.filter(indent => indentState(indent) === filter);
 
   return (
     <View style={styles.root}>
@@ -145,6 +207,52 @@ export default function IndentsScreen({
         </Text>
       </View>
 
+      {/* Status chips, back after being taken out.
+
+          They were removed on the grounds that a Mait has tens of indents rather than
+          hundreds, and that the control cost more room than the rows it filtered. That holds
+          for a *search box*; it does not hold for status, which is the one axis anybody
+          actually asks this screen about — "was anything turned down", "what have I already
+          collected". The chips carry their counts, so the common questions are answered
+          without a tap, and the row scrolls sideways rather than wrapping to a second line
+          and taking the height the old argument was about. */}
+      <View style={styles.filterWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filters}
+        >
+          {(['all', ...INDENT_STATES] as const).map(key => {
+            const active = key === filter;
+            const count = key === 'all' ? all.length : (counts[key] ?? 0);
+            return (
+              <Pressable
+                key={key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => setFilter(key)}
+                style={[styles.filter, active && styles.filterActive]}
+                testID={`indent-filter-${key}`}
+              >
+                <Text
+                  style={[styles.filterLabel, active && styles.filterLabelActive]}
+                  numberOfLines={1}
+                >
+                  {key === 'all' ? t('indents.filterAll') : t(`indents.state_${key}`)}
+                </Text>
+                {/* Only where there is something to count. A grey nought beside every unused
+                    status turns the row into a report nobody asked for. */}
+                {count > 0 && (
+                  <Text style={[styles.filterCount, active && styles.filterLabelActive]}>
+                    {count}
+                  </Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
@@ -165,11 +273,20 @@ export default function IndentsScreen({
             busy={indents.isFetching}
           />
         ) : rows.length === 0 ? (
-          <EmptyState title={t('indents.emptyTitle')} body={t('indents.emptyBody')} />
+          // Two different nothings. "You have never raised one" and "none of yours are in
+          // this state" want different answers, and only one of them is worth a way out.
+          all.length > 0 ? (
+            <EmptyState
+              title={t('indents.emptyFilterTitle', { status: t(`indents.state_${filter}`) })}
+              body={t('indents.emptyFilterBody')}
+            />
+          ) : (
+            <EmptyState title={t('indents.emptyTitle')} body={t('indents.emptyBody')} />
+          )
         ) : (
           rows.map(indent => {
-            const status = statusTone(indent);
-            const collectable = indent.status === 'issued' && !indent.received_at;
+            const status = statusTone(indent, t);
+            const collectable = indentState(indent) === 'issued';
             return (
               <Pressable
                 key={indent.id}
@@ -196,7 +313,10 @@ export default function IndentsScreen({
                 </View>
 
                 <View style={[styles.pill, styles[`pill_${status.tone}`]]}>
-                  <Text style={[styles.pillLabel, styles[`pillLabel_${status.tone}`]]}>
+                  <Text
+                    style={[styles.pillLabel, styles[`pillLabel_${status.tone}`]]}
+                    numberOfLines={1}
+                  >
                     {status.label}
                   </Text>
                 </View>
@@ -208,7 +328,7 @@ export default function IndentsScreen({
         )}
 
         {/* The sentence this whole screen exists to prevent somebody learning the hard way. */}
-        {rows.length > 0 && (
+        {rows.length > 0 && filter !== 'collected' && filter !== 'rejected' && (
           <View style={styles.footnote} testID="indents-footnote">
             <Ionicons name="warning-outline" size={17} color={colors.secondaryPressed} />
             <Text style={styles.footnoteText}>{t('indents.issuedIsNotReceived')}</Text>
@@ -277,13 +397,41 @@ const styles = StyleSheet.create({
   rowMetaWaiting: { color: yolk[800] },
 
   pill: { paddingHorizontal: spacing[3], paddingVertical: 3, borderRadius: radius.pill },
-  pill_good: { backgroundColor: colors.primaryWash },
+  pill_plain: { backgroundColor: colors.background },
   pill_info: { backgroundColor: colors.infoWash },
-  pill_warn: { backgroundColor: colors.errorWash },
+  pill_waiting: { backgroundColor: colors.secondaryWash },
+  pill_good: { backgroundColor: colors.primaryWash },
+  pill_bad: { backgroundColor: colors.errorWash },
   pillLabel: { ...typography.caption },
-  pillLabel_good: { color: colors.primaryDark },
+  pillLabel_plain: { color: colors.textMuted },
   pillLabel_info: { color: colors.info },
-  pillLabel_warn: { color: colors.error },
+  pillLabel_waiting: { color: yolk[800] },
+  pillLabel_good: { color: colors.primaryDark },
+  pillLabel_bad: { color: colors.error },
+
+  // -- status chips ----------------------------------------------------------------------
+  filterWrap: { paddingTop: spacing[4] },
+  // The padding lives on the content rather than on the ScrollView, so the first chip starts
+  // at the gutter and the last one can still scroll clear of the edge.
+  filters: { paddingHorizontal: spacing[4], gap: spacing[2] },
+  filter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    minHeight: MIN_TOUCH_TARGET - 12,
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  // Outlined rather than filled, the same way the chips on AI events are: green in this app
+  // means "do this", and choosing what to look at is not an action.
+  filterActive: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
+  filterLabel: { ...typography.label, color: colors.textMuted },
+  filterLabelActive: { color: colors.primaryDark },
+  filterCount: { ...typography.caption, color: colors.textDisabled },
 
   footnote: {
     flexDirection: 'row',

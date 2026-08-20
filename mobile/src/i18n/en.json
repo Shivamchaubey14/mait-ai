@@ -174,8 +174,6 @@
     "earTagHint": "Leave it blank if the animal carries no tag.",
     "noBreeds": "No breeds configured yet",
     "noBreedsBody": "Ask the administrator to add them before capturing.",
-    "whichBreed": "Which breed?",
-    "whichBreedSubtitle": "Only breeds you are carrying straws for.",
     "strawsWithYou_one": "{{count}} straw with you",
     "strawsWithYou_other": "{{count}} straws with you",
     "noneInStock": "None in your stock",
@@ -234,7 +232,21 @@
     "forFarmerWithCode": "For {{name}} · {{code}}",
     "codeGoesToHer": "The code goes to her own phone",
     "codeGoesToHerBody": "Read off her record, never typed here. She reads it back to you.",
-    "sendTheCode": "Send the code"
+    "sendTheCode": "Send the code",
+    "whatDidYouUse": "What did you use?",
+    "whatDidYouUseSubtitle": "Doses and consumables both come off your stock.",
+    "strawsTab": "Straws",
+    "consumablesTab": "Consumables",
+    "strawsWithSpecies": "{{species}} · {{count}} with you",
+    "suppliesWithYou": "{{code}} · {{count}} {{unit}} with you",
+    "twoDosesTwoSheaths": "Two doses in one visit usually means two sheaths. Correct the count if you used fewer.",
+    "noConsumables": "Nothing in your bag",
+    "noConsumablesBody": "Sheaths and gloves appear here once the store issues them.",
+    "doseCount_one": "{{count}} {{breed}} dose",
+    "doseCount_other": "{{count}} {{breed}} doses",
+    "consumableCount_one": "{{count}} consumable",
+    "consumableCount_other": "{{count}} consumables",
+    "usedTally": "{{doses}} · {{consumables}}"
   },
   "unfinished": {
     "eyebrow": "Unfinished",
@@ -447,7 +459,17 @@
     "emptyTodayTitle": "Nothing recorded today",
     "emptyTodayBody": "Events you record today appear here.",
     "emptyWeekTitle": "Nothing this week",
-    "emptyWeekBody": "Try All to see everything you have recorded."
+    "emptyWeekBody": "Try All to see everything you have recorded.",
+    "range_dates": "Dates",
+    "dateRangeTitle": "Choose dates",
+    "dateRangeFirst": "Tap the first day, then the last.",
+    "dateRangeThen": "Now tap the last day.",
+    "dateRangeApply": "Show these dates",
+    "dateRangeClear": "Clear",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "emptyRangeTitle": "Nothing in these dates",
+    "emptyRangeBody": "Try a wider range, or All."
   },
   "aiEvent": {
     "errorTitle": "Could not open this event",
@@ -466,7 +488,6 @@
     "missingBody_payment_pending": "The payment is recorded, but unconfirmed.",
     "missingBodyCash": "{{amount}} cash is recorded, but unconfirmed.",
     "breed": "Breed",
-    "oneDose": "One dose · {{type}}",
     "payment": "Payment",
     "paymentNotRecorded": "Nothing recorded yet",
     "deductedFromMilk": "Deducted from milk",
@@ -498,7 +519,13 @@
     "missing_notClosed": "This capture was never closed off",
     "missingBody_notClosed": "Her payment is confirmed. The record itself was never finished.",
     "finish_notClosed": "Close this off",
-    "couldNotClose": "This could not be closed. Try again when you have a signal."
+    "couldNotClose": "This could not be closed. Try again when you have a signal.",
+    "used": "What was used",
+    "usedQty": "{{count}} {{unit}}",
+    "doseCount_one": "{{count}} dose · {{type}}",
+    "doseCount_other": "{{count}} doses · {{type}}",
+    "openPhoto": "Open the full photo",
+    "photoFull": "AI proof photo, full size"
   },
   "requestStock": {
     "action": "Request stock",
@@ -636,7 +663,22 @@
     "confirmFailed": "Could not confirm. Pull down to refresh and try again.",
     "notSyncedTitle": "Not sent to Indent Easy yet",
     "notSyncedBody": "The office can still see it. Tell them if it stays this way.",
-    "collectAtNamed": "Collect at {{plant}} depot"
+    "collectAtNamed": "Collect at {{plant}} depot",
+    "state_requested": "Requested",
+    "state_approved": "Approved",
+    "state_issued": "Issued",
+    "state_collected": "Collected",
+    "state_rejected": "Rejected",
+    "filterAll": "All",
+    "emptyFilterTitle": "Nothing is {{status}}",
+    "emptyFilterBody": "Tap All to see every indent you have raised.",
+    "stepRejected": "Turned down by store",
+    "stepRejectedMeta": "Reason: {{reason}}",
+    "stepRejectedNoReason": "No reason was given. Ask the office.",
+    "nothingToIssue": "Nothing will be issued",
+    "rejectedTitle": "This request was turned down",
+    "rejectedBody": "Nothing is coming for it. Raise a new request if you still need the stock.",
+    "rejectedLabel": "Turned down"
   },
   "done": {
     "recorded": "Recorded",
@@ -670,5 +712,9 @@
     "allSentBody": "Nothing is waiting on this phone.",
     "needsYou_one": "One needs you.",
     "needsYou_other": "{{count}} need you."
+  },
+  "calendar": {
+    "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    "weekdays": ["S", "M", "T", "W", "T", "F", "S"]
   }
 }

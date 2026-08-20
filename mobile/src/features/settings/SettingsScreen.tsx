@@ -20,7 +20,15 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,6 +41,7 @@ import {
   useLogoutMutation,
 } from '@api/endpoints';
 import { LanguageToggle } from '@/components/brand';
+import { fitTitleSize } from '@/components/hero';
 import { loggedOut } from '@/features/auth/authSlice';
 import { useAppDispatch, useAppSelector } from '@/store';
 import {
@@ -176,6 +185,7 @@ export default function SettingsScreen({
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const user = useAppSelector(state => state.auth.user);
   const refreshToken = useAppSelector(state => state.auth.refreshToken);
@@ -238,6 +248,15 @@ export default function SettingsScreen({
     dispatch(loggedOut());
   };
 
+  /**
+   * What is left for the name after the avatar has taken its share.
+   *
+   * `AVATAR_ROW` is the 52pt circle plus the 16pt gap beside it; the gutters are the hero's
+   * own 24pt each side. Kept as arithmetic rather than measured on layout because a name that
+   * resizes itself after the first paint is a name that visibly jumps.
+   */
+  const nameSize = fitTitleSize(user?.fullName ?? '', width - spacing[5] * 2 - AVATAR_ROW);
+
   const syncBody =
     pending > 0
       ? lastSyncAt
@@ -257,10 +276,23 @@ export default function SettingsScreen({
           <Text style={styles.avatarLabel}>{initialsOf(user?.fullName ?? '')}</Text>
         </View>
         <View style={styles.heroBody}>
-          {/* Two lines, because plenty of names do not fit on one at this size and a name
-              clipped to "Shivam Kumar Chaub…" on the screen a Mait shows a farmer is worse
-              than a name that wraps. */}
-          <Text style={styles.heroTitle} numberOfLines={2}>
+          {/* One line, set to whatever size makes it fit.
+
+              It used to wrap to two, on the reasoning that a name clipped to "Shivam Kumar
+              Chaub…" is worse than a name that wraps — which was true of the only two choices
+              then on the table. Measuring it is the third: nothing is clipped, nothing is
+              broken across lines, and the card stops changing height depending on whose phone
+              it is. The same rule Home's hero uses, through the same function, with the avatar
+              and its gap taken off the width first. */}
+          <Text
+            style={[
+              styles.heroTitle,
+              { fontSize: nameSize, lineHeight: Math.round(nameSize * 1.25) },
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+          >
             {user?.fullName ?? ''}
           </Text>
           {!!meta && (
@@ -418,6 +450,9 @@ export default function SettingsScreen({
     </View>
   );
 }
+
+/** The 52pt avatar plus the 16pt gap beside it — what the name in the hero does not get. */
+const AVATAR_ROW = 52 + spacing[4];
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },

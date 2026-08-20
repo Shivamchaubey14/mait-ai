@@ -24,9 +24,14 @@ from apps.core.exceptions import (
     StrawAlreadyConsumed,
 )
 from apps.core.services import record_audit
-from apps.inventory.services import consume_straw, get_straw_for_mait, take_straw_of_breed
+from apps.inventory.services import (
+    consume_straw,
+    consume_supply,
+    get_straw_for_mait,
+    take_straw_of_breed,
+)
 
-from .models import AIEvent, AIEventTimeline
+from .models import AIEvent, AIEventConsumable, AIEventStraw, AIEventTimeline
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +76,8 @@ def start_ai_event(
     client_uuid,
     straw_unique_no: str = "",
     semen_breed: str = "",
+    doses: int = 1,
+    consumables=None,
     actor=None,
     synced_from_offline: bool = False,
 ) -> AIEvent:
@@ -109,13 +116,20 @@ def start_ai_event(
         # draft back with it — a failed scan must not leave a half-started event behind.
         verify_straw(event, straw_unique_no, semen_breed=semen_breed, actor=actor)
     elif semen_breed:
-        reserve_straw_by_breed(event, semen_breed, actor=actor)
+        reserve_straw_by_breed(event, semen_breed, doses=doses, actor=actor)
+
+    # What the visit took besides semen. Recorded here, deducted at completion, exactly like
+    # the straws: a capture abandoned halfway costs a Mait no gloves.
+    for consumable, qty in consumables or []:
+        AIEventConsumable.objects.create(ai_event=event, consumable=consumable, qty=qty)
 
     return event
 
 
 @transaction.atomic
-def reserve_straw_by_breed(event: AIEvent, semen_breed: str, *, actor=None) -> AIEvent:
+def reserve_straw_by_breed(
+    event: AIEvent, semen_breed: str, *, doses: int = 1, actor=None
+) -> AIEvent:
     """
     Hold one straw of a breed against this event, with no number read (SRS §6.3 step 4).
 
@@ -129,20 +143,32 @@ def reserve_straw_by_breed(event: AIEvent, semen_breed: str, *, actor=None) -> A
     (SRS §6.4.3), so a capture the Mait abandons costs them nothing — no insemination
     happened.
     """
-    straw = take_straw_of_breed(event.mait, semen_breed)
+    # One at a time, and each one is held the moment it is picked — so the second dose cannot
+    # be handed the straw the first has already taken.
+    held = []
+    for _ in range(max(1, doses)):
+        straw = take_straw_of_breed(event.mait, semen_breed)
+        AIEventStraw.objects.create(ai_event=event, semen_batch=straw)
+        held.append(straw)
 
+    code = semen_breed.strip().upper()
     _transition(
         event,
         AIEvent.Status.STRAW_VERIFIED,
         actor=actor,
-        note=f"{semen_breed.strip().upper()} straw held from stock",
+        note=(
+            f"{code} straw held from stock"
+            if len(held) == 1
+            else f"{len(held)} {code} straws held from stock"
+        ),
     )
-    event.semen_batch = straw
+    event.semen_batch = held[0]
+    event.doses = len(held)
     # Carried when the depot issued numbered stock, and left blank when it did not. An
     # unnumbered row's placeholder is a bookkeeping artefact, not a number anyone read off a
     # straw, and writing it here would look like a scan that never happened.
-    event.straw_unique_no = "" if straw.is_unnumbered else straw.unique_straw_no
-    event.save(update_fields=["semen_batch", "straw_unique_no", "status", "updated_at"])
+    event.straw_unique_no = "" if held[0].is_unnumbered else held[0].unique_straw_no
+    event.save(update_fields=["semen_batch", "doses", "straw_unique_no", "status", "updated_at"])
     return event
 
 
@@ -172,6 +198,7 @@ def verify_straw(
     )
     event.semen_batch = straw
     event.straw_unique_no = straw.unique_straw_no
+    AIEventStraw.objects.get_or_create(ai_event=event, semen_batch=straw)
     event.save(update_fields=["semen_batch", "straw_unique_no", "status", "updated_at"])
     return event
 
@@ -244,53 +271,90 @@ def mark_payment_pending(event: AIEvent, *, actor=None) -> AIEvent:
     return event
 
 
-def _deduct_a_straw(event: AIEvent, *, actor=None, without_stock: bool = False) -> None:
+def _deduct_the_stock(event: AIEvent, *, actor=None, without_stock: bool = False) -> None:
     """
-    Take this event's straw out of the Mait's stock.
+    Take everything this insemination used out of the Mait's stock.
 
-    Normally that is all this is, and it is the only place stock moves for an insemination. A
-    straw that cannot be deducted refuses the completion, and it has to: two events holding
-    one straw arriving together is exactly the case where one straw would otherwise serve two
-    animals, which is the thing this platform exists to prevent (ADR 0002).
+    Every straw held for it — one, or two on a difficult animal — and every consumable the
+    Mait said they used. All of it inside the caller's transaction, so the deductions and the
+    event's own status change commit together or not at all.
+
+    A straw that cannot be deducted refuses the completion, and it has to: two events holding
+    one straw arriving together is exactly the case where one straw would serve two animals,
+    which is the thing this platform exists to prevent (ADR 0002).
 
     ``without_stock`` is the one exception, and it is never inferred — it comes from a person
     pressing *Close this off* on a record the app has already told them is stuck. Then a straw
-    that has already gone stops being a refusal: the animal was served, that straw was
-    inserted into it, and the flask is one short whatever the system does next. Deducting a
-    *different* straw would charge the holding twice for one insemination, and could refuse
-    the record all over again for want of a straw that was never this event's to spend. So the
-    completion does the one thing actually outstanding — it closes the event — and the record
-    carries ``stock_deducted=False`` and a line on the audit trail saying so.
+    that has already gone stops being a refusal: the animal was served, that straw was inserted
+    into it, and the flask is one short whatever the system does next. Deducting a *different*
+    straw would charge the holding twice for one insemination, and could refuse the record all
+    over again for want of a straw that was never this event's to spend. So the completion does
+    the one thing actually outstanding — it closes the event — and the record carries
+    ``stock_deducted=False`` and a line on the audit trail saying so.
 
     Even then the flag is a permission rather than an instruction: where the straw *is* still
     in stock it is deducted exactly as always. And what keeps the exception from becoming a
-    hole is the picker, which no longer offers a straw that an unfinished capture is holding
-    (``take_straw_of_breed``) — two of a Mait's events can no longer come to share one straw
-    in the first place. This path is for the records that already did.
-    """
-    try:
-        consume_straw(mait=event.mait, straw=event.semen_batch, ai_event_id=event.id, actor=actor)
-        return
-    except (InsufficientStock, StrawAlreadyConsumed) as gone:
-        if not without_stock:
-            raise
+    hole is the picker, which no longer offers a straw an unfinished capture is holding
+    (``take_straw_of_breed``) — two of a Mait's events can no longer come to share one straw in
+    the first place. This path is for the records that already did.
 
-        event.stock_deducted = False
-        AIEventTimeline.objects.create(
-            ai_event=event,
-            from_status=event.status,
-            to_status=event.status,
-            note=f"Closed without a stock movement — {gone}"[:255],
-            actor=actor,
-        )
-        logger.info(
-            "AI event closed without a stock movement",
-            extra={
-                "ai_event_id": event.id,
-                "mait_id": event.mait_id,
-                "straw": event.straw_unique_no,
-            },
-        )
+    Consumables follow the straws rather than leading them: they are the smaller loss, and a
+    record that closed without its sheath while the semen it used went unaccounted for would be
+    the wrong way round.
+    """
+    # `semen_batch` is the first of them and stays on the event for every reader that wants the
+    # breed; the rows are what says how many there were. An event recorded before the rows
+    # existed has none, and its one straw is still on the event itself.
+    held = [row.semen_batch for row in event.straws.select_related("semen_batch").all()]
+    if not held and event.semen_batch_id:
+        held = [event.semen_batch]
+
+    for straw in held:
+        try:
+            consume_straw(mait=event.mait, straw=straw, ai_event_id=event.id, actor=actor)
+        except (InsufficientStock, StrawAlreadyConsumed) as gone:
+            if not without_stock:
+                raise
+
+            event.stock_deducted = False
+            AIEventTimeline.objects.create(
+                ai_event=event,
+                from_status=event.status,
+                to_status=event.status,
+                note=f"Closed without a stock movement — {gone}"[:255],
+                actor=actor,
+            )
+            logger.info(
+                "AI event closed without a stock movement",
+                extra={
+                    "ai_event_id": event.id,
+                    "mait_id": event.mait_id,
+                    "straw": straw.unique_straw_no,
+                },
+            )
+
+    for line in event.consumables.select_related("consumable").all():
+        try:
+            consume_supply(
+                mait=event.mait,
+                consumable=line.consumable,
+                qty=line.qty,
+                ai_event_id=event.id,
+                actor=actor,
+            )
+        except InsufficientStock as short:
+            if not without_stock:
+                raise
+
+            # Same rule, same reason: the sheath was opened whatever the count says.
+            event.stock_deducted = False
+            AIEventTimeline.objects.create(
+                ai_event=event,
+                from_status=event.status,
+                to_status=event.status,
+                note=f"Closed without a stock movement — {short}"[:255],
+                actor=actor,
+            )
 
 
 @transaction.atomic
@@ -321,10 +385,17 @@ def complete_ai_event(event: AIEvent, *, actor=None, without_stock: bool = False
     if event.semen_batch_id is None:
         raise InvalidStateTransition("This event has no verified straw to deduct.")
 
-    _deduct_a_straw(event, actor=actor, without_stock=without_stock)
+    consumables = list(event.consumables.select_related("consumable").all())
 
+    _deduct_the_stock(event, actor=actor, without_stock=without_stock)
+
+    used = [f"{event.doses} straw" if event.doses == 1 else f"{event.doses} straws"]
+    used += [f"{line.qty} × {line.consumable.name}" for line in consumables]
     _transition(
-        event, AIEvent.Status.COMPLETED, actor=actor, note="Payment initiated, straw deducted"
+        event,
+        AIEvent.Status.COMPLETED,
+        actor=actor,
+        note=f"Payment initiated, {', '.join(used)} deducted"[:255],
     )
     event.completed_at = timezone.now()
     event.save(update_fields=["status", "completed_at", "stock_deducted", "updated_at"])
@@ -342,7 +413,10 @@ def complete_ai_event(event: AIEvent, *, actor=None, without_stock: bool = False
             "mpp_code": event.mpp.mpp_code,
         },
     )
-    logger.info("AI event completed", extra={"ai_event_id": event.id})
+    logger.info(
+        "AI event completed",
+        extra={"ai_event_id": event.id, "doses": event.doses},
+    )
     return event
 
 

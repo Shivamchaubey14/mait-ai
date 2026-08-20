@@ -97,6 +97,14 @@ class AIEvent(TimeStampedModel):
         db_index=True,
         help_text="Denormalised from the batch so history survives any master-data cleanup.",
     )
+    doses = models.PositiveSmallIntegerField(
+        default=1,
+        help_text=(
+            "How many straws of the breed this insemination used. Two in one visit is "
+            "ordinary practice on a difficult animal, and both come off the Mait's flask — "
+            "so the count is the event's, not an assumption of one held anywhere else."
+        ),
+    )
 
     stock_deducted = models.BooleanField(
         default=True,
@@ -200,6 +208,73 @@ class AIEvent(TimeStampedModel):
             raise ValidationError(
                 "An AI event must be for exactly one of a member or a non-member."
             )
+
+
+class AIEventStraw(models.Model):
+    """
+    One straw held against one event.
+
+    A `semen_batch` on the event itself could only ever name one, and an insemination may use
+    two. These are the rows the completion deducts, and the rows the picker reads when it
+    refuses to hand a straw already spoken for to a second capture — so the promise that ten
+    straws complete ten doses survives an event that takes two of them.
+
+    `AIEvent.semen_batch` stays, carrying the first of these. Every reader of it — the breed
+    on a row, the reports, the portal — wants the breed rather than the identity, and they all
+    keep working unchanged.
+    """
+
+    ai_event = models.ForeignKey(AIEvent, on_delete=models.CASCADE, related_name="straws")
+    semen_batch = models.ForeignKey(
+        "inventory.SemenBatch", on_delete=models.PROTECT, related_name="ai_event_straws"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "ai_event_straw"
+        ordering = ["id"]
+        constraints = [
+            # One straw cannot be held twice by the same event; the picker keeps two events
+            # off one straw.
+            models.UniqueConstraint(fields=["ai_event", "semen_batch"], name="ai_event_straw_once"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.ai_event_id}: {self.semen_batch_id}"
+
+
+class AIEventConsumable(models.Model):
+    """
+    A consumable used on one insemination — sheaths, gloves, whatever the visit took.
+
+    Recorded rather than assumed. The dairy's own rule of thumb is one sheath per dose, and a
+    rule of thumb is exactly what a stock count must not be built on: a Mait who used one
+    sheath for two doses, or three because two tore, ends the month with a flask that
+    disagrees with the ledger and no way to say where the difference went.
+
+    Not charged to the farmer. Consumables come off the Mait's stock and are replaced by
+    indent; what she pays for is the service and the semen.
+    """
+
+    ai_event = models.ForeignKey(AIEvent, on_delete=models.CASCADE, related_name="consumables")
+    consumable = models.ForeignKey(
+        "inventory.Consumable", on_delete=models.PROTECT, related_name="ai_event_uses"
+    )
+    qty = models.PositiveSmallIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "ai_event_consumable"
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ai_event", "consumable"], name="ai_event_consumable_once"
+            ),
+            models.CheckConstraint(condition=models.Q(qty__gt=0), name="ai_event_consumable_qty"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.ai_event_id}: {self.consumable_id} × {self.qty}"
 
 
 class AIEventTimeline(models.Model):

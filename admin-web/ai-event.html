@@ -174,31 +174,63 @@
             </figure>
           </div>
 
-          <!-- SRS §9.6 — the trail a dispute is settled from, so it is readable rather than
-               raw before/after payloads. -->
-          <section class="panel" aria-labelledby="trail-title">
-            <div class="panel__head">
-              <h2 class="panel__title" id="trail-title">
-                <span class="panel__icon trail__icon" aria-hidden="true">
-                  <!-- The dashboard's clock, for the one panel that is about time. -->
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.7"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7.5V12l3.5 2" />
-                  </svg>
-                </span>
-                Audit trail
-              </h2>
-            </div>
-            <ol class="trail" id="trail">
-              <li class="trail__step">Loading…</li>
-            </ol>
-          </section>
+          <!-- The right-hand column holds two panels now: what the visit took, and the trail
+               of when. The wrapper is what keeps them one grid cell — dropped straight into
+               the grid they would have become a second row, with the photo beside a gap. -->
+          <div class="event__side">
+            <!-- What came off the Mait's stock for this event: the doses of semen and every
+                 consumable they said they used. It is the half of the record the flask is
+                 reconciled against at month end, and until now it lived nowhere an admin
+                 could read it. -->
+            <section class="panel panel--used" aria-labelledby="used-title">
+              <div class="panel__head">
+                <h2 class="panel__title" id="used-title">
+                  <span class="panel__icon used__icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8" />
+                    </svg>
+                  </span>
+                  What was used
+                </h2>
+              </div>
+              <ul class="used" id="used">
+                <li class="used__row">Loading…</li>
+              </ul>
+            </section>
+
+            <!-- SRS §9.6 — the trail a dispute is settled from, so it is readable rather than
+                 raw before/after payloads. -->
+            <section class="panel" aria-labelledby="trail-title">
+              <div class="panel__head">
+                <h2 class="panel__title" id="trail-title">
+                  <span class="panel__icon trail__icon" aria-hidden="true">
+                    <!-- The dashboard's clock, for the one panel that is about time. -->
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7.5V12l3.5 2" />
+                    </svg>
+                  </span>
+                  Audit trail
+                </h2>
+              </div>
+              <ol class="trail" id="trail">
+                <li class="trail__step">Loading…</li>
+              </ol>
+            </section>
+          </div>
         </div>
       </main>
     </div>

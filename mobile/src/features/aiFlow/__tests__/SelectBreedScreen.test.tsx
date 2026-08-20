@@ -6,7 +6,11 @@
  * in it. So the cases that matter are about stock: a breed the flask is empty of cannot be
  * chosen, cannot be hidden, and cannot open an event.
  *
- * It is also the step that commits, so what it sends is asserted rather than assumed.
+ * It is also where a Mait says how much of it they used — two doses on a difficult animal,
+ * and the sheaths and gloves the visit took — because all of it comes off the same flask and
+ * none of it used to be recorded anywhere.
+ *
+ * It is the step that commits, so what it sends is asserted rather than assumed.
  */
 
 import React from 'react';
@@ -24,7 +28,12 @@ const BREEDS = [
 /** What POST /ai-events/ answers, when a test gets that far. */
 let created: Response | null = null;
 
-function mockApi(byBreed: Record<string, number>) {
+/** What the bag holds, in the shape the summary serves it. */
+function supply(code: string, name: string, qty: number, unit = 'piece') {
+  return { code, name, qty, unit, issued: qty, used: 0, issued_at: null };
+}
+
+function mockApi(byBreed: Record<string, number>, consumables: ReturnType<typeof supply>[] = []) {
   created = null;
   sentBody = null;
   (global.fetch as jest.Mock).mockImplementation(async (input: string | Request) => {
@@ -39,7 +48,7 @@ function mockApi(byBreed: Record<string, number>) {
       total_straws: Object.values(byBreed).reduce((sum, n) => sum + n, 0),
       is_low_stock: false,
       by_breed: byBreed,
-      consumables: [],
+      consumables,
       assets: [],
     });
   });
@@ -100,15 +109,15 @@ describe('SelectBreedScreen', () => {
     mockApi({ HF_CROSS: 18, SAHIWAL: 12 });
     renderScreen();
 
-    await waitFor(() => expect(screen.getByText('18 straws with you')).toBeTruthy());
-    expect(screen.getByText('12 straws with you')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Cow · 18 with you')).toBeTruthy());
+    expect(screen.getByText('Cow · 12 with you')).toBeTruthy();
   });
 
   it('warns on a breed that is nearly out rather than only when it is gone', async () => {
     mockApi({ HF_CROSS: 18, SAHIWAL: 2 });
     renderScreen();
 
-    await waitFor(() => expect(screen.getByText('2 straws with you')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Cow · 2 with you')).toBeTruthy());
     expect(screen.getByText('Low')).toBeTruthy();
   });
 
@@ -144,7 +153,7 @@ describe('SelectBreedScreen', () => {
     mockApi({ SAHIWAL: 1 });
     renderScreen('SAHIWAL');
 
-    await waitFor(() => expect(screen.getByText('1 straw with you')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Cow · 1 with you')).toBeTruthy());
     created = problemResponse(409, 'insufficient-stock');
     fireEvent.press(screen.getByTestId('breed-continue'));
 
@@ -167,7 +176,7 @@ describe('SelectBreedScreen', () => {
     renderScreen('SAHIWAL');
 
     // No tap on a row: the step arrives answered, and agreeing is one tap on Continue.
-    await waitFor(() => expect(screen.getByText('12 straws with you')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Cow · 12 with you')).toBeTruthy());
     fireEvent.press(screen.getByTestId('breed-continue'));
 
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
@@ -195,6 +204,91 @@ describe('SelectBreedScreen', () => {
 
     // A blocked breed cannot be the answer, and no other breed may be chosen on her behalf.
     expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('sends the doses the animal actually took', async () => {
+    // A difficult animal takes a second straw in the same visit. It used to go unrecorded,
+    // and a month of that ends with a flask that disagrees with the ledger.
+    mockApi({ HF_CROSS: 18 });
+    renderScreen();
+
+    fireEvent.press(await screen.findByText('HF Cross'));
+    fireEvent.press(screen.getByTestId('doses-HF_CROSS-more'));
+    expect(screen.getByTestId('doses-HF_CROSS-value')).toHaveTextContent('2');
+
+    fireEvent.press(screen.getByTestId('breed-continue'));
+
+    await waitFor(async () => expect((await createdBody()).doses).toBe(2));
+  });
+
+  it('will not claim more doses than the flask holds of that breed', async () => {
+    mockApi({ HF_CROSS: 18, SAHIWAL: 1 });
+    renderScreen();
+
+    fireEvent.press(await screen.findByText('Sahiwal'));
+    fireEvent.press(screen.getByTestId('doses-SAHIWAL-more'));
+
+    // One straw, one dose. The refusal is here rather than at the server, with the animal
+    // still unserved.
+    expect(screen.getByTestId('doses-SAHIWAL-value')).toHaveTextContent('1');
+  });
+
+  it('sends what came out of the bag as well as what came out of the flask', async () => {
+    mockApi({ HF_CROSS: 18 }, [supply('SHEATH', 'AI sheaths', 46), supply('GLOVES', 'Gloves', 38)]);
+    renderScreen();
+
+    await screen.findByText('Cow · 18 with you');
+    fireEvent.press(screen.getByText('HF Cross'));
+    fireEvent.press(screen.getByTestId('use-tab-consumables'));
+
+    // A sheath is already there — every insemination takes one, and forgetting it is the
+    // commonest way this count drifts.
+    await waitFor(() => expect(screen.getByTestId('supply-SHEATH-value')).toHaveTextContent('1'));
+    fireEvent.press(screen.getByTestId('supply-SHEATH-more'));
+    fireEvent.press(screen.getByText('Gloves'));
+
+    fireEvent.press(screen.getByTestId('breed-continue'));
+
+    await waitFor(async () =>
+      expect((await createdBody()).consumables).toEqual(
+        expect.arrayContaining([
+          { code: 'SHEATH', qty: 2 },
+          { code: 'GLOVES', qty: 1 },
+        ]),
+      ),
+    );
+  });
+
+  it('lets a Mait take a consumable back off the list', async () => {
+    // The suggestion is a default, not a decision: one sheath for two doses happens, and the
+    // ledger has to be able to say so.
+    mockApi({ HF_CROSS: 18 }, [supply('SHEATH', 'AI sheaths', 46)]);
+    renderScreen();
+
+    await screen.findByText('Cow · 18 with you');
+    fireEvent.press(screen.getByText('HF Cross'));
+    fireEvent.press(screen.getByTestId('use-tab-consumables'));
+    await waitFor(() => screen.getByTestId('supply-SHEATH-value'));
+    fireEvent.press(screen.getByTestId('supply-SHEATH-less'));
+
+    fireEvent.press(screen.getByTestId('breed-continue'));
+
+    await waitFor(async () => expect((await createdBody()).consumables).toEqual([]));
+  });
+
+  it('counts both halves of the answer on the tabs', async () => {
+    mockApi({ HF_CROSS: 18 }, [supply('SHEATH', 'AI sheaths', 46)]);
+    renderScreen();
+
+    fireEvent.press(await screen.findByText('HF Cross'));
+    fireEvent.press(screen.getByTestId('doses-HF_CROSS-more'));
+
+    // The tab a Mait is not looking at still says what is on it, which is the whole reason
+    // the two halves are tabs rather than two screens.
+    expect(screen.getByTestId('use-tab-straws-count')).toHaveTextContent('2');
+    await waitFor(() =>
+      expect(screen.getByTestId('use-tab-consumables-count')).toHaveTextContent('1'),
+    );
   });
 
   it('says the round cannot go ahead when the flask is empty', async () => {

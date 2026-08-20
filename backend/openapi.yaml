@@ -3056,6 +3056,18 @@ components:
           type: string
           readOnly: true
           default: ''
+        doses:
+          type: integer
+          readOnly: true
+          description: How many straws of the breed this insemination used. Two in
+            one visit is ordinary practice on a difficult animal, and both come off
+            the Mait's flask — so the count is the event's, not an assumption of one
+            held anywhere else.
+        consumables:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIEventConsumable'
+          readOnly: true
         amount_due:
           type: string
           nullable: true
@@ -3135,7 +3147,9 @@ components:
       - cancelled_reason
       - client_uuid
       - completed_at
+      - consumables
       - created_at
+      - doses
       - ear_tag_no
       - gps_lat
       - gps_lng
@@ -3174,6 +3188,28 @@ components:
           description: Close a record whose straw has already left the Mait's stock,
             without spending another one on it. The straw is still deducted where
             it is there to deduct.
+    AIEventConsumable:
+      type: object
+      description: One consumable a visit used, named the way the catalogue names
+        it.
+      properties:
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        unit:
+          type: string
+          readOnly: true
+        qty:
+          type: integer
+          readOnly: true
+      required:
+      - code
+      - name
+      - qty
+      - unit
     AIEventCreateRequest:
       type: object
       description: |-
@@ -3214,6 +3250,22 @@ components:
         straw_unique_no:
           type: string
           maxLength: 30
+        doses:
+          type: integer
+          maximum: 5
+          minimum: 1
+          default: 1
+          description: How many straws of the breed this insemination used. Two in
+            one visit is ordinary practice on a difficult animal; every one of them
+            comes off the Mait's flask, and the capture is refused if the flask cannot
+            cover them.
+        consumables:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsumableLineRequest'
+          description: What else the visit took — sheaths, gloves — by catalogue code.
+            Deducted at completion alongside the straws, and never charged to the
+            farmer.
         semen_breed:
           type: string
           description: 'Breed of the straw used. This is how the capture flow names
@@ -3917,6 +3969,21 @@ components:
       - name
       - rate
       - unit
+    ConsumableLineRequest:
+      type: object
+      description: A catalogue code and how many of it the visit took.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 30
+        qty:
+          type: integer
+          maximum: 99
+          minimum: 1
+      required:
+      - code
+      - qty
     ConsumableWrite:
       type: object
       description: |-

@@ -595,6 +595,14 @@ interface OptionCardProps {
   blockedReason?: string;
   tone?: Tone;
   /** Renders the right-hand radio dot, for a one-of-N choice. */
+  /**
+   * A control on the right, in place of the tick.
+   *
+   * For a row whose answer is a number rather than a yes: two doses of this breed, three of
+   * these sheaths. The tick says the row was chosen and stops there, which on those rows is
+   * the smaller half of the answer.
+   */
+  trailing?: React.ReactNode;
   radio?: boolean;
   /**
    * The same choice, marked only once made: a filled tick on the chosen row and nothing at
@@ -620,6 +628,7 @@ export function OptionCard({
   pill,
   pillTone = 'primary',
   selected = false,
+  trailing,
   blockedReason,
   tone = 'primary',
   radio = false,
@@ -719,6 +728,8 @@ export function OptionCard({
           </Text>
         </View>
       )}
+
+      {trailing}
 
       {/* A tick rather than a dot once chosen: at arm's length in sunlight a filled circle
           and an empty one are the same circle, and a tick is not. */}

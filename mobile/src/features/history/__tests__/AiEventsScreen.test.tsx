@@ -18,7 +18,16 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import AiEventsScreen from '../AiEventsScreen';
 import { clearQueue, enqueue } from '@api/queue';
 import type { AIEvent } from '@api/types';
+import i18n from '@/i18n';
+import { formatRange, isoDate } from '@/components/dateRange';
 import { jsonResponse, renderWithStore } from '@/test-utils';
+
+/** A day the calendar will actually offer — the grid refuses anything after today. */
+function daysBack(days: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d;
+}
 
 /** A payment started and never confirmed — the state a capture waiting on her code is in. */
 const UNCONFIRMED = {
@@ -181,6 +190,131 @@ describe('AiEventsScreen', () => {
     // Mait's hands, and a row claiming it did is the beginning of an accusation.
     await waitFor(() => expect(screen.getByText(/HF Cross · ₹ 0/)).toBeTruthy());
     expect(screen.queryByText(/₹ 50/)).toBeNull();
+  });
+
+  it('gives the three chips equal width, so they read as one control', async () => {
+    // They were content-width, which made "Today" narrower than "This week" and left a ragged
+    // gap after "All" — three answers to one question drawn at three different sizes.
+    mockApi([event()]);
+    renderWithStore(<AiEventsScreen onOpen={onOpen} />);
+
+    await waitFor(() => screen.getByTestId('ai-events-range-today'));
+    const widths = ['today', 'week', 'all'].map(key => {
+      const style = screen.getByTestId(`ai-events-range-${key}`).props.style;
+      return (Array.isArray(style) ? style : [style])
+        .filter(Boolean)
+        .reduce((acc, layer) => ({ ...acc, ...layer }), {}).flex;
+    });
+    expect(widths).toEqual([1, 1, 1]);
+  });
+
+  it('asks the server for a chosen range rather than filtering the page it holds', async () => {
+    // A Mait asking for last March is asking for rows this handset has never downloaded, so
+    // the range has to reach the API. Filtering the cached page would answer "nothing".
+    mockApi([event()]);
+    renderWithStore(<AiEventsScreen onOpen={onOpen} />);
+
+    await waitFor(() => screen.getByTestId('ai-events-range-dates'));
+    fireEvent.press(screen.getByTestId('ai-events-range-dates'));
+
+    const first = isoDate(daysBack(6));
+    const last = isoDate(daysBack(2));
+    fireEvent.press(screen.getByTestId(`date-range-day-${first}`));
+    fireEvent.press(screen.getByTestId(`date-range-day-${last}`));
+    fireEvent.press(screen.getByTestId('date-range-apply'));
+
+    await waitFor(() => {
+      const asked = (global.fetch as jest.Mock).mock.calls
+        .map(([input]) => (typeof input === 'string' ? input : input.url))
+        .filter((url: string) => url.includes('date_from'));
+      expect(asked.some((url: string) => url.includes(`date_from=${first}`))).toBe(true);
+      expect(asked.some((url: string) => url.includes(`date_to=${last}`))).toBe(true);
+    });
+  });
+
+  it('names the chosen range on the chip, since nothing else on the screen says it', async () => {
+    mockApi([event()]);
+    renderWithStore(<AiEventsScreen onOpen={onOpen} />);
+
+    await waitFor(() => screen.getByTestId('ai-events-range-dates'));
+    fireEvent.press(screen.getByTestId('ai-events-range-dates'));
+
+    const day = daysBack(3);
+    fireEvent.press(screen.getByTestId(`date-range-day-${isoDate(day)}`));
+    fireEvent.press(screen.getByTestId('date-range-apply'));
+
+    // Asserted through the same formatter the chip uses, so the test says "the chip names the
+    // range" rather than pinning the exact wording of the label.
+    const months = i18n.t('calendar.months', { returnObjects: true }) as string[];
+    await waitFor(() =>
+      expect(screen.getByText(formatRange(isoDate(day), isoDate(day), months))).toBeTruthy(),
+    );
+  });
+
+  it('puts all three chips out while a range of dates is in force', async () => {
+    // Two filters both claiming to say what the list is showing is a list nobody can read.
+    mockApi([event()]);
+    renderWithStore(<AiEventsScreen onOpen={onOpen} />);
+
+    await waitFor(() => screen.getByTestId('ai-events-range-today'));
+    expect(screen.getByTestId('ai-events-range-today').props.accessibilityState.selected).toBe(
+      true,
+    );
+
+    fireEvent.press(screen.getByTestId('ai-events-range-dates'));
+    fireEvent.press(screen.getByTestId(`date-range-day-${isoDate(daysBack(3))}`));
+    fireEvent.press(screen.getByTestId('date-range-apply'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('ai-events-range-today').props.accessibilityState.selected).toBe(
+        false,
+      ),
+    );
+    expect(screen.getByTestId('ai-events-range-dates').props.accessibilityState.selected).toBe(
+      true,
+    );
+  });
+
+  it('drops the range when a chip is tapped again', async () => {
+    mockApi([event()]);
+    renderWithStore(<AiEventsScreen onOpen={onOpen} />);
+
+    await waitFor(() => screen.getByTestId('ai-events-range-dates'));
+    fireEvent.press(screen.getByTestId('ai-events-range-dates'));
+    fireEvent.press(screen.getByTestId(`date-range-day-${isoDate(daysBack(3))}`));
+    fireEvent.press(screen.getByTestId('date-range-apply'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('ai-events-range-dates').props.accessibilityState.selected).toBe(
+        true,
+      ),
+    );
+
+    fireEvent.press(screen.getByTestId('ai-events-range-all'));
+
+    expect(screen.getByTestId('ai-events-range-dates').props.accessibilityState.selected).toBe(
+      false,
+    );
+    expect(screen.getByTestId('ai-events-range-all').props.accessibilityState.selected).toBe(true);
+  });
+
+  it('still counts the headline off the whole list while a range is in force', async () => {
+    // The two numbers at the top are what a Mait checks before anything else, and they mean
+    // "how is the day going" — not "how did the days I happen to be looking at go".
+    mockApi([
+      event(),
+      event({ id: 31, owner_name: 'Radha Singh', status: 'payment_pending', payment: UNCONFIRMED }),
+    ]);
+    renderWithStore(<AiEventsScreen onOpen={onOpen} />);
+
+    await waitFor(() => screen.getByTestId('ai-events-range-dates'));
+    fireEvent.press(screen.getByTestId('ai-events-range-dates'));
+    fireEvent.press(screen.getByTestId(`date-range-day-${isoDate(daysBack(1))}`));
+    fireEvent.press(screen.getByTestId('date-range-apply'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('ai-events-headline')).toHaveTextContent(/2 today, 1 waiting/),
+    );
   });
 
   it('opens the event that was tapped', async () => {

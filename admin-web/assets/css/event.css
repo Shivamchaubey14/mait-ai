@@ -44,12 +44,81 @@
   min-height: 0;
 }
 
+/* Two panels, one grid cell. What was used keeps its own height and the trail takes the rest,
+   because the first is four lines at most and the second is however long the event has been
+   going. */
+.event__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.event__side > .panel--used {
+  flex: 0 0 auto;
+}
+
+.event__side > .panel:not(.panel--used) {
+  flex: 1 1 auto;
+}
+
+/* Ink, like the trail's, so the two headings in this column read as a pair. */
+.used__icon {
+  background: var(--ink-50);
+}
+
+.used {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-2);
+}
+
+.used__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.used__row:last-child {
+  border-bottom: 0;
+}
+
+.used__name {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.used__meta {
+  display: block;
+  font-size: var(--text-caption);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.used__qty {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+
+/* Nothing recorded is a fact about the event, not an empty state to apologise for: every
+   capture before this was built said nothing about its sheaths. */
+.used__none {
+  padding: var(--space-2) 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
 /* The panel's own bottom margin would add to the column height and put the two columns back
    out of step by exactly one space unit. The grid gap spaces this row.
    A flex column so the head stays put and only the steps scroll — five entries fit without
    scrolling at all, which is the case this screen is read in; forty is the dispute that needs
    it, and there the head has to stay visible. */
-.event > .panel {
+.event > .panel,
+.event__side > .panel {
   display: flex;
   flex-direction: column;
   margin-bottom: 0;

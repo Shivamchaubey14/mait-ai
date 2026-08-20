@@ -284,7 +284,9 @@ export const maitaiApi = api.injectEndpoints({
         headers: idempotencyHeaders(body.client_uuid),
         body,
       }),
-      invalidatesTags: ['AIEvent'],
+      // The straws and the supplies both come off stock at completion, so what the app is
+      // holding as "in my flask" is out of date the moment a capture opens.
+      invalidatesTags: ['AIEvent', 'Inventory'],
     }),
 
     // ---- indents -------------------------------------------------------------------

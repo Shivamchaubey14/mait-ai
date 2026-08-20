@@ -21,6 +21,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -189,6 +190,7 @@ export default function AiEventDetailScreen({
   const event = detail.data;
   /** A finished event opens as a statement; an unfinished one opens with its own history. */
   const [trailOpen, setTrailOpen] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
 
   const hindi = i18n.language.startsWith('hi');
   const breedName = (code: string): string => {
@@ -274,6 +276,13 @@ export default function AiEventDetailScreen({
    */
   const chosen = event.photo_source === 'gallery';
 
+  /** Said in both places the photo appears, so the two can never disagree about it. */
+  const photoCaption = !photo
+    ? t('aiEvent.photoPending')
+    : t(chosen ? 'aiEvent.photoChosen' : 'aiEvent.photoCaption', {
+        when: shortStamp(event.performed_at ?? event.created_at),
+      });
+
   const trailRows = trail.data ?? [];
 
   return (
@@ -346,7 +355,10 @@ export default function AiEventDetailScreen({
             icon="git-branch-outline"
             label={t('aiEvent.breed')}
             value={breedName(event.semen_breed || event.breed)}
-            note={t('aiEvent.oneDose', { type: t(`aiFlow.animalType.${event.animal_type}`) })}
+            note={t('aiEvent.doseCount', {
+              count: event.doses ?? 1,
+              type: t(`aiFlow.animalType.${event.animal_type}`),
+            })}
             testID="tile-breed"
           />
           <Tile
@@ -385,36 +397,76 @@ export default function AiEventDetailScreen({
           />
         </View>
 
+        {/* What came off the Mait's stock for this event.
+
+            The semen is on the tile above; this is the rest of it — the sheath, the gloves —
+            which is what a month-end count actually goes missing on and what nobody could see
+            anywhere until it was recorded. An event captured before the app asked for them has
+            none, and the card stays off rather than claiming the visit used nothing. */}
+        {event.consumables?.length > 0 && (
+          <View style={styles.used} testID="ai-event-used">
+            <View style={styles.usedHead}>
+              <Ionicons name="cube-outline" size={16} color={colors.textMuted} />
+              <Text style={styles.usedTitle}>{t('aiEvent.used')}</Text>
+            </View>
+
+            {event.consumables.map(line => (
+              <View key={line.code} style={styles.usedRow}>
+                <View style={styles.usedBody}>
+                  <Text style={styles.usedName} numberOfLines={1}>
+                    {line.name}
+                  </Text>
+                  <Text style={styles.usedMeta}>{line.code}</Text>
+                </View>
+                <Text style={styles.usedQty}>
+                  {t('aiEvent.usedQty', { count: line.qty, unit: line.unit })}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* The photo, at the size it is worth showing. Never a thumbnail: it is the evidence
             the whole record hangs on, and a farmer has to be able to recognise her own animal
             in it from arm's length. */}
         <View style={styles.photoCard}>
-          <View style={styles.photoFrame}>
+          {/* Tapping it opens it whole. The card crops to a 180pt band so the page below it
+              stays reachable, and a cropped photograph is exactly the wrong thing to settle
+              an argument with — the ear tag a farmer is being asked to recognise is as often
+              as not in the part the crop took. */}
+          <Pressable
+            accessibilityRole={photo ? 'imagebutton' : 'image'}
+            accessibilityLabel={photo ? t('aiEvent.openPhoto') : t('aiEvent.noPhotoYet')}
+            accessibilityState={{ disabled: !photo }}
+            disabled={!photo}
+            onPress={() => setPhotoOpen(true)}
+            style={({ pressed }) => [styles.photoFrame, pressed && styles.photoFramePressed]}
+            testID="ai-event-photo-open"
+          >
             {photo ? (
-              <Image
-                source={{ uri: photo }}
-                style={styles.photo}
-                resizeMode="cover"
-                accessibilityLabel={t('aiEvent.proofPhoto')}
-                testID="ai-event-photo"
-              />
+              <>
+                <Image
+                  source={{ uri: photo }}
+                  style={styles.photo}
+                  resizeMode="cover"
+                  accessibilityLabel={t('aiEvent.proofPhoto')}
+                  testID="ai-event-photo"
+                />
+                {/* The one affordance saying the photo does something. Bottom right, where it
+                    sits over the corner of a yard rather than over an animal. */}
+                <View style={styles.expand}>
+                  <Ionicons name="expand-outline" size={16} color={colors.surface} />
+                </View>
+              </>
             ) : (
               <View style={styles.photoEmpty} testID="ai-event-photo-empty">
                 <Ionicons name="camera-outline" size={22} color={colors.surface} />
                 <Text style={styles.photoEmptyLabel}>{t('aiEvent.noPhotoYet')}</Text>
               </View>
             )}
-          </View>
+          </Pressable>
           <Text style={[styles.photoCaption, chosen && styles.photoCaptionChosen]}>
-            {!photo
-              ? t('aiEvent.photoPending')
-              : chosen
-                ? t('aiEvent.photoChosen', {
-                    when: shortStamp(event.performed_at ?? event.created_at),
-                  })
-                : t('aiEvent.photoCaption', {
-                    when: shortStamp(event.performed_at ?? event.created_at),
-                  })}
+            {photoCaption}
           </Text>
         </View>
 
@@ -456,6 +508,67 @@ export default function AiEventDetailScreen({
 
         {showTrail && <Text style={styles.footnote}>{t('aiEvent.trailFootnote')}</Text>}
       </ScrollView>
+
+      {/* The photo, whole.
+
+          `contain` rather than `cover`, on black: this is evidence being examined, and a
+          viewer that crops to fill the screen is the same crop the card already made. Black
+          rather than the app's ink, because the surround should read as absence and let the
+          photograph be the only thing lit.
+
+          A plain Modal rather than a route: it is a look, not a place. Nothing about the
+          record changes behind it, and the back gesture should return the Mait to the record
+          rather than out of it — which `onRequestClose` gives on Android for free. */}
+      <Modal
+        visible={photoOpen && !!photo}
+        transparent={false}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setPhotoOpen(false)}
+        testID="ai-event-photo-viewer"
+      >
+        <View style={styles.viewer}>
+          <Pressable
+            style={styles.viewerCanvas}
+            accessibilityLabel={t('common.close')}
+            onPress={() => setPhotoOpen(false)}
+          >
+            <Image
+              source={{ uri: photo }}
+              style={styles.viewerPhoto}
+              resizeMode="contain"
+              accessibilityLabel={t('aiEvent.photoFull')}
+              testID="ai-event-photo-full"
+            />
+          </Pressable>
+
+          {/* A button as well as the tap-anywhere, because tap-to-dismiss is invisible and
+              this is the one screen in the app with no visible way out of its own. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+            onPress={() => setPhotoOpen(false)}
+            style={({ pressed }) => [
+              styles.viewerClose,
+              { top: insets.top + spacing[3] },
+              pressed && styles.photoFramePressed,
+            ]}
+            testID="ai-event-photo-close"
+          >
+            <Ionicons name="close" size={22} color={colors.surface} />
+          </Pressable>
+
+          {/* The same line the card carries, kept with the photograph it qualifies: whether
+              this was taken here or chosen from the gallery is the first question asked of a
+              photograph being used as proof. */}
+          <Text
+            style={[styles.viewerCaption, { paddingBottom: insets.bottom + spacing[4] }]}
+            testID="ai-event-photo-viewer-caption"
+          >
+            {photoCaption}
+          </Text>
+        </View>
+      </Modal>
 
       {/* The way back into the capture, and only where there is a capture to go back into. */}
       {waiting && !!onResume && (
@@ -575,6 +688,34 @@ const styles = StyleSheet.create({
   tileValue: { ...typography.h3, color: colors.ink, marginTop: spacing[2] },
   tileNote: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
 
+  // -- what was used -----------------------------------------------------------------------
+  used: {
+    padding: spacing[4],
+    marginBottom: spacing[3],
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  usedHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[2],
+  },
+  usedTitle: { ...typography.label, color: colors.textMuted, letterSpacing: 1 },
+  usedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  usedBody: { flex: 1 },
+  usedName: { ...typography.bodyStrong, color: colors.ink },
+  usedMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  usedQty: { ...typography.bodyStrong, color: colors.ink },
+
   // -- photo -----------------------------------------------------------------------------
   photoCard: {
     borderRadius: radius.lg,
@@ -585,13 +726,50 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   photoFrame: { height: 180, backgroundColor: colors.ink },
+  photoFramePressed: { opacity: 0.85 },
   photo: { width: '100%', height: '100%' },
+  // Over the photograph, so it needs its own ground: a bare glyph disappears against a light
+  // patch of yard.
+  expand: {
+    position: 'absolute',
+    right: spacing[3],
+    bottom: spacing[3],
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
   photoEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing[2] },
   photoEmptyLabel: { ...typography.caption, color: colors.surface, opacity: 0.8 },
   photoCaption: { ...typography.caption, color: colors.textMuted, padding: spacing[3] },
   // Not red — a chosen photo is allowed, not an error. Amber is this product's "read this
   // before you rely on it", which is exactly what the line is for.
   photoCaptionChosen: { color: yolk[800], backgroundColor: colors.secondaryWash },
+
+  // -- the photo, whole ------------------------------------------------------------------
+  viewer: { flex: 1, backgroundColor: '#000000' },
+  viewerCanvas: { flex: 1 },
+  viewerPhoto: { width: '100%', height: '100%' },
+  viewerClose: {
+    position: 'absolute',
+    right: spacing[4],
+    width: MIN_TOUCH_TARGET,
+    height: MIN_TOUCH_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  viewerCaption: {
+    ...typography.caption,
+    color: colors.surface,
+    opacity: 0.8,
+    textAlign: 'center',
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[3],
+  },
 
   // -- trail -----------------------------------------------------------------------------
   trailToggle: {

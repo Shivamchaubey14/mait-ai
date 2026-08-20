@@ -174,8 +174,6 @@
     "earTagHint": "टैग न हो तो खाली छोड़ दें।",
     "noBreeds": "अभी कोई नस्ल दर्ज नहीं है",
     "noBreedsBody": "दर्ज करने से पहले प्रशासक से नस्लें जुड़वाएँ।",
-    "whichBreed": "कौन सी नस्ल?",
-    "whichBreedSubtitle": "सिर्फ़ वे नस्लें जिनकी स्ट्रॉ आपके पास हैं।",
     "strawsWithYou_one": "आपके पास {{count}} स्ट्रॉ",
     "strawsWithYou_other": "आपके पास {{count}} स्ट्रॉ",
     "noneInStock": "आपके स्टॉक में नहीं",
@@ -234,7 +232,21 @@
     "forFarmerWithCode": "{{name}} के लिए · {{code}}",
     "codeGoesToHer": "कोड उन्हीं के फ़ोन पर जाएगा",
     "codeGoesToHerBody": "उनके रिकॉर्ड से लिया गया, यहाँ टाइप नहीं होता। वे आपको पढ़कर बताएँगी।",
-    "sendTheCode": "कोड भेजें"
+    "sendTheCode": "कोड भेजें",
+    "whatDidYouUse": "आपने क्या इस्तेमाल किया?",
+    "whatDidYouUseSubtitle": "डोज़ और सामान, दोनों आपके स्टॉक से घटेंगे।",
+    "strawsTab": "स्ट्रॉ",
+    "consumablesTab": "सामान",
+    "strawsWithSpecies": "{{species}} · आपके पास {{count}}",
+    "suppliesWithYou": "{{code}} · आपके पास {{count}} {{unit}}",
+    "twoDosesTwoSheaths": "एक ही बार में दो डोज़ मतलब आम तौर पर दो शीथ। कम इस्तेमाल की हों तो गिनती ठीक कर लें।",
+    "noConsumables": "आपके बैग में कुछ नहीं",
+    "noConsumablesBody": "स्टोर से मिलने पर शीथ और दस्ताने यहाँ दिखेंगे।",
+    "doseCount_one": "{{count}} {{breed}} डोज़",
+    "doseCount_other": "{{count}} {{breed}} डोज़",
+    "consumableCount_one": "{{count}} सामान",
+    "consumableCount_other": "{{count}} सामान",
+    "usedTally": "{{doses}} · {{consumables}}"
   },
   "unfinished": {
     "eyebrow": "अधूरे",
@@ -447,7 +459,17 @@
     "emptyTodayTitle": "आज कुछ दर्ज नहीं",
     "emptyTodayBody": "आज दर्ज किए इवेंट यहाँ दिखेंगे।",
     "emptyWeekTitle": "इस हफ़्ते कुछ नहीं",
-    "emptyWeekBody": "सब देखने के लिए 'सभी' चुनें।"
+    "emptyWeekBody": "सब देखने के लिए 'सभी' चुनें।",
+    "range_dates": "तारीख़",
+    "dateRangeTitle": "तारीख़ चुनें",
+    "dateRangeFirst": "पहला दिन दबाएँ, फिर आख़िरी दिन।",
+    "dateRangeThen": "अब आख़िरी दिन दबाएँ।",
+    "dateRangeApply": "ये तारीख़ें दिखाएँ",
+    "dateRangeClear": "हटाएँ",
+    "previousMonth": "पिछला महीना",
+    "nextMonth": "अगला महीना",
+    "emptyRangeTitle": "इन तारीख़ों में कुछ नहीं",
+    "emptyRangeBody": "बड़ी अवधि चुनें, या सभी देखें।"
   },
   "aiEvent": {
     "errorTitle": "यह इवेंट नहीं खुल सका",
@@ -466,7 +488,6 @@
     "missingBody_payment_pending": "पेमेंट दर्ज है, पर पुष्टि नहीं हुई।",
     "missingBodyCash": "{{amount}} नकद दर्ज है, पर पुष्टि नहीं हुई।",
     "breed": "नस्ल",
-    "oneDose": "एक डोज़ · {{type}}",
     "payment": "पेमेंट",
     "paymentNotRecorded": "अभी कुछ दर्ज नहीं",
     "deductedFromMilk": "दूध के भुगतान से कटेगा",
@@ -498,7 +519,13 @@
     "missing_notClosed": "यह कैप्चर कभी बंद नहीं हुआ",
     "missingBody_notClosed": "पेमेंट की पुष्टि हो चुकी है। रिकॉर्ड ही पूरा नहीं हुआ।",
     "finish_notClosed": "इसे बंद करें",
-    "couldNotClose": "यह बंद नहीं हो सका। नेटवर्क आने पर फिर कोशिश करें।"
+    "couldNotClose": "यह बंद नहीं हो सका। नेटवर्क आने पर फिर कोशिश करें।",
+    "used": "क्या इस्तेमाल हुआ",
+    "usedQty": "{{count}} {{unit}}",
+    "doseCount_one": "{{count}} डोज़ · {{type}}",
+    "doseCount_other": "{{count}} डोज़ · {{type}}",
+    "openPhoto": "पूरी फ़ोटो खोलें",
+    "photoFull": "एआई प्रमाण फ़ोटो, पूरे आकार में"
   },
   "requestStock": {
     "action": "स्टॉक मांगें",
@@ -636,7 +663,22 @@
     "confirmFailed": "पुष्टि नहीं हो सकी। नीचे खींचकर फिर कोशिश करें।",
     "notSyncedTitle": "अभी Indent Easy को नहीं भेजा गया",
     "notSyncedBody": "ऑफ़िस को फिर भी दिखता है। ऐसा ही रहे तो उन्हें बताएँ।",
-    "collectAtNamed": "{{plant}} डिपो से लें"
+    "collectAtNamed": "{{plant}} डिपो से लें",
+    "state_requested": "माँगा गया",
+    "state_approved": "मंज़ूर",
+    "state_issued": "जारी",
+    "state_collected": "ले लिया",
+    "state_rejected": "अस्वीकृत",
+    "filterAll": "सभी",
+    "emptyFilterTitle": "कुछ भी {{status}} नहीं",
+    "emptyFilterBody": "अपनी सभी माँगें देखने के लिए सभी दबाएँ।",
+    "stepRejected": "स्टोर ने मना किया",
+    "stepRejectedMeta": "कारण: {{reason}}",
+    "stepRejectedNoReason": "कोई कारण नहीं बताया गया। दफ़्तर से पूछें।",
+    "nothingToIssue": "कुछ जारी नहीं होगा",
+    "rejectedTitle": "यह माँग अस्वीकार कर दी गई",
+    "rejectedBody": "इसके लिए कुछ नहीं आएगा। ज़रूरत हो तो नई माँग भेजें।",
+    "rejectedLabel": "अस्वीकृत"
   },
   "done": {
     "recorded": "दर्ज हो गया",
@@ -670,5 +712,22 @@
     "allSentBody": "इस फ़ोन में कुछ बाकी नहीं।",
     "needsYou_one": "एक में आपकी ज़रूरत है।",
     "needsYou_other": "{{count}} में आपकी ज़रूरत है।"
+  },
+  "calendar": {
+    "months": [
+      "जन",
+      "फ़र",
+      "मार्च",
+      "अप्रै",
+      "मई",
+      "जून",
+      "जुल",
+      "अग",
+      "सित",
+      "अक्तू",
+      "नव",
+      "दिस"
+    ],
+    "weekdays": ["र", "सो", "मं", "बु", "गु", "शु", "श"]
   }
 }
