@@ -716,5 +716,36 @@
   "calendar": {
     "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     "weekdays": ["S", "M", "T", "W", "T", "F", "S"]
+  },
+  "route": {
+    "homeContext": "Today's work and your flask",
+    "stockContext": "Straws, consumables, equipment",
+    "historyContext": "Every insemination you have recorded",
+    "settingsContext": "Your figures, MPPs and indents",
+    "captureContext": "Step 1 of 6 · owner type",
+    "aiEvent": "AI event",
+    "aiEventContext": "The whole record, and its trail",
+    "indent": "Indent",
+    "indentContext": "Where your stock has got to",
+    "indentsContext": "What you have asked the store for",
+    "requestStock": "Raise an indent",
+    "requestStockContext": "Ask the store for stock",
+    "queue": "Waiting to send",
+    "queueContext": "Records still held on this phone",
+    "unfinished": "Unfinished captures",
+    "unfinishedContext": "Work still owed a finish"
+  },
+  "pull": {
+    "holding": "Checking your holding…",
+    "events": "Checking your events…",
+    "waiting": "Checking what is waiting…",
+    "figures": "Checking your figures…"
+  },
+  "scope": {
+    "added_one": "You have been given {{codes}}",
+    "added_other": "You have been given {{codes}}",
+    "removed_one": "{{codes}} is no longer yours",
+    "removed_other": "{{codes}} are no longer yours",
+    "both": "Your collection points have changed"
   }
 }

@@ -8,10 +8,10 @@
  */
 
 import React from 'react';
-import { ScrollView } from 'react-native';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import HomeScreen from '../HomeScreen';
+import PullToRefresh from '@/components/pullToRefresh';
 import type { AIEvent, InventorySummary } from '@api/types';
 import { loggedIn } from '@/features/auth/authSlice';
 import type { AuthUser } from '@/features/auth/authSlice';
@@ -237,9 +237,12 @@ describe('HomeScreen', () => {
     mockApi(SUMMARY, []);
     render({ pending: 3, onOpenQueue, onSync });
 
-    const scroll = screen.UNSAFE_getByType(ScrollView);
+    // Reached through the container rather than through the pan gesture: what is under test
+    // is what a completed pull *does*, and driving PanResponder here would be testing React
+    // Native's gesture arbitration instead.
+    const pull = screen.UNSAFE_getByType(PullToRefresh);
     await act(async () => {
-      scroll.props.refreshControl.props.onRefresh();
+      await pull.props.onRefresh();
     });
 
     expect(onSync).toHaveBeenCalled();

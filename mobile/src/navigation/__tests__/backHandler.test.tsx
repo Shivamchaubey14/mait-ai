@@ -165,6 +165,20 @@ describe('back inside the capture flow', () => {
     expect(screen.queryByText('Which collection point?')).toBeNull();
   });
 
+  it('leaves the capture for the tab that was tapped, even when it is the one already lit', async () => {
+    // The bar under the flow shows the tab the capture was entered from, so tapping Home
+    // there is a tap on an apparently-active tab. Treating that as "already there" and doing
+    // nothing leaves a Mait in the flow with a tab bar that answers nothing.
+    renderApp();
+    fireEvent.press(await screen.findByTestId('home-start-ai'));
+    await screen.findByText('Is she a member?');
+
+    fireEvent.press(screen.getByTestId('tab-home'));
+
+    await screen.findByTestId('home-start-ai');
+    expect(screen.queryByText('Is she a member?')).toBeNull();
+  });
+
   it('leaves the flow for Home at the first step, where nothing is committed yet', async () => {
     renderApp();
     fireEvent.press(await screen.findByTestId('home-start-ai'));

@@ -160,6 +160,10 @@ export default function SyncQueueScreen({
         (needing > 0 ? ' ' + t('queue.needsYou', { count: needing }) : '')
       }
       onBack={onBack}
+      // The one screen wearing the flow's frame that is not a step, so the one that can carry
+      // a pull. Retrying is exactly what a pull means here: these records are waiting on a
+      // network, and pulling is how a Mait asks again.
+      pull={{ label: t('pull.waiting'), onRefresh: onRetryAll }}
       tabBarBelow
       cta={
         captures.length > 0

@@ -11,7 +11,7 @@
  * generated at send time would be new on every attempt and deduplicate nothing.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useTranslation } from 'react-i18next';
@@ -33,6 +33,8 @@ import { drainQueue } from '@api/sync';
 import type { SyncProgress } from '@api/sync';
 import type { AIEvent, Animal, Member, MPP, NonMember, NonMemberSummary } from '@api/types';
 import BottomNav, { Tab } from '@/components/BottomNav';
+import { RouteTransitionHost, useRouteTransition } from '@/components/routeTransition';
+import type { RouteKey } from '@/navigation/routes';
 import { Toast } from '@/components/toast';
 import AddNonMemberScreen from '@/features/aiFlow/AddNonMemberScreen';
 import CapturePhotoScreen from '@/features/aiFlow/CapturePhotoScreen';
@@ -50,6 +52,7 @@ import UnfinishedScreen from '@/features/aiFlow/UnfinishedScreen';
 import { resumePoint, whatIsMissing } from '@/features/aiFlow/resume';
 import OwnerTypeScreen, { OwnerType } from '@/features/aiFlow/OwnerTypeScreen';
 import LoginScreen from '@/features/auth/LoginScreen';
+import { useLiveScope } from '@/features/auth/liveScope';
 import AiEventDetailScreen from '@/features/history/AiEventDetailScreen';
 import AiEventsScreen from '@/features/history/AiEventsScreen';
 import SyncQueueScreen, { toCaptures } from '@/features/history/SyncQueueScreen';
@@ -78,6 +81,29 @@ type CaptureStep =
   | 'recordPayment'
   | 'done';
 
+/**
+ * The order the flow runs in, for deciding which way a slide goes.
+ *
+ * `addNonMember` sits beside the roster it is reached from and `done` at the end. A step not
+ * in this list compares as -1, which reads as "further back than anything" — so leaving the
+ * flow slides backwards, which is what leaving is.
+ */
+const STEP_ORDER: CaptureStep[] = [
+  'ownerType',
+  'selectMpp',
+  'selectFarmer',
+  'selectNonMember',
+  'addNonMember',
+  'confirmFarmer',
+  'selectAnimal',
+  'selectBreed',
+  'capturePhoto',
+  'memberStatement',
+  'collectPayment',
+  'recordPayment',
+  'done',
+];
+
 /** Who the capture is for. Exactly one of the two codes is ever set. */
 type Farmer =
   | { kind: 'member'; name: string; memberCode: string }
@@ -94,7 +120,91 @@ export default function RootNavigator(): React.JSX.Element {
   const accessToken = useAppSelector(state => state.auth.accessToken);
 
   const [tab, setTab] = useState<Tab>('home');
-  const [step, setStep] = useState<CaptureStep | null>(null);
+  const [step, setStepDirect] = useState<CaptureStep | null>(null);
+  /**
+   * The Mait's own scope, kept current while the app is open.
+   *
+   * Mounted here rather than on a screen because it outlives every screen: an MPP assigned
+   * while a Mait is halfway through Inventory has to be true by the time they reach the
+   * capture flow, which reads the same list.
+   */
+  const scope = useLiveScope();
+  /**
+   * Pulled out on its own because it is the stable half.
+   *
+   * `sync` must not depend on the whole hook: `scope.change` moves whenever the office
+   * reassigns something, and the netinfo effect below depends on `sync` — so taking the whole
+   * object would rebuild `sync`, re-run that effect, drain again, and re-read the scope, in a
+   * circle. `refresh` never changes identity, so this is what `sync` is allowed to see.
+   */
+  const refreshScope = scope.refresh;
+
+  /**
+   * A scope change, said out loud.
+   *
+   * A silent refetch turns "3 MPPs" into "4 MPPs" under the Mait's name with nothing to say
+   * why, and the capture flow quietly grows a collection point they have never been told
+   * about. Both directions are worth a sentence — losing one matters more than gaining one,
+   * because a Mait who walks to a yard that is no longer theirs has wasted a morning.
+   */
+  const scopeNotice = ((): string | null => {
+    if (!scope.change) {
+      return null;
+    }
+    const { added, removed } = scope.change;
+    if (added.length && removed.length) {
+      return t('scope.both');
+    }
+    return added.length
+      ? t('scope.added', { count: added.length, codes: added.join(', ') })
+      : t('scope.removed', { count: removed.length, codes: removed.join(', ') });
+  })();
+
+  const transition = useRouteTransition();
+
+  /**
+   * The tab to light while the screen behind is still the old one.
+   *
+   * Only the four that are tabs: a card on its way to an AI event is not a reason to move the
+   * bar, because the record is layered over the tab that opened it and that tab stays lit.
+   */
+  const pendingTab = (['home', 'stock', 'history', 'settings'] as RouteKey[]).includes(
+    transition.pending as RouteKey,
+  )
+    ? (transition.pending as Tab)
+    : null;
+
+  /**
+   * Where each step sits in the flow, so a change between two of them knows which way it is
+   * going without every call site being told.
+   *
+   * The forks are flattened onto the path they belong to — a non-member's list sits where a
+   * member's list sits, because from the Mait's side they are the same question asked of a
+   * different roster, and a slide that went backwards between them would say otherwise.
+   */
+  const stepRef = useRef<CaptureStep | null>(null);
+  stepRef.current = step;
+
+  /**
+   * Every step change in the flow, wrapped once.
+   *
+   * Shadowing the setter rather than editing twenty call sites: a slide is a property of
+   * moving between steps, not a decision each screen should be making, and one of the twenty
+   * would eventually be added without it.
+   *
+   * Deliberately not a card. Six cards on a six-step flow is six interruptions in a task a
+   * Mait is trying to get through, and the destination of a step is never in doubt — they
+   * just answered the question that chose it.
+   */
+  const setStep = useCallback(
+    (next: CaptureStep | null) => {
+      const from = STEP_ORDER.indexOf(stepRef.current as CaptureStep);
+      const to = STEP_ORDER.indexOf(next as CaptureStep);
+      transition.slide(to >= from ? 'forward' : 'back', () => setStepDirect(next));
+    },
+    [transition],
+  );
+
   const [requestingStock, setRequestingStock] = useState(false);
   /** null = not looking at indents, 0 = the list, n = that indent. */
   const [indentView, setIndentView] = useState<number | null>(null);
@@ -186,7 +296,12 @@ export default function RootNavigator(): React.JSX.Element {
 
   const sync = useCallback(async () => {
     setDraining(true);
+    // Both directions on one gesture. Every pull-to-refresh in the app calls this, so a Mait
+    // pulling any screen also re-reads who they are and what the office has changed — which
+    // is the one thing they cannot see from the handset.
+    const scopeRead = refreshScope();
     const result = await drainQueue(accessToken, setProgress);
+    await scopeRead;
     setPending(result.remaining);
     setQueueJobs(await readQueue());
     setDraining(false);
@@ -199,7 +314,7 @@ export default function RootNavigator(): React.JSX.Element {
       // lands.
       eventsChanged();
     }
-  }, [accessToken, eventsChanged]);
+  }, [accessToken, eventsChanged, refreshScope]);
 
   /** Read the queue for the screen that lists it, without sending anything. */
   const refreshQueue = useCallback(async () => {
@@ -242,16 +357,33 @@ export default function RootNavigator(): React.JSX.Element {
    * closed — swallow the press rather than inventing a route out of a half-finished capture.
    */
   const goBack = useCallback((): boolean => {
-    if (queueOpen) {
-      setQueueOpen(false);
-      setTab('home');
+    /**
+     * Every branch below is reversal, so every branch runs the same way: the exit and the
+     * settle, and no card. Going back is not arriving anywhere — a Mait pressing back already
+     * knows where they will land, and announcing it would be the app explaining a decision
+     * they just made.
+     *
+     * The thunks call `setStepDirect`, never the shadowed `setStep`: the reversal already owns
+     * the movement, and the slide underneath it would be a second transition cancelling the
+     * first.
+     */
+    const reverse = (change: () => void): boolean => {
+      transition.back(change);
       return true;
+    };
+
+    if (queueOpen) {
+      return reverse(() => {
+        setQueueOpen(false);
+        setTab('home');
+      });
     }
 
     if (unfinishedOpen) {
-      setUnfinishedOpen(false);
-      setTab('home');
-      return true;
+      return reverse(() => {
+        setUnfinishedOpen(false);
+        setTab('home');
+      });
     }
 
     if (step) {
@@ -278,40 +410,38 @@ export default function RootNavigator(): React.JSX.Element {
       }
 
       const target = previous[step] ?? null;
+      // Leaving the flow is reversal; stepping back inside it is a step, and keeps the flow's
+      // own horizontal slide rather than dimming the whole screen.
       if (target === null) {
-        setStep(null);
-        setTab('home');
-      } else {
-        setStep(target);
+        return reverse(() => {
+          setStepDirect(null);
+          setTab('home');
+        });
       }
+      transition.slide('back', () => setStepDirect(target));
       return true;
     }
 
     if (requestingStock) {
-      setRequestingStock(false);
-      return true;
+      return reverse(() => setRequestingStock(false));
     }
 
     if (indentView) {
-      setIndentView(0);
-      return true;
+      return reverse(() => setIndentView(0));
     }
 
     if (indentView === 0) {
-      setIndentView(null);
-      return true;
+      return reverse(() => setIndentView(null));
     }
 
     // The detail is layered over the AI events tab, so back closes it rather than leaving
     // the tab — the list is where it was opened from.
     if (eventView !== null) {
-      setEventView(null);
-      return true;
+      return reverse(() => setEventView(null));
     }
 
     if (tab !== 'home') {
-      setTab('home');
-      return true;
+      return reverse(() => setTab('home'));
     }
 
     // Home is the bottom of the stack. Left unhandled on purpose, so back there still closes
@@ -327,6 +457,7 @@ export default function RootNavigator(): React.JSX.Element {
     indentView,
     eventView,
     tab,
+    transition,
   ]);
 
   useEffect(() => {
@@ -348,12 +479,16 @@ export default function RootNavigator(): React.JSX.Element {
     setEvent(null);
     setOwnerType('member');
     setClientUuid(newClientUuid());
-    setStep('ownerType');
+    // The one step change in the flow that announces itself: this is arriving somewhere, not
+    // moving within somewhere. Everything after it is a step, and gets the slide.
+    transition.go('capture', () => setStepDirect('ownerType'));
   };
 
   const leaveCapture = () => {
-    setStep(null);
-    setTab('home');
+    transition.back(() => {
+      setStepDirect(null);
+      setTab('home');
+    });
   };
 
   /**
@@ -622,25 +757,34 @@ export default function RootNavigator(): React.JSX.Element {
    */
   const withTabs = (screen: React.JSX.Element, active: Tab = 'home') => (
     <View style={styles.flex}>
-      <View style={styles.flex}>{screen}</View>
+      <RouteTransitionHost transition={transition}>{screen}</RouteTransitionHost>
       <Toast
         message={closeProblem}
         onDismiss={() => setCloseProblem(null)}
         testID="close-off-error"
       />
+      <Toast message={scopeNotice} tone="info" onDismiss={scope.clear} testID="scope-changed" />
       <BottomNav
-        active={active}
+        // Lit as soon as the tap lands, while the screen behind is still the old one. That
+        // is the point of the exit phase: something has to have answered the tap.
+        active={pendingTab ?? active}
         pending={waiting}
         onChange={next => {
-          setStep(null);
-          // The waiting list is layered over the tabs like the capture flow is, so it has to be
-          // closed here too. Without this a tab press left it open and every destination drew
-          // the queue instead — the bar moved and the screen did not. The unfinished list and
-          // the event being read are layered the same way and need the same closing.
-          setQueueOpen(false);
-          setUnfinishedOpen(false);
-          setEventView(null);
-          setTab(next);
+          // No "already there" guard here, unlike the tab bar below. This one only ever draws
+          // under the capture flow, where `active` is the tab the flow was entered from and a
+          // tap on it means "leave this and go back there" — guarding it would strand a Mait
+          // in the flow with a bar that answers nothing.
+          transition.go(next, () => {
+            setStepDirect(null);
+            // The waiting list is layered over the tabs like the capture flow is, so it has to be
+            // closed here too. Without this a tab press left it open and every destination drew
+            // the queue instead — the bar moved and the screen did not. The unfinished list and
+            // the event being read are layered the same way and need the same closing.
+            setQueueOpen(false);
+            setUnfinishedOpen(false);
+            setEventView(null);
+            setTab(next);
+          });
         }}
       />
     </View>
@@ -961,7 +1105,7 @@ export default function RootNavigator(): React.JSX.Element {
   // -- the tabs --------------------------------------------------------------------------
   return (
     <View style={styles.flex}>
-      <View style={styles.flex}>
+      <RouteTransitionHost transition={transition}>
         {/* Keeps the bar, unlike the capture flow: asking for stock is a form a Mait can
             abandon by tapping another tab, not a sequence they can strand halfway. */}
         {requestingStock && <RequestStockScreen onDone={() => setRequestingStock(false)} />}
@@ -992,15 +1136,19 @@ export default function RootNavigator(): React.JSX.Element {
             the tab that was lit rather than moving the Mait somewhere they never chose. */}
         {!requestingStock && indentView === 0 && (
           <IndentsScreen
-            onOpen={indent => setIndentView(indent.id)}
-            onBack={() => setIndentView(null)}
+            onOpen={indent => transition.go('indentDetail', () => setIndentView(indent.id))}
+            onBack={() => transition.back(() => setIndentView(null))}
           />
         )}
         {!requestingStock && !!indentView && (
-          <IndentDetailScreen indentId={indentView} onBack={() => setIndentView(0)} />
+          <IndentDetailScreen
+            indentId={indentView}
+            onBack={() => transition.back(() => setIndentView(0))}
+          />
         )}
         {!requestingStock && tab === 'stock' && indentView === null && (
           <StockScreen
+            onSync={sync}
             onRequestStock={() => {
               setIndentView(null);
               setRequestingStock(true);
@@ -1008,12 +1156,15 @@ export default function RootNavigator(): React.JSX.Element {
           />
         )}
         {!requestingStock && tab === 'history' && indentView === null && eventView === null && (
-          <AiEventsScreen onOpen={opened => setEventView(opened.id)} />
+          <AiEventsScreen
+            onOpen={opened => transition.go('aiEventDetail', () => setEventView(opened.id))}
+            onSync={sync}
+          />
         )}
         {!requestingStock && tab === 'history' && indentView === null && eventView !== null && (
           <AiEventDetailScreen
             eventId={eventView}
-            onBack={() => setEventView(null)}
+            onBack={() => transition.back(() => setEventView(null))}
             // An unfinished event is picked up at the step it stopped on, by the same
             // function the Unfinished list uses — so what the detail screen's button promises
             // and where it lands cannot drift apart.
@@ -1027,10 +1178,10 @@ export default function RootNavigator(): React.JSX.Element {
             onSync={sync}
             online={online}
             lastSyncAt={lastSyncAt}
-            onOpenIndents={() => setIndentView(0)}
+            onOpenIndents={() => transition.go('indents', () => setIndentView(0))}
           />
         )}
-      </View>
+      </RouteTransitionHost>
 
       {/* A close-off the server refused. Anchored to the top of the app rather than put in
           the screen below, because it is about the request rather than about anything on the
@@ -1040,20 +1191,30 @@ export default function RootNavigator(): React.JSX.Element {
         onDismiss={() => setCloseProblem(null)}
         testID="close-off-error"
       />
+      {/* Anchored to the app rather than to a screen: the office can reassign a Mait while
+          they are anywhere, and the news does not belong to whichever page happens to be up. */}
+      <Toast message={scopeNotice} tone="info" onDismiss={scope.clear} testID="scope-changed" />
 
       {/* Destinations only. Each screen's own action lives at the foot of that screen's
           content — "Start new AI" on Home, "Request stock" on Inventory — where it is next to
           the thing it acts on rather than in the furniture. */}
       <BottomNav
-        active={tab}
+        active={pendingTab ?? tab}
         pending={waiting}
         onChange={next => {
-          // Switching tabs leaves the form. Nothing is lost that was worth keeping — an
-          // unsent indent is a decision not yet made.
-          setRequestingStock(false);
-          setIndentView(null);
-          setEventView(null);
-          setTab(next);
+          // A tab that is already lit is not a destination. Without this, tapping the tab you
+          // are on announces a journey to where you already are.
+          if (next === tab && indentView === null && eventView === null && !requestingStock) {
+            return;
+          }
+          transition.go(next, () => {
+            // Switching tabs leaves the form. Nothing is lost that was worth keeping — an
+            // unsent indent is a decision not yet made.
+            setRequestingStock(false);
+            setIndentView(null);
+            setEventView(null);
+            setTab(next);
+          });
         }}
       />
     </View>

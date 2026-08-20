@@ -23,7 +23,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next';
 import { useGetInventorySummaryQuery, useListBreedsQuery } from '@api/endpoints';
 import type { StrawLot, SuppliesLot } from '@api/types';
 import { BrandMark } from '@/components/brand';
+import PullToRefresh from '@/components/pullToRefresh';
 import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
 import {
   colors,
@@ -184,8 +185,16 @@ function Footnote({
 // --------------------------------------------------------------------------------------
 export default function StockScreen({
   onRequestStock,
+  onSync,
 }: {
   onRequestStock: () => void;
+  /**
+   * Push whatever is still queued on the handset.
+   *
+   * A pull here means the same thing it means everywhere else — bring me up to date, in both
+   * directions. Optional so a screen rendered without a shell around it still works.
+   */
+  onSync?: () => void;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -309,136 +318,152 @@ export default function StockScreen({
       </View>
 
       {/* Only this moves. */}
-      <ScrollView
-        contentContainerStyle={styles.body}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={stock.isFetching && !stock.isLoading}
-            onRefresh={() => stock.refetch()}
-            tintColor={colors.primary}
-          />
-        }
+      <PullToRefresh
+        onRefresh={async () => {
+          onSync?.();
+          await stock.refetch();
+        }}
+        label={t('pull.holding')}
+        testID="stock-pull"
       >
-        {loading && <SkeletonList rows={4} />}
+        {scrollProps => (
+          <ScrollView
+            contentContainerStyle={styles.body}
+            showsVerticalScrollIndicator={false}
+            // Reports where the list has got to, so a downward drag at the top is read as a
+            // pull and anywhere else as a scroll.
+            {...scrollProps}
+          >
+            {loading && <SkeletonList rows={4} />}
 
-        {failed && (
-          <ErrorState
-            title={t('stock.errorTitle')}
-            onRetry={() => stock.refetch()}
-            busy={stock.isFetching}
-            testID="stock-error"
-          />
-        )}
-
-        {!loading && !failed && tab === 'straws' && (
-          <>
-            {straws.length === 0 && (
-              <EmptyState title={t('stock.emptyTitle')} body={t('stock.emptyBody')} />
+            {failed && (
+              <ErrorState
+                title={t('stock.errorTitle')}
+                onRetry={() => stock.refetch()}
+                busy={stock.isFetching}
+                testID="stock-error"
+              />
             )}
 
-            {grouped.map(group => (
-              <View key={group.type || 'unknown'}>
-                <GroupHead
-                  label={
-                    group.type ? t(`aiFlow.animalType.${group.type}`) : t('stock.unknownAnimal')
-                  }
-                  meta={t('stock.doses', {
-                    count: group.rows.reduce((sum, row) => sum + row.qty, 0),
-                  })}
-                />
-                {group.rows.map(row => (
+            {!loading && !failed && tab === 'straws' && (
+              <>
+                {straws.length === 0 && (
+                  <EmptyState title={t('stock.emptyTitle')} body={t('stock.emptyBody')} />
+                )}
+
+                {grouped.map(group => (
+                  <View key={group.type || 'unknown'}>
+                    <GroupHead
+                      label={
+                        group.type ? t(`aiFlow.animalType.${group.type}`) : t('stock.unknownAnimal')
+                      }
+                      meta={t('stock.doses', {
+                        count: group.rows.reduce((sum, row) => sum + row.qty, 0),
+                      })}
+                    />
+                    {group.rows.map(row => (
+                      <StockRow
+                        key={row.breed}
+                        name={breedName(row.breed)}
+                        meta={t('stock.issuedUsed', {
+                          code: row.breed,
+                          issued: row.issued,
+                          used: row.used,
+                        })}
+                        value={String(row.qty)}
+                        unit={t('stock.dosesUnit')}
+                        low={row.qty <= LOW_PER_BREED}
+                        badge={
+                          row.qty <= LOW_PER_BREED
+                            ? { label: t('stock.low'), tone: 'warn' }
+                            : undefined
+                        }
+                        testID={`stock-straw-${row.breed}`}
+                      />
+                    ))}
+                  </View>
+                ))}
+
+                {lowBreeds > 0 && <Footnote text={t('stock.breedsLow', { count: lowBreeds })} />}
+              </>
+            )}
+
+            {!loading && !failed && tab === 'consumables' && (
+              <>
+                {consumables.length === 0 && (
+                  <EmptyState title={t('stock.noSuppliesTitle')} body={t('stock.noSuppliesBody')} />
+                )}
+
+                {consumables.map(item => (
                   <StockRow
-                    key={row.breed}
-                    name={breedName(row.breed)}
-                    meta={t('stock.issuedUsed', {
-                      code: row.breed,
-                      issued: row.issued,
-                      used: row.used,
+                    key={item.code}
+                    name={item.name}
+                    meta={t('stock.perUnit', {
+                      code: item.code,
+                      unit: item.unit || t('stock.piece'),
                     })}
-                    value={String(row.qty)}
-                    unit={t('stock.dosesUnit')}
-                    low={row.qty <= LOW_PER_BREED}
-                    badge={
-                      row.qty <= LOW_PER_BREED ? { label: t('stock.low'), tone: 'warn' } : undefined
+                    value={String(item.qty)}
+                    unit={
+                      item.unit ? t('stock.unitPlural', { unit: item.unit }) : t('stock.pieces')
                     }
-                    testID={`stock-straw-${row.breed}`}
+                    low={isLowConsumable(item)}
+                    badge={
+                      isLowConsumable(item) ? { label: t('stock.low'), tone: 'warn' } : undefined
+                    }
+                    testID={`stock-consumable-${item.code}`}
                   />
                 ))}
-              </View>
-            ))}
 
-            {lowBreeds > 0 && <Footnote text={t('stock.breedsLow', { count: lowBreeds })} />}
-          </>
-        )}
-
-        {!loading && !failed && tab === 'consumables' && (
-          <>
-            {consumables.length === 0 && (
-              <EmptyState title={t('stock.noSuppliesTitle')} body={t('stock.noSuppliesBody')} />
-            )}
-
-            {consumables.map(item => (
-              <StockRow
-                key={item.code}
-                name={item.name}
-                meta={t('stock.perUnit', {
-                  code: item.code,
-                  unit: item.unit || t('stock.piece'),
-                })}
-                value={String(item.qty)}
-                unit={item.unit ? t('stock.unitPlural', { unit: item.unit }) : t('stock.pieces')}
-                low={isLowConsumable(item)}
-                badge={isLowConsumable(item) ? { label: t('stock.low'), tone: 'warn' } : undefined}
-                testID={`stock-consumable-${item.code}`}
-              />
-            ))}
-
-            {/* Nitrogen gets a warning of its own. It is the only consumable whose running out
+                {/* Nitrogen gets a warning of its own. It is the only consumable whose running out
                 does not stop one insemination — it spoils the whole flask. */}
-            {!!nitrogen && isLowConsumable(nitrogen) && (
-              <Warning title={t('stock.nitrogenTitle')} body={t('stock.nitrogenBody')} />
+                {!!nitrogen && isLowConsumable(nitrogen) && (
+                  <Warning title={t('stock.nitrogenTitle')} body={t('stock.nitrogenBody')} />
+                )}
+
+                {consumables.length > 0 && <Footnote text={t('stock.countsFall')} />}
+              </>
             )}
 
-            {consumables.length > 0 && <Footnote text={t('stock.countsFall')} />}
-          </>
-        )}
+            {!loading && !failed && tab === 'equipment' && (
+              <>
+                {assets.length === 0 && (
+                  <EmptyState
+                    title={t('stock.noEquipmentTitle')}
+                    body={t('stock.noEquipmentBody')}
+                  />
+                )}
 
-        {!loading && !failed && tab === 'equipment' && (
-          <>
-            {assets.length === 0 && (
-              <EmptyState title={t('stock.noEquipmentTitle')} body={t('stock.noEquipmentBody')} />
+                {assets.map(item => {
+                  const since = longDate(item.issued_at);
+                  return (
+                    <StockRow
+                      key={item.code}
+                      name={item.name}
+                      meta={
+                        since
+                          ? t('stock.issuedOn', { code: item.code, date: since })
+                          : t('stock.issuedUnknown', { code: item.code })
+                      }
+                      // Never a count. One AI gun is not "1 piece of stock" — it is a thing the
+                      // Mait either has or has to report, and a number invites reading it as
+                      // something that can run out.
+                      value=""
+                      badge={{ label: t('stock.inUse'), tone: 'good' }}
+                      testID={`stock-asset-${item.code}`}
+                    />
+                  );
+                })}
+
+                {assets.length > 0 && <Footnote text={t('stock.equipmentFootnote')} />}
+              </>
             )}
 
-            {assets.map(item => {
-              const since = longDate(item.issued_at);
-              return (
-                <StockRow
-                  key={item.code}
-                  name={item.name}
-                  meta={
-                    since
-                      ? t('stock.issuedOn', { code: item.code, date: since })
-                      : t('stock.issuedUnknown', { code: item.code })
-                  }
-                  // Never a count. One AI gun is not "1 piece of stock" — it is a thing the
-                  // Mait either has or has to report, and a number invites reading it as
-                  // something that can run out.
-                  value=""
-                  badge={{ label: t('stock.inUse'), tone: 'good' }}
-                  testID={`stock-asset-${item.code}`}
-                />
-              );
-            })}
-
-            {assets.length > 0 && <Footnote text={t('stock.equipmentFootnote')} />}
-          </>
+            {lowSupplies.length > 0 && tab === 'straws' && (
+              <Footnote text={t('stock.suppliesLowElsewhere', { count: lowSupplies.length })} />
+            )}
+          </ScrollView>
         )}
-
-        {lowSupplies.length > 0 && tab === 'straws' && (
-          <Footnote text={t('stock.suppliesLowElsewhere', { count: lowSupplies.length })} />
-        )}
-      </ScrollView>
+      </PullToRefresh>
 
       {/* Fixed foot, above the tab bar. The one action out of this screen should not have to
           be scrolled back to — a Mait who has just read a low count wants it under their

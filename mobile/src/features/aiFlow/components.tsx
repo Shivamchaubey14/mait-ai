@@ -42,6 +42,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BrandMark } from '@/components/brand';
 import { useKeyboardOverlap } from '@/components/keyboard';
+import PullToRefresh from '@/components/pullToRefresh';
 import { AI_FLOW_STEPS } from '@/config/env';
 import {
   colors,
@@ -250,6 +251,14 @@ interface FlowScreenProps {
    */
   refresh?: { refreshing: boolean; onRefresh: () => void };
   /**
+   * The three-dot pull, for the one screen that wears this frame without being a step.
+   *
+   * Deliberately separate from `refresh` above rather than replacing it. `refresh` is used by
+   * six screens *inside* the capture flow, where a pull risks a Mait losing what they have
+   * entered — those keep the platform control they already had, and none of them passes this.
+   */
+  pull?: { label: string; onRefresh: () => Promise<unknown> | void };
+  /**
    * There is a tab bar under this screen, so the footer must not reserve the safe area again.
    *
    * The bar already pads itself clear of the home indicator. Adding the same inset here on top
@@ -267,6 +276,30 @@ interface FlowScreenProps {
   place?: boolean;
 }
 
+/**
+ * The pull container, or nothing at all.
+ *
+ * Written as a component rather than as a ternary around the ScrollView so the tree has the
+ * same shape either way — a conditional wrapper inline would remount the list every time the
+ * prop changed, losing the scroll position with it.
+ */
+function MaybePull({
+  pull,
+  children,
+}: {
+  pull?: { label: string; onRefresh: () => Promise<unknown> | void };
+  children: React.ReactNode;
+}): React.JSX.Element {
+  if (!pull) {
+    return <>{children}</>;
+  }
+  return (
+    <PullToRefresh onRefresh={pull.onRefresh} label={pull.label} testID="flow-pull">
+      {children}
+    </PullToRefresh>
+  );
+}
+
 export function FlowScreen({
   step,
   stepLabel,
@@ -282,6 +315,7 @@ export function FlowScreen({
   footerNote,
   stickyTop,
   refresh,
+  pull,
   tabBarBelow = false,
   place = false,
 }: FlowScreenProps): React.JSX.Element {
@@ -403,37 +437,39 @@ export function FlowScreen({
           </View>
         )}
 
-        <ScrollView
-          ref={scroller}
-          innerViewRef={content}
-          /* A keyboard's worth of room under the content while one is open. Without it a
+        <MaybePull pull={pull}>
+          <ScrollView
+            ref={scroller}
+            innerViewRef={content}
+            /* A keyboard's worth of room under the content while one is open. Without it a
              field near the bottom cannot be scrolled any higher than the content's own end,
              which on a short body is not high enough to clear the keyboard — the scroll runs
              out before the field arrives. */
-          contentContainerStyle={[styles.scroll, !!overlap && { paddingBottom: overlap }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            refresh ? (
-              <RefreshControl
-                refreshing={refresh.refreshing}
-                onRefresh={refresh.onRefresh}
-                tintColor={colors.primary}
-              />
-            ) : undefined
-          }
-        >
-          <View
-            style={[
-              styles.body,
-              // The sticky band has already opened the gap under the hero.
-              !!stickyTop && styles.bodyUnderSticky,
-              { paddingLeft: spacing[5] + insets.left, paddingRight: spacing[5] + insets.right },
-            ]}
+            contentContainerStyle={[styles.scroll, !!overlap && { paddingBottom: overlap }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              refresh ? (
+                <RefreshControl
+                  refreshing={refresh.refreshing}
+                  onRefresh={refresh.onRefresh}
+                  tintColor={colors.primary}
+                />
+              ) : undefined
+            }
           >
-            <FlowScroll.Provider value={api}>{children}</FlowScroll.Provider>
-          </View>
-        </ScrollView>
+            <View
+              style={[
+                styles.body,
+                // The sticky band has already opened the gap under the hero.
+                !!stickyTop && styles.bodyUnderSticky,
+                { paddingLeft: spacing[5] + insets.left, paddingRight: spacing[5] + insets.right },
+              ]}
+            >
+              <FlowScroll.Provider value={api}>{children}</FlowScroll.Provider>
+            </View>
+          </ScrollView>
+        </MaybePull>
 
         {/* Fixed too, for the same reason the hero is: the one action out of this step should
             not have to be scrolled back to. */}

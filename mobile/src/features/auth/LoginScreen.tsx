@@ -39,6 +39,7 @@ import { useAppDispatch } from '@/store';
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
 import { loggedIn } from './authSlice';
+import { toAuthUser } from './liveScope';
 import OtpVerifyScreen, { OtpFailure } from './OtpVerifyScreen';
 
 type Step = 'mobile' | 'otp';
@@ -193,14 +194,10 @@ export default function LoginScreen(): React.JSX.Element {
         loggedIn({
           access: tokens.access,
           refresh: tokens.refresh,
-          user: {
-            id: user.id,
-            fullName: user.full_name,
-            role: user.role,
-            mobileNo: user.mobile_no,
-            maitId: user.mait_id,
-            sahayakVendorCode: user.sahayak_vendor_code,
-          },
+          // Shared with the live refresh, so the two cannot come to disagree about what a
+          // profile is — a field mapped here and forgotten there would go stale on a phone
+          // that never signs out.
+          user: toAuthUser(user),
           assignedMppCodes: user.assigned_mpp_codes,
         }),
       );

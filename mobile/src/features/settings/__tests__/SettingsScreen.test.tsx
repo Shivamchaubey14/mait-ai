@@ -15,11 +15,12 @@
  */
 
 import React from 'react';
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import SettingsScreen from '../SettingsScreen';
 import { loggedIn } from '@/features/auth/authSlice';
 import type { AuthUser } from '@/features/auth/authSlice';
+import PullToRefresh from '@/components/pullToRefresh';
 import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
 
 const USER: AuthUser = {
@@ -190,6 +191,23 @@ describe('SettingsScreen', () => {
 
     await waitFor(() => expect(screen.getByText(USER.fullName)).toBeTruthy());
     expect(screen.getByText(USER.fullName).props.numberOfLines).toBe(1);
+  });
+
+  it('pushes what is queued as well as re-reading, when pulled', async () => {
+    // The two figures this screen exists for — the month's count and the cash in hand — are
+    // both wrong while today's work is still sitting on the handset, so a pull here has to
+    // mean "send" as much as it means "fetch".
+    mockApi({ monthCount: 214 });
+    const { onSync } = render();
+
+    await waitFor(() => expect(screen.getByTestId('profile-month')).toHaveTextContent(/214/));
+
+    const pull = screen.UNSAFE_getByType(PullToRefresh);
+    await act(async () => {
+      await pull.props.onRefresh();
+    });
+
+    expect(onSync).toHaveBeenCalled();
   });
 
   it('names the MPPs and opens the rest of them', async () => {

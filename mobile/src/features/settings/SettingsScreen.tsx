@@ -20,15 +20,7 @@
  */
 
 import React, { useState } from 'react';
-import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,6 +34,7 @@ import {
 } from '@api/endpoints';
 import { LanguageToggle } from '@/components/brand';
 import { fitTitleSize } from '@/components/hero';
+import PullToRefresh from '@/components/pullToRefresh';
 import { loggedOut } from '@/features/auth/authSlice';
 import { useAppDispatch, useAppSelector } from '@/store';
 import {
@@ -303,150 +296,154 @@ export default function SettingsScreen({
         </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={month.isFetching && !month.isLoading}
-            onRefresh={() => {
-              month.refetch();
-              todays.refetch();
-              indents.refetch();
-            }}
-            tintColor={colors.primary}
-          />
-        }
+      <PullToRefresh
+        onRefresh={async () => {
+          // The queue goes too, the way it does on every other screen that pulls. Profile is
+          // where a Mait checks the month's count and the cash they are carrying, and both are
+          // wrong while today's work is still sitting on the handset.
+          onSync();
+          await Promise.all([month.refetch(), todays.refetch(), indents.refetch()]);
+        }}
+        label={t('pull.figures')}
+        testID="profile-pull"
       >
-        <View style={styles.tiles}>
-          <Tile
-            tone="good"
-            label={t('settings.thisMonth')}
-            value={month.isLoading ? '—' : String(month.data?.count ?? 0)}
-            foot={t('settings.inseminations')}
-            testID="profile-month"
-          />
-          <Tile
-            label={t('settings.cashOnHand')}
-            value={todays.isLoading ? '—' : `₹ ${Math.round(cash)}`}
-            foot={t('settings.collectionsToday', { count: collections.length })}
-            testID="profile-cash"
-          />
-        </View>
+        {scrollProps => (
+          <ScrollView
+            contentContainerStyle={styles.body}
+            showsVerticalScrollIndicator={false}
+            {...scrollProps}
+          >
+            <View style={styles.tiles}>
+              <Tile
+                tone="good"
+                label={t('settings.thisMonth')}
+                value={month.isLoading ? '—' : String(month.data?.count ?? 0)}
+                foot={t('settings.inseminations')}
+                testID="profile-month"
+              />
+              <Tile
+                label={t('settings.cashOnHand')}
+                value={todays.isLoading ? '—' : `₹ ${Math.round(cash)}`}
+                foot={t('settings.collectionsToday', { count: collections.length })}
+                testID="profile-cash"
+              />
+            </View>
 
-        {/* Tapping opens the names rather than a screen: a Mait asked which MPPs they cover
+            {/* Tapping opens the names rather than a screen: a Mait asked which MPPs they cover
             needs the list read out, and that is the whole of the answer. */}
-        <Row
-          title={
-            assigned.length
-              ? t('settings.mppsAssigned', { count: assigned.length })
-              : t('settings.noMpps')
-          }
-          body={
-            assigned.length
-              ? assigned
-                  .map(mpp => mpp.mpp_name)
-                  .slice(0, 3)
-                  .join(' · ')
-              : undefined
-          }
-          onPress={assigned.length ? () => setMppsOpen(open => !open) : undefined}
-          testID="profile-mpps"
-        />
+            <Row
+              title={
+                assigned.length
+                  ? t('settings.mppsAssigned', { count: assigned.length })
+                  : t('settings.noMpps')
+              }
+              body={
+                assigned.length
+                  ? assigned
+                      .map(mpp => mpp.mpp_name)
+                      .slice(0, 3)
+                      .join(' · ')
+                  : undefined
+              }
+              onPress={assigned.length ? () => setMppsOpen(open => !open) : undefined}
+              testID="profile-mpps"
+            />
 
-        {mppsOpen && (
-          <View style={styles.mppList} testID="profile-mpp-list">
-            {assigned.map(mpp => (
-              <View key={mpp.mpp_code} style={styles.mppRow}>
-                <Text style={styles.mppName} numberOfLines={1}>
-                  {mpp.mpp_name}
-                </Text>
-                <Text style={styles.mppCode}>{mpp.mpp_code}</Text>
+            {mppsOpen && (
+              <View style={styles.mppList} testID="profile-mpp-list">
+                {assigned.map(mpp => (
+                  <View key={mpp.mpp_code} style={styles.mppRow}>
+                    <Text style={styles.mppName} numberOfLines={1}>
+                      {mpp.mpp_name}
+                    </Text>
+                    <Text style={styles.mppCode}>{mpp.mpp_code}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-        )}
+            )}
 
-        {/* Here rather than only under Inventory. Raising an indent is a stock job and belongs
+            {/* Here rather than only under Inventory. Raising an indent is a stock job and belongs
             with the flask; chasing one is a "where is my order" question, and a Mait asks it
             from wherever they are standing. */}
-        <Row
-          title={t('settings.yourIndents')}
-          body={
-            indents.isLoading
-              ? t('common.loading')
-              : openIndents > 0
-                ? t('settings.indentsOpen', { count: openIndents })
-                : t('settings.indentsNone')
-          }
-          onPress={onOpenIndents}
-          testID="profile-indents"
-        />
+            <Row
+              title={t('settings.yourIndents')}
+              body={
+                indents.isLoading
+                  ? t('common.loading')
+                  : openIndents > 0
+                    ? t('settings.indentsOpen', { count: openIndents })
+                    : t('settings.indentsNone')
+              }
+              onPress={onOpenIndents}
+              testID="profile-indents"
+            />
 
-        <Row
-          title={t('settings.language')}
-          right={<LanguageToggle variant="light" />}
-          testID="profile-language"
-        />
+            <Row
+              title={t('settings.language')}
+              right={<LanguageToggle variant="light" />}
+              testID="profile-language"
+            />
 
-        <Row
-          title={t('settings.sync')}
-          body={syncBody}
-          onPress={onSync}
-          chevron={false}
-          right={
-            <View style={[styles.pill, online ? styles.pillOnline : styles.pillOffline]}>
-              <Text style={[styles.pillLabel, online ? styles.pillLabelOnline : undefined]}>
-                {online ? t('settings.online') : t('settings.offline')}
-              </Text>
-            </View>
-          }
-          testID="profile-sync"
-        />
+            <Row
+              title={t('settings.sync')}
+              body={syncBody}
+              onPress={onSync}
+              chevron={false}
+              right={
+                <View style={[styles.pill, online ? styles.pillOnline : styles.pillOffline]}>
+                  <Text style={[styles.pillLabel, online ? styles.pillLabelOnline : undefined]}>
+                    {online ? t('settings.online') : t('settings.offline')}
+                  </Text>
+                </View>
+              }
+              testID="profile-sync"
+            />
 
-        {/* A statement, not a door. There is no supervisor number on the record for the app to
+            {/* A statement, not a door. There is no supervisor number on the record for the app to
             dial, so a chevron here would open nothing; the version rides along because it is
             the first thing support asks for. */}
-        <Row
-          title={t('settings.help')}
-          body={t('settings.helpFoot', { version })}
-          testID="profile-help"
-        />
+            <Row
+              title={t('settings.help')}
+              body={t('settings.helpFoot', { version })}
+              testID="profile-help"
+            />
 
-        {confirming && (
-          <View style={styles.warning} testID="signout-warning">
-            <Ionicons name="warning-outline" size={18} color={colors.secondaryPressed} />
-            <View style={styles.rowBody}>
-              <Text style={styles.warningTitle}>
-                {t('settings.signOutWarnTitle', { count: pending })}
+            {confirming && (
+              <View style={styles.warning} testID="signout-warning">
+                <Ionicons name="warning-outline" size={18} color={colors.secondaryPressed} />
+                <View style={styles.rowBody}>
+                  <Text style={styles.warningTitle}>
+                    {t('settings.signOutWarnTitle', { count: pending })}
+                  </Text>
+                  <Text style={styles.warningText}>{t('settings.signOutWarnBody')}</Text>
+                </View>
+              </View>
+            )}
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={signOut}
+              style={({ pressed }) => [styles.signOut, pressed && styles.signOutPressed]}
+              testID="sign-out"
+            >
+              <Text style={styles.signOutLabel}>
+                {confirming ? t('settings.signOutAnyway') : t('settings.signOut')}
               </Text>
-              <Text style={styles.warningText}>{t('settings.signOutWarnBody')}</Text>
-            </View>
-          </View>
-        )}
+            </Pressable>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={signOut}
-          style={({ pressed }) => [styles.signOut, pressed && styles.signOutPressed]}
-          testID="sign-out"
-        >
-          <Text style={styles.signOutLabel}>
-            {confirming ? t('settings.signOutAnyway') : t('settings.signOut')}
-          </Text>
-        </Pressable>
-
-        {confirming && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setConfirming(false)}
-            style={styles.cancel}
-            testID="signout-cancel"
-          >
-            <Text style={styles.cancelLabel}>{t('common.cancel')}</Text>
-          </Pressable>
+            {confirming && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setConfirming(false)}
+                style={styles.cancel}
+                testID="signout-cancel"
+              >
+                <Text style={styles.cancelLabel}>{t('common.cancel')}</Text>
+              </Pressable>
+            )}
+          </ScrollView>
         )}
-      </ScrollView>
+      </PullToRefresh>
     </View>
   );
 }

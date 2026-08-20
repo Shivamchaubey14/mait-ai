@@ -26,7 +26,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +36,7 @@ import { readQueue } from '@api/queue';
 import type { AIEvent } from '@api/types';
 import { BrandMark } from '@/components/brand';
 import DateRangeSheet, { formatRange } from '@/components/dateRange';
+import PullToRefresh from '@/components/pullToRefresh';
 import { whatIsMissing } from '@/features/aiFlow/resume';
 import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
 import {
@@ -163,8 +164,11 @@ function EventRow({
 // --------------------------------------------------------------------------------------
 export default function AiEventsScreen({
   onOpen,
+  onSync,
 }: {
   onOpen: (event: AIEvent) => void;
+  /** Push what is still queued. A pull here means "bring me up to date", both ways. */
+  onSync?: () => void;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -388,64 +392,63 @@ export default function AiEventsScreen({
         </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={source.isFetching && !source.isLoading}
-            onRefresh={() => {
-              // Both, always: the headline counts come off the unfiltered request even while
-              // the rows come off the dated one, and a pull that refreshed only what is on
-              // screen would leave the two numbers at the top stale.
-              events.refetch();
-              if (dates) {
-                ranged.refetch();
-              }
-              readQueued();
-            }}
-            tintColor={colors.primary}
-          />
-        }
+      <PullToRefresh
+        onRefresh={async () => {
+          onSync?.();
+          // Both requests, always: the headline counts come off the unfiltered one even while
+          // the rows come off the dated one, and a pull that refreshed only what is on screen
+          // would leave the two numbers at the top stale.
+          await Promise.all([events.refetch(), dates ? ranged.refetch() : null, readQueued()]);
+        }}
+        label={t('pull.events')}
+        testID="ai-events-pull"
       >
-        {source.isLoading ? (
-          <SkeletonList rows={5} />
-        ) : source.isError ? (
-          <ErrorState
-            title={t('history.errorTitle')}
-            onRetry={() => source.refetch()}
-            busy={source.isFetching}
-          />
-        ) : shown.length === 0 ? (
-          <EmptyState title={empty.title} body={empty.body} />
-        ) : (
-          days.map(day => (
-            <View key={day.label} style={styles.day}>
-              {/* Dropped when the filter is already one day: "Today" under a chip that says
+        {scrollProps => (
+          <ScrollView
+            contentContainerStyle={styles.body}
+            showsVerticalScrollIndicator={false}
+            {...scrollProps}
+          >
+            {source.isLoading ? (
+              <SkeletonList rows={5} />
+            ) : source.isError ? (
+              <ErrorState
+                title={t('history.errorTitle')}
+                onRetry={() => source.refetch()}
+                busy={source.isFetching}
+              />
+            ) : shown.length === 0 ? (
+              <EmptyState title={empty.title} body={empty.body} />
+            ) : (
+              days.map(day => (
+                <View key={day.label} style={styles.day}>
+                  {/* Dropped when the filter is already one day: "Today" under a chip that says
                   Today is the same word twice. */}
-              {(!!dates || range !== 'today') && (
-                <View style={styles.dayHead}>
-                  <Text style={styles.dayLabel}>{day.label}</Text>
-                  <Text style={styles.dayCount}>{day.rows.length}</Text>
-                </View>
-              )}
+                  {(!!dates || range !== 'today') && (
+                    <View style={styles.dayHead}>
+                      <Text style={styles.dayLabel}>{day.label}</Text>
+                      <Text style={styles.dayCount}>{day.rows.length}</Text>
+                    </View>
+                  )}
 
-              {day.rows.map(event => {
-                const state = stateOf(event);
-                return (
-                  <EventRow
-                    key={event.id}
-                    event={event}
-                    state={state}
-                    meta={metaFor(event, state)}
-                    onPress={() => onOpen(event)}
-                  />
-                );
-              })}
-            </View>
-          ))
+                  {day.rows.map(event => {
+                    const state = stateOf(event);
+                    return (
+                      <EventRow
+                        key={event.id}
+                        event={event}
+                        state={state}
+                        meta={metaFor(event, state)}
+                        onPress={() => onOpen(event)}
+                      />
+                    );
+                  })}
+                </View>
+              ))
+            )}
+          </ScrollView>
         )}
-      </ScrollView>
+      </PullToRefresh>
 
       <DateRangeSheet
         visible={datesOpen}

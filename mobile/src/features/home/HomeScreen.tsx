@@ -12,13 +12,14 @@
  */
 
 import React, { useCallback } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import { useGetInventorySummaryQuery, useListAiEventsQuery } from '@api/endpoints';
 import { LanguageToggle } from '@/components/brand';
 import PageHero from '@/components/hero';
+import PullToRefresh from '@/components/pullToRefresh';
 import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
 import { useAppSelector } from '@/store';
 import { colors, radius, spacing, typography } from '@theme/tokens';
@@ -83,10 +84,17 @@ export default function HomeScreen({
   const stock = useGetInventorySummaryQuery();
   const events = useListAiEventsQuery();
 
-  const refresh = useCallback(() => {
-    stock.refetch();
-    events.refetch();
+  /**
+   * What a pull means here: the holding, the day's events, and a shove at whatever is still
+   * stuck on the phone.
+   *
+   * Awaited rather than fired and forgotten, so the dots stop when the work does. The queue
+   * flush is deliberately not awaited *for its result* — it can fail all it likes; a pull with
+   * no signal still finishes with a tick, and the offline strip above is what explains it.
+   */
+  const refresh = useCallback(async () => {
     onSync();
+    await Promise.all([stock.refetch(), events.refetch()]);
   }, [events, onSync, stock]);
 
   const today = (events.data?.results ?? []).filter(event => isToday(event.created_at));
@@ -148,160 +156,155 @@ export default function HomeScreen({
           So the frame is fixed and the one part that grows is the part that can afford to:
           the flask. Its card takes what is left after the tiles, the unfinished row and the
           button have had theirs, and the breeds scroll inside it. */}
-      <View style={styles.body}>
-        <View style={styles.tiles}>
-          <View style={[styles.tile, styles.tileDone]}>
-            <View style={styles.tileHead}>
-              <View style={[styles.tileIcon, styles.tileIconDone]}>
-                <Ionicons name="checkmark" size={13} color={colors.surface} />
+      <PullToRefresh onRefresh={refresh} label={t('pull.holding')} testID="home-pull">
+        <View style={styles.body}>
+          <View style={styles.tiles}>
+            <View style={[styles.tile, styles.tileDone]}>
+              <View style={styles.tileHead}>
+                <View style={[styles.tileIcon, styles.tileIconDone]}>
+                  <Ionicons name="checkmark" size={13} color={colors.surface} />
+                </View>
+                <Text style={styles.tileLabel} numberOfLines={1}>
+                  {t('home.today')}
+                </Text>
               </View>
-              <Text style={styles.tileLabel} numberOfLines={1}>
-                {t('home.today')}
+              {events.isLoading ? (
+                <View style={styles.tileSkeleton} />
+              ) : (
+                <Text style={[styles.tileValue, styles.tileValueDone]}>{today.length}</Text>
+              )}
+              <Text style={styles.tileFoot} numberOfLines={1}>
+                {t('home.inseminationsRecorded')}
               </Text>
             </View>
-            {events.isLoading ? (
-              <View style={styles.tileSkeleton} />
-            ) : (
-              <Text style={[styles.tileValue, styles.tileValueDone]}>{today.length}</Text>
-            )}
-            <Text style={styles.tileFoot} numberOfLines={1}>
-              {t('home.inseminationsRecorded')}
-            </Text>
-          </View>
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={onOpenQueue}
-            style={[styles.tile, styles.tileWaiting]}
-            testID="tile-waiting"
-          >
-            <View style={styles.tileHead}>
-              <Ionicons name="time-outline" size={17} color={colors.secondaryPressed} />
-              <Text style={styles.tileLabel} numberOfLines={1}>
-                {t('home.waiting')}
+            <Pressable
+              accessibilityRole="button"
+              onPress={onOpenQueue}
+              style={[styles.tile, styles.tileWaiting]}
+              testID="tile-waiting"
+            >
+              <View style={styles.tileHead}>
+                <Ionicons name="time-outline" size={17} color={colors.secondaryPressed} />
+                <Text style={styles.tileLabel} numberOfLines={1}>
+                  {t('home.waiting')}
+                </Text>
+              </View>
+              <Text style={[styles.tileValue, styles.tileValueWaiting]}>{pending}</Text>
+              <Text style={styles.tileFoot} numberOfLines={1}>
+                {pending > 0
+                  ? t('home.eventsToSync')
+                  : lastSyncAt
+                    ? t('home.allSentBody', { time: lastSyncAt })
+                    : t('home.allSentBodyPlain')}
               </Text>
-            </View>
-            <Text style={[styles.tileValue, styles.tileValueWaiting]}>{pending}</Text>
-            <Text style={styles.tileFoot} numberOfLines={1}>
-              {pending > 0
-                ? t('home.eventsToSync')
-                : lastSyncAt
-                  ? t('home.allSentBody', { time: lastSyncAt })
-                  : t('home.allSentBodyPlain')}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Stock, because it decides whether the day can start at all. */}
-        <View style={styles.card}>
-          <View style={styles.cardHead}>
-            <Text style={styles.cardTitle}>{t('home.strawsWithYou')}</Text>
-            {!stock.isLoading && !stock.isError && (
-              <Text style={styles.cardMeta}>{t('home.totalStraws', { count: totalStraws })}</Text>
-            )}
+            </Pressable>
           </View>
 
-          {/* The only scrolling thing on the screen, and where pull-to-refresh now lives —
+          {/* Stock, because it decides whether the day can start at all. */}
+          <View style={styles.card}>
+            <View style={styles.cardHead}>
+              <Text style={styles.cardTitle}>{t('home.strawsWithYou')}</Text>
+              {!stock.isLoading && !stock.isError && (
+                <Text style={styles.cardMeta}>{t('home.totalStraws', { count: totalStraws })}</Text>
+              )}
+            </View>
+
+            {/* The only scrolling thing on the screen, and where pull-to-refresh now lives —
               the gesture belongs to the list it reloads. */}
-          <ScrollView
-            style={styles.breeds}
-            contentContainerStyle={styles.breedsContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={events.isFetching}
-                onRefresh={refresh}
-                tintColor={colors.primary}
-              />
-            }
-          >
-            {stock.isLoading ? (
-              <SkeletonList rows={3} />
-            ) : stock.isError ? (
-              // Worth its own state: a Mait who cannot see their balance does not know whether
-              // they can work, and the answer to that is not "reload the app".
-              <ErrorState
-                title={t('home.stockErrorTitle')}
-                onRetry={() => stock.refetch()}
-                busy={stock.isFetching}
-                testID="stock-error"
-              />
-            ) : byBreed.length === 0 ? (
-              <EmptyState title={t('home.noStrawsTitle')} body={t('home.noStrawsBody')} />
-            ) : (
-              byBreed.map(([breed, count]) => {
-                // Per breed, not against the flask total: eight straws is a comfortable day
-                // unless they are the only Murrah left and the next three farmers keep buffalo.
-                const low = count <= LOW_BREED_STRAWS;
-                return (
-                  <View key={breed} style={styles.breedRow} testID={`breed-${breed}`}>
-                    <View style={[styles.dot, low && styles.dotLow]} />
-                    <Text style={styles.breedName} numberOfLines={1}>
-                      {breed}
-                    </Text>
-                    {low && (
-                      <View style={[styles.lowBadge, styles.lowBadgeOnWash]}>
-                        <Text style={styles.lowLabel}>{t('home.low')}</Text>
-                      </View>
-                    )}
-                    <Text style={styles.breedCount}>{count}</Text>
-                  </View>
-                );
-              })
-            )}
-          </ScrollView>
-        </View>
+            <ScrollView
+              style={styles.breeds}
+              contentContainerStyle={styles.breedsContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {stock.isLoading ? (
+                <SkeletonList rows={3} />
+              ) : stock.isError ? (
+                // Worth its own state: a Mait who cannot see their balance does not know whether
+                // they can work, and the answer to that is not "reload the app".
+                <ErrorState
+                  title={t('home.stockErrorTitle')}
+                  onRetry={() => stock.refetch()}
+                  busy={stock.isFetching}
+                  testID="stock-error"
+                />
+              ) : byBreed.length === 0 ? (
+                <EmptyState title={t('home.noStrawsTitle')} body={t('home.noStrawsBody')} />
+              ) : (
+                byBreed.map(([breed, count]) => {
+                  // Per breed, not against the flask total: eight straws is a comfortable day
+                  // unless they are the only Murrah left and the next three farmers keep buffalo.
+                  const low = count <= LOW_BREED_STRAWS;
+                  return (
+                    <View key={breed} style={styles.breedRow} testID={`breed-${breed}`}>
+                      <View style={[styles.dot, low && styles.dotLow]} />
+                      <Text style={styles.breedName} numberOfLines={1}>
+                        {breed}
+                      </Text>
+                      {low && (
+                        <View style={[styles.lowBadge, styles.lowBadgeOnWash]}>
+                          <Text style={styles.lowLabel}>{t('home.low')}</Text>
+                        </View>
+                      )}
+                      <Text style={styles.breedCount}>{count}</Text>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
 
-        {unfinished.length > 0 && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={onOpenUnfinished}
-            style={({ pressed }) => [styles.unfinished, pressed && styles.unfinishedPressed]}
-            testID="resume-unfinished"
-          >
-            <Ionicons name="create-outline" size={17} color={colors.secondaryPressed} />
-            <Text style={styles.unfinishedLabel} numberOfLines={1}>
-              {unfinished.length === 1 && unfinished[0]
-                ? t('home.unfinished', { name: unfinished[0].owner_name })
-                : t('unfinished.openList', { count: unfinished.length })}
-            </Text>
-            <Text style={styles.resume}>{t('home.resume')}</Text>
-          </Pressable>
-        )}
+          {unfinished.length > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onOpenUnfinished}
+              style={({ pressed }) => [styles.unfinished, pressed && styles.unfinishedPressed]}
+              testID="resume-unfinished"
+            >
+              <Ionicons name="create-outline" size={17} color={colors.secondaryPressed} />
+              <Text style={styles.unfinishedLabel} numberOfLines={1}>
+                {unfinished.length === 1 && unfinished[0]
+                  ? t('home.unfinished', { name: unfinished[0].owner_name })
+                  : t('unfinished.openList', { count: unfinished.length })}
+              </Text>
+              <Text style={styles.resume}>{t('home.resume')}</Text>
+            </Pressable>
+          )}
 
-        {events.isError && (
-          <ErrorState
-            title={t('home.eventsErrorTitle')}
-            onRetry={() => events.refetch()}
-            busy={events.isFetching}
-            testID="events-error"
-          />
-        )}
+          {events.isError && (
+            <ErrorState
+              title={t('home.eventsErrorTitle')}
+              onRetry={() => events.refetch()}
+              busy={events.isFetching}
+              testID="events-error"
+            />
+          )}
 
-        {/* The screen's one action, at the foot of the screen's own content rather than
+          {/* The screen's one action, at the foot of the screen's own content rather than
             floating in the tab bar. Disabled at zero straws, because the flow would stop dead
             at the scan step with an animal already served. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: totalStraws === 0 && !stock.isLoading }}
-          onPress={totalStraws === 0 && !stock.isLoading ? onOpenStock : onStartCapture}
-          style={({ pressed }) => [
-            styles.cta,
-            totalStraws === 0 && !stock.isLoading ? styles.ctaEmpty : styles.ctaReady,
-            pressed && styles.ctaPressed,
-          ]}
-          testID="home-start-ai"
-        >
-          <Ionicons
-            name={totalStraws === 0 && !stock.isLoading ? 'cube-outline' : 'add'}
-            size={20}
-            color={colors.surface}
-          />
-          <Text style={styles.ctaLabel}>
-            {totalStraws === 0 && !stock.isLoading ? t('home.seeStock') : t('home.startNewAi')}
-          </Text>
-        </Pressable>
-      </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: totalStraws === 0 && !stock.isLoading }}
+            onPress={totalStraws === 0 && !stock.isLoading ? onOpenStock : onStartCapture}
+            style={({ pressed }) => [
+              styles.cta,
+              totalStraws === 0 && !stock.isLoading ? styles.ctaEmpty : styles.ctaReady,
+              pressed && styles.ctaPressed,
+            ]}
+            testID="home-start-ai"
+          >
+            <Ionicons
+              name={totalStraws === 0 && !stock.isLoading ? 'cube-outline' : 'add'}
+              size={20}
+              color={colors.surface}
+            />
+            <Text style={styles.ctaLabel}>
+              {totalStraws === 0 && !stock.isLoading ? t('home.seeStock') : t('home.startNewAi')}
+            </Text>
+          </Pressable>
+        </View>
+      </PullToRefresh>
     </View>
   );
 }

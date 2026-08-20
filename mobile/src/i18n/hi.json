@@ -729,5 +729,36 @@
       "दिस"
     ],
     "weekdays": ["र", "सो", "मं", "बु", "गु", "शु", "श"]
+  },
+  "route": {
+    "homeContext": "आज का काम और आपका फ्लास्क",
+    "stockContext": "स्ट्रॉ, सामग्री, उपकरण",
+    "historyContext": "आपके दर्ज किए हुए सभी एआई",
+    "settingsContext": "आपके आँकड़े, एमपीपी और माँगें",
+    "captureContext": "चरण 1 / 6 · मालिक का प्रकार",
+    "aiEvent": "एआई रिकॉर्ड",
+    "aiEventContext": "पूरा रिकॉर्ड और उसका ब्यौरा",
+    "indent": "माँग",
+    "indentContext": "आपका स्टॉक कहाँ तक पहुँचा",
+    "indentsContext": "आपने स्टोर से क्या माँगा है",
+    "requestStock": "माँग भेजें",
+    "requestStockContext": "स्टोर से स्टॉक माँगें",
+    "queue": "भेजना बाकी",
+    "queueContext": "इस फ़ोन पर रुके हुए रिकॉर्ड",
+    "unfinished": "अधूरे रिकॉर्ड",
+    "unfinishedContext": "जो काम अभी पूरा होना है"
+  },
+  "pull": {
+    "holding": "आपका स्टॉक देखा जा रहा है…",
+    "events": "आपके रिकॉर्ड देखे जा रहे हैं…",
+    "waiting": "रुका हुआ काम देखा जा रहा है…",
+    "figures": "आपके आँकड़े देखे जा रहे हैं…"
+  },
+  "scope": {
+    "added_one": "आपको {{codes}} दिया गया है",
+    "added_other": "आपको {{codes}} दिए गए हैं",
+    "removed_one": "{{codes}} अब आपका नहीं है",
+    "removed_other": "{{codes}} अब आपके नहीं हैं",
+    "both": "आपके संकलन केंद्र बदल गए हैं"
   }
 }
