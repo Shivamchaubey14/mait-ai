@@ -317,10 +317,16 @@ def mait_performance(request):
         days = min(MAX_TREND_DAYS, max(1, int(request.query_params.get("days", 30))))
     except (TypeError, ValueError):
         days = 30
-    start = timezone.localdate() - timedelta(days=days - 1)
+    today = timezone.localdate()
+    start = today - timedelta(days=days - 1)
 
-    rows = (
-        DailyAIAggregate.objects.filter(date__gte=start)
+    # Settled days only. Today is added live below, the way `trends` and `summary` do it: the
+    # aggregate is written hourly, so today's slice is absent until the first run after
+    # midnight and up to an hour behind after that. Read from the aggregate alone, a Mait who
+    # had worked all morning showed yesterday's total — and a leaderboard that does not move
+    # when somebody works is one they stop believing.
+    settled = (
+        DailyAIAggregate.objects.filter(date__gte=start, date__lt=today)
         .values("mait_id", "mait__name", "mait__sahayak_vendor_code")
         .annotate(
             ai_count=Sum("ai_count"),
@@ -328,23 +334,98 @@ def mait_performance(request):
             cod=Sum("cod_amount"),
             online=Sum("online_amount"),
         )
-        .order_by("-ai_count")[:50]
     )
+
+    totals: dict[int, dict] = {}
+    for row in settled:
+        totals[row["mait_id"]] = {
+            "mait_id": row["mait_id"],
+            "name": row["mait__name"],
+            "sahayak_vendor_code": row["mait__sahayak_vendor_code"],
+            "ai_count": row["ai_count"] or 0,
+            "collected": row["collected"] or 0,
+            "cod": row["cod"] or 0,
+            "online": row["online"] or 0,
+        }
+
+    def slot(mait_id: int, name: str, code: str) -> dict:
+        """The running total for one Mait, created on first sight."""
+        return totals.setdefault(
+            mait_id,
+            {
+                "mait_id": mait_id,
+                "name": name,
+                "sahayak_vendor_code": code,
+                "ai_count": 0,
+                "collected": 0,
+                "cod": 0,
+                "online": 0,
+            },
+        )
+
+    # Bounded by instants rather than by `completed_at__date`, which compiles to a CONVERT_TZ
+    # that is NULL on a MySQL without timezone tables loaded — the failure `apps.core.timeframe`
+    # exists to prevent, and one that would silently drop every row rather than raise.
+    today_events = (
+        AIEvent.objects.filter(
+            status=AIEvent.Status.COMPLETED,
+            completed_at__gte=start_of_day(today),
+            completed_at__lt=end_of_day(today),
+        )
+        .values("mait_id", "mait__name", "mait__sahayak_vendor_code")
+        .annotate(n=Count("id"))
+    )
+    for row in today_events:
+        slot(row["mait_id"], row["mait__name"], row["mait__sahayak_vendor_code"])[
+            "ai_count"
+        ] += row["n"]
+
+    # The same split the aggregate keeps, computed the same way as `_money_for_slice`: only
+    # verified payments count, because an unconfirmed one is money nobody has yet agreed
+    # changed hands.
+    today_money = (
+        Payment.objects.filter(
+            status=Payment.Status.VERIFIED,
+            ai_event__completed_at__gte=start_of_day(today),
+            ai_event__completed_at__lt=end_of_day(today),
+        )
+        .values("ai_event__mait_id")
+        .annotate(
+            total=Sum("amount"),
+            cod=Sum("amount", filter=Q(mode=Payment.Mode.COD)),
+            online=Sum("amount", filter=Q(mode=Payment.Mode.ONLINE)),
+        )
+    )
+    for row in today_money:
+        entry = totals.get(row["ai_event__mait_id"])
+        # No entry means a verified payment against an event this window does not hold, which
+        # the join above makes impossible. Skipped rather than invented: a name is not
+        # available here, and a row on the leaderboard with money and no inseminations would
+        # be the worst kind of wrong.
+        if entry is None:
+            continue
+        entry["collected"] += row["total"] or 0
+        entry["cod"] += row["cod"] or 0
+        entry["online"] += row["online"] or 0
+
+    # Ordered here rather than in SQL, because today's live counts are only merged in now and
+    # a Mait who did twenty this morning has to be able to reach the top of the board.
+    ranked = sorted(totals.values(), key=lambda e: e["ai_count"], reverse=True)[:50]
 
     return Response(
         {
             "days": days,
             "results": [
                 {
-                    "mait_id": r["mait_id"],
-                    "name": r["mait__name"],
-                    "sahayak_vendor_code": r["mait__sahayak_vendor_code"],
-                    "ai_count": r["ai_count"] or 0,
-                    "amount_collected": str(r["collected"] or 0),
-                    "cod_amount": str(r["cod"] or 0),
-                    "online_amount": str(r["online"] or 0),
+                    "mait_id": e["mait_id"],
+                    "name": e["name"],
+                    "sahayak_vendor_code": e["sahayak_vendor_code"],
+                    "ai_count": e["ai_count"],
+                    "amount_collected": str(e["collected"]),
+                    "cod_amount": str(e["cod"]),
+                    "online_amount": str(e["online"]),
                 }
-                for r in rows
+                for e in ranked
             ],
         }
     )
