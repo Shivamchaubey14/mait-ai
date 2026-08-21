@@ -8,10 +8,11 @@
  */
 
 import React from 'react';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 
 import HomeScreen from '../HomeScreen';
 import PullToRefresh from '@/components/pullToRefresh';
+import i18n from '@/i18n';
 import type { AIEvent, InventorySummary } from '@api/types';
 import { loggedIn } from '@/features/auth/authSlice';
 import type { AuthUser } from '@/features/auth/authSlice';
@@ -227,6 +228,32 @@ describe('HomeScreen', () => {
     fireEvent.press(screen.getByTestId('tile-waiting'));
 
     expect(onOpenQueue).toHaveBeenCalled();
+  });
+
+  it('blames the network, not the app, when the handset has no signal', async () => {
+    // The two failures need different answers. With no signal a Mait should carry on working
+    // — the queue is built for it — and the card has to say so rather than implying the app
+    // is broken and their morning is at risk.
+    (global.fetch as jest.Mock).mockImplementation(() => Promise.reject(new TypeError('offline')));
+    render({ online: false, pending: 3 });
+
+    await waitFor(() => expect(screen.getByTestId('stock-error')).toBeTruthy());
+    // Scoped: both the flask and the events list fail together here, so there are two cards.
+    const card = within(screen.getByTestId('stock-error'));
+    expect(card.getByTestId('problem-title')).toHaveTextContent(i18n.t('problem.offline.title'));
+    // Named, not vague: "your 3 records" is the answer, "your work is safe" is not.
+    expect(card.getByTestId('problem-reassurance')).toHaveTextContent(/3/);
+  });
+
+  it('blames the server when the handset has signal and the server does not answer', async () => {
+    (global.fetch as jest.Mock).mockImplementation(() => Promise.reject(new TypeError('down')));
+    render({ online: true, lastSyncAt: '9:48' });
+
+    await waitFor(() => expect(screen.getByTestId('stock-error')).toBeTruthy());
+    const card = within(screen.getByTestId('stock-error'));
+    expect(card.getByTestId('problem-title')).toHaveTextContent(i18n.t('problem.server.title'));
+    // When it last worked, so a Mait can tell a two-minute blip from a dead morning.
+    expect(card.getByText(/9:48/)).toBeTruthy();
   });
 
   it('stays on Home when the page is pulled down to refresh', async () => {

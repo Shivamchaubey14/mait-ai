@@ -19,8 +19,9 @@ import { useTranslation } from 'react-i18next';
 import { useGetInventorySummaryQuery, useListAiEventsQuery } from '@api/endpoints';
 import { LanguageToggle } from '@/components/brand';
 import PageHero from '@/components/hero';
+import Problem from '@/components/problem';
 import PullToRefresh from '@/components/pullToRefresh';
-import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
+import { EmptyState, SkeletonList } from '@/components/states';
 import { useAppSelector } from '@/store';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
@@ -222,10 +223,15 @@ export default function HomeScreen({
               ) : stock.isError ? (
                 // Worth its own state: a Mait who cannot see their balance does not know whether
                 // they can work, and the answer to that is not "reload the app".
-                <ErrorState
-                  title={t('home.stockErrorTitle')}
+                <Problem
+                  // The cause, not the screen. "Could not load your holding" names our
+                  // problem; a Mait needs to know whether to walk somewhere with signal or
+                  // to carry on working, and those are different answers.
+                  kind={online ? 'server' : 'offline'}
                   onRetry={() => stock.refetch()}
                   busy={stock.isFetching}
+                  pending={pending}
+                  lastReachedAt={lastSyncAt}
                   testID="stock-error"
                 />
               ) : byBreed.length === 0 ? (
@@ -272,10 +278,12 @@ export default function HomeScreen({
           )}
 
           {events.isError && (
-            <ErrorState
-              title={t('home.eventsErrorTitle')}
+            <Problem
+              kind={online ? 'server' : 'offline'}
               onRetry={() => events.refetch()}
               busy={events.isFetching}
+              pending={pending}
+              lastReachedAt={lastSyncAt}
               testID="events-error"
             />
           )}
