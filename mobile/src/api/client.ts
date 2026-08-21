@@ -62,6 +62,11 @@ const rawBaseQuery = fetchBaseQuery({
       headers.set('Authorization', `Bearer ${token}`);
     }
     headers.set('Accept', 'application/json');
+    // Harmless everywhere, and the difference between working and not when the API is
+    // reached through an ngrok tunnel — which is how a handset on mobile data talks to a
+    // laptop. Without it ngrok's free tier answers a browser-ish client with an HTML
+    // interstitial, which arrives here as a JSON parse failure and reads as a server fault.
+    headers.set('ngrok-skip-browser-warning', 'true');
     return headers;
   },
 });
@@ -121,7 +126,10 @@ export const api = createApi({
  * at send time would be regenerated on retry and defeat the deduplication.
  */
 export function idempotencyHeaders(clientUuid: string): Record<string, string> {
-  return { 'Idempotency-Key': clientUuid };
+  // The queued writes go out as plain `fetch` and never pass through `prepareHeaders`, so
+  // the tunnel header has to be repeated here or a capture sent through ngrok comes back as
+  // an HTML page. See the note in `prepareHeaders` above.
+  return { 'Idempotency-Key': clientUuid, 'ngrok-skip-browser-warning': 'true' };
 }
 
 /**
