@@ -27,6 +27,7 @@ import NetInfo from '@react-native-community/netinfo';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
+import { pendingCount } from '@api/queue';
 import { IT_SUPPORT_PHONE } from '@/config/env';
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
@@ -78,8 +79,12 @@ export interface ProblemProps {
   onRetry: () => void;
   busy?: boolean;
   /**
-   * Records still held on this handset. Named in the reassurance line when offline, because
-   * "your 3 saved records are safe" answers the question and "your work is safe" does not.
+   * Records still held on this handset, where the screen already knows.
+   *
+   * Named in the reassurance line, because "your 3 saved records are safe" answers the
+   * question and "your work is safe" invites a Mait to wonder which work. Left out, the card
+   * counts the queue itself rather than assuming — a screen that does not know must not be
+   * able to say "nothing is waiting" on a phone holding a day's inseminations.
    */
   pending?: number;
   /** When the server was last reached, for the variant that says it has stopped answering. */
@@ -95,7 +100,7 @@ export default function Problem({
   kind,
   onRetry,
   busy = false,
-  pending = 0,
+  pending,
   lastReachedAt,
   attempts,
   onDismiss,
@@ -103,6 +108,22 @@ export default function Problem({
 }: ProblemProps): React.JSX.Element {
   const { t } = useTranslation();
   const tone = TONE[kind];
+
+  // Null until known. The screens that already hold the number pass it and skip the read;
+  // the rest get the truth a tick later, and say nothing about counts until then.
+  const [held, setHeld] = useState<number | null>(pending ?? null);
+  useEffect(() => {
+    if (pending !== undefined || kind !== 'offline') {
+      return;
+    }
+    let alive = true;
+    pendingCount()
+      .then(count => alive && setHeld(count))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [kind, pending]);
 
   const subtitle =
     kind === 'server' && lastReachedAt
@@ -118,9 +139,11 @@ export default function Problem({
   // waiting decides whether there is anything to reassure anybody about.
   const reassurance =
     kind === 'offline'
-      ? pending > 0
-        ? t('problem.offline.holding', { count: pending })
-        : t('problem.offline.nothingHeld')
+      ? held === null
+        ? t('problem.offline.unknownHeld')
+        : held > 0
+          ? t('problem.offline.holding', { count: held })
+          : t('problem.offline.nothingHeld')
       : t(`problem.${kind}.reassurance`);
 
   /**

@@ -35,7 +35,8 @@ import { useTranslation } from 'react-i18next';
 import { useGetAiEventQuery, useGetAiEventTimelineQuery, useListBreedsQuery } from '@api/endpoints';
 import type { AIEvent } from '@api/types';
 import { BrandMark } from '@/components/brand';
-import { ErrorState, SkeletonList } from '@/components/states';
+import Problem, { useOnline } from '@/components/problem';
+import { SkeletonList } from '@/components/states';
 import { whatIsMissing } from '@/features/aiFlow/resume';
 import { mediaUrl } from '@/config/env';
 import {
@@ -184,6 +185,7 @@ export default function AiEventDetailScreen({
   const insets = useSafeAreaInsets();
 
   const detail = useGetAiEventQuery(eventId);
+  const online = useOnline();
   const trail = useGetAiEventTimelineQuery(eventId);
   const breeds = useListBreedsQuery();
 
@@ -217,10 +219,11 @@ export default function AiEventDetailScreen({
         </View>
         <View style={styles.body}>
           {detail.isError ? (
-            <ErrorState
-              title={t('aiEvent.errorTitle')}
+            <Problem
+              kind={online ? 'server' : 'offline'}
               onRetry={() => detail.refetch()}
               busy={detail.isFetching}
+              testID="ai-event-error"
             />
           ) : (
             <SkeletonList rows={4} />

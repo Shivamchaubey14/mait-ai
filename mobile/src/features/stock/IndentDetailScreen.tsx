@@ -35,7 +35,8 @@ import {
   useListMppsQuery,
 } from '@api/endpoints';
 import type { Indent } from '@api/types';
-import { ErrorState, SkeletonList } from '@/components/states';
+import Problem, { useOnline } from '@/components/problem';
+import { SkeletonList } from '@/components/states';
 import { Toast } from '@/components/toast';
 import { FlowNotice } from '@/features/aiFlow/components';
 import { shortDate, shortTime, statusTone } from '@/features/stock/IndentsScreen';
@@ -105,6 +106,7 @@ export default function IndentDetailScreen({
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const query = useGetIndentQuery(indentId);
+  const online = useOnline();
   const breeds = useListBreedsQuery();
   const mpps = useListMppsQuery();
   const indent = query.data;
@@ -144,7 +146,12 @@ export default function IndentDetailScreen({
         <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>{heroTop}</View>
         <ScrollView contentContainerStyle={styles.body}>
           {query.isError ? (
-            <ErrorState title={t('indents.errorTitle')} onRetry={() => query.refetch()} />
+            <Problem
+              kind={online ? 'server' : 'offline'}
+              onRetry={() => query.refetch()}
+              busy={query.isFetching}
+              testID="indent-error"
+            />
           ) : (
             <SkeletonList rows={4} />
           )}

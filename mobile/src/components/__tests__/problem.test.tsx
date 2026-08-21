@@ -13,9 +13,10 @@
  */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, waitFor } from '@testing-library/react-native';
 
 import Problem, { PROBLEM_TONE } from '../problem';
+import { clearQueue, enqueue } from '@api/queue';
 import i18n from '@/i18n';
 
 describe('the tone', () => {
@@ -34,6 +35,10 @@ describe('the tone', () => {
 });
 
 describe('no network', () => {
+  beforeEach(async () => {
+    await clearQueue();
+  });
+
   it('names the records being held, rather than promising vaguely that work is safe', () => {
     // "Your 3 saved records are safe" answers the question. "Your work is safe" invites a
     // Mait to wonder which work.
@@ -49,6 +54,34 @@ describe('no network', () => {
     expect(screen.getByTestId('problem-reassurance')).toHaveTextContent(
       i18n.t('problem.offline.nothingHeld'),
     );
+  });
+
+  it('counts the queue itself when the screen does not know', async () => {
+    // Five of the seven screens that can show this card have no idea how many records are
+    // waiting. Rather than plumb the number through all of them, the card reads the queue —
+    // which is what makes the sentence true wherever it appears.
+    await enqueue('completeEvent', 'uuid-a', { eventId: 1 });
+    await enqueue('completeEvent', 'uuid-b', { eventId: 2 });
+
+    render(<Problem kind="offline" onRetry={jest.fn()} />);
+
+    await waitFor(() => expect(screen.getByTestId('problem-reassurance')).toHaveTextContent(/2/));
+  });
+
+  it('says nothing about counts until it knows one', async () => {
+    // The bug this closes. `pending` used to default to zero, so a screen that simply did not
+    // know announced "nothing is waiting to send" — on a handset that might be holding a
+    // day's inseminations. Better to say something true and general than something specific
+    // and wrong.
+    await enqueue('completeEvent', 'uuid-c', { eventId: 3 });
+
+    render(<Problem kind="offline" onRetry={jest.fn()} />);
+
+    // Before the read resolves.
+    expect(screen.getByTestId('problem-reassurance')).toHaveTextContent(
+      i18n.t('problem.offline.unknownHeld'),
+    );
+    expect(screen.queryByText(i18n.t('problem.offline.nothingHeld'))).toBeNull();
   });
 
   it('offers a way out of the card as well as a retry', () => {

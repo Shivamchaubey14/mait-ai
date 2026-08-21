@@ -33,7 +33,8 @@ import type { TFunction } from 'i18next';
 
 import { useListBreedsQuery, useListIndentsQuery } from '@api/endpoints';
 import type { Indent } from '@api/types';
-import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
+import Problem, { useOnline } from '@/components/problem';
+import { EmptyState, SkeletonList } from '@/components/states';
 import {
   colors,
   MIN_TOUCH_TARGET,
@@ -152,6 +153,7 @@ export default function IndentsScreen({
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<IndentState | 'all'>('all');
+  const online = useOnline();
 
   const indents = useListIndentsQuery();
   const breeds = useListBreedsQuery();
@@ -267,10 +269,11 @@ export default function IndentsScreen({
         {indents.isLoading ? (
           <SkeletonList rows={4} />
         ) : indents.isError ? (
-          <ErrorState
-            title={t('indents.errorTitle')}
+          <Problem
+            kind={online ? 'server' : 'offline'}
             onRetry={() => indents.refetch()}
             busy={indents.isFetching}
+            testID="indents-error"
           />
         ) : rows.length === 0 ? (
           // Two different nothings. "You have never raised one" and "none of yours are in

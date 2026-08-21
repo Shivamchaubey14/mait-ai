@@ -13,7 +13,6 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useTranslation } from 'react-i18next';
 
 import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
@@ -48,22 +47,22 @@ export function SkeletonList({ rows = 3 }: { rows?: number }): React.JSX.Element
 // Empty and error
 // --------------------------------------------------------------------------------------
 function CentredState({
-  tone,
   icon,
   title,
   body,
   action,
   testID,
 }: {
-  tone: 'good' | 'bad';
   icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
   body: string;
   action?: { label: string; onPress: () => void; busy?: boolean; testID?: string };
   testID?: string;
 }): React.JSX.Element {
-  const wash = tone === 'good' ? colors.primaryWash : colors.errorWash;
-  const tint = tone === 'good' ? colors.primary : colors.error;
+  // Only the calm one survives here: anything that has gone *wrong* is drawn by
+  // `problem.tsx`, which picks its colour from the cause rather than from the caller.
+  const wash = colors.primaryWash;
+  const tint = colors.primary;
 
   return (
     <View style={styles.centred} testID={testID}>
@@ -107,41 +106,7 @@ export function EmptyState({
   testID?: string;
 }): React.JSX.Element {
   return (
-    <CentredState
-      tone="good"
-      icon="leaf-outline"
-      title={title}
-      body={body}
-      action={action}
-      testID={testID}
-    />
-  );
-}
-
-export function ErrorState({
-  title,
-  body,
-  onRetry,
-  busy,
-  testID = 'error-state',
-}: {
-  title: string;
-  body?: string;
-  onRetry: () => void;
-  busy?: boolean;
-  testID?: string;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <CentredState
-      tone="bad"
-      icon="cloud-offline-outline"
-      title={title}
-      // The default says the queued work is safe, because that is the actual question.
-      body={body ?? t('states.errorBody')}
-      action={{ label: t('states.tryAgain'), onPress: onRetry, busy, testID: 'retry' }}
-      testID={testID}
-    />
+    <CentredState icon="leaf-outline" title={title} body={body} action={action} testID={testID} />
   );
 }
 

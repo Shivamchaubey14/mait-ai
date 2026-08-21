@@ -38,7 +38,8 @@ import { BrandMark } from '@/components/brand';
 import DateRangeSheet, { formatRange } from '@/components/dateRange';
 import PullToRefresh from '@/components/pullToRefresh';
 import { whatIsMissing } from '@/features/aiFlow/resume';
-import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
+import Problem, { useOnline } from '@/components/problem';
+import { EmptyState, SkeletonList } from '@/components/states';
 import {
   colors,
   MIN_TOUCH_TARGET,
@@ -173,6 +174,7 @@ export default function AiEventsScreen({
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const [range, setRange] = useState<Range>('today');
+  const online = useOnline();
 
   /**
    * A range of dates, which is a fourth answer to the same question the chips answer — so
@@ -412,10 +414,11 @@ export default function AiEventsScreen({
             {source.isLoading ? (
               <SkeletonList rows={5} />
             ) : source.isError ? (
-              <ErrorState
-                title={t('history.errorTitle')}
+              <Problem
+                kind={online ? 'server' : 'offline'}
                 onRetry={() => source.refetch()}
                 busy={source.isFetching}
+                testID="events-error"
               />
             ) : shown.length === 0 ? (
               <EmptyState title={empty.title} body={empty.body} />

@@ -32,7 +32,8 @@ import { useGetInventorySummaryQuery, useListBreedsQuery } from '@api/endpoints'
 import type { StrawLot, SuppliesLot } from '@api/types';
 import { BrandMark } from '@/components/brand';
 import PullToRefresh from '@/components/pullToRefresh';
-import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
+import Problem, { useOnline } from '@/components/problem';
+import { EmptyState, SkeletonList } from '@/components/states';
 import {
   colors,
   MIN_TOUCH_TARGET,
@@ -199,6 +200,7 @@ export default function StockScreen({
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('straws');
+  const online = useOnline();
 
   const stock = useGetInventorySummaryQuery();
   const breeds = useListBreedsQuery();
@@ -337,8 +339,8 @@ export default function StockScreen({
             {loading && <SkeletonList rows={4} />}
 
             {failed && (
-              <ErrorState
-                title={t('stock.errorTitle')}
+              <Problem
+                kind={online ? 'server' : 'offline'}
                 onRetry={() => stock.refetch()}
                 busy={stock.isFetching}
                 testID="stock-error"

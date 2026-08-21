@@ -756,7 +756,8 @@
       "holding_one": "Your {{count}} saved record stays on this phone and goes in on its own when signal returns. Keep working.",
       "holding_other": "Your {{count}} saved records stay on this phone and go in on their own when signal returns. Keep working.",
       "nothingHeld": "Nothing is waiting to send. Keep working — anything you record now saves here and goes in on its own.",
-      "primary": "Try now"
+      "primary": "Try now",
+      "unknownHeld": "Anything you record stays on this phone and goes in on its own when signal returns. Keep working."
     },
     "server": {
       "title": "Mait AI is not answering",
