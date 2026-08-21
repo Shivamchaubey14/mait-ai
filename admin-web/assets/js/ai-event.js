@@ -176,9 +176,15 @@
     const stamp = event.performed_at || event.created_at;
     $('#proof-caption').text('AI proof photo · captured ' + ui.dateTime(stamp));
 
+    const alt = 'AI proof photo for event ' + event.id;
+
     $('<img>')
       .addClass('proof__image')
-      .attr('alt', 'AI proof photo for event ' + event.id)
+      .attr('alt', alt)
+      // Announced as a button, because it is one. Without this a keyboard reaches the photo
+      // and finds nothing to press, and a screen reader calls the only interactive thing on
+      // the card an image.
+      .attr({ role: 'button', tabindex: 0, title: 'Open the full photo' })
       .on('load', function () {
         $('#proof-frame').empty().append(this);
       })
@@ -187,6 +193,77 @@
         $('#proof-caption').text('AI proof photo · captured ' + ui.dateTime(stamp) + ' · missing');
       })
       .attr('src', src);
+
+    bindLightbox(src, alt, $('#proof-caption').text());
+  }
+
+  /**
+   * The photo, full size.
+   *
+   * The card is a preview — bounded, so a portrait handset photo cannot push the audit trail
+   * beside it off the screen. But a dispute is settled on what is *in* the photograph, and an
+   * ear tag at preview size is not something anybody should be asked to identify. So the card
+   * opens.
+   *
+   * Delegated from the frame rather than bound to the image, because the image is replaced
+   * whenever the event reloads and a handler bound to the old element would go with it.
+   */
+  function bindLightbox(src, alt, caption) {
+    const dialog = document.getElementById('lightbox');
+    if (!dialog) {
+      return;
+    }
+
+    // Built here rather than sitting in the markup: an `<img>` with no `src` is invalid, and
+    // one with a placeholder is a request for a file that does not exist on every page load.
+    $('#lightbox-figure')
+      .empty()
+      .append($('<img>').addClass('lightbox__image').attr({ src: src, alt: alt }));
+    $('#lightbox-caption').text(caption);
+
+    const open = function () {
+      // `showModal`, not `show`: it is what puts the page behind it inert and gives Escape
+      // its meaning. Guarded because a dialog already open throws on a second call.
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+    };
+
+    $('#proof-frame')
+      .off('click.lightbox keydown.lightbox')
+      .on('click.lightbox', '.proof__image', open)
+      .on('keydown.lightbox', '.proof__image', function (e) {
+        // Enter and Space, the two keys a button answers to.
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
+      });
+
+    $('#lightbox-close')
+      .off('click.lightbox')
+      .on('click.lightbox', function () {
+        dialog.close();
+      });
+
+    /**
+     * Clicking the dark area closes it.
+     *
+     * A click on a dialog's backdrop is dispatched to the dialog element itself — there is no
+     * node to bind to — so this asks where the click landed rather than what it hit. Testing
+     * `e.target === dialog` would work for the backdrop but would also fire on the dialog's
+     * own padding, and it cannot tell the two apart; the pointer's position can.
+     */
+    $(dialog)
+      .off('click.lightbox')
+      .on('click.lightbox', function (e) {
+        const r = dialog.getBoundingClientRect();
+        const outside =
+          e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+        if (outside) {
+          dialog.close();
+        }
+      });
   }
 
   /**

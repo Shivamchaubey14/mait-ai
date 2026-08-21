@@ -235,6 +235,35 @@
       </main>
     </div>
 
+    <!-- The photo, full size.
+
+         Inert and empty until a photo is clicked. A `<dialog>` rather than a div-with-a-scrim
+         because the browser already knows how to do this properly: Escape closes it, focus is
+         trapped inside it, and everything behind is marked inert for a screen reader without
+         a line of script. -->
+    <dialog class="lightbox" id="lightbox" aria-labelledby="lightbox-title">
+      <h2 class="visually-hidden" id="lightbox-title">AI proof photo, full size</h2>
+      <button
+        class="lightbox__close"
+        id="lightbox-close"
+        type="button"
+        aria-label="Close the photo"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      </button>
+      <div class="lightbox__figure" id="lightbox-figure"></div>
+      <p class="lightbox__caption" id="lightbox-caption"></p>
+    </dialog>
+
     <script src="assets/vendor/jquery-3.7.1.min.js"></script>
     <script src="assets/js/api.js"></script>
     <script src="assets/js/ui.js"></script>

@@ -83,8 +83,9 @@
 }
 
 /* The rules between lines go. They were drawn for a white panel; on the wash the grey reads
-   as a cool line across a warm ground. The app's copy of this card has never had them — the
-   padding separates the rows well enough at the three or four lines this ever runs to. */
+   as a cool line across a warm ground, and a tomato one is a shout between two sheaths. The
+   app's copy of this card has never had them — the padding separates the rows well enough at
+   the three or four lines this ever runs to. */
 .panel--used .used__row {
   border-bottom: 0;
 }
@@ -164,18 +165,20 @@
   box-shadow: var(--shadow-card);
 }
 
-/* The card that takes up the slack in the column. `min-height: 0` so it is allowed to be
-   shorter than the photo inside it wants to be — without it a flex item refuses to shrink
-   below its content and the whole point is lost. */
-.proof--photo {
-  flex: 1 1 auto;
-  min-height: 0;
-}
+/* Grid rather than flex, and this is the whole fix.
 
+   Flex sizes a child on the main axis and caps it on the cross axis independently, so a
+   3000px handset photo came out shrunk one way and clamped the other — the well ended up
+   whatever shape the leftover viewport height happened to be, and the picture sat letterboxed
+   in the middle of it. On a wide short window that is a slit with a stamp-sized photo in it;
+   on a narrow one it is a 260px strip with a portrait photo reduced to a sliver. Which is the
+   same bug reported two ways: the image looked wrong at some sizes and fine at others.
+
+   Grid with `place-items: center` sizes the box to the *picture*, bounded. The photo keeps
+   its own proportions at every window size and the well stops being a shape nobody chose. */
 .proof__frame {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   min-height: 190px;
   padding: var(--space-4);
   background: var(--ink-700);
@@ -183,23 +186,35 @@
   overflow: hidden;
 }
 
-.proof--photo .proof__frame {
-  flex: 1 1 auto;
-  min-height: 0;
+/* Shrink to fit the column, never stretch to fill it. It used to take the slack so the two
+   columns ended level; that is what made the well an arbitrary shape. The photo is a preview
+   now — the full picture is one click away — so a tidy edge is not worth a distorted one. */
+.proof--photo {
+  /* Never below its own content. `min-height: 0` was letting the column squash this card to
+     166px while it held 320px of photo and caption — the caption ended up 71px *below* the
+     card it belongs to. A flex item's automatic minimum size is exactly the protection wanted
+     here, so the rule to write is no rule at all. */
+  flex: 0 0 auto;
 }
 
-/* The image takes the whole well and `object-fit` letterboxes the picture inside it, rather
-   than the image being sized by the picture. As a flex item left to its natural size a 3000px
-   handset photo is shrunk on the main axis and capped on the cross axis independently, which
-   gave a tall narrow box with the photo stranded in the middle of it at thumbnail size. The
-   well's height is decided by the column; this fills it and gets out of the way. */
+/* The bound lives here, on the picture, and it is in viewport units for a reason.
+
+   `max-height: 100%` on the image did nothing: a percentage resolves against the parent's
+   *definite* height, and the well has none — a `max-height` is a cap, not a height. So the
+   image took its natural size. A 973px handset photo then sat inside a 364px card, hidden by
+   the well's `overflow` and therefore invisible in a screenshot, while its box ran 600px past
+   the card: over the map below, which is why a click on the photo landed on the map's link,
+   and shoving the caption clean out of the bottom of the card.
+
+   A viewport unit is definite, so this actually binds. Sized to leave room for the map card
+   underneath at the shortest window the two-column layout is used at. */
 .proof__image {
-  flex: 1 1 auto;
-  align-self: stretch;
-  min-width: 0;
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(40vh, 420px);
   object-fit: contain;
+  cursor: zoom-in;
 }
 
 /* No photo, or a photo that would not load. Stated in words with a glyph, rather than left to
@@ -432,7 +447,12 @@
 /* Below this the columns stack, and two full-width cards plus a trail cannot be made to fit a
    window however hard the layout tries — so the page goes back to being a page and scrolls,
    rather than squeezing the photo down to a strip to honour a rule that no longer helps. */
-@media (max-width: 1100px), (max-height: 620px) {
+/* Below this the two-column, no-scroll layout stops being honest: a photo, a map and an audit
+   trail cannot share 460px of column without the photo shrinking to something nobody can
+   identify an ear tag in. Short windows get the stacked layout and an ordinary scrollbar
+   instead — 620px was the old threshold and a 1280x720 laptop, which is most of them, fell
+   just the wrong side of it. */
+@media (max-width: 1100px), (max-height: 800px) {
   .content {
     display: block;
     height: auto;
@@ -442,7 +462,9 @@
     min-height: 0;
   }
 
-  .proof--photo .proof__frame {
+  /* Taller floor on a stacked layout, where the photo has the full width to itself. The
+     ceiling above still stops it running away. */
+  .proof__frame {
     min-height: 260px;
   }
 
@@ -455,4 +477,83 @@
   .event {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---------------------------------------------------------------------------------------
+   The photo, full size
+   --------------------------------------------------------------------------------------- */
+
+/* Black, not Ink. The surround should read as absence and let the photograph be the only lit
+   thing on the screen — this is evidence being examined, and the page's own colours around it
+   would be something else for the eye to judge it against. */
+.lightbox {
+  /* Sized by the picture, bounded by the window — not a fixed box the picture is poured into.
+     `position: relative` because the close button is laid over it. */
+  position: relative;
+  width: fit-content;
+  max-width: 94vw;
+  max-height: 92vh;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: #000;
+  overflow: hidden;
+}
+
+.lightbox::backdrop {
+  background: rgb(12 21 27 / 72%);
+}
+
+/* Sized by the picture, the same lesson as the card: `width: 100%` made the element's box
+   landscape around a portrait photograph, so `object-fit` letterboxed it inside black bars
+   that were wider than the picture. Bounded on both axes instead, and the box is the photo.
+
+   `contain` stays as a backstop. It should never have anything to do now, but a viewer that
+   crops to fill would be making the same cut the card already made — which is the one thing
+   opening the photo has to undo. */
+.lightbox__image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 94vw;
+  max-height: calc(92vh - 52px);
+  object-fit: contain;
+}
+
+/* The same line the card carries, kept with the picture it qualifies: whether the photo was
+   taken in the app or chosen from a gallery is the first question asked of anything offered
+   as proof. */
+.lightbox__caption {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--ink-200);
+  font-size: var(--text-caption);
+  text-align: center;
+}
+
+.lightbox__close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: var(--color-surface);
+  background: rgb(255 255 255 / 16%);
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.lightbox__close:hover,
+.lightbox__close:focus-visible {
+  background: rgb(255 255 255 / 28%);
+}
+
+.lightbox__close svg {
+  width: 20px;
+  height: 20px;
 }
