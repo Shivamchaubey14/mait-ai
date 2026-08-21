@@ -33,6 +33,7 @@ import {
   useVerifyLoginOtpMutation,
 } from '@api/endpoints';
 import { BrandWordmark, LanguageToggle } from '@/components/brand';
+import Problem, { useOnline } from '@/components/problem';
 import { Toast } from '@/components/toast';
 import { OTP_EXPIRY_SECONDS, OTP_LOCK_MINUTES, OTP_MAX_ATTEMPTS } from '@/config/env';
 import { useAppDispatch } from '@/store';
@@ -120,6 +121,9 @@ export default function LoginScreen(): React.JSX.Element {
   const [focused, setFocused] = useState(false);
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
+  /** A send that never reached the server. Shown as a card, cleared by the next attempt. */
+  const [unreachable, setUnreachable] = useState(false);
+  const online = useOnline();
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [failure, setFailure] = useState<OtpFailure>(null);
   // Counted here rather than parsed out of the server's message. The message is translated,
@@ -174,6 +178,22 @@ export default function LoginScreen(): React.JSX.Element {
       // A throttled send is not a fault, and saying "something went wrong" sends the Mait
       // hunting for a problem that does not exist — they simply have to wait.
       const status = (err as { status?: number })?.status;
+
+      /**
+       * A request that never reached anything gets a card, not a toast.
+       *
+       * RTK Query reports an unreachable server as `FETCH_ERROR` with no HTTP status, which
+       * used to land on `errors.generic` — "Something went wrong. Please try again." That is
+       * the least useful sentence the app can say here: signing in is the one step that
+       * genuinely cannot work without a signal, and a Mait needs telling that rather than
+       * being invited to try the same thing again in the same place.
+       */
+      const neverArrived =
+        status === undefined || (err as { status?: string })?.status === 'FETCH_ERROR';
+      if (neverArrived) {
+        setUnreachable(true);
+        return;
+      }
       setError(status === 429 ? t('errors.tooManyRequests') : t('errors.generic'));
     }
   }, [mobileNo, sendOtp, t]);
@@ -283,6 +303,23 @@ export default function LoginScreen(): React.JSX.Element {
           about the number in the box below it. */}
       <Toast message={error} onDismiss={() => setError(null)} testID="login-error" />
 
+      {/* The one step in the app that cannot work offline, said plainly and in place, rather
+          than as a toast that disappears before it has been read. */}
+      {unreachable && (
+        <View style={styles.problem}>
+          <Problem
+            kind={online ? 'server' : 'signIn'}
+            onRetry={() => {
+              setUnreachable(false);
+              handleSend();
+            }}
+            busy={sendState.isLoading}
+            onDismiss={() => setUnreachable(false)}
+            testID="login-unreachable"
+          />
+        </View>
+      )}
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -371,6 +408,8 @@ export default function LoginScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  // Outside the form's own sheet, so it needs the page gutters itself.
+  problem: { paddingHorizontal: spacing[5], paddingTop: spacing[4] },
   root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   scroll: { flexGrow: 1 },
