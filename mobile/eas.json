@@ -9,6 +9,9 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_ALLOW_CLEARTEXT": "true"
       }
     },
     "preview": {
@@ -17,7 +20,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://apolonia-unvouchsafed-joy.ngrok-free.dev/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://apolonia-unvouchsafed-joy.ngrok-free.dev/api/v1",
+        "EXPO_ALLOW_CLEARTEXT": "true"
       }
     },
     "production": {
