@@ -409,8 +409,8 @@ export default function AiEventDetailScreen({
         {event.consumables?.length > 0 && (
           <View style={styles.used} testID="ai-event-used">
             <View style={styles.usedHead}>
-              <Ionicons name="cube-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.usedTitle}>{t('aiEvent.used')}</Text>
+              <Ionicons name="cube-outline" size={16} color={colors.info} />
+              <Text style={[styles.usedTitle, styles.usedTitleTone]}>{t('aiEvent.used')}</Text>
             </View>
 
             {event.consumables.map(line => (
@@ -692,13 +692,25 @@ const styles = StyleSheet.create({
   tileNote: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
 
   // -- what was used -----------------------------------------------------------------------
+  // Blue, the same pair the location tile on this screen already wears.
+  //
+  // White, this card sat between two others that were also white and read as a footnote to
+  // them — and it is the half of the record a month-end stock count actually goes missing on.
+  // Blue is this palette's colour for a fact about the situation, which is exactly what a
+  // sheath and a pair of gloves are: not an action to take, not something waiting, and
+  // certainly not something wrong. Green would claim it as an action and red as a fault.
+  //
+  // The wash carries the colour and the border states it; the text stays Ink. That is the
+  // rule the token is written to — "pale enough to carry Ink text at full contrast; the
+  // status colour is the dot and the border, never the text" — and it is what keeps the card
+  // legible on a cheap screen in sunlight.
   used: {
     padding: spacing[4],
     marginBottom: spacing[3],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.infoWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.info,
     ...shadows.card,
   },
   usedHead: {
@@ -714,6 +726,7 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     paddingVertical: spacing[2],
   },
+  usedTitleTone: { color: colors.info },
   usedBody: { flex: 1 },
   usedName: { ...typography.bodyStrong, color: colors.ink },
   usedMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },

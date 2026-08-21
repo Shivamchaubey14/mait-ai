@@ -62,9 +62,31 @@
   flex: 1 1 auto;
 }
 
-/* Ink, like the trail's, so the two headings in this column read as a pair. */
+/* Blue, and the same blue the app draws this card in — a Mait and the admin looking at the
+   same event should be looking at the same card. White, it sat between two other white panels
+   and read as a footnote to them, when it is the half of the record a month-end stock count
+   actually goes missing on.
+
+   Blue is this palette's colour for a fact about the situation, which is what a sheath and a
+   pair of gloves are: not an action, not something waiting, and not something wrong. The wash
+   carries the colour and the border states it; the text stays Ink, which is the rule
+   `--color-info-wash` is written to. */
+.panel--used {
+  background: var(--color-info-wash);
+  border-color: var(--color-info);
+}
+
+/* White tile, blue glyph. On the wash an ink tile would sink into the panel behind it. */
 .used__icon {
-  background: var(--ink-50);
+  background: var(--color-surface);
+  color: var(--color-info);
+}
+
+/* The rules between lines go. They were drawn for a white panel; on the wash the grey reads
+   as a cool line across a warm ground. The app's copy of this card has never had them — the
+   padding separates the rows well enough at the three or four lines this ever runs to. */
+.panel--used .used__row {
+  border-bottom: 0;
 }
 
 .used {
