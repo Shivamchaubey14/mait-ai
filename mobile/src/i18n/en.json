@@ -747,5 +747,39 @@
     "removed_one": "{{codes}} is no longer yours",
     "removed_other": "{{codes}} are no longer yours",
     "both": "Your collection points have changed"
+  },
+  "problem": {
+    "dismiss": "Not now",
+    "offline": {
+      "title": "No network",
+      "subtitle": "The handset has no signal in this village.",
+      "holding_one": "Your {{count}} saved record stays on this phone and goes in on its own when signal returns. Keep working.",
+      "holding_other": "Your {{count}} saved records stay on this phone and go in on their own when signal returns. Keep working.",
+      "nothingHeld": "Nothing is waiting to send. Keep working — anything you record now saves here and goes in on its own.",
+      "primary": "Try now"
+    },
+    "server": {
+      "title": "Mait AI is not answering",
+      "subtitle": "The handset has signal, but the server did not respond.",
+      "subtitleSince": "The handset has signal, but the server did not respond. Last reached {{time}}.",
+      "reassurance": "Nothing you have recorded is affected. New records still save here.",
+      "primary": "Try again",
+      "secondary": "Report"
+    },
+    "signIn": {
+      "title": "Cannot sign in offline",
+      "subtitle": "The code must be sent by SMS, so this one step needs a signal.",
+      "reassurance": "Move to where you have bars. Once you are in, the capture flow works offline.",
+      "primary": "Try again"
+    },
+    "exhausted": {
+      "title": "Still not answering",
+      "subtitle": "Retrying has stopped.",
+      "subtitleAt_one": "{{count}} attempt, the last at {{time}}.",
+      "subtitleAt_other": "{{count}} attempts, the last at {{time}}.",
+      "reassurance": "Retrying has stopped so it does not drain your battery. Nothing is lost — pull down to try again.",
+      "primary": "Try once more",
+      "secondary": "Call"
+    }
   }
 }
