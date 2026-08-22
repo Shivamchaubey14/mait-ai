@@ -564,3 +564,33 @@ export interface PregnancyCheckPage extends Paginated<PregnancyCheck> {
   due_this_week: number;
   overdue: number;
 }
+
+/**
+ * A stop on a planned round.
+ *
+ * `leg_km` is the distance from the stop before it — a straight line scaled for the fact that
+ * roads wind, because there is no routing service behind this. Good enough to order stops;
+ * the screen says what it is rather than letting a Mait read it as a road distance.
+ */
+export interface RouteStop extends PregnancyCheck {
+  leg_km: number;
+  lat: number | null;
+  lng: number | null;
+}
+
+export interface RouteOption {
+  total_km: number;
+  /** Riding plus the checks themselves. */
+  minutes_total: number;
+  minutes_on_road: number;
+  stops: RouteStop[];
+}
+
+export interface PdRoute {
+  /** False when the handset had no fix, so the round is ordered from the first stop instead. */
+  from_here: boolean;
+  stop_count: number;
+  options: { shortest: RouteOption; late_first: RouteOption };
+  /** Checks with no recorded position. They cannot be placed, so they go last. */
+  without_location: number;
+}

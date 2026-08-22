@@ -8,6 +8,7 @@
 import { api, idempotencyHeaders } from './client';
 import type {
   PdOutcome,
+  PdRoute,
   PregnancyCheck,
   PregnancyCheckPage,
   AadhaarImages,
@@ -388,6 +389,22 @@ export const maitaiApi = api.injectEndpoints({
     }),
 
     /**
+     * Today's round, ordered two ways.
+     *
+     * Both orderings come back together so the reorder screen needs no second request and the
+     * figures cannot move between the two screens — which is what that screen promises.
+     * Skipped without a fix rather than sending nulls: the server orders from the first stop
+     * when it has no start, and asking with a half-answer would hide that.
+     */
+    getPdRoute: builder.query<PdRoute, { lat?: number; lng?: number } | void>({
+      query: args => ({
+        url: '/pregnancy-checks/route/',
+        params: args?.lat && args?.lng ? { lat: args.lat, lng: args.lng } : undefined,
+      }),
+      providesTags: ['Pregnancy'],
+    }),
+
+    /**
      * What the Mait found.
      *
      * `clientUuid` is minted when the outcome is tapped, not when the request leaves — a
@@ -461,6 +478,7 @@ export const {
   useGetAiEventQuery,
   useGetAiEventTimelineQuery,
   useListPregnancyChecksQuery,
+  useGetPdRouteQuery,
   useRecordPregnancyCheckMutation,
   useCreateIndentMutation,
   useListIndentsQuery,
