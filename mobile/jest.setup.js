@@ -64,7 +64,7 @@ jest.mock('expo-image-manipulator', () => {
     renderAsync: jest.fn(() =>
       Promise.resolve({
         saveAsync: jest.fn(() => Promise.resolve({ uri: 'file:///resized.jpg' })),
-      })
+      }),
     ),
   };
   return {
@@ -86,3 +86,20 @@ jest.mock('@react-native-community/netinfo', () => ({
 // the RTK Query cache timers that used to compound this are cancelled in test-utils.
 // Left unmocked deliberately — switching the whole suite to fake timers to silence a
 // warning would make every `waitFor` need manual clock advancement.
+
+// The map is a native view with no JS implementation under Jest. Rendered as plain views that
+// keep their testIDs, so a test can assert the route reached the map without a renderer that
+// cannot exist here. `Polyline` is kept as a real element because the line *is* the feature —
+// a route drawn without it is a scatter of pins.
+jest.mock('react-native-maps', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const Passthrough = ({ children, ...props }) => React.createElement(View, props, children);
+  return {
+    __esModule: true,
+    default: Passthrough,
+    Marker: Passthrough,
+    Polyline: Passthrough,
+    PROVIDER_GOOGLE: 'google',
+  };
+});
