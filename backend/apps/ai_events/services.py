@@ -413,6 +413,14 @@ def complete_ai_event(event: AIEvent, *, actor=None, without_stock: bool = False
             "mpp_code": event.mpp.mpp_code,
         },
     )
+    # The insemination is finished; the question it asked is not. Booked here rather than by
+    # a sweep looking for events that were missed, so a check exists the moment the event
+    # does — and imported locally, because the pregnancy services import this module's models
+    # and naming them at the top would close the loop.
+    from apps.pregnancy.services import schedule_check
+
+    schedule_check(event, actor=actor)
+
     logger.info(
         "AI event completed",
         extra={"ai_event_id": event.id, "doses": event.doses},
