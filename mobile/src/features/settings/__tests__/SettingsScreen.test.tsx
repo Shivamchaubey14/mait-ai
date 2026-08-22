@@ -136,6 +136,7 @@ function render(props: Partial<React.ComponentProps<typeof SettingsScreen>> = {}
   const store = makeStore();
   store.dispatch(loggedIn({ access: 'a', refresh: 'r', user: USER, assignedMppCodes: ['001302'] }));
   const onOpenIndents = jest.fn();
+  const onOpenPd = jest.fn();
   const onSync = jest.fn();
   renderWithStore(
     <SettingsScreen
@@ -144,11 +145,12 @@ function render(props: Partial<React.ComponentProps<typeof SettingsScreen>> = {}
       online
       lastSyncAt="9:48"
       onOpenIndents={onOpenIndents}
+      onOpenPd={onOpenPd}
       {...props}
     />,
     { store },
   );
-  return { onOpenIndents, onSync };
+  return { onOpenIndents, onOpenPd, onSync };
 }
 
 describe('SettingsScreen', () => {
@@ -208,6 +210,18 @@ describe('SettingsScreen', () => {
     });
 
     expect(onSync).toHaveBeenCalled();
+  });
+
+  it('offers the pregnancy checks, and says how many are due', async () => {
+    // Above the indents on purpose: a check is work in a yard with a date on it, and a Mait
+    // planning tomorrow reads it before they read paperwork with the store.
+    mockApi({});
+    const { onOpenPd } = render();
+
+    await waitFor(() => expect(screen.getByTestId('profile-pd')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('profile-pd'));
+
+    expect(onOpenPd).toHaveBeenCalled();
   });
 
   it('names the MPPs and opens the rest of them', async () => {

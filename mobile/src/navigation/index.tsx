@@ -11,7 +11,7 @@
  * generated at send time would be new on every attempt and deduplicate nothing.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useTranslation } from 'react-i18next';
@@ -25,13 +25,24 @@ import {
   useGetNonMemberQuery,
   useInitiatePaymentMutation,
   useListAiEventsQuery,
+  useListPregnancyChecksQuery,
+  useRecordPregnancyCheckMutation,
   useVerifyPaymentOtpMutation,
 } from '@api/endpoints';
 import { enqueue, pendingCount, readQueue } from '@api/queue';
 import type { QueuedJob, QueuedLabel } from '@api/queue';
 import { drainQueue } from '@api/sync';
 import type { SyncProgress } from '@api/sync';
-import type { AIEvent, Animal, Member, MPP, NonMember, NonMemberSummary } from '@api/types';
+import type {
+  AIEvent,
+  Animal,
+  Member,
+  MPP,
+  NonMember,
+  NonMemberSummary,
+  PdOutcome,
+  PregnancyCheck,
+} from '@api/types';
 import BottomNav, { Tab } from '@/components/BottomNav';
 import { RouteTransitionHost, useRouteTransition } from '@/components/routeTransition';
 import type { RouteKey } from '@/navigation/routes';
@@ -60,6 +71,9 @@ import HomeScreen from '@/features/home/HomeScreen';
 import SettingsScreen from '@/features/settings/SettingsScreen';
 import IndentDetailScreen from '@/features/stock/IndentDetailScreen';
 import IndentsScreen from '@/features/stock/IndentsScreen';
+import PdDoneScreen from '@/features/pregnancy/PdDoneScreen';
+import PdListScreen from '@/features/pregnancy/PdListScreen';
+import PdRecordScreen from '@/features/pregnancy/PdRecordScreen';
 import RequestStockScreen from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -208,6 +222,28 @@ export default function RootNavigator(): React.JSX.Element {
   const [requestingStock, setRequestingStock] = useState(false);
   /** null = not looking at indents, 0 = the list, n = that indent. */
   const [indentView, setIndentView] = useState<number | null>(null);
+  /**
+   * Where the pregnancy checks are.
+   *
+   * `null` is not looking at them; `'list'` is the week; a check means it is being recorded;
+   * and `done` holds what was just found, because that screen has to say what happened after
+   * the check itself has left the list.
+   */
+  const [pdView, setPdView] = useState<'list' | null>(null);
+  const [pdCheck, setPdCheck] = useState<PregnancyCheck | null>(null);
+  const [pdPhoto, setPdPhoto] = useState<string | null>(null);
+  const [pdDone, setPdDone] = useState<{
+    check: PregnancyCheck;
+    outcome: PdOutcome;
+    queued: boolean;
+  } | null>(null);
+  const [pdSaving, setPdSaving] = useState(false);
+  /** The animal a follow-up capture is for, until the roster carrying it has loaded. */
+  const [pendingAnimalId, setPendingAnimalId] = useState<number | null>(null);
+
+  const [recordPd] = useRecordPregnancyCheckMutation();
+  const pdChecks = useListPregnancyChecksQuery({ window: 'due' }, { skip: pdView === null });
+
   /** The waiting-to-sync screen, opened from Home's yellow tile. */
   const [queueOpen, setQueueOpen] = useState(false);
   /** The list of captures still owed a finish, opened from Home. */
@@ -279,6 +315,39 @@ export default function RootNavigator(): React.JSX.Element {
     farmer?.kind === 'nonMember' ? farmer.nonMemberId : 0,
     { skip: farmer?.kind !== 'nonMember' },
   );
+
+  /**
+   * The animals on the chosen farmer's roster.
+   *
+   * Memoised: `?? []` builds a new array on every render, and an effect depending on it would
+   * then run on every render — which for one that advances a step is a flow that will not
+   * stand still.
+   */
+  const animals = useMemo(
+    () =>
+      (farmer?.kind === 'member' ? memberDetail.data?.animals : nonMemberDetail.data?.animals) ??
+      [],
+    [farmer?.kind, memberDetail.data?.animals, nonMemberDetail.data?.animals],
+  );
+
+  /**
+   * Resolve the animal the check was about, once the roster it lives in has loaded.
+   *
+   * Only ever skips *forward*, and only while the Mait is still on the animal step — if they
+   * have already chosen a different animal, or moved on, this must not reach in and change
+   * what they picked. A cow can be served for a different animal in the same yard.
+   */
+  useEffect(() => {
+    if (pendingAnimalId === null || step !== 'selectAnimal') {
+      return;
+    }
+    const found = animals.find(row => row.id === pendingAnimalId);
+    if (found) {
+      setAnimal(found);
+      setPendingAnimalId(null);
+      setStepDirect('selectBreed');
+    }
+  }, [pendingAnimalId, step, animals]);
 
   /**
    * Tell the cached lists that the server has moved on.
@@ -422,6 +491,24 @@ export default function RootNavigator(): React.JSX.Element {
       return true;
     }
 
+    // The pregnancy journey, unwound in the order it was walked. Without this, back from a
+    // half-recorded check drops a Mait onto whichever tab was lit underneath and the visit
+    // they were part-way through is simply gone from the screen.
+    if (pdDone) {
+      return reverse(() => setPdDone(null));
+    }
+
+    if (pdCheck) {
+      return reverse(() => {
+        setPdCheck(null);
+        setPdPhoto(null);
+      });
+    }
+
+    if (pdView) {
+      return reverse(() => setPdView(null));
+    }
+
     if (requestingStock) {
       return reverse(() => setRequestingStock(false));
     }
@@ -458,6 +545,9 @@ export default function RootNavigator(): React.JSX.Element {
     eventView,
     tab,
     transition,
+    pdView,
+    pdCheck,
+    pdDone,
   ]);
 
   useEffect(() => {
@@ -469,8 +559,88 @@ export default function RootNavigator(): React.JSX.Element {
     return <LoginScreen />;
   }
 
-  const animals =
-    (farmer?.kind === 'member' ? memberDetail.data?.animals : nonMemberDetail.data?.animals) ?? [];
+  /**
+   * Write what the Mait found, offline or not.
+   *
+   * The key is minted here, before anything is sent, and reused by the queued job — a check
+   * happens in a yard with no signal as often as not, and a key generated at send time is new
+   * on every retry and deduplicates nothing (ADR 0003).
+   *
+   * A failure is not an error the Mait can act on: the visit happened, the answer is known,
+   * and the only thing missing is a network. So it is queued and the screen says so, rather
+   * than asking somebody to examine the animal again.
+   */
+  const savePd = async (check: PregnancyCheck, outcome: PdOutcome, photoUri: string | null) => {
+    setPdSaving(true);
+    const key = newClientUuid();
+    let queued = false;
+
+    try {
+      await recordPd({
+        id: check.id,
+        outcome,
+        photoUrl: photoUri ?? undefined,
+        clientUuid: key,
+      }).unwrap();
+    } catch {
+      await enqueue(
+        'recordPd',
+        key,
+        { checkId: check.id, outcome, photoUrl: photoUri },
+        {
+          farmer: check.owner_name,
+          kind: check.owner_type === 'member' ? 'member' : 'nonMember',
+          at: clockTime(),
+          checkId: check.id,
+          outcome,
+        },
+      );
+      setPending(await pendingCount());
+      queued = true;
+    }
+
+    setPdSaving(false);
+    setPdPhoto(null);
+    setPdDone({ check, outcome, queued });
+    setPdCheck(null);
+  };
+
+  /**
+   * Start a fresh insemination for the animal that was just checked.
+   *
+   * The card offering this promises the member and animal are already filled in, and until
+   * now the button called `startCapture`, which clears everything — so it promised four steps
+   * and delivered six. A promise a Mait tests once and finds false is a button they stop
+   * pressing.
+   *
+   * Everything the check already knows is set here: who she is, which collection point, and
+   * which animal. The animal itself arrives with the member's detail a moment later, so it is
+   * held as an id and resolved by the effect below — landing on the animal step meanwhile,
+   * which is a step forward rather than a wait.
+   */
+  const startCaptureFor = (check: PregnancyCheck) => {
+    setEvent(null);
+    setAnimal(null);
+    setClientUuid(newClientUuid());
+
+    const isMember = check.owner_type === 'member';
+    setOwnerType(isMember ? 'member' : 'nonMember');
+    setFarmer(
+      isMember
+        ? { kind: 'member', name: check.owner_name, memberCode: check.member_code }
+        : { kind: 'nonMember', name: check.owner_name, nonMemberId: check.non_member_id ?? 0 },
+    );
+    // Built from what the check carries rather than looked up: the flow only ever shows the
+    // code and the name, and a round trip here would be a spinner between two taps.
+    setMpp({ id: check.mpp_id, mpp_code: check.mpp_code, mpp_name: check.mpp_name } as MPP);
+    setPendingAnimalId(check.animal_id);
+
+    transition.go('capture', () => setStepDirect('selectAnimal'));
+  };
+
+  /** The next check still open, so the done screen can point at the rest of the round. */
+  const nextPdAfter = (check: PregnancyCheck): PregnancyCheck | null =>
+    (pdChecks.data?.results ?? []).find(row => row.id !== check.id && !row.outcome) ?? null;
 
   const startCapture = () => {
     setMpp(null);
@@ -1172,13 +1342,59 @@ export default function RootNavigator(): React.JSX.Element {
             busy={closing}
           />
         )}
-        {!requestingStock && tab === 'settings' && indentView === null && (
+        {/* Pregnancy checks, layered over whichever tab opened them — Profile, where a Mait
+            asks "what do I owe a visit". The three screens are one journey and share the
+            record being worked on, so they live here rather than inside the list. */}
+        {!requestingStock && pdView === 'list' && !pdCheck && !pdDone && (
+          <PdListScreen
+            onOpen={check => transition.go('pdRecord', () => setPdCheck(check))}
+            onSync={sync}
+          />
+        )}
+        {!requestingStock && !!pdCheck && (
+          <PdRecordScreen
+            check={pdCheck}
+            photoUri={pdPhoto}
+            busy={pdSaving}
+            onBack={() => transition.back(() => setPdCheck(null))}
+            onPhoto={setPdPhoto}
+            onSave={(outcome, photoUri) => savePd(pdCheck, outcome, photoUri)}
+          />
+        )}
+        {!requestingStock && !!pdDone && (
+          <PdDoneScreen
+            check={pdDone.check}
+            outcome={pdDone.outcome}
+            queued={pdDone.queued}
+            next={nextPdAfter(pdDone.check)}
+            onStartAi={() => {
+              // She is not in calf, she is in heat, and the Mait is standing in the yard.
+              // Sending them back to Home to start from scratch is how a second service
+              // becomes a visit nobody makes.
+              const from = pdDone.check;
+              setPdDone(null);
+              setPdView(null);
+              startCaptureFor(from);
+            }}
+            onOpenNext={() => {
+              const next = nextPdAfter(pdDone.check);
+              transition.go('pdRecord', () => {
+                setPdDone(null);
+                setPdCheck(next);
+              });
+            }}
+            onBackToList={() => transition.back(() => setPdDone(null))}
+          />
+        )}
+
+        {!requestingStock && tab === 'settings' && indentView === null && pdView === null && (
           <SettingsScreen
             pending={pending}
             onSync={sync}
             online={online}
             lastSyncAt={lastSyncAt}
             onOpenIndents={() => transition.go('indents', () => setIndentView(0))}
+            onOpenPd={() => transition.go('pd', () => setPdView('list'))}
           />
         )}
       </RouteTransitionHost>
@@ -1204,7 +1420,17 @@ export default function RootNavigator(): React.JSX.Element {
         onChange={next => {
           // A tab that is already lit is not a destination. Without this, tapping the tab you
           // are on announces a journey to where you already are.
-          if (next === tab && indentView === null && eventView === null && !requestingStock) {
+          // Every layer that can sit *over* a tab has to be listed here. Tapping Profile
+          // while the pregnancy checks are open is a real destination — they were opened
+          // from Profile, so the tab underneath is already lit and the guard would otherwise
+          // swallow the tap and strand the Mait on the list.
+          if (
+            next === tab &&
+            indentView === null &&
+            eventView === null &&
+            pdView === null &&
+            !requestingStock
+          ) {
             return;
           }
           transition.go(next, () => {
@@ -1213,6 +1439,9 @@ export default function RootNavigator(): React.JSX.Element {
             setRequestingStock(false);
             setIndentView(null);
             setEventView(null);
+            setPdView(null);
+            setPdCheck(null);
+            setPdDone(null);
             setTab(next);
           });
         }}

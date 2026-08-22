@@ -27,7 +27,9 @@ export type RouteKey =
   | 'capture'
   | 'requestStock'
   | 'queue'
-  | 'unfinished';
+  | 'unfinished'
+  | 'pd'
+  | 'pdRecord';
 
 export interface RouteMeta {
   /** Ionicons, because that is the set this app draws. The spec's Lucide is not installed. */
@@ -53,6 +55,8 @@ export const ROUTES: Record<RouteKey, RouteMeta> = {
   requestStock: { icon: 'cube', title: 'route.requestStock', context: 'route.requestStockContext' },
   queue: { icon: 'time', title: 'route.queue', context: 'route.queueContext' },
   unfinished: { icon: 'create', title: 'route.unfinished', context: 'route.unfinishedContext' },
+  pd: { icon: 'heart-circle', title: 'pd.eyebrow', context: 'route.pdContext' },
+  pdRecord: { icon: 'heart-circle', title: 'route.pdRecord', context: 'route.pdRecordContext' },
 };
 
 /**
@@ -74,6 +78,10 @@ const ANNOUNCED: readonly RouteKey[] = [
   'capture',
   'aiEventDetail',
   'indentDetail',
+  // Both announce. Reaching a check is arriving at a piece of work in a yard, and the record
+  // screen is opened from a list row like any other record.
+  'pd',
+  'pdRecord',
 ];
 
 export function announces(key: RouteKey): boolean {

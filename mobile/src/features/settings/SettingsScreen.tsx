@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import {
   useListAiEventsQuery,
   useListIndentsQuery,
+  useListPregnancyChecksQuery,
   useListMppsQuery,
   useLogoutMutation,
 } from '@api/endpoints';
@@ -167,6 +168,7 @@ export default function SettingsScreen({
   online,
   lastSyncAt,
   onOpenIndents,
+  onOpenPd,
 }: {
   pending: number;
   onSync: () => void;
@@ -174,6 +176,8 @@ export default function SettingsScreen({
   /** The clock time of the last successful drain, or null if nothing has gone up yet. */
   lastSyncAt: string | null;
   onOpenIndents: () => void;
+  /** The pregnancy checks this Mait owes a visit. */
+  onOpenPd: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
@@ -186,6 +190,16 @@ export default function SettingsScreen({
   const [logout] = useLogoutMutation();
   const [confirming, setConfirming] = useState(false);
   const [mppsOpen, setMppsOpen] = useState(false);
+
+  /**
+   * Checks due this week, counted by the server.
+   *
+   * Read here rather than passed in so the row is right the moment Profile is opened, and
+   * off the response's own count rather than the rows: the list, this row and the screen's
+   * headline all have to show one number.
+   */
+  const pd = useListPregnancyChecksQuery({ window: 'due' });
+  const pdDue = pd.data?.due_this_week ?? 0;
 
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -365,6 +379,22 @@ export default function SettingsScreen({
             {/* Here rather than only under Inventory. Raising an indent is a stock job and belongs
             with the flask; chasing one is a "where is my order" question, and a Mait asks it
             from wherever they are standing. */}
+            {/* Above the indents, because it is work in a yard rather than paperwork with the
+                store — and because a check has a date on it that an indent does not. A Mait
+                planning tomorrow reads this row first. */}
+            <Row
+              title={t('settings.upcomingPd')}
+              body={
+                pd.isLoading
+                  ? t('common.loading')
+                  : pdDue > 0
+                    ? t('settings.upcomingPdMeta', { count: pdDue })
+                    : t('settings.upcomingPdNone')
+              }
+              onPress={onOpenPd}
+              testID="profile-pd"
+            />
+
             <Row
               title={t('settings.yourIndents')}
               body={
