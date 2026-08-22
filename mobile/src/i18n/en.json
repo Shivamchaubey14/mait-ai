@@ -740,7 +740,9 @@
     "unfinishedContext": "Work still owed a finish",
     "pdContext": "Checks due ninety days after an AI",
     "pdRecord": "Pregnancy check",
-    "pdRecordContext": "What you found on the animal"
+    "pdRecordContext": "What you found on the animal",
+    "pdRouteContext": "Your stops, ordered for walking",
+    "pdReorderContext": "Two orders, and what each costs"
   },
   "pull": {
     "holding": "Checking your holding…",
@@ -843,6 +845,44 @@
     "nextSameVillage": "same village",
     "nextOtherVillage": "at {{mpp}}",
     "backToList": "Not today — back to the list",
-    "allDone": "That was the last one this week"
+    "allDone": "That was the last one this week",
+    "recorded": "Already recorded",
+    "recordedOn": "Checked {{date}}",
+    "recordedCalving": "Calving due about {{date}}",
+    "recordedRecheck": "A recheck was booked for 21 days later.",
+    "cannotChange": "A result cannot be changed here. If it is wrong, tell the office — the record keeps who wrote it and when.",
+    "found": "What was found",
+    "rowDone": "{{outcome}} · checked {{date}} · {{mpp}}",
+    "legend": "What the marks mean"
+  },
+  "route2": {
+    "title": "Today's route",
+    "stops_one": "{{count}} stop · {{km}} km",
+    "stops_other": "{{count}} stops · {{km}} km",
+    "summaryShortest": "About {{time}} with the checks. Shortest order, not the due order.",
+    "summaryLate": "About {{time}} with the checks. The late ones first.",
+    "youAreHere": "You are here",
+    "noFix": "No location yet — ordered from the first stop",
+    "dueToday": "due today",
+    "dueIn_one": "due in {{count}} day",
+    "dueIn_other": "due in {{count}} days",
+    "late_one": "{{count}} day late",
+    "late_other": "{{count}} days late",
+    "openInMaps": "Open in Maps",
+    "reorder": "Reorder",
+    "noStops": "Nothing to plan",
+    "noStopsBody": "Checks due this week appear here as a round.",
+    "unplaced_one": "{{count}} check has no recorded location and is listed last.",
+    "unplaced_other": "{{count}} checks have no recorded location and are listed last.",
+    "reorderEyebrow": "Reorder stops",
+    "reorderAsk": "Shortest, or the late one first?",
+    "reorderSubject": "{{name}} is {{km}} km out and already late.",
+    "reorderSubjectNone": "Nothing is overdue, so the shortest order is usually the one.",
+    "optShortest": "Shortest first",
+    "optLate": "Late one first",
+    "distance": "Distance",
+    "onTheRoad": "On the road",
+    "estimate": "Distances are straight lines between where each animal was last served, scaled for winding roads — not road directions. The real ride is longer, and further where a river or canal has to be gone around. Worked out once when you tap Plan and held, so reordering offline uses the same figures.",
+    "useThisOrder": "Use this order"
   }
 }
