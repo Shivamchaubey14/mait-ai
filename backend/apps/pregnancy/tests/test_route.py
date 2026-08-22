@@ -76,6 +76,7 @@ def test_the_shortest_round_is_actually_the_shortest():
             for a, b in zip(
                 [STATION] + [(c.ai_event.gps_lat, c.ai_event.gps_lng) for c in order],
                 [(c.ai_event.gps_lat, c.ai_event.gps_lng) for c in order],
+                strict=False,
             )
         ),
     )
@@ -85,6 +86,7 @@ def test_the_shortest_round_is_actually_the_shortest():
             for a, b in zip(
                 [STATION] + [(c.ai_event.gps_lat, c.ai_event.gps_lng) for c in best],
                 [(c.ai_event.gps_lat, c.ai_event.gps_lng) for c in best],
+                strict=False,
             )
         ),
         1,
