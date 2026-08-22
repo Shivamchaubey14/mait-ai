@@ -29,7 +29,9 @@ export type RouteKey =
   | 'queue'
   | 'unfinished'
   | 'pd'
-  | 'pdRecord';
+  | 'pdRecord'
+  | 'pdRoute'
+  | 'pdReorder';
 
 export interface RouteMeta {
   /** Ionicons, because that is the set this app draws. The spec's Lucide is not installed. */
@@ -57,6 +59,12 @@ export const ROUTES: Record<RouteKey, RouteMeta> = {
   unfinished: { icon: 'create', title: 'route.unfinished', context: 'route.unfinishedContext' },
   pd: { icon: 'heart-circle', title: 'pd.eyebrow', context: 'route.pdContext' },
   pdRecord: { icon: 'heart-circle', title: 'route.pdRecord', context: 'route.pdRecordContext' },
+  pdRoute: { icon: 'navigate', title: 'route2.title', context: 'route.pdRouteContext' },
+  pdReorder: {
+    icon: 'swap-vertical',
+    title: 'route2.reorderEyebrow',
+    context: 'route.pdReorderContext',
+  },
 };
 
 /**
@@ -82,6 +90,8 @@ const ANNOUNCED: readonly RouteKey[] = [
   // screen is opened from a list row like any other record.
   'pd',
   'pdRecord',
+  'pdRoute',
+  'pdReorder',
 ];
 
 export function announces(key: RouteKey): boolean {
