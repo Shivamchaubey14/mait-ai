@@ -14,6 +14,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
 
 import { attachPhoto, completeEvent } from '@api/capture';
@@ -25,6 +26,7 @@ import {
   useGetNonMemberQuery,
   useInitiatePaymentMutation,
   useListAiEventsQuery,
+  useGetPdRouteQuery,
   useListPregnancyChecksQuery,
   useRecordPregnancyCheckMutation,
   useVerifyPaymentOtpMutation,
@@ -73,6 +75,9 @@ import IndentDetailScreen from '@/features/stock/IndentDetailScreen';
 import IndentsScreen from '@/features/stock/IndentsScreen';
 import PdDoneScreen from '@/features/pregnancy/PdDoneScreen';
 import PdListScreen from '@/features/pregnancy/PdListScreen';
+import PdReorderScreen from '@/features/pregnancy/PdReorderScreen';
+import type { OrderKey } from '@/features/pregnancy/PdReorderScreen';
+import PdRouteScreen from '@/features/pregnancy/PdRouteScreen';
 import PdRecordScreen from '@/features/pregnancy/PdRecordScreen';
 import RequestStockScreen from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
@@ -229,7 +234,7 @@ export default function RootNavigator(): React.JSX.Element {
    * and `done` holds what was just found, because that screen has to say what happened after
    * the check itself has left the list.
    */
-  const [pdView, setPdView] = useState<'list' | null>(null);
+  const [pdView, setPdView] = useState<'list' | 'route' | 'reorder' | null>(null);
   const [pdCheck, setPdCheck] = useState<PregnancyCheck | null>(null);
   const [pdPhoto, setPdPhoto] = useState<string | null>(null);
   const [pdDone, setPdDone] = useState<{
@@ -240,9 +245,51 @@ export default function RootNavigator(): React.JSX.Element {
   const [pdSaving, setPdSaving] = useState(false);
   /** The animal a follow-up capture is for, until the roster carrying it has loaded. */
   const [pendingAnimalId, setPendingAnimalId] = useState<number | null>(null);
+  /** Which of the two orders the Mait is working from. */
+  const [pdOrder, setPdOrder] = useState<OrderKey>('shortest');
+  /** Where the round is planned from, once the handset has a fix. */
+  const [pdFrom, setPdFrom] = useState<{ lat: number; lng: number } | null>(null);
 
   const [recordPd] = useRecordPregnancyCheckMutation();
   const pdChecks = useListPregnancyChecksQuery({ window: 'due' }, { skip: pdView === null });
+
+  /**
+   * The round, worked out once and held.
+   *
+   * Asked for only while a route screen is up, and keyed on the fix so it is computed again
+   * if the Mait has moved a village since. Both orders come back together, so choosing
+   * between them on the next screen needs no network at all — which is what makes reordering
+   * work in a yard.
+   */
+  const pdRoute = useGetPdRouteQuery(pdFrom ?? undefined, {
+    skip: pdView !== 'route' && pdView !== 'reorder',
+  });
+
+  useEffect(() => {
+    if (pdView !== 'route' || pdFrom !== null) {
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          return;
+        }
+        const fix = await Location.getCurrentPositionAsync({});
+        if (alive) {
+          setPdFrom({ lat: fix.coords.latitude, lng: fix.coords.longitude });
+        }
+      } catch {
+        // No fix, and nothing to do about it. The server orders the round from the first
+        // stop instead and the screen says so, which is better than a spinner that never
+        // resolves in a yard with no sky.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [pdView, pdFrom]);
 
   /** The waiting-to-sync screen, opened from Home's yellow tile. */
   const [queueOpen, setQueueOpen] = useState(false);
@@ -505,6 +552,14 @@ export default function RootNavigator(): React.JSX.Element {
       });
     }
 
+    if (pdView === 'reorder') {
+      return reverse(() => setPdView('route'));
+    }
+
+    if (pdView === 'route') {
+      return reverse(() => setPdView('list'));
+    }
+
     if (pdView) {
       return reverse(() => setPdView(null));
     }
@@ -571,6 +626,14 @@ export default function RootNavigator(): React.JSX.Element {
    * than asking somebody to examine the animal again.
    */
   const savePd = async (check: PregnancyCheck, outcome: PdOutcome, photoUri: string | null) => {
+    // A result is written once. The screen already refuses to offer the choices for a check
+    // that carries an outcome, and the server refuses the write regardless — this is the
+    // third: a guard here means no future call site can reopen a settled record for editing
+    // by wiring the screen up differently.
+    if (check.outcome) {
+      return;
+    }
+
     setPdSaving(true);
     const key = newClientUuid();
     let queued = false;
@@ -1348,9 +1411,38 @@ export default function RootNavigator(): React.JSX.Element {
         {!requestingStock && pdView === 'list' && !pdCheck && !pdDone && (
           <PdListScreen
             onOpen={check => transition.go('pdRecord', () => setPdCheck(check))}
+            onPlanRoute={() => transition.go('pdRoute', () => setPdView('route'))}
             onSync={sync}
           />
         )}
+        {/* The round, and the choice of how to order it. Both read the one route response, so
+            picking an order needs no network — which is the point of computing it once. */}
+        {!requestingStock && pdView === 'route' && !pdCheck && !pdDone && !!pdRoute.data && (
+          <PdRouteScreen
+            option={pdRoute.data.options[pdOrder]}
+            orderKey={pdOrder}
+            fromHere={pdRoute.data.from_here}
+            startPoint={pdFrom}
+            withoutLocation={pdRoute.data.without_location}
+            onBack={() => transition.back(() => setPdView('list'))}
+            onReorder={() => transition.go('pdReorder', () => setPdView('reorder'))}
+            onOpenStop={stop => transition.go('pdRecord', () => setPdCheck(stop))}
+          />
+        )}
+        {!requestingStock && pdView === 'reorder' && !!pdRoute.data && (
+          <PdReorderScreen
+            route={pdRoute.data}
+            current={pdOrder}
+            onBack={() => transition.back(() => setPdView('route'))}
+            onUse={order =>
+              transition.back(() => {
+                setPdOrder(order);
+                setPdView('route');
+              })
+            }
+          />
+        )}
+
         {!requestingStock && !!pdCheck && (
           <PdRecordScreen
             check={pdCheck}

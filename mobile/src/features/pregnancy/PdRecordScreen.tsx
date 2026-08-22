@@ -173,21 +173,104 @@ export default function PdRecordScreen({
     );
   }
 
+  const heroTop = (
+    <View style={styles.heroTop}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('common.back')}
+        onPress={onBack}
+        style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
+        testID="pd-back"
+      >
+        <Ionicons name="arrow-back" size={20} color={colors.surface} />
+      </Pressable>
+      <Text style={styles.eyebrow}>{t('pd.eyebrow')}</Text>
+    </View>
+  );
+
+  /**
+   * A result already found is a record, not a form.
+   *
+   * The Done tab exists so a Mait can check what they told a farmer last week before being
+   * asked about it again — so tapping the row has to lead somewhere. What it must not lead to
+   * is three fresh radio buttons over an answer that has already been given, gone into the
+   * ledger, and possibly been repeated to the farmer.
+   *
+   * The server refuses a second write regardless. This is so a Mait never gets as far as
+   * believing they changed something: an answer that appears to save and then does not is
+   * worse than one that was never offered.
+   */
+  if (check.outcome) {
+    const answer =
+      check.outcome === 'pregnant'
+        ? t('pd.pregnant')
+        : check.outcome === 'not_pregnant'
+          ? t('pd.notPregnant')
+          : t('pd.unsure');
+    const tone =
+      check.outcome === 'pregnant' ? 'good' : check.outcome === 'not_pregnant' ? 'bad' : 'unsure';
+
+    return (
+      <View style={styles.root}>
+        <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
+          {heroTop}
+          <Text style={styles.heroTitle}>{t('pd.recorded')}</Text>
+          <Text style={styles.heroSubtitle} numberOfLines={2}>
+            {subject}
+          </Text>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <Text style={styles.sectionLabel}>{t('pd.found')}</Text>
+
+          <View style={[styles.settled, styles[`settled_${tone}`]]} testID="pd-recorded">
+            <View style={[styles.settledIcon, styles[`settledIcon_${tone}`]]}>
+              <Ionicons
+                name={
+                  check.outcome === 'pregnant'
+                    ? 'checkmark'
+                    : check.outcome === 'not_pregnant'
+                      ? 'close'
+                      : 'help'
+                }
+                size={20}
+                color={colors.surface}
+              />
+            </View>
+            <View style={styles.choiceBody}>
+              <Text style={styles.choiceLabel}>{answer}</Text>
+              <Text style={styles.choiceHint}>
+                {check.checked_at
+                  ? t('pd.recordedOn', { date: shortDate(check.checked_at.slice(0, 10)) })
+                  : ''}
+              </Text>
+            </View>
+          </View>
+
+          {/* The two things a farmer actually asks about afterwards. */}
+          {!!check.calving_due_on && (
+            <Text style={styles.settledNote} testID="pd-recorded-calving">
+              {t('pd.recordedCalving', { date: shortDate(check.calving_due_on) })}
+            </Text>
+          )}
+          {check.outcome === 'unsure' && (
+            <Text style={styles.settledNote}>{t('pd.recordedRecheck')}</Text>
+          )}
+
+          {/* Why there is nothing to tap, said rather than left to be discovered. */}
+          <View style={styles.locked} testID="pd-locked">
+            <Ionicons name="lock-closed-outline" size={17} color={colors.textMuted} />
+            <Text style={styles.lockedText}>{t('pd.cannotChange')}</Text>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
-        <View style={styles.heroTop}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-            onPress={onBack}
-            style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
-            testID="pd-back"
-          >
-            <Ionicons name="arrow-back" size={20} color={colors.surface} />
-          </Pressable>
-          <Text style={styles.eyebrow}>{t('pd.eyebrow')}</Text>
-        </View>
+        {heroTop}
 
         <Text style={styles.heroTitle}>{t('pd.ask')}</Text>
         <Text style={styles.heroSubtitle} numberOfLines={2}>
@@ -333,6 +416,48 @@ const styles = StyleSheet.create({
 
   body: { padding: spacing[4] },
   pressed: { opacity: 0.85 },
+
+  // -- a result already found --------------------------------------------------------------
+  sectionLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+    letterSpacing: 1,
+    marginBottom: spacing[2],
+  },
+  settled: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+  },
+  settled_good: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
+  settled_bad: { backgroundColor: colors.errorWash, borderColor: colors.error },
+  settled_unsure: { backgroundColor: colors.background, borderColor: colors.border },
+  settledIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settledIcon_good: { backgroundColor: colors.primary },
+  settledIcon_bad: { backgroundColor: colors.error },
+  settledIcon_unsure: { backgroundColor: colors.textMuted },
+  settledNote: { ...typography.caption, color: colors.textMuted, marginTop: spacing[3] },
+  locked: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[3],
+    marginTop: spacing[5],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  lockedText: { ...typography.caption, color: colors.textMuted, flex: 1, lineHeight: 18 },
 
   choice: {
     flexDirection: 'row',
