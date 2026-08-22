@@ -51,6 +51,22 @@ export function shortDate(iso: string | null): string {
   return `${d} ${MONTHS[m - 1]}`;
 }
 
+/**
+ * The three answers, each as a mark, a tone and a word.
+ *
+ * One table, read by the badge on a row and by the legend below it, so the two can never
+ * come to disagree about what a symbol means.
+ */
+export const OUTCOMES = [
+  { key: 'pregnant', icon: 'checkmark', tone: 'good', label: 'pd.pregnant' },
+  { key: 'not_pregnant', icon: 'close', tone: 'bad', label: 'pd.notPregnant' },
+  { key: 'unsure', icon: 'help', tone: 'unsure', label: 'pd.unsure' },
+] as const;
+
+function outcomeWord(outcome: string, t: (key: string) => string): string {
+  return t(OUTCOMES.find(row => row.key === outcome)?.label ?? 'pd.unsure');
+}
+
 type Urgency = 'late' | 'today' | 'soon';
 
 /** Three states, because they call for three different decisions on the day. */
@@ -70,6 +86,21 @@ export function urgencyOf(daysUntil: number): Urgency {
  */
 function DayBadge({ check }: { check: PregnancyCheck }): React.JSX.Element {
   const { t } = useTranslation();
+
+  // Once it is answered there are no days left to count, and a "4 LATE" against a check
+  // done last month is a lie the badge tells at a glance. The answer takes its place.
+  if (check.outcome) {
+    const found = OUTCOMES.find(row => row.key === check.outcome) ?? OUTCOMES[2];
+    return (
+      <View
+        style={[styles.outcome, styles[`outcome_${found.tone}`]]}
+        testID={`pd-outcome-${found.tone}`}
+      >
+        <Ionicons name={found.icon} size={20} color={colors.surface} />
+      </View>
+    );
+  }
+
   const urgency = urgencyOf(check.days_until);
   const count = Math.abs(check.days_until);
 
@@ -83,6 +114,35 @@ function DayBadge({ check }: { check: PregnancyCheck }): React.JSX.Element {
   );
 }
 
+/**
+ * What the three marks mean, on the tab where they appear.
+ *
+ * A coloured glyph is fast to scan and says nothing on its own — a grey question mark is
+ * unreadable to somebody meeting it for the first time. The word is on every row as well;
+ * this is the one place that explains the *shape*, so a Mait reading a column of ticks knows
+ * what a column of ticks is.
+ */
+function Legend(): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.legend} testID="pd-legend">
+      <Text style={styles.legendTitle}>{t('pd.legend')}</Text>
+      <View style={styles.legendRow}>
+        {OUTCOMES.map(row => (
+          <View key={row.key} style={styles.legendItem}>
+            <View style={[styles.legendMark, styles[`outcome_${row.tone}`]]}>
+              <Ionicons name={row.icon} size={13} color={colors.surface} />
+            </View>
+            <Text style={styles.legendLabel} numberOfLines={1}>
+              {t(row.label)}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function CheckRow({
   check,
   onPress,
@@ -91,9 +151,18 @@ function CheckRow({
   onPress: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const urgency = urgencyOf(check.days_until);
-  const meta =
-    check.owner_type === 'member'
+  const urgency = check.outcome ? null : urgencyOf(check.days_until);
+
+  // A recorded row leads with the answer. The coloured mark is for scanning a column at a
+  // glance; the word is what makes it mean anything, and this is the line a Mait is already
+  // reading. On an open row there is no answer yet, so the line stays about finding the yard.
+  const meta = check.outcome
+    ? t('pd.rowDone', {
+        outcome: outcomeWord(check.outcome, t),
+        date: shortDate(check.checked_at ? check.checked_at.slice(0, 10) : check.due_on),
+        mpp: check.mpp_name,
+      })
+    : check.owner_type === 'member'
       ? t('pd.rowMeta', {
           date: shortDate(check.served_on),
           breed: check.breed || '—',
@@ -104,7 +173,7 @@ function CheckRow({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${check.owner_name} · ${check.due_on}`}
+      accessibilityLabel={`${check.owner_name} · ${check.outcome_display || check.due_on}`}
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
@@ -132,9 +201,12 @@ function CheckRow({
 
 export default function PdListScreen({
   onOpen,
+  onPlanRoute,
   onSync,
 }: {
   onOpen: (check: PregnancyCheck) => void;
+  /** Opens the round, ordered for walking rather than by date. */
+  onPlanRoute: () => void;
   onSync?: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -219,9 +291,14 @@ export default function PdListScreen({
                 body={tab === 'week' ? t('pd.emptyWeekBody') : t('pd.emptyDoneBody')}
               />
             ) : (
-              rows.map(check => (
-                <CheckRow key={check.id} check={check} onPress={() => onOpen(check)} />
-              ))
+              <>
+                {/* Only on Done, where the marks are. On the week's list every row is open
+                    and there is no mark to explain. */}
+                {tab === 'done' && <Legend />}
+                {rows.map(check => (
+                  <CheckRow key={check.id} check={check} onPress={() => onOpen(check)} />
+                ))}
+              </>
             )}
           </ScrollView>
         )}
@@ -233,7 +310,7 @@ export default function PdListScreen({
         <View style={[styles.foot, { paddingBottom: spacing[3] + insets.bottom }]}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => onOpen(rows[0] as PregnancyCheck)}
+            onPress={onPlanRoute}
             style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
             testID="pd-plan-route"
           >
@@ -329,6 +406,45 @@ const styles = StyleSheet.create({
   badgeText_late: { color: colors.surface },
   badgeText_today: { color: yolk[900] },
   badgeText_soon: { color: colors.primaryDark },
+
+  // The answer, where the countdown used to be. Green took, red did not, grey was unsure.
+  outcome: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  outcome_good: { backgroundColor: colors.primary },
+  outcome_bad: { backgroundColor: colors.error },
+  outcome_unsure: { backgroundColor: colors.textMuted },
+
+  legend: {
+    padding: spacing[3],
+    marginBottom: spacing[3],
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  legendTitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: spacing[2],
+  },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  // Wraps rather than truncates: "Not pregnant" in Hindi is longer than in English, and a
+  // legend that clips the word it exists to teach has taught nothing.
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], flexShrink: 1 },
+  legendMark: {
+    width: 22,
+    height: 22,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legendLabel: { ...typography.caption, color: colors.text, flexShrink: 1 },
 
   foot: {
     paddingHorizontal: spacing[4],
