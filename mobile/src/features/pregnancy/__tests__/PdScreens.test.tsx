@@ -20,6 +20,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import PdDoneScreen from '../PdDoneScreen';
 import PdListScreen, { shortDate, urgencyOf } from '../PdListScreen';
 import PdRecordScreen, { calvingPreview } from '../PdRecordScreen';
+import PdReorderScreen, { villagePath } from '../PdReorderScreen';
+import PdRouteScreen, { mapsUrl, readableTime } from '../PdRouteScreen';
+import type { PdRoute, RouteOption, RouteStop } from '@api/types';
 import type { PregnancyCheck } from '@api/types';
 import { jsonResponse, renderWithStore } from '@/test-utils';
 import i18n from '@/i18n';
@@ -122,14 +125,14 @@ describe('the list', () => {
 
   it('counts the week in the headline, off the server', async () => {
     mockList([check(), check({ id: 2 })], { due_this_week: 4, overdue: 1 });
-    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} />));
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
 
     expect(await screen.findByTestId('pd-headline')).toHaveTextContent(/4/);
   });
 
   it('says how many are already late, because that is the sentence that moves somebody', async () => {
     mockList([check({ days_until: -4 })], { due_this_week: 1, overdue: 1 });
-    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} />));
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
 
     await screen.findByTestId('pd-headline');
     expect(screen.getByText(/already late/i)).toBeTruthy();
@@ -138,7 +141,7 @@ describe('the list', () => {
   it('opens the check that was tapped', async () => {
     const onOpen = jest.fn();
     mockList([check({ id: 7 })]);
-    renderWithStore(withArea(<PdListScreen onOpen={onOpen} />));
+    renderWithStore(withArea(<PdListScreen onOpen={onOpen} onPlanRoute={jest.fn()} />));
 
     fireEvent.press(await screen.findByTestId('pd-check-7'));
 
@@ -147,14 +150,50 @@ describe('the list', () => {
 
   it('names the village on the row, because the row is how a round is planned', async () => {
     mockList([check({ mpp_name: 'Nandgaon' })]);
-    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} />));
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
 
     expect(await screen.findByText(/Nandgaon/)).toBeTruthy();
   });
 
+  it('shows the answer instead of a countdown once a check is done', async () => {
+    // "4 LATE" against a check recorded last month is a lie the badge tells at a glance.
+    mockList([check({ id: 9, outcome: 'pregnant', days_until: -30 })]);
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
+
+    await screen.findByTestId('pd-check-9');
+    expect(screen.getByTestId('pd-outcome-good')).toBeTruthy();
+    expect(screen.queryByText('LATE')).toBeNull();
+  });
+
+  it('names the outcome on a recorded row, not only its colour', async () => {
+    // A green tick is fast to scan and says nothing on its own. The word is on the line a
+    // Mait is already reading to find the yard.
+    mockList([check({ id: 11, outcome: 'unsure', checked_at: '2026-08-20T11:00:00Z' })]);
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
+
+    await screen.findByTestId('pd-check-11');
+    expect(screen.getByTestId('pd-check-11')).toHaveTextContent(new RegExp(i18n.t('pd.unsure')));
+  });
+
+  it('explains the three marks on the tab where they appear', async () => {
+    mockList([check({ id: 12, outcome: 'pregnant' })]);
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
+
+    await screen.findByTestId('pd-check-12');
+    // The week's list is all open rows and has no mark to explain.
+    expect(screen.queryByTestId('pd-legend')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('pd-tab-done'));
+
+    const legend = await screen.findByTestId('pd-legend');
+    expect(legend).toHaveTextContent(new RegExp(i18n.t('pd.pregnant')));
+    expect(legend).toHaveTextContent(new RegExp(i18n.t('pd.notPregnant')));
+    expect(legend).toHaveTextContent(new RegExp(i18n.t('pd.unsure')));
+  });
+
   it('offers no route to plan when there is nothing to walk to', async () => {
     mockList([], { due_this_week: 0, overdue: 0 });
-    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} />));
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
 
     await screen.findByTestId('empty-state');
     expect(screen.queryByTestId('pd-plan-route')).toBeNull();
@@ -229,6 +268,52 @@ describe('recording what was found', () => {
     fireEvent.press(screen.getByTestId('pd-photo'));
 
     expect(screen.getByTestId('pd-camera-allow')).toBeTruthy();
+  });
+
+  it('will not offer the choices again once a result is on the record', () => {
+    // The Done tab exists so a Mait can check what they told a farmer. It must not lead to
+    // three fresh radio buttons over an answer already given and possibly already repeated
+    // to her — the server refuses the second write, and a save that appears to work and
+    // then does not is worse than one that was never offered.
+    render(
+      withArea(
+        <PdRecordScreen
+          {...props}
+          check={check({
+            outcome: 'pregnant',
+            outcome_display: 'Pregnant',
+            checked_at: '2026-08-20T11:00:00Z',
+            calving_due_on: '2027-02-28',
+          })}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('pd-recorded')).toBeTruthy();
+    expect(screen.queryByTestId('pd-outcome-pregnant')).toBeNull();
+    expect(screen.queryByTestId('pd-outcome-not-pregnant')).toBeNull();
+    expect(screen.queryByTestId('pd-outcome-unsure')).toBeNull();
+    expect(screen.queryByTestId('pd-save')).toBeNull();
+    expect(screen.queryByTestId('pd-photo')).toBeNull();
+  });
+
+  it('says why there is nothing to tap, rather than leaving it to be discovered', () => {
+    render(withArea(<PdRecordScreen {...props} check={check({ outcome: 'not_pregnant' })} />));
+
+    expect(screen.getByTestId('pd-locked')).toBeTruthy();
+  });
+
+  it('shows the calving date a farmer will ask about', () => {
+    render(
+      withArea(
+        <PdRecordScreen
+          {...props}
+          check={check({ outcome: 'pregnant', calving_due_on: '2027-02-28' })}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('pd-recorded-calving')).toHaveTextContent(/28 Feb/);
   });
 
   it('names the animal and how long she has been carrying', () => {
@@ -312,5 +397,227 @@ describe('once it is recorded', () => {
 
     expect(screen.getByTestId('pd-all-done')).toBeTruthy();
     expect(screen.queryByTestId('pd-next')).toBeNull();
+  });
+});
+
+// --- the round -------------------------------------------------------------------------
+
+function stop(over: Partial<RouteStop> = {}): RouteStop {
+  return { ...check(), leg_km: 2.5, lat: 26.79, lng: 82.19, ...over } as RouteStop;
+}
+
+function option(stops: RouteStop[], over: Partial<RouteOption> = {}): RouteOption {
+  return {
+    total_km: 18,
+    minutes_total: 160,
+    minutes_on_road: 52,
+    stops,
+    ...over,
+  };
+}
+
+describe('readableTime', () => {
+  it('reads as hours and minutes, the way a morning is talked about', () => {
+    expect(readableTime(160)).toBe('2h 40m');
+    expect(readableTime(45)).toBe('45m');
+  });
+});
+
+describe('mapsUrl', () => {
+  it('hands every stop to Maps in order, the last one as the destination', () => {
+    // The one part of this that is real navigation. Whatever the estimates say, Maps gives
+    // turn-by-turn along actual roads.
+    const url = mapsUrl([
+      stop({ id: 1, lat: 26.77, lng: 82.14 }),
+      stop({ id: 2, lat: 26.79, lng: 82.19 }),
+    ]);
+
+    expect(url).toContain('destination=26.79,82.19');
+    expect(url).toContain('waypoints=');
+  });
+
+  it('offers nothing rather than a broken link when no stop has a position', () => {
+    expect(mapsUrl([stop({ lat: null, lng: null })])).toBeNull();
+  });
+});
+
+describe('villagePath', () => {
+  it('collapses a run of stops in one village into its name once', () => {
+    // "Three Barsana stops, then Nandgaon" is what makes a route make sense to somebody who
+    // knows their own villages.
+    const path = villagePath(
+      option([
+        stop({ id: 1, mpp_name: 'Barsana' }),
+        stop({ id: 2, mpp_name: 'Barsana' }),
+        stop({ id: 3, mpp_name: 'Nandgaon' }),
+      ]),
+    );
+
+    expect(path).toBe('Barsana → Nandgaon');
+  });
+});
+
+describe('the route screen', () => {
+  const base = {
+    orderKey: 'shortest' as const,
+    fromHere: true,
+    startPoint: { lat: 26.79, lng: 82.13 },
+    withoutLocation: 0,
+    onBack: jest.fn(),
+    onReorder: jest.fn(),
+    onOpenStop: jest.fn(),
+  };
+
+  it('leads with the count and the distance, not with a date', () => {
+    render(
+      withArea(
+        <PdRouteScreen
+          {...base}
+          option={option([stop({ id: 1 }), stop({ id: 2 }), stop({ id: 3 })])}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('route-headline')).toHaveTextContent(/3/);
+    expect(screen.getByTestId('route-headline')).toHaveTextContent(/18/);
+  });
+
+  it('keeps an overdue stop reading as overdue wherever the order put it', () => {
+    // The route may well put a late one last. The reason it is on the list does not change
+    // because of where it landed.
+    render(
+      withArea(
+        <PdRouteScreen
+          {...base}
+          option={option([stop({ id: 1 }), stop({ id: 2, days_until: -9 })])}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('route-stop-2')).toHaveTextContent(/9/);
+  });
+
+  it('says it has no fix rather than pretending the order started from somewhere', () => {
+    render(withArea(<PdRouteScreen {...base} fromHere={false} option={option([stop()])} />));
+
+    expect(screen.getByText(i18n.t('route2.noFix'))).toBeTruthy();
+  });
+
+  it('draws the round on a map, with the legs between the stops', () => {
+    // Two earlier attempts were not maps: evenly spaced dots, then a plot of true
+    // coordinates with no roads or landmarks in it. A Mait cannot recognise their own
+    // village in a field of dots, and recognising it is the whole point of looking.
+    render(
+      withArea(
+        <PdRouteScreen
+          {...base}
+          option={option([
+            stop({ id: 1, lat: 26.762, lng: 82.12 }),
+            stop({ id: 2, lat: 26.7956, lng: 82.1943 }),
+          ])}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('route-map')).toBeTruthy();
+  });
+
+  it('draws nothing rather than a false picture when no stop has a position', () => {
+    render(
+      withArea(
+        <PdRouteScreen
+          {...base}
+          startPoint={null}
+          option={option([stop({ lat: null, lng: null })])}
+        />,
+      ),
+    );
+
+    expect(screen.queryByTestId('route-map')).toBeNull();
+  });
+
+  it('names the checks it could not place rather than dropping them silently', () => {
+    render(withArea(<PdRouteScreen {...base} withoutLocation={2} option={option([stop()])} />));
+
+    expect(screen.getByTestId('route-unplaced')).toHaveTextContent(/2/);
+  });
+
+  it('opens the check that was tapped', () => {
+    const onOpenStop = jest.fn();
+    render(
+      withArea(
+        <PdRouteScreen {...base} onOpenStop={onOpenStop} option={option([stop({ id: 5 })])} />,
+      ),
+    );
+
+    fireEvent.press(screen.getByTestId('route-stop-5'));
+
+    expect(onOpenStop).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }));
+  });
+});
+
+describe('choosing an order', () => {
+  const route: PdRoute = {
+    from_here: true,
+    stop_count: 3,
+    without_location: 0,
+    options: {
+      shortest: option([stop({ id: 1, mpp_name: 'Barsana' })], {
+        total_km: 18,
+        minutes_on_road: 52,
+      }),
+      late_first: option(
+        [stop({ id: 2, owner_name: 'Anita Devi', days_until: -9, mpp_name: 'Nandgaon' })],
+        { total_km: 27, minutes_on_road: 78 },
+      ),
+    },
+  };
+
+  it('shows what each order costs, side by side', () => {
+    // Somebody choosing 27 km over 18 is making a decision with these two numbers.
+    render(
+      withArea(
+        <PdReorderScreen route={route} current="shortest" onBack={jest.fn()} onUse={jest.fn()} />,
+      ),
+    );
+
+    expect(screen.getByTestId('reorder-shortest')).toHaveTextContent(/18 km/);
+    expect(screen.getByTestId('reorder-late')).toHaveTextContent(/27 km/);
+  });
+
+  it('names the late stop that makes this a question at all', () => {
+    render(
+      withArea(
+        <PdReorderScreen route={route} current="shortest" onBack={jest.fn()} onUse={jest.fn()} />,
+      ),
+    );
+
+    expect(screen.getByText(/Anita Devi/)).toBeTruthy();
+  });
+
+  it('says the distances are estimates, where the estimates are being weighed', () => {
+    // There is no routing service behind this. A Mait deciding on a longer ride deserves to
+    // know how firm the number is.
+    render(
+      withArea(
+        <PdReorderScreen route={route} current="shortest" onBack={jest.fn()} onUse={jest.fn()} />,
+      ),
+    );
+
+    expect(screen.getByTestId('reorder-note')).toHaveTextContent(/straight lines/i);
+  });
+
+  it('hands back the order that was chosen', () => {
+    const onUse = jest.fn();
+    render(
+      withArea(
+        <PdReorderScreen route={route} current="shortest" onBack={jest.fn()} onUse={onUse} />,
+      ),
+    );
+
+    fireEvent.press(screen.getByTestId('reorder-late'));
+    fireEvent.press(screen.getByTestId('reorder-use'));
+
+    expect(onUse).toHaveBeenCalledWith('late_first');
   });
 });
