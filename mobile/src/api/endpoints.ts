@@ -7,6 +7,9 @@
 
 import { api, idempotencyHeaders } from './client';
 import type {
+  PdOutcome,
+  PregnancyCheck,
+  PregnancyCheckPage,
   AadhaarImages,
   AIEvent,
   AIEventDraft,
@@ -366,6 +369,52 @@ export const maitaiApi = api.injectEndpoints({
      * from a row cached before a payment landed, has to be able to ask for itself. Tagged
      * `AIEvent` like the list, so completing a capture invalidates both together.
      */
+    /**
+     * The checks this Mait owes a visit.
+     *
+     * `due` is the default and what the list opens on: open checks that are overdue or fall
+     * inside the seven-day window. Overdue never drops off — an animal quietly removed from
+     * the round is a conception rate computed over the convenient visits.
+     */
+    listPregnancyChecks: builder.query<
+      PregnancyCheckPage,
+      { window?: 'due' | 'done' | 'all' } | void
+    >({
+      query: args => ({
+        url: '/pregnancy-checks/',
+        params: { window: args?.window ?? 'due', limit: 100 },
+      }),
+      providesTags: ['Pregnancy'],
+    }),
+
+    /**
+     * What the Mait found.
+     *
+     * `clientUuid` is minted when the outcome is tapped, not when the request leaves — a
+     * check is done in a yard with no signal as often as not, and a key generated at send
+     * time is new on every retry and deduplicates nothing (ADR 0003).
+     *
+     * Invalidates `AIEvent` as well as `Pregnancy`: a "not pregnant" is usually followed by a
+     * fresh insemination on the spot, and the history behind it is out of date the moment
+     * this lands.
+     */
+    recordPregnancyCheck: builder.mutation<
+      PregnancyCheck,
+      { id: number; outcome: PdOutcome; photoUrl?: string; note?: string; clientUuid: string }
+    >({
+      query: ({ id, outcome, photoUrl, note, clientUuid }) => ({
+        url: `/pregnancy-checks/${id}/record/`,
+        method: 'POST',
+        body: {
+          outcome,
+          ...(photoUrl ? { photo_url: photoUrl } : {}),
+          ...(note ? { note } : {}),
+          client_uuid: clientUuid,
+        },
+      }),
+      invalidatesTags: ['Pregnancy', 'AIEvent'],
+    }),
+
     getAiEvent: builder.query<AIEvent, number>({
       query: id => `/ai-events/${id}/`,
       providesTags: ['AIEvent'],
@@ -411,6 +460,8 @@ export const {
   useListAiEventsQuery,
   useGetAiEventQuery,
   useGetAiEventTimelineQuery,
+  useListPregnancyChecksQuery,
+  useRecordPregnancyCheckMutation,
   useCreateIndentMutation,
   useListIndentsQuery,
   useGetIndentQuery,

@@ -25,7 +25,13 @@ import { IDEMPOTENCY_TTL_HOURS } from '@/config/env';
 const STORAGE_KEY = 'maitai.queue.v1';
 
 /** What the job asks the server to do. One per write in the capture flow. */
-export type QueuedKind = 'createEvent' | 'attachPhoto' | 'completeEvent' | 'verifyPayment';
+export type QueuedKind =
+  | 'createEvent'
+  | 'attachPhoto'
+  | 'completeEvent'
+  | 'verifyPayment'
+  /** A pregnancy check recorded in a yard with no signal — the ordinary case, not the edge. */
+  | 'recordPd';
 
 /**
  * Enough of the capture to name it on a screen the Mait comes back to.
@@ -45,6 +51,9 @@ export interface QueuedLabel {
   at: string;
   /** The event this job belongs to, for the screens that need to reopen it. */
   eventId?: number;
+  /** A pregnancy check waiting to send, and what was found. */
+  checkId?: number;
+  outcome?: 'pregnant' | 'not_pregnant' | 'unsure';
 }
 
 export interface QueuedJob {

@@ -69,6 +69,25 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
     });
   }
 
+  /**
+   * What the Mait found on a pregnancy check.
+   *
+   * Queued rather than dropped for the same reason a payment is: the visit *happened*. She
+   * was examined, the answer is known, and the only thing missing is a network. Sent on its
+   * own so a result found in a village needs no second trip to the yard.
+   */
+  if (job.kind === 'recordPd') {
+    return fetch(`${API_BASE_URL}/pregnancy-checks/${job.payload.checkId}/record/`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        outcome: job.payload.outcome,
+        client_uuid: job.clientUuid,
+        ...(job.payload.photoUrl ? { photo_url: job.payload.photoUrl } : {}),
+      }),
+    });
+  }
+
   if (job.kind === 'completeEvent') {
     return fetch(`${API_BASE_URL}/ai-events/${job.payload.eventId}/complete/`, {
       method: 'POST',

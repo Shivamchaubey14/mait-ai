@@ -113,7 +113,7 @@ export const baseQueryWithReauth: BaseQueryFn<
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithReauth,
-  tagTypes: ['Inventory', 'AIEvent', 'Indent', 'Member', 'MPP', 'Animal', 'Payment'],
+  tagTypes: ['Inventory', 'AIEvent', 'Indent', 'Member', 'MPP', 'Animal', 'Payment', 'Pregnancy'],
   // Endpoints are injected per feature slice so this module never becomes a dumping ground.
   endpoints: () => ({}),
 });

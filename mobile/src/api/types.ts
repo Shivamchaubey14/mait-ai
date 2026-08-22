@@ -519,3 +519,48 @@ export interface IndentDraft {
   qty_requested: number;
   note?: string;
 }
+
+/**
+ * A pregnancy check — did the insemination take?
+ *
+ * Flattened by the server on purpose: a row on the list is a name, a village and a number of
+ * days, and a handset in a village with one bar must not have to join three responses to draw
+ * one. `days_until` is negative when the check is overdue.
+ */
+export type PdOutcome = 'pregnant' | 'not_pregnant' | 'unsure';
+
+export interface PregnancyCheck {
+  id: number;
+  ai_event_id: number;
+  owner_name: string;
+  owner_type: 'member' | 'non_member';
+  mpp_id: number;
+  mpp_code: string;
+  mpp_name: string;
+  /** Enough to start the next insemination without re-asking what the record already holds. */
+  member_code: string;
+  non_member_id: number | null;
+  animal_id: number;
+  animal_type: string;
+  ear_tag_no: string | null;
+  breed: string;
+  /** The day of the insemination, `YYYY-MM-DD`. */
+  served_on: string | null;
+  due_on: string;
+  /** Negative when overdue, zero on the day. What the badge on the row counts. */
+  days_until: number;
+  /** How long she has been carrying, if she is. */
+  days_since_ai: number | null;
+  outcome: PdOutcome | '';
+  outcome_display: string;
+  checked_at: string | null;
+  calving_due_on: string | null;
+  photo_url: string;
+  note: string;
+}
+
+/** The list carries its own counts, so every screen showing a number shows the same one. */
+export interface PregnancyCheckPage extends Paginated<PregnancyCheck> {
+  due_this_week: number;
+  overdue: number;
+}
