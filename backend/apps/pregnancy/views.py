@@ -24,6 +24,7 @@ from rest_framework.response import Response
 from apps.core.permissions import IsMait
 
 from .models import ALERT_WINDOW_DAYS, PregnancyCheck
+from .route import late_first, minutes_for, road_minutes, shortest_first
 from .serializers import PregnancyCheckSerializer, RecordCheckSerializer
 from .services import CheckAlreadyRecorded, PhotoRequired, record_check
 
@@ -111,6 +112,75 @@ class PregnancyCheckViewSet(viewsets.ReadOnlyModelViewSet):
         ).count()
         response.data["overdue"] = mine.filter(due_on__lt=today).count()
         return response
+
+    @extend_schema(
+        summary="Today's round, ordered two ways",
+        parameters=[
+            OpenApiParameter(name="lat", required=False, type=float),
+            OpenApiParameter(name="lng", required=False, type=float),
+        ],
+        responses={200: dict},
+        description=(
+            "Both orderings in one response, so the reorder screen needs no second request "
+            "and the figures cannot move between the two screens. "
+            "**Distances are straight lines scaled for winding, not road geometry.** There is "
+            "no routing service configured for this platform. Good enough to order stops; not "
+            "good enough to quote without saying what it is, which the app does."
+        ),
+    )
+    @action(detail=False, methods=["get"], url_path="route")
+    def route(self, request):
+        # The same window the list uses, stated here rather than inherited. `get_queryset`
+        # deliberately drops the window for detail lookups, so a round planned off it would
+        # have quietly included every check the Mait will owe in the next three months.
+        today = timezone.localdate()
+        checks = list(
+            self.get_queryset()
+            .filter(outcome="", due_on__lte=today + timedelta(days=ALERT_WINDOW_DAYS))
+            .order_by("due_on", "id")
+        )
+
+        start = None
+        try:
+            if request.query_params.get("lat") and request.query_params.get("lng"):
+                start = (float(request.query_params["lat"]), float(request.query_params["lng"]))
+        except (TypeError, ValueError):
+            start = None
+
+        def shape(stops):
+            total = round(sum(s.leg_km for s in stops), 1)
+            return {
+                "total_km": total,
+                "minutes_total": minutes_for(total, len(stops)),
+                "minutes_on_road": road_minutes(total),
+                "stops": [
+                    {
+                        **PregnancyCheckSerializer(
+                            s.check, context=self.get_serializer_context()
+                        ).data,
+                        "leg_km": s.leg_km,
+                        "lat": s.point[0] if s.point else None,
+                        "lng": s.point[1] if s.point else None,
+                    }
+                    for s in stops
+                ],
+            }
+
+        return Response(
+            {
+                "from_here": start is not None,
+                "stop_count": len(checks),
+                # Named rather than positional: the app picks by key, so an order added later
+                # cannot silently become the default by being listed first.
+                "options": {
+                    "shortest": shape(shortest_first(start, checks)),
+                    "late_first": shape(late_first(start, checks)),
+                },
+                "without_location": sum(
+                    1 for c in checks if c.ai_event.gps_lat is None or c.ai_event.gps_lng is None
+                ),
+            }
+        )
 
     @extend_schema(
         summary="Record what the Mait found",
