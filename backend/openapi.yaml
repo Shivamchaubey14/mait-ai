@@ -2899,6 +2899,129 @@ paths:
               schema:
                 $ref: '#/components/schemas/Payment'
           description: ''
+  /api/v1/pregnancy-checks/:
+    get:
+      operationId: pregnancy_checks_list
+      description: |-
+        What this Mait owes a visit, and what they have already found.
+
+        `window=due` is the default and the one the app opens on: everything open and due inside
+        the alert window, plus everything already overdue. Overdue never falls off the list — a
+        check nobody did does not stop mattering, and an animal quietly dropped from the round is
+        a conception rate nobody can trust.
+      summary: Pregnancy checks for the signed-in Mait
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: window
+        schema:
+          type: string
+        description: '`due` (default) — open checks that are overdue or fall inside
+          the seven-day alert window. `done` — checks already recorded, newest first.
+          `all` — everything.'
+      tags:
+      - pregnancy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPregnancyCheckList'
+          description: ''
+  /api/v1/pregnancy-checks/{id}/:
+    get:
+      operationId: pregnancy_checks_retrieve
+      description: |-
+        What this Mait owes a visit, and what they have already found.
+
+        `window=due` is the default and the one the app opens on: everything open and due inside
+        the alert window, plus everything already overdue. Overdue never falls off the list — a
+        check nobody did does not stop mattering, and an animal quietly dropped from the round is
+        a conception rate nobody can trust.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this pregnancy check.
+        required: true
+      tags:
+      - pregnancy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PregnancyCheck'
+          description: ''
+  /api/v1/pregnancy-checks/{id}/record/:
+    post:
+      operationId: pregnancy_checks_record_create
+      description: |-
+        What this Mait owes a visit, and what they have already found.
+
+        `window=due` is the default and the one the app opens on: everything open and due inside
+        the alert window, plus everything already overdue. Overdue never falls off the list — a
+        check nobody did does not stop mattering, and an animal quietly dropped from the round is
+        a conception rate nobody can trust.
+      summary: Record what the Mait found
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this pregnancy check.
+        required: true
+      tags:
+      - pregnancy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordCheckRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecordCheckRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecordCheckRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PregnancyCheck'
+          description: ''
   /api/v1/reports/export/:
     get:
       operationId: reports_export_retrieve
@@ -5297,6 +5420,16 @@ components:
       required:
       - mobile_no
       - otp
+    OutcomeEnum:
+      enum:
+      - pregnant
+      - not_pregnant
+      - unsure
+      type: string
+      description: |-
+        * `pregnant` - Pregnant
+        * `not_pregnant` - Not pregnant
+        * `unsure` - Not sure
     OwnerTypeEnum:
       enum:
       - member
@@ -5581,6 +5714,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/NonMemberPicker'
+    PaginatedPregnancyCheckList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PregnancyCheck'
     PaginatedUploadErrorRowList:
       type: object
       required:
@@ -6003,6 +6159,116 @@ components:
       description: |-
         * `camera` - Taken on the handset
         * `gallery` - Chosen from the gallery
+    PregnancyCheck:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        ai_event_id:
+          type: integer
+          readOnly: true
+        owner_name:
+          type: string
+          readOnly: true
+        owner_type:
+          type: string
+          readOnly: true
+        mpp_id:
+          type: integer
+          readOnly: true
+        mpp_code:
+          type: string
+          readOnly: true
+        mpp_name:
+          type: string
+          readOnly: true
+        member_code:
+          type: string
+          readOnly: true
+          default: ''
+        non_member_id:
+          type: integer
+          readOnly: true
+        animal_id:
+          type: integer
+          readOnly: true
+        animal_type:
+          type: string
+          readOnly: true
+        ear_tag_no:
+          type: string
+          readOnly: true
+        breed:
+          type: string
+          readOnly: true
+        served_on:
+          type: string
+          nullable: true
+          readOnly: true
+        due_on:
+          type: string
+          format: date
+          readOnly: true
+          description: Ninety days after the insemination, or a recheck's own date.
+        days_until:
+          type: integer
+          description: Negative when overdue. The badge on the row is this number.
+          readOnly: true
+        days_since_ai:
+          type: integer
+          nullable: true
+          description: How long she has been carrying, if she is. Shown on the recording
+            screen.
+          readOnly: true
+        outcome:
+          allOf:
+          - $ref: '#/components/schemas/OutcomeEnum'
+          readOnly: true
+        outcome_display:
+          type: string
+          readOnly: true
+        checked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        calving_due_on:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          description: Set on a pregnant result and never recomputed after.
+        photo_url:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+      required:
+      - ai_event_id
+      - animal_id
+      - animal_type
+      - breed
+      - calving_due_on
+      - checked_at
+      - days_since_ai
+      - days_until
+      - due_on
+      - ear_tag_no
+      - id
+      - member_code
+      - mpp_code
+      - mpp_id
+      - mpp_name
+      - non_member_id
+      - note
+      - outcome
+      - outcome_display
+      - owner_name
+      - owner_type
+      - photo_url
+      - served_on
     ProductTypeEnum:
       enum:
       - straw
@@ -6011,6 +6277,28 @@ components:
       description: |-
         * `straw` - Semen straw
         * `consumable` - Consumable
+    RecordCheckRequest:
+      type: object
+      description: |-
+        What the handset sends back from the yard.
+
+        `client_uuid` is minted when the Mait taps the outcome, not when the request goes out —
+        a check is done without a signal as often as not, and a key generated at send time is new
+        on every retry and deduplicates nothing (ADR 0003).
+      properties:
+        outcome:
+          $ref: '#/components/schemas/OutcomeEnum'
+        photo_url:
+          type: string
+          maxLength: 500
+        note:
+          type: string
+          maxLength: 255
+        client_uuid:
+          type: string
+          format: uuid
+      required:
+      - outcome
     RefTypeEnum:
       enum:
       - indent

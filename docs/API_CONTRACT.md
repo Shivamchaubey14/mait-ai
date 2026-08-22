@@ -328,6 +328,41 @@ out of it are unassigned. Every field is optional and absence means "leave alone
 cannot wipe what it did not load. The assignment is what scopes a Mait's whole app, so this
 moves MPPs, their members and the permission to serve them between Maits.
 
+## 9.11 Pregnancy diagnosis
+
+An insemination is not finished when the straw is used — it is finished when somebody finds
+out whether it took. A check is booked automatically ninety days after every completed AI
+event, and it belongs to the Mait who served the animal.
+
+| Method | Endpoint | Description | Auth |
+| --- | --- | --- | --- |
+| GET | `/pregnancy-checks/` | The Mait's own checks. `?window=due` (default) is everything open that is overdue or falls inside the seven-day alert window; `done` is what has been recorded, newest first; `all` is both | Mait |
+| GET | `/pregnancy-checks/{id}/` | One check | Mait |
+| POST | `/pregnancy-checks/{id}/record/` | What the Mait found: `outcome`, optional `photo_url` and `note`, and a `client_uuid` | Mait |
+
+The list response carries `due_this_week` and `overdue` alongside the page, so the Profile
+row, the screen's own headline and the list agree on one number rather than each counting for
+itself.
+
+**Overdue never leaves the list.** A check nobody did does not stop mattering, and an animal
+quietly dropped from the round is a conception rate computed over the visits that happened to
+be convenient.
+
+**The three outcomes are not symmetrical**, and what each one *does* is decided server-side:
+
+| `outcome` | What follows |
+| --- | --- |
+| `pregnant` | Sets `calving_due_on`, counted from the insemination and not from the visit — a Mait who is a fortnight late must not move a farmer's calving month with them. Stored rather than recomputed, because the gestation constants will be revised and a date already told to a farmer must not silently change |
+| `not_pregnant` | `photo_url` is **required**; the request is rejected without one. It is the outcome that costs somebody money and the one a farmer disputes. The animal is open to service the same day |
+| `unsure` | Books another check twenty-one days out, chained to this one through `rechecks` |
+
+**Idempotency** — `client_uuid` is minted on the handset when the outcome is tapped, not when
+the request goes out. A check is done in a yard with no signal as often as not, and a replay
+returns the record already written rather than refusing it: a retrying handset must not treat
+its own success as a failure and send a Mait back to the animal.
+
+---
+
 ## Operational
 
 | Method | Endpoint | Description | Auth |
