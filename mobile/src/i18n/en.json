@@ -883,6 +883,7 @@
     "distance": "Distance",
     "onTheRoad": "On the road",
     "estimate": "Distances are straight lines between where each animal was last served, scaled for winding roads — not road directions. The real ride is longer, and further where a river or canal has to be gone around. Worked out once when you tap Plan and held, so reordering offline uses the same figures.",
-    "useThisOrder": "Use this order"
+    "useThisOrder": "Use this order",
+    "noMap": "No map on this build — positions only"
   }
 }

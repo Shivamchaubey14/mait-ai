@@ -87,19 +87,11 @@ jest.mock('@react-native-community/netinfo', () => ({
 // Left unmocked deliberately — switching the whole suite to fake timers to silence a
 // warning would make every `waitFor` need manual clock advancement.
 
-// The map is a native view with no JS implementation under Jest. Rendered as plain views that
-// keep their testIDs, so a test can assert the route reached the map without a renderer that
-// cannot exist here. `Polyline` is kept as a real element because the line *is* the feature —
-// a route drawn without it is a scatter of pins.
-jest.mock('react-native-maps', () => {
+// The web view carrying the map has no JS implementation under Jest. Rendered as a plain
+// view that keeps its testID, so a test can assert the map was reached — what is inside it is
+// a document, and `routeMapHtml` is tested directly as one.
+jest.mock('react-native-webview', () => {
   const React = require('react');
   const { View } = require('react-native');
-  const Passthrough = ({ children, ...props }) => React.createElement(View, props, children);
-  return {
-    __esModule: true,
-    default: Passthrough,
-    Marker: Passthrough,
-    Polyline: Passthrough,
-    PROVIDER_GOOGLE: 'google',
-  };
+  return { __esModule: true, WebView: props => React.createElement(View, props) };
 });

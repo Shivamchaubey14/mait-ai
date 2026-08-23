@@ -18,16 +18,18 @@
  * somebody to discover on a longer ride than they planned for.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import { WebView } from 'react-native-webview';
 
 import type { RouteOption, RouteStop } from '@api/types';
+import { routeMapHtml } from './routeMapHtml';
+import type { MapPoint } from './routeMapHtml';
 import { EmptyState } from '@/components/states';
 import {
   colors,
@@ -38,9 +40,6 @@ import {
   typography,
   yolk,
 } from '@theme/tokens';
-
-/** Markers are anchored on their middle, so a numbered disc sits *on* the point it marks. */
-const CENTRE = { x: 0.5, y: 0.5 };
 
 /** "2h 40m", or "45m" where there is no hour to say. */
 export function readableTime(minutes: number): string {
@@ -93,14 +92,102 @@ function dueLabel(stop: RouteStop, t: TFunction): string {
  * no roads, no river and no landmarks — a Mait cannot recognise their own village in a field
  * of dots, and recognising it is the whole point of looking.
  *
- * `react-native-maps` renders Google Maps on Android and Apple Maps on iOS. A `Polyline`
- * carries the order — the lines are what make it a *route* rather than a scatter of pins.
+ * Drawn with Leaflet over OpenStreetMap tiles in a web view, which needs no API key of any
+ * kind. It was `react-native-maps` for one commit, and that is what crashed the app: Google's
+ * Maps SDK is metered, the key is how the meter is attributed, and an empty key does not fall
+ * back to a grey square — the Android SDK fails to initialise and closes the screen. Which is
+ * also the answer to why "Open in Maps" always worked: that hands the round to an app already
+ * installed and already paid for, and involves nothing of ours.
  *
- * **A standalone build needs a Google Maps key.** In Expo Go the tiles come from Expo's own
- * key and work with nothing configured; an APK signed by us has to carry
- * `android.config.googleMaps.apiKey` or Android draws an empty grey square. The fallback
- * below is why an empty square never appears: with no map available it draws the coordinate
- * plot instead, which says what it is.
+ * A polyline carries the order; the line is what makes it a route rather than a scatter of
+ * pins. Anything at all going wrong — no signal, a blocked CDN, a bad tile server — falls back
+ * to the plot above. That fallback is the thing this screen was missing when it crashed, and
+ * it is now the default rather than the exception.
+ */
+/**
+ * The stops plotted where they are, with no tiles under them.
+ *
+ * What a round looks like when there is no map to draw it on. Relative positions only — no
+ * roads, no landmarks, no scale — so it is labelled, and it is strictly a fallback. It earns
+ * its place by showing which stops cluster and whether the route doubles back, which a
+ * numbered list cannot, and by never being the reason an app closes.
+ */
+function Plot({
+  stops,
+  start,
+}: {
+  stops: RouteStop[];
+  start: { lat: number; lng: number } | null;
+}) {
+  const { t } = useTranslation();
+  const placed = stops.filter(s => s.lat !== null && s.lng !== null);
+  const points = [
+    ...(start ? [{ lat: start.lat, lng: start.lng, here: true, index: 0 }] : []),
+    ...placed.map((s, i) => ({
+      lat: s.lat as number,
+      lng: s.lng as number,
+      here: false,
+      index: i + 1,
+    })),
+  ];
+
+  if (points.length === 0) {
+    return null;
+  }
+
+  const lats = points.map(p => p.lat);
+  const lngs = points.map(p => p.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  // A floor on the span: one stop, or several at the same yard, would divide by zero.
+  const spanLat = Math.max(maxLat - minLat, 0.0005);
+  const spanLng = Math.max(maxLng - minLng, 0.0005);
+
+  return (
+    <View style={styles.plotCanvas} testID="route-plot">
+      {points.map(point => (
+        <View
+          key={`${point.index}-${point.here}`}
+          style={[
+            styles.pin,
+            styles.plotPin,
+            {
+              // Latitude grows northward and the screen downward, so it is flipped.
+              top: `${8 + ((maxLat - point.lat) / spanLat) * 84}%`,
+              left: `${8 + ((point.lng - minLng) / spanLng) * 84}%`,
+            },
+            point.here && styles.pinHere,
+            !point.here && point.index === 1 && styles.pinFirst,
+          ]}
+        >
+          <Text style={styles.pinLabel}>{point.here ? '•' : point.index}</Text>
+        </View>
+      ))}
+      <Text style={styles.plotNote}>{t('route2.noMap')}</Text>
+    </View>
+  );
+}
+
+/**
+ * The round on a real map, drawn without an API key.
+ *
+ * **Why "Open in Maps" always worked and this did not.** They are not the same thing. A link
+ * hands the round to the Maps app already on the phone — already installed, already signed
+ * in, already paid for. Drawing a map *inside* our screen used Google's Maps SDK, which is
+ * metered, and the key is how Google knows whose meter to run. There is no way to use that
+ * SDK without one, and an empty key does not fall back to a grey square: the Android SDK
+ * fails to initialise and closes the screen, which is what crashed the app.
+ *
+ * So this uses OpenStreetMap instead, through Leaflet in a web view. Free, keyless, and real
+ * — actual roads, rivers and village names, which is the whole reason to have a map rather
+ * than a diagram. A polyline carries the order; the line is what makes it a route.
+ *
+ * The web view reports back when the tiles are on screen. Until it does, and if it never
+ * does — no signal, a blocked CDN, anything — the plot above is what is shown. That is the
+ * fallback this screen was missing when it crashed, and it is now the default rather than
+ * the exception.
  */
 function RouteMap({
   stops,
@@ -112,72 +199,64 @@ function RouteMap({
   start: { lat: number; lng: number } | null;
 }) {
   const { t } = useTranslation();
+  const [failed, setFailed] = useState(false);
 
   const placed = stops.filter(s => s.lat !== null && s.lng !== null);
   if (placed.length === 0) {
     return null;
   }
 
-  const path = [
-    ...(start ? [{ latitude: start.lat, longitude: start.lng }] : []),
-    ...placed.map(s => ({ latitude: s.lat as number, longitude: s.lng as number })),
+  const points: MapPoint[] = [
+    ...(start
+      ? [{ lat: start.lat, lng: start.lng, index: 0, label: t('route2.youAreHere'), late: false }]
+      : []),
+    ...placed.map((stop, index) => ({
+      lat: stop.lat as number,
+      lng: stop.lng as number,
+      index: index + 1,
+      label: `${index + 1}. ${stop.owner_name}`,
+      late: stop.days_until < 0,
+    })),
   ];
 
-  // Framed to hold every stop with room to breathe. A delta of zero — one stop, or several
-  // at the same yard — would zoom the camera to the ground.
-  const lats = path.map(p => p.latitude);
-  const lngs = path.map(p => p.longitude);
-  const region = {
-    latitude: (Math.min(...lats) + Math.max(...lats)) / 2,
-    longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2,
-    latitudeDelta: Math.max((Math.max(...lats) - Math.min(...lats)) * 1.6, 0.02),
-    longitudeDelta: Math.max((Math.max(...lngs) - Math.min(...lngs)) * 1.6, 0.02),
-  };
+  const html = routeMapHtml(points, {
+    primary: colors.primary,
+    error: colors.error,
+    info: colors.info,
+    surface: colors.surface,
+  });
 
   return (
     <View style={styles.plot}>
-      <View style={styles.mapFrame} testID="route-map">
-        <MapView
-          style={styles.map}
-          initialRegion={region}
-          // Read, not driven. Panning is allowed because a Mait will want to look around;
-          // rotation and pitch only make a small map harder to read.
-          rotateEnabled={false}
-          pitchEnabled={false}
-          toolbarEnabled={false}
-          showsUserLocation={fromHere}
-          showsMyLocationButton={false}
-        >
-          {/* The order, drawn. Without it the stops are pins and not a route. */}
-          <Polyline coordinates={path} strokeColor={colors.primary} strokeWidth={3} />
-
-          {start && (
-            <Marker coordinate={{ latitude: start.lat, longitude: start.lng }} anchor={CENTRE}>
-              <View style={[styles.pin, styles.pinHere]} />
-            </Marker>
-          )}
-
-          {placed.map((stop, index) => (
-            <Marker
-              key={stop.id}
-              coordinate={{ latitude: stop.lat as number, longitude: stop.lng as number }}
-              title={stop.owner_name}
-              description={stop.note || stop.mpp_name}
-              anchor={CENTRE}
-            >
-              {/* The number is the whole point: it is what the list beside it is keyed to. */}
-              <View
-                style={[
-                  styles.pin,
-                  index === 0 && styles.pinFirst,
-                  stop.days_until < 0 && styles.pinLate,
-                ]}
-              >
-                <Text style={styles.pinLabel}>{index + 1}</Text>
-              </View>
-            </Marker>
-          ))}
-        </MapView>
+      <View style={styles.mapFrame}>
+        {failed ? (
+          <Plot stops={stops} start={start} />
+        ) : (
+          <WebView
+            style={styles.map}
+            originWhitelist={['*']}
+            source={{ html }}
+            // The map is looked at, not scrolled past — the page inside is exactly the frame.
+            scrollEnabled={false}
+            bounces={false}
+            javaScriptEnabled
+            domStorageEnabled
+            // Any failure at all lands on the plot. A blank frame where a map should be tells
+            // a Mait nothing about whether the round is wrong or the network is.
+            onError={() => setFailed(true)}
+            onHttpError={() => setFailed(true)}
+            onMessage={event => {
+              try {
+                if (!JSON.parse(event.nativeEvent.data)?.ok) {
+                  setFailed(true);
+                }
+              } catch {
+                setFailed(true);
+              }
+            }}
+            testID="route-map"
+          />
+        )}
       </View>
 
       <View style={styles.plotFoot}>
@@ -410,6 +489,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   map: { ...StyleSheet.absoluteFillObject },
+  // The fallback ground, inside the same frame the map would fill.
+  plotCanvas: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.background },
+  plotPin: { position: 'absolute', marginLeft: -13, marginTop: -13 },
+  plotNote: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: spacing[2],
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
   pin: {
     width: 26,
     height: 26,
