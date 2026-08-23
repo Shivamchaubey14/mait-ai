@@ -22,6 +22,7 @@ import PdListScreen, { shortDate, urgencyOf } from '../PdListScreen';
 import PdRecordScreen, { calvingPreview } from '../PdRecordScreen';
 import PdReorderScreen, { villagePath } from '../PdReorderScreen';
 import PdRouteScreen, { mapsUrl, readableTime } from '../PdRouteScreen';
+import { routeMapHtml } from '../routeMapHtml';
 import type { PdRoute, RouteOption, RouteStop } from '@api/types';
 import type { PregnancyCheck } from '@api/types';
 import { jsonResponse, renderWithStore } from '@/test-utils';
@@ -619,5 +620,70 @@ describe('choosing an order', () => {
     fireEvent.press(screen.getByTestId('reorder-use'));
 
     expect(onUse).toHaveBeenCalledWith('late_first');
+  });
+});
+
+describe('the map document', () => {
+  it('draws a line through the stops, which is what makes it a route', () => {
+    const html = routeMapHtml(
+      [
+        { lat: 26.79, lng: 82.13, index: 0, label: 'You are here', late: false },
+        { lat: 26.771, lng: 82.149, index: 1, label: '1. Kavita', late: false },
+        { lat: 26.7956, lng: 82.1943, index: 2, label: '2. Malti', late: true },
+      ],
+      { primary: '#3BB77E', error: '#E54D42', info: '#3E92E5', surface: '#FFF' },
+    );
+
+    expect(html).toContain('L.polyline');
+    expect(html).toContain('[26.79, 82.13]');
+    expect(html).toContain('[26.7956, 82.1943]');
+  });
+
+  it('uses OpenStreetMap, which needs no key at all', () => {
+    // The whole reason this is not Google: their SDK is metered and cannot be used without a
+    // key, and an empty key crashed the app rather than degrading.
+    const html = routeMapHtml([{ lat: 26.79, lng: 82.13, index: 1, label: 'x', late: false }], {
+      primary: '#0f0',
+      error: '#f00',
+      info: '#00f',
+      surface: '#fff',
+    });
+
+    expect(html).toContain('tile.openstreetmap.org');
+    expect(html).not.toMatch(/api[_-]?key|googleapis/i);
+  });
+
+  it('keeps the attribution the tiles are given on condition of', () => {
+    const html = routeMapHtml([{ lat: 26.79, lng: 82.13, index: 1, label: 'x', late: false }], {
+      primary: '#0f0',
+      error: '#f00',
+      info: '#00f',
+      surface: '#fff',
+    });
+
+    expect(html).toContain('OpenStreetMap');
+  });
+
+  it('does not let a name become markup', () => {
+    const html = routeMapHtml(
+      [{ lat: 26.79, lng: 82.13, index: 1, label: '<script>alert(1)</script>', late: false }],
+      { primary: '#0f0', error: '#f00', info: '#00f', surface: '#fff' },
+    );
+
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('reports a failure rather than leaving an empty frame', () => {
+    // A map that silently fails to load looks exactly like a round with nothing in it.
+    const html = routeMapHtml([{ lat: 26.79, lng: 82.13, index: 1, label: 'x', late: false }], {
+      primary: '#0f0',
+      error: '#f00',
+      info: '#00f',
+      surface: '#fff',
+    });
+
+    expect(html).toContain('ReactNativeWebView.postMessage');
+    expect(html).toContain('window.onerror');
   });
 });
