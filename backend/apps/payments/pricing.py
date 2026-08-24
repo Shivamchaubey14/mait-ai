@@ -16,6 +16,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from apps.animals.models import BreedConfig
+from apps.pregnancy.models import PregnancyRate
 
 
 def price_for(*, breed: str, animal_type: str, owner_type: str) -> Decimal | None:
@@ -40,3 +41,18 @@ def price_for(*, breed: str, animal_type: str, owner_type: str) -> Decimal | Non
 
     rate = config.rate if owner_type == "member" else config.non_member_rate
     return rate if rate and rate > 0 else None
+
+
+def pd_price_for(*, owner_type: str) -> Decimal | None:
+    """
+    What a pregnancy diagnosis costs this owner, or ``None`` when nobody has set a rate.
+
+    Flat, not per breed: an insemination's price follows the straw, and this one follows the
+    visit. Otherwise it obeys the same two rules as `price_for` — a member and a non-member are
+    quoted apart because they settle in different worlds, and an unset rate is `None` rather
+    than zero so it can never reach a farmer as "free".
+    """
+    config = PregnancyRate.objects.filter(
+        service=PregnancyRate.Service.PREGNANCY_DIAGNOSIS
+    ).first()
+    return config.for_owner(owner_type) if config else None

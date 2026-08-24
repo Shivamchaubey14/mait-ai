@@ -78,9 +78,15 @@ def record_check(
     """
     Write what the Mait found, and do whatever that answer implies.
 
-    The three outcomes each have a consequence, and all three live here:
-    pregnant fixes a calving date, unsure books a recheck, not pregnant does neither and
-    demands a photograph.
+    Each outcome has a consequence and all of them live here: pregnant fixes a calving date,
+    unsure books a recheck three weeks out, not pregnant does neither and demands a
+    photograph — and declined ends it. A refusal books nothing and closes the row: the owner
+    said no, and there is nothing further for the Mait to do or be reminded about.
+
+    That leaves the chain recorded with no finding on it, which `oversight.rates_by_mait` has
+    to recognise and exclude — otherwise the animal is scored a failed insemination for an
+    examination her owner did not permit. The rule lives there rather than here because it is
+    a question about reading the data, not about writing it.
     """
     if check.is_recorded:
         raise CheckAlreadyRecorded(
@@ -97,6 +103,20 @@ def record_check(
     check.photo_url = photo_url
     check.note = note
 
+    # What the visit cost, stamped now rather than derived later. The figure the farmer was
+    # quoted in the yard is a fact about today, and reading it back through whatever the rate
+    # happens to be next quarter would silently restate every visit already made.
+    #
+    # Nothing is stamped on a refusal: no examination happened, so there is nothing to bill
+    # for, and a charge against a visit the owner declined is the one thing that would make a
+    # Mait stop offering the choice honestly.
+    if check.is_finding:
+        # Imported here rather than at module scope: `payments.pricing` reads this app's own
+        # models, and pulling it in at import time closes the loop.
+        from apps.payments.pricing import pd_price_for
+
+        check.amount_charged = pd_price_for(owner_type=check.ai_event.owner_type)
+
     if outcome == PregnancyCheck.Outcome.PREGNANT:
         event = check.ai_event
         served = local_day(event.performed_at or event.completed_at or check.checked_at)
@@ -105,9 +125,21 @@ def record_check(
         check.calving_due_on = calving_due_from(served, event.animal.animal_type)
 
     check.save(
-        update_fields=["outcome", "checked_at", "photo_url", "note", "calving_due_on", "updated_at"]
+        update_fields=[
+            "outcome",
+            "checked_at",
+            "photo_url",
+            "note",
+            "calving_due_on",
+            "amount_charged",
+            "updated_at",
+        ]
     )
 
+    # Only an unsure result books another visit. A refusal does not: the owner has answered,
+    # and a check that reappears in the round every week is how a Mait gets told to stop
+    # coming. If the dairy wants to try again it is a decision somebody makes, not one this
+    # function makes on their behalf.
     recheck = None
     if outcome == PregnancyCheck.Outcome.UNSURE:
         recheck = PregnancyCheck.objects.create(
@@ -136,6 +168,9 @@ def record_check(
             "ai_event_id": check.ai_event_id,
             "calving_due_on": str(check.calving_due_on) if check.calving_due_on else None,
             "recheck_id": recheck.id if recheck else None,
+            # On the trail, because what somebody was charged is the thing they come back to
+            # argue about and the rate it came from can change underneath the record.
+            "amount_charged": str(check.amount_charged) if check.amount_charged else None,
         },
     )
     return check

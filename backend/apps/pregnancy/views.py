@@ -23,13 +23,18 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.pagination import StandardLimitOffsetPagination
+from apps.core.services import record_audit
 from apps.core.permissions import IsAdmin, IsMait
 from apps.masterdata.models import Mait
 
-from .models import ALERT_WINDOW_DAYS, PregnancyCheck
+from .models import ALERT_WINDOW_DAYS, PregnancyCheck, PregnancyRate
 from .oversight import Rate, counts_by_mait, empty_counts, rates_by_mait
 from .route import late_first, minutes_for, road_minutes, shortest_first
-from .serializers import PregnancyCheckSerializer, RecordCheckSerializer
+from .serializers import (
+    PregnancyCheckSerializer,
+    PregnancyRateSerializer,
+    RecordCheckSerializer,
+)
 from .services import CheckAlreadyRecorded, PhotoRequired, record_check
 
 
@@ -273,6 +278,11 @@ def _mait_identity(mait) -> dict:
         "unsure result books a recheck, and an event whose second check came back pregnant "
         "did not fail. An insemination still carrying an open check is in neither half of "
         "the fraction — otherwise a Mait improves their own rate by staying at home."
+        "\n\n"
+        "`declined` counts the visits an owner refused. It is reported beside the three "
+        "findings and never added to them: nobody examined the animal, so the insemination "
+        "is in neither half of the rate either. A refusal books the next attempt, so those "
+        "checks are still in `open` as well — the round has not lost the animal."
     ),
     responses={200: dict},
 )
@@ -309,6 +319,7 @@ def pregnancy_oversight(request):
                 "pregnant": sum(row["pregnant"] for row in rows),
                 "not_pregnant": sum(row["not_pregnant"] for row in rows),
                 "unsure": sum(row["unsure"] for row in rows),
+                "declined": sum(row["declined"] for row in rows),
                 "alert_window_days": ALERT_WINDOW_DAYS,
                 **overall.as_dict(),
             },
@@ -376,3 +387,60 @@ def mait_pregnancy_checks(request, mait_id: int):
         "alert_window_days": ALERT_WINDOW_DAYS,
     }
     return response
+
+
+def _the_pd_rate() -> PregnancyRate:
+    """
+    The one row, created if a deployment somehow reaches this without its data migration.
+
+    Cheaper than making every caller — and every screen — handle an absent row.
+    """
+    rate, _ = PregnancyRate.objects.get_or_create(
+        service=PregnancyRate.Service.PREGNANCY_DIAGNOSIS,
+        defaults={"member_rate": 0, "non_member_rate": 0},
+    )
+    return rate
+
+
+@extend_schema(
+    tags=["pregnancy"],
+    summary="What a pregnancy diagnosis costs",
+    description=(
+        "The two prices, read and set from the Rates screen."
+        "\n\n"
+        "Flat rather than per breed, unlike the insemination rate: a straw's price "
+        "follows the bull it came from, and this one follows the visit, which is the "
+        "same work whatever animal it is."
+        "\n\n"
+        "**Zero means not priced, never free.** A rate nobody has entered reaches a "
+        "Mait as \"chargeable, amount not set\" rather than as a farmer being told "
+        "the visit costs nothing. `PATCH` accepts either rate on its own."
+    ),
+    request=PregnancyRateSerializer,
+    responses={200: PregnancyRateSerializer},
+)
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAdmin])
+def pregnancy_rate(request):
+    rate = _the_pd_rate()
+
+    if request.method == "GET":
+        return Response(PregnancyRateSerializer(rate).data)
+
+    serializer = PregnancyRateSerializer(rate, data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+
+    # Audited like any other price change. What a farmer was charged is the thing that gets
+    # disputed, and "who set it to that, and when" is the first question asked.
+    record_audit(
+        action="update",
+        entity_type="pregnancy_rate",
+        entity_id=rate.id,
+        actor=request.user,
+        meta={
+            "member_rate": str(rate.member_rate),
+            "non_member_rate": str(rate.non_member_rate),
+        },
+    )
+    return Response(serializer.data)

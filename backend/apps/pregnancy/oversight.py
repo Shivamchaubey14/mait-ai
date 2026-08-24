@@ -48,6 +48,15 @@ class Rate:
         }
 
 
+#: The outcomes that mean somebody actually examined the animal. `declined` is not among them
+#: and that omission is the whole point — see `rates_by_mait`.
+FINDINGS = [
+    PregnancyCheck.Outcome.PREGNANT,
+    PregnancyCheck.Outcome.NOT_PREGNANT,
+    PregnancyCheck.Outcome.UNSURE,
+]
+
+
 def _per_insemination(checks: QuerySet[PregnancyCheck]):
     """
     Roll checks up to one row per insemination.
@@ -55,12 +64,16 @@ def _per_insemination(checks: QuerySet[PregnancyCheck]):
     The chain is the unit, not the check. An unsure result books a recheck three weeks out,
     and an event whose second check came back pregnant did not fail — counting checks would
     score that insemination as half a failure and quietly depress every rate on the screen.
+
+    `findings` is the count of visits on the chain that examined the animal. It is what
+    separates a chain that has been answered from one that has only been *closed*.
     """
     return (
         checks.values("ai_event_id", "mait_id")
         .annotate(
             pregnant=Count("id", filter=Q(outcome=PregnancyCheck.Outcome.PREGNANT)),
             still_open=Count("id", filter=Q(outcome="")),
+            findings=Count("id", filter=Q(outcome__in=FINDINGS)),
         )
         .order_by()
     )
@@ -70,11 +83,20 @@ def rates_by_mait(checks: QuerySet[PregnancyCheck] | None = None) -> tuple[dict[
     """
     Conception rate per Mait, and across the whole field.
 
-    An insemination counts as **settled** once it can no longer change: either something on
-    its chain came back pregnant, or every check on it has been recorded and none booked
-    another. An event still carrying an open check is left out of both halves of the fraction
-    rather than counted as a failure — the visit has not happened, and scoring it as a failure
-    would mean a Mait improved their own rate by staying at home.
+    An insemination counts as **settled** once it can no longer change *and somebody actually
+    looked*: either something on its chain came back pregnant, or every check on it has been
+    recorded, none booked another, and at least one of them examined the animal. An event
+    still carrying an open check is left out of both halves of the fraction rather than
+    counted as a failure — the visit has not happened, and scoring it as a failure would mean
+    a Mait improved their own rate by staying at home.
+
+    **That last clause is what keeps a refusal out.** A declined check closes its chain and
+    books nothing, so without it the chain would arrive here fully recorded and never
+    pregnant — which is this function's definition of a failed service. The animal would be
+    scored a failure because her owner would not open the gate: wrong, invisible, and directly
+    against the figure this platform is judged on. So a chain has to carry a real finding
+    before it counts either way, and one that only carries refusals is in neither half — the
+    same place as a visit nobody has made yet, which is exactly what it is.
 
     Rolled up in Python from one grouped query. The second aggregation — over the first
     group-by rather than over the table — needs a subquery the ORM will not express without
@@ -90,7 +112,8 @@ def rates_by_mait(checks: QuerySet[PregnancyCheck] | None = None) -> tuple[dict[
         conceived = row["pregnant"] > 0
         # A pregnant result settles the insemination whatever else is on the chain: the
         # recheck an earlier unsure booked is the visit that produced this answer.
-        if not (conceived or row["still_open"] == 0):
+        closed = row["still_open"] == 0 and row["findings"] > 0
+        if not (conceived or closed):
             continue
 
         rate = per_mait[row["mait_id"]]
@@ -111,6 +134,11 @@ def counts_by_mait(today: date, checks: QuerySet[PregnancyCheck] | None = None) 
     window is "everything open that falls on or before the end of the week ahead", and an
     overdue check has certainly done that. Two surfaces using one word for two populations is
     how a Mait and an admin end up arguing about which number is wrong.
+
+    `recorded` is every visit written down, refusals included: the Mait went, and that is what
+    the figure is counting. `pregnant + not_pregnant + unsure` is what was actually *found*,
+    and `declined` is the difference between the two. Anything reporting on the work done wants
+    the first; anything reporting on the animals wants the second.
     """
     base = checks if checks is not None else PregnancyCheck.objects.all()
     horizon = today + timedelta(days=ALERT_WINDOW_DAYS)
@@ -125,6 +153,10 @@ def counts_by_mait(today: date, checks: QuerySet[PregnancyCheck] | None = None) 
             pregnant=Count("id", filter=Q(outcome=PregnancyCheck.Outcome.PREGNANT)),
             not_pregnant=Count("id", filter=Q(outcome=PregnancyCheck.Outcome.NOT_PREGNANT)),
             unsure=Count("id", filter=Q(outcome=PregnancyCheck.Outcome.UNSURE)),
+            # Counted separately from the three findings and never folded in with them. A
+            # screen that adds this to "not pregnant" is a screen reporting refusals as
+            # failures.
+            declined=Count("id", filter=Q(outcome=PregnancyCheck.Outcome.DECLINED)),
         )
         .order_by()
     )
@@ -142,4 +174,5 @@ def empty_counts() -> dict:
         "pregnant": 0,
         "not_pregnant": 0,
         "unsure": 0,
+        "declined": 0,
     }
