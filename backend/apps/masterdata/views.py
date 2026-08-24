@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.db.models import Count, Max, Q
+from django.http import Http404, HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -45,6 +46,7 @@ from .serializers import (
     NonMemberSerializer,
     UploadErrorRowSerializer,
 )
+from .snapshots import build_snapshot, latest_upload
 from .storage import store_aadhaar_image
 from .tasks import process_master_upload
 from .templates_xlsx import assignment_template_response
@@ -191,6 +193,113 @@ class MasterUploadViewSet(
     @action(detail=False, methods=["get"], url_path="assignment-template")
     def assignment_template(self, request):
         return assignment_template_response()
+
+    @extend_schema(
+        summary="Which masters have a copy to download",
+        description=(
+            "One entry per SAP master, saying whether there is a landed upload behind it and "
+            "what it was."
+            "\n\n"
+            "Sent as a list rather than left for the screen to assemble from the history, "
+            "because the screen would have to know which statuses count as landed — and a "
+            "portal offering a download of a failed upload is a portal handing back a file "
+            "that never became the master."
+        ),
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"], url_path="snapshots")
+    def snapshots(self, request):
+        masters = [
+            DataUploadLog.UploadType.MEMBER,
+            DataUploadLog.UploadType.MAIT,
+            DataUploadLog.UploadType.MPP,
+        ]
+
+        results = []
+        for upload_type in masters:
+            upload = latest_upload(upload_type)
+            results.append(
+                {
+                    "upload_type": upload_type,
+                    "label": DataUploadLog.UploadType(upload_type).label,
+                    "available": upload is not None,
+                    "file_name": upload.file_name if upload else "",
+                    "uploaded_at": (
+                        (upload.finished_at or upload.created_at).isoformat() if upload else None
+                    ),
+                    "uploaded_by": (
+                        (upload.uploaded_by.full_name or upload.uploaded_by.username)
+                        if upload
+                        else ""
+                    ),
+                    "total_rows": upload.total_rows if upload else 0,
+                    "success_rows": upload.success_rows if upload else 0,
+                    "failed_rows": upload.failed_rows if upload else 0,
+                }
+            )
+
+        return Response({"results": results})
+
+    @extend_schema(
+        summary="Download the last upload of a master, locked",
+        description=(
+            "The workbook this platform is currently running on, rebuilt and protected."
+            "\n\n"
+            "Not a blank template — the templates are the SAP exports themselves, which this "
+            "portal has always said. This is *what we last loaded*, so an admin about to "
+            "re-upload a corrected master can open the one in force and check a column "
+            "against it."
+            "\n\n"
+            "**Protected, not sealed.** The sheet carries Excel's own protection, which stops "
+            "the accidental edit — a stray keystroke, a dragged column — and can be removed by "
+            "anyone who means to. It is not encryption, and one of these files is not "
+            "evidence."
+            "\n\n"
+            "404 where nothing has landed for that master yet."
+        ),
+        responses={200: bytes},
+    )
+    @action(detail=False, methods=["get"], url_path=r"snapshots/(?P<upload_type>[a-z]+)")
+    def snapshot(self, request, upload_type=None):
+        masters = {
+            DataUploadLog.UploadType.MEMBER,
+            DataUploadLog.UploadType.MAIT,
+            DataUploadLog.UploadType.MPP,
+        }
+        if upload_type not in masters:
+            raise Http404("No such master.")
+
+        upload = latest_upload(upload_type)
+        if upload is None:
+            raise Http404("Nothing has been uploaded for this master yet.")
+
+        # The masters carry names, mobile numbers and member codes, so handing one back is a
+        # PII read and is logged as one — the same treatment the exports get.
+        record_audit(
+            action=AuditLog.Action.PII_ACCESS,
+            entity_type="master_snapshot",
+            entity_id=str(upload.id),
+            request=request,
+            meta={"upload_type": upload_type, "file_name": upload.file_name},
+        )
+
+        buffer = build_snapshot(upload)
+        payload = buffer.getvalue()
+        stamp = timezone.localtime(upload.finished_at or upload.created_at).strftime("%Y-%m-%d")
+
+        response = HttpResponse(
+            payload,
+            content_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )
+        response["Content-Disposition"] = (
+            f'attachment; filename="{upload_type}-master-{stamp}.xlsx"'
+        )
+        # Stated so the browser can draw a real progress bar rather than a spinner. The file
+        # is built in memory and its length is known; a streamed response could not say.
+        response["Content-Length"] = str(len(payload))
+        return response
 
     @extend_schema(
         summary="Row-level error report",
