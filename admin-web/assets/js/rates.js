@@ -1,5 +1,5 @@
 /**
- * Rates (W18) — what one insemination costs, by breed.
+ * Rates (W18) — what one insemination costs by breed, and what a pregnancy check costs.
  *
  * Two prices for the same service, because they are settled in different worlds: a member's is
  * taken out of a milk payment the dairy already owes her, a non-member's is cash handed to a
@@ -12,6 +12,12 @@
  *
  * Edited in place and saved together. Pricing is a decision made across a list — "cows at 300,
  * buffaloes at 350" — and a form per breed would make eighteen small decisions out of two.
+ *
+ * The pregnancy rate sits above the table as a single pair of figures rather than a column on
+ * it. An insemination's price follows the straw and so belongs to the breed; a pregnancy check
+ * is the same work whatever animal it is, and eighteen rows for one decision would be
+ * seventeen extra chances to leave one at zero. One Save covers both — an administrator who
+ * has just re-priced the list should not have to notice that this card saves separately.
  */
 
 (function (MaitAI, $) {
@@ -22,6 +28,9 @@
   /** Every breed as the API returned it, keyed by id, plus whatever has been typed since. */
   let breeds = [];
   const edits = {};
+
+  /** The pregnancy rate as the API returned it. The inputs hold whatever has been typed. */
+  let pdRate = null;
 
   let kind = 'COW';
   let search = '';
@@ -66,10 +75,20 @@
     });
   }
 
-  /* A number field per rate, tagged with the breed and which of the two it is. */
+  /**
+   * A rupee field per rate, tagged with the breed and which of the two it is.
+   *
+   * The ₹ is inside the box rather than in the column heading. A bare number in a table is a
+   * quantity, and this is a price — an operator scanning a column of them should not have to
+   * remember which of the two the column holds. `aria-hidden`, because the input's own label
+   * already says what the figure is and a screen reader announcing "rupees" in between only
+   * makes the field longer to hear.
+   */
   function rateCell(breed, field) {
     return (
       '<td class="table__num">' +
+      '<span class="money-field">' +
+      '<span class="money-field__unit" aria-hidden="true">₹</span>' +
       '<input class="input input--rate" type="number" min="0" step="1" ' +
       'inputmode="numeric" data-id="' +
       breed.id +
@@ -80,6 +99,7 @@
       '" aria-label="' +
       ui.escapeHtml(breed.name + ' — ' + (field === 'rate' ? 'member rate' : 'non-member rate')) +
       '" />' +
+      '</span>' +
       '</td>'
     );
   }
@@ -135,6 +155,79 @@
     summarise();
   }
 
+  /* --- the pregnancy rate ---------------------------------------------------------------
+   * Two inputs and one line of state. Kept apart from the breed table's `edits` map because
+   * it is not a row: there is one of it, it is always on screen, and the input is its own
+   * source of truth while it is being typed into.
+   */
+
+  function pdValue(id) {
+    const raw = $(id).val();
+    return raw === '' ? null : Number(raw);
+  }
+
+  function pdDirty() {
+    if (!pdRate) {
+      return false;
+    }
+    return (
+      pdValue('#pd-member-rate') !== Number(pdRate.member_rate) ||
+      pdValue('#pd-non-member-rate') !== Number(pdRate.non_member_rate)
+    );
+  }
+
+  /**
+   * Say plainly whether the visit is priced — in words and in the colour of the card.
+   *
+   * The same rule the tile above the breed table states: zero is not free, it is unpriced,
+   * and the consequence lands on a Mait in a yard rather than on the desk that set it. Said
+   * on the card as well as in the notice at the foot, because a card with two zeroes in it
+   * otherwise looks like a card that has been filled in.
+   *
+   * The tone follows the same fact rather than being set once in the markup. A screen where
+   * the colour is decoration teaches an operator to ignore the colour; here yellow means
+   * there is something to do on this card and green means there is not, which is worth
+   * glancing at from across a desk. Both classes come off first, so the state is derived
+   * from the figures every time rather than accumulated.
+   */
+  function paintPdState() {
+    const member = pdValue('#pd-member-rate');
+    const other = pdValue('#pd-non-member-rate');
+    const missing = !member || !other;
+
+    $('#pd-rate-state')
+      .text(missing ? 'Not priced' : ui.money(member) + ' / ' + ui.money(other))
+      .toggleClass('panel__count--warn', missing);
+
+    $('#pd-rate-card')
+      .removeClass('panel--warn panel--good')
+      .addClass(missing ? 'panel--warn' : 'panel--good');
+  }
+
+  function paintPdRate() {
+    if (!pdRate) {
+      return;
+    }
+    // `Number` so a stored "100.00" does not sit in the box looking like an unsaved edit
+    // against the 100 an administrator would type.
+    $('#pd-member-rate').val(Number(pdRate.member_rate));
+    $('#pd-non-member-rate').val(Number(pdRate.non_member_rate));
+    paintPdState();
+  }
+
+  function loadPdRate() {
+    MaitAI.api
+      .pregnancyRate()
+      .done(function (data) {
+        pdRate = data;
+        paintPdRate();
+      })
+      .fail(function (problem) {
+        MaitAI.shell.alert(problem.detail);
+        $('#pd-rate-state').text('Could not load');
+      });
+  }
+
   function load() {
     MaitAI.shell.clearAlert();
     MaitAI.api
@@ -158,7 +251,8 @@
    */
   function saveAll() {
     const changed = breeds.filter(dirty);
-    if (!changed.length) {
+    const pdChanged = pdDirty();
+    if (!changed.length && !pdChanged) {
       MaitAI.shell.alert('Nothing has changed.', 'good');
       return;
     }
@@ -187,16 +281,31 @@
         });
     });
 
+    if (pdChanged) {
+      requests.push(
+        MaitAI.api
+          .updatePregnancyRate({
+            member_rate: pdValue('#pd-member-rate') || 0,
+            non_member_rate: pdValue('#pd-non-member-rate') || 0,
+          })
+          .done(function (saved) {
+            pdRate = saved;
+            paintPdRate();
+          })
+          .fail(function () {
+            failures.push('Pregnancy diagnosis');
+          })
+      );
+    }
+
     $.when.apply($, requests).always(function () {
       $button.prop('disabled', false).text('Save changes');
       render();
       if (failures.length) {
         MaitAI.shell.alert('Could not save: ' + failures.join(', ') + '.');
       } else {
-        MaitAI.shell.alert(
-          changed.length + (changed.length === 1 ? ' rate saved.' : ' rates saved.'),
-          'good'
-        );
+        const saved = changed.length + (pdChanged ? 1 : 0);
+        MaitAI.shell.alert(saved + (saved === 1 ? ' rate saved.' : ' rates saved.'), 'good');
       }
     });
   }
@@ -218,6 +327,7 @@
     }
     MaitAI.shell.mount();
     load();
+    loadPdRate();
 
     // Delegated: the rows are re-rendered on every keystroke's worth of state, so a handler
     // bound to the inputs themselves would be lost with them.
@@ -248,6 +358,9 @@
     });
 
     $('#save-all').on('click', saveAll);
+    // Repainted as it is typed, so "Not priced" clears the moment a figure lands rather than
+    // on save — the state on the card should describe the card, not the last request.
+    $('#pd-member-rate, #pd-non-member-rate').on('input', paintPdState);
     $('#kind-COW').on('click', function () {
       chooseKind('COW');
     });

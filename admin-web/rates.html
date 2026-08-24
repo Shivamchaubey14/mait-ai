@@ -16,7 +16,9 @@
         <header class="topbar">
           <div>
             <h1 class="topbar__title">Rates</h1>
-            <p class="topbar__meta">What one insemination costs, by breed</p>
+            <p class="topbar__meta">
+              What an insemination costs by breed, and what a pregnancy check costs
+            </p>
           </div>
           <div class="topbar__actions">
             <button class="btn btn--primary" id="save-all" type="button">Save changes</button>
@@ -34,12 +36,18 @@
             <p class="tile__value" id="unpriced">—</p>
             <p class="tile__foot">A Mait cannot close a capture on these</p>
           </article>
-          <article class="tile">
+          <!-- Two figures that are read against each other, so they must not be the same
+               colour: three identical grey rectangles is a row an operator has to read
+               left to right to tell apart, which is the one thing a summary row exists to
+               avoid. Green for the member and blue for everyone else, following the SAP
+               upload cards — that page already colours a member green, and one convention
+               learned once beats two invented separately. -->
+          <article class="tile tile--good">
             <p class="tile__label">Member rate</p>
             <p class="tile__value" id="member-range">—</p>
             <p class="tile__foot">Deducted from her milk payment</p>
           </article>
-          <article class="tile">
+          <article class="tile tile--info">
             <p class="tile__label">Non-member rate</p>
             <p class="tile__value" id="non-member-range">—</p>
             <p class="tile__foot">Collected by the Mait, on the spot</p>
@@ -63,19 +71,96 @@
           </button>
         </section>
 
+        <!-- Priced once, not per breed. A straw is a different product depending on the bull
+             it came from; putting a hand on an animal is the same work whatever she is, and
+             eighteen rows for it would be eighteen chances to leave one at zero. Above the
+             breed table because it is one decision and that is a list of them.
+
+             Tinted, and the tone is the card's own state rather than decoration — the rule
+             `.panel--tinted` states in portal.css. Yellow while either figure is zero, because
+             an unpriced visit stops a Mait in a yard with the owner waiting; green once both
+             are set. It loads neutral: grey is "not known yet", and a card that flashed green
+             before the request landed would be reassuring about something it had not read. -->
+        <section class="panel panel--tinted" id="pd-rate-card" aria-labelledby="pd-rate-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="pd-rate-title">
+              <span class="panel__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M9.5 14.5l2 2 3.5-4" />
+                </svg>
+              </span>
+              Pregnancy diagnosis
+            </h2>
+            <span class="panel__count" id="pd-rate-state">—</span>
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label class="field__label" for="pd-member-rate">Member pays</label>
+              <!-- The same `.money-field` the breed rows carry. Two kinds of money box on one
+                   page is the sort of thing nobody names and everybody notices. -->
+              <span class="money-field money-field--wide">
+                <span class="money-field__unit" aria-hidden="true">₹</span>
+                <input
+                  class="input input--rate"
+                  id="pd-member-rate"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputmode="numeric"
+                  aria-describedby="pd-member-help"
+                />
+              </span>
+              <p class="field__hint" id="pd-member-help">
+                Deducted from her milk payment. She hands over nothing in the yard.
+              </p>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="pd-non-member-rate">Non-member pays</label>
+              <span class="money-field money-field--wide">
+                <span class="money-field__unit" aria-hidden="true">₹</span>
+                <input
+                  class="input input--rate"
+                  id="pd-non-member-rate"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputmode="numeric"
+                  aria-describedby="pd-non-member-help"
+                />
+              </span>
+              <p class="field__hint" id="pd-non-member-help">
+                Cash, collected by the Mait before leaving.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section class="panel panel--flush" aria-label="Rates by breed">
           <div class="table-wrap">
-          <table class="table">
-            <thead>
-              <tr>
-                <th scope="col">Breed</th>
-                <th scope="col" class="table__num">Member pays</th>
-                <th scope="col" class="table__num">Non-member pays</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody id="rows"></tbody>
-          </table>
+            <!-- Measured, for the reason the pregnancy table is: left to size themselves,
+                 the two rate columns came out 266px wide around a 100px field and the row
+                 read as four things adrift from each other. The figures get what they need,
+                 Status gets its pill, and the slack lands on the breed name. -->
+            <table class="table table--rates">
+              <thead>
+                <tr>
+                  <th scope="col" class="col-breed">Breed</th>
+                  <th scope="col" class="table__num col-rate">Member pays</th>
+                  <th scope="col" class="table__num col-rate">Non-member pays</th>
+                  <th scope="col" class="col-status">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
           </div>
         </section>
 
@@ -85,9 +170,15 @@
           <div class="notice__body">
             <p class="notice__title">A rate left at zero is not free</p>
             <p>
-              It reads as unpriced, and the app tells the Mait to ask an administrator rather
-              than quoting a figure the dairy cannot stand behind. Both figures are per
-              insemination and reach every handset on its next request.
+              It reads as unpriced, and the app tells the Mait to ask an administrator rather than
+              quoting a figure the dairy cannot stand behind. That holds for the pregnancy rate as
+              much as for the breeds. Every figure here reaches the handsets on their next request,
+              and applies from then on — a visit already recorded keeps the price it was charged at,
+              so re-pricing today never restates last month.
+            </p>
+            <p>
+              A refused check is never charged. Nothing was examined, so there is nothing to collect
+              and nothing to deduct.
             </p>
           </div>
         </div>

@@ -150,8 +150,119 @@
    Narrow and right-aligned, because the column is read as money down the page rather than as
    a form field across it — and the full-width input every other screen uses would put two
    text boxes where two numbers belong. */
+/* --- a rupee field --------------------------------------------------------------------
+ * A number box on its own is not money, and 7.5rem of white box for a three-digit rupee value
+ * left every rate cell mostly empty — 120px of input in a 266px column, floating with nothing
+ * around it. The wrapper *is* the box now: it carries the border, the fill and the focus ring,
+ * with the unit inside it on the left and the input stripped bare on the right. That is the
+ * shape every currency field on the web has, and it is 100px instead of 120 while holding
+ * more.
+ *
+ * Filled rather than white, because a white box on a white table row is invisible until it is
+ * hovered — an operator cannot see what is editable, which on a pricing screen is the whole
+ * question. It turns white on focus, so the field being typed into is the one that is lit.
+ */
+.money-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  background: var(--ink-50);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.money-field:focus-within {
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* In a form field rather than a table cell there is a whole column to fill and no neighbour
+   to line up with, so the box spans it and the figure sits left where a form field's value
+   belongs. A 100px box adrift in a 460px column is the thing this page has just been fixed
+   for; repeating it on the card above would be funny. */
+.money-field--wide {
+  display: flex;
+}
+
+.money-field--wide .input--rate {
+  flex: 1;
+  text-align: left;
+}
+
+.money-field__unit {
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* On a tinted row the field goes white instead — the same white-chip-on-wash construction the
+   tiles, notices and upload cards use, so the field stays legible on the red unpriced row. */
+.is-blocked .money-field,
+.panel--tinted .money-field {
+  background: var(--color-surface);
+}
+
 .input--rate {
-  width: 7.5rem;
+  width: 3.5rem;
+  min-height: 34px;
+  padding: 0;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: 0;
+}
+
+/* The ring belongs to the wrapper, which is the thing that looks like a box. Two rings, one
+   inside the other, is what leaving this on produced. */
+.input--rate:focus {
+  outline: none;
+}
+
+/* Spinners on a rupee field are a control nobody uses to set a price — they arrive by accident
+   with `type=number`, which is here for the numeric keypad and the validation, not for the
+   arrows. Removing them is also what lets the field be 3.5rem wide. */
+.input--rate::-webkit-outer-spin-button,
+.input--rate::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.input--rate {
+  appearance: textfield;
+}
+
+/* --- the breed rate table ----------------------------------------------------------------
+ * Fixed, so a long breed name cannot pull the numbers around, and every column measured
+ * except the name — which is where the slack belongs, being the one thing that varies.
+ *
+ * `Non-member pays` is the widest heading on the row and sets its own column's floor; the
+ * member column matches it rather than being an accidental pixel narrower, because two rate
+ * columns that differ slightly read as a mistake rather than as a decision.
+ */
+.table--rates {
+  table-layout: fixed;
+  min-width: 720px;
+}
+
+.table--rates .col-breed {
+  width: auto;
+}
+
+.table--rates .col-rate {
+  width: 170px;
+}
+
+.table--rates .col-status {
+  width: 130px;
+}
+
+/* Fixed layout will not widen a column to fit a long word, so a code with no spaces in it
+   would paint over the figures beside it. */
+.table--rates .table__name,
+.table--rates .table__sub {
+  overflow-wrap: break-word;
 }
