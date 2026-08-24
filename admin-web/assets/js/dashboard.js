@@ -68,6 +68,29 @@
 
     $('[data-kpi="lifetime"]').text(count(data.lifetime));
     setFoot('lifetime-foot', data.since ? 'Since ' + data.since : '');
+
+    renderRate(data.pregnancy || {});
+  }
+
+  /**
+   * Conception rate.
+   *
+   * Null and zero are different answers. 0.0% is a platform whose inseminations are failing;
+   * no rate at all is a platform whose first checks are not due yet — ninety days after the
+   * straw — and rendering the two the same way raises a false alarm on a portal in its first
+   * quarter. So an em dash and a line saying why, rather than a red zero.
+   */
+  function renderRate(pregnancy) {
+    const percent = pregnancy.conception_rate;
+    const known = typeof percent === 'number';
+
+    $('[data-kpi="rate"]').text(known ? percent.toFixed(1) + '%' : '—');
+    setFoot(
+      'rate-foot',
+      known
+        ? count(pregnancy.conceived) + ' of ' + count(pregnancy.decided) + ' settled'
+        : 'No insemination has an answer yet'
+    );
   }
 
   /**
@@ -138,19 +161,26 @@
     });
   }
 
+  const QUEUES = {
+    'pending-payments': 'pending_payments',
+    'failed-otps': 'failed_otps',
+    'low-stock': 'low_stock',
+    'stale-indents': 'stale_indents',
+    'overdue-checks': 'overdue_checks',
+  };
+
   function renderExceptions(data) {
-    const total =
-      (data.pending_payments || {}).count +
-      (data.failed_otps || {}).count +
-      (data.low_stock || {}).count +
-      (data.stale_indents || {}).count;
+    let total = 0;
+
+    // Summed from the same list the cards are drawn from. Adding a queue used to mean editing
+    // an addition here as well, and the badge quietly kept counting four of five.
+    Object.keys(QUEUES).forEach(function (name) {
+      const queue = data[QUEUES[name]] || {};
+      total += queue.count || 0;
+      renderException(name, queue);
+    });
 
     MaitAI.shell.setExceptionCount(total);
-
-    renderException('pending-payments', data.pending_payments || {});
-    renderException('failed-otps', data.failed_otps || {});
-    renderException('low-stock', data.low_stock || {});
-    renderException('stale-indents', data.stale_indents || {});
   }
 
   // ------------------------------------------------------------------------------------

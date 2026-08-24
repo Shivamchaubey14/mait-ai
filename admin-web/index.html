@@ -134,6 +134,29 @@
             <p class="tile__value" data-kpi="lifetime">—</p>
             <p class="tile__foot" data-kpi="lifetime-foot"></p>
           </article>
+          <!-- The only tile in the row that is not a count of events. It is deliberately last
+               and deliberately here: the four beside it say how much was sold, and this says
+               whether any of it worked, which is the number this platform is ultimately
+               judged on. A tinted link because it is the one tile with a screen behind it. -->
+          <a class="tile tile--linked" href="pregnancy.html" data-kpi="rate-tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M8 12.5l2.5 2.5L16 9.5" />
+                </svg>
+              </span>
+              Conception rate
+            </p>
+            <p class="tile__value" data-kpi="rate">—</p>
+            <p class="tile__foot" data-kpi="rate-foot"></p>
+          </a>
         </section>
 
         <!-- SRS §6.7.3 -->
@@ -315,6 +338,49 @@
             </a>
           </div>
           <div data-rows="stale-indents"></div>
+        </section>
+
+        <!-- Yellow, not red: a check nobody walked is waiting work, not blocked work. The Mait
+             can still record events; it is the animal's answer that is late. -->
+        <section class="panel panel--warning panel--linked" aria-labelledby="overdue-checks-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="overdue-checks-title">
+              <span class="panel__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M9.5 14.5l2 2 3.5-4" />
+                </svg>
+              </span>
+              Overdue checks
+            </h2>
+            <span class="panel__count" data-count="overdue-checks">—</span>
+            <a
+              class="panel__link"
+              data-link="overdue-checks"
+              href="pregnancy.html"
+              aria-label="Open pregnancy diagnosis, most overdue first"
+            >
+              Open
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </a>
+          </div>
+          <div data-rows="overdue-checks"></div>
         </section>
       </main>
     </div>

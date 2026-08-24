@@ -27,6 +27,11 @@
      an event at step 5 has not gone wrong, it has not finished. */
   const TONE_ICON = { good: 'good', warn: 'clock', bad: 'bad', info: 'info' };
 
+  /* Pregnancy outcomes are not symmetrical and neither are their colours: pregnant is the
+     result the platform exists to produce, not-pregnant is the one that cost somebody
+     money, and unsure is neither — it is a visit that has to happen again. */
+  const OUTCOME_TONE = { pregnant: 'good', not_pregnant: 'bad', unsure: 'warn' };
+
   /** Put a tile's tone on, having cleared whichever one was there before. */
   function tone($tile, name) {
     $tile.removeClass('tile--good tile--warn tile--bad tile--info');
@@ -103,8 +108,82 @@
     $('#status-icon').html(MaitAI.shell.icon(TONE_ICON[statusTone] || 'info'));
 
     renderUsed(event);
+    renderChain(event);
     renderProof(event);
     renderMap(event);
+  }
+
+  /**
+   * The pregnancy checks this insemination booked.
+   *
+   * Ninety days after the straw somebody has to find out whether it took, and until that
+   * happens the record says what was sold rather than what it achieved. Rendered as a chain
+   * rather than a single verdict because an unsure result books another check three weeks
+   * out: an event whose second check came back pregnant did not fail, and a screen showing
+   * only the latest row would make it look like it had.
+   *
+   * Detail only — the list endpoint does not carry this, so an event page reached before the
+   * API was extended simply shows the open-check line rather than breaking.
+   */
+  function renderChain(event) {
+    const checks = event.pregnancy_checks || [];
+    const $list = $('#chain').empty();
+
+    if (!checks.length) {
+      $('<li>')
+        .addClass('chain__none')
+        // Said precisely: a completed event with no check is a booking that failed, whereas
+        // an unfinished one was never due a check at all, and the two want different people.
+        .text(
+          event.status === 'completed'
+            ? 'No check was booked for this insemination.'
+            : 'A check is booked ninety days after the event completes.'
+        )
+        .appendTo($list);
+      return;
+    }
+
+    checks.forEach(function (check) {
+      const recorded = !!check.outcome;
+      const tone = recorded ? OUTCOME_TONE[check.outcome] || 'info' : null;
+      const late = !recorded && check.days_until < 0;
+
+      const label = recorded
+        ? check.outcome_display
+        : late
+          ? Math.abs(check.days_until) + ' days overdue'
+          : 'Due in ' + check.days_until + ' days';
+
+      const meta = recorded
+        ? 'Checked ' + ui.dateTime(check.checked_at)
+        : 'Due ' + ui.date(check.due_on);
+
+      $('<li>')
+        .addClass('chain__step')
+        .toggleClass('chain__step--open', !recorded)
+        .toggleClass('chain__step--late', late)
+        .append(
+          $('<span>')
+            .addClass('chain__badge')
+            .html(ui.pill(label, tone || 'warn'))
+        )
+        .append(
+          $('<span>')
+            .addClass('chain__body')
+            .append($('<span>').addClass('chain__meta').text(meta))
+            .append(
+              check.calving_due_on
+                ? // Counted from the insemination and never recomputed — a Mait who checked
+                  // late must not move a farmer's calving month with them.
+                  $('<span>')
+                    .addClass('chain__calving')
+                    .text('Calving due ' + ui.date(check.calving_due_on))
+                : null
+            )
+            .append(check.note ? $('<span>').addClass('chain__note').text(check.note) : null)
+        )
+        .appendTo($list);
+    });
   }
 
   /**

@@ -118,3 +118,26 @@
 .exception__meta--error {
   color: var(--color-error);
 }
+
+/* A stat tile that is also a link.
+   Only one tile on this dashboard has a screen behind it — conception rate opens the
+   pregnancy round it was computed from. An anchor inherits none of `.tile`'s block layout or
+   the portal's link colour, so both are restated here; without the colour reset the figure
+   came out green on a grey card and read as a tone rather than as a number. The lift on hover
+   is what says it is clickable, since the tile carries no other affordance. */
+.tile--linked {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    border-color 120ms ease;
+}
+
+.tile--linked:hover,
+.tile--linked:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--ink-200);
+  box-shadow: var(--shadow-card);
+}

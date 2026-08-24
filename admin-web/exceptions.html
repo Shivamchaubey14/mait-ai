@@ -210,6 +210,49 @@
           <div data-rows="stale-indents"></div>
         </section>
 
+        <!-- Yellow, not red: a check nobody walked is waiting work, not blocked work. The Mait
+             can still record events; it is the animal's answer that is late. -->
+        <section class="panel panel--warning panel--linked" aria-labelledby="overdue-checks-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="overdue-checks-title">
+              <span class="panel__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M9.5 14.5l2 2 3.5-4" />
+                </svg>
+              </span>
+              Overdue checks
+            </h2>
+            <span class="panel__count" data-count="overdue-checks">—</span>
+            <a
+              class="panel__link"
+              data-link="overdue-checks"
+              href="pregnancy.html"
+              aria-label="Open pregnancy diagnosis, most overdue first"
+            >
+              Open
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </a>
+          </div>
+          <div data-rows="overdue-checks"></div>
+        </section>
+
         <!-- The same colour rule as the app, said out loud: a Mait and an admin describing
              the same problem should reach for the same word. -->
         <div class="notice">

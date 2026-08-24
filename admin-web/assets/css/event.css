@@ -44,9 +44,14 @@
   min-height: 0;
 }
 
-/* Two panels, one grid cell. What was used keeps its own height and the trail takes the rest,
-   because the first is four lines at most and the second is however long the event has been
-   going. */
+/* Three panels, one grid cell. What was used and the pregnancy chain each keep their own
+   height and the trail takes the rest, because the first two are a handful of lines at most
+   and the trail is however long the event has been going.
+
+   Naming the two that stay put, rather than `:not(.panel--used)` naming the one that grows.
+   Written that way it meant "everything except the first", and adding the chain silently made
+   it two growing panels sharing the slack — which left a short list of one check padded out
+   with a hundred and fifty pixels of nothing. */
 .event__side {
   display: flex;
   flex-direction: column;
@@ -54,11 +59,12 @@
   min-height: 0;
 }
 
-.event__side > .panel--used {
+.event__side > .panel--used,
+.event__side > .panel--chain {
   flex: 0 0 auto;
 }
 
-.event__side > .panel:not(.panel--used) {
+.event__side > .panel:not(.panel--used):not(.panel--chain) {
   flex: 1 1 auto;
 }
 
@@ -556,4 +562,79 @@
 .lightbox__close svg {
   width: 20px;
   height: 20px;
+}
+
+/* --- did it take -----------------------------------------------------------------------
+ * The pregnancy chain, in the side column under "What was used".
+ *
+ * A list rather than the audit trail's timeline: the trail is one event moving through its
+ * own states, where a connecting rule reads as progress. This is a *sequence of visits*, one
+ * of which may never happen, and drawing a spine down it would promise the last one is
+ * already booked when the whole question is whether anybody walks it.
+ */
+.chain__icon {
+  background: var(--color-surface);
+  color: var(--color-primary-dark);
+}
+
+.chain {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.chain__step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+/* An open check is the row that has not happened yet, so it is the one the eye should land
+   on — held apart with a rule rather than a tint, which at this size would read as a
+   selected row. */
+.chain__step--open {
+  border-top: 1px dashed var(--color-border);
+}
+
+.chain__step--late {
+  border-top-color: var(--yolk-300);
+}
+
+.chain__badge {
+  flex: none;
+}
+
+.chain__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chain__meta {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+/* The one line on this panel a farmer has already been told. Inked rather than muted: it is
+   a commitment, not a timestamp. */
+.chain__calving {
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.chain__note {
+  font-size: var(--text-caption);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* Not an empty state to apologise for: an insemination whose check is not due is the normal
+   case for the first ninety days of its life. */
+.chain__none {
+  padding: var(--space-2) 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
 }

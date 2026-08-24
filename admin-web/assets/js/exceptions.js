@@ -2,7 +2,7 @@
  * Exceptions (W16).
  *
  * Everything that needs a human, in one place, so the morning triage is one screen rather
- * than four. The dashboard shows the same four queues as a summary; this is where they are
+ * than five. The dashboard shows the same queues as a summary; this is where they are
  * worked.
  *
  * Each queue carries its full count next to a bounded sample: the count says how bad it is,
@@ -15,12 +15,19 @@
 
   const ui = MaitAI.ui;
 
-  const QUEUES = ['pending-payments', 'failed-otps', 'low-stock', 'stale-indents'];
+  const QUEUES = [
+    'pending-payments',
+    'failed-otps',
+    'low-stock',
+    'stale-indents',
+    'overdue-checks',
+  ];
   const KEY = {
     'pending-payments': 'pending_payments',
     'failed-otps': 'failed_otps',
     'low-stock': 'low_stock',
     'stale-indents': 'stale_indents',
+    'overdue-checks': 'overdue_checks',
   };
 
   const state = { queues: {} };
@@ -90,7 +97,18 @@
 
     // Only meaningful against the full queue. While searching, "N more" would be counting
     // rows that were never on this page to begin with.
-    const remaining = searching ? 0 : (queue.count || 0) - all.length;
+    //
+    // Every queue states `more` itself, and it wins. Subtracting the sample from the count
+    // assumes the two are the same unit, and only one queue's ever were: the rest count
+    // events and sample the people or the categories behind them, so a row that already
+    // accounted for everything still read as "N more" underneath. The subtraction is kept
+    // only as a fallback for a queue served by an older API than this file.
+    const stated = queue.more;
+    const remaining = searching
+      ? 0
+      : typeof stated === 'number'
+        ? stated
+        : (queue.count || 0) - all.length;
     $('[data-rows="' + name + '"]').html(
       html +
         (remaining > 0
