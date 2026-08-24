@@ -299,6 +299,16 @@ say which bundle it came out of. Validate then answers `reason: "breed_required"
 | GET | `/dashboard/mait-performance/` | Per-Mait AI count & collections for a period | Admin |
 | GET | `/dashboard/mpp-coverage/` | Members served vs. total per MPP for a window (`?days=`, default 30, max 365) | Admin |
 | GET | `/reports/export/` | CSV/Excel export of AI events / payments (query-filtered) | Admin |
+| GET | `/reports/pregnancy/` | CSV of every pregnancy check: who agreed, who refused, who has not been visited (§9.11) | Admin |
+
+The AI event export carries **`member_code` beside `farmer_name`**, not instead of it. A name
+is what a person recognises; a code is what the dairy's own systems key on, and a file that
+gets reconciled against a milk payment or looked up in SAP needs both — there are several
+AKANKSHAs. Empty on a non-member row, who has no membership number, and `farmer_type` on the
+same row says which kind of farmer it is.
+
+Both exports mask mobile numbers and carry no Aadhaar: the file leaves this system. Both are
+audit-logged as `pii_access` against the admin who ran them, with the filters used.
 
 `/dashboard/mpp-coverage/` answers with `summary` and `results`, and they are not the same
 population. `summary` is every active MPP that has members; `results` is the largest
@@ -308,6 +318,33 @@ not volume, which is what separates it from the leaderboard. Each row carries `m
 `mait_name` and `mait_activated` because zero coverage has three causes and three different
 people to call: nobody assigned, somebody assigned who cannot log in, or somebody who can and
 has not been.
+
+### Downloading a master back
+
+| Method | Endpoint | Description | Auth |
+| --- | --- | --- | --- |
+| GET | `/admin/uploads/snapshots/` | Which masters have a landed upload behind them, and what it was | Admin |
+| GET | `/admin/uploads/snapshots/{member\|mait\|mpp}/` | That upload, rebuilt as a protected workbook | Admin |
+
+Not a blank template — the templates are the SAP exports themselves, which this portal has
+always said. This is **what was last loaded**, so an admin about to re-upload a corrected
+master can open the one in force and check a column against it.
+
+"Landed" means `completed` or `completed_with_errors`. A queued or failed upload never became
+the master, and handing one back as "what we are running on" is the mistake the feature exists
+to prevent — which is why the listing endpoint exists at all rather than letting the screen
+work it out from the upload history.
+
+The workbook is rebuilt rather than streamed back, which is what lets the first rows carry a
+provenance banner: which upload, when it landed, how many rows were accepted, who sent it. A
+copy of a master with no date on it gets mistaken for the current one three weeks later.
+
+**Protected, not sealed.** The sheet carries Excel's own protection, which stops the accidental
+edit — a stray keystroke, a dragged column — on a file that may be forwarded to somebody. It is
+not encryption: it can be removed by anyone who means to, and one of these files is not
+evidence. `Content-Length` is sent, so the portal draws a real progress bar rather than a
+spinner. Downloads are audit-logged as `pii_access`: the masters carry names, mobile numbers
+and member codes.
 
 ## 9.10 Admin — users
 
@@ -354,6 +391,87 @@ appears including the ones holding no checks at all. A Mait whose inseminations 
 to have booked a check reads very differently from a Mait ignoring twenty, and a list built
 from check rows alone cannot tell them apart.
 
+### The owner is asked first
+
+A Mait arriving at a yard asks the owner whether to go ahead before a hand goes on the animal,
+and the app asks in the same order: permission, then the finding. `POST
+/pregnancy-checks/{id}/record/` therefore takes a fourth `outcome`, **`declined`**, and it is
+not a finding — nothing was examined, so nothing was learned.
+
+A refusal needs no photograph, is **never charged**, and **books nothing**. It closes the
+check and the visit is over: the owner has answered, and a check that reappears in the round
+every week is how a Mait gets told to stop coming. If the dairy wants to try again that is a
+decision somebody makes, not one the platform makes on their behalf.
+
+**That leaves a sharp edge, and `rates_by_mait` is where it is handled.** An insemination whose
+checks are all recorded with none pregnant is this platform's definition of a *failed* service,
+so a chain ending in a refusal would score the animal a failure for an examination her owner
+did not permit — wrong, silent, and against the one figure the platform is judged on. The rate
+therefore requires a chain to carry a real **finding** before it counts either way. A chain
+holding only refusals is in neither half, the same place as a visit nobody has made yet, which
+is exactly what it is.
+
+So a refused check is counted four ways, and they must not be confused:
+
+| Figure | Includes a refusal? | Why |
+| --- | --- | --- |
+| `recorded` | Yes | The Mait walked to the yard. That is the work, and it is on the record. |
+| `pregnant` / `not_pregnant` / `unsure` | No | These are findings. `declined` is reported beside them and never added to them. |
+| `conception_rate` | No | The chain carries no finding, so it is excluded outright — see above. |
+| `open` / `overdue` | No | The check is closed and nothing is booked behind it. |
+| `amount_charged` | No | Nothing was examined, so there is nothing to bill. |
+
+### The report
+
+`GET /reports/pregnancy/` is one row per check, and the column it exists for is
+**`owner_consent`**: *Accepted* where somebody examined the animal, *Declined* where the owner
+refused, *Not visited yet* where the check is still owed. It is a column rather than something
+to infer from `outcome`, because inferring it means knowing that a blank outcome is a visit
+nobody made and that `declined` is a refusal — two facts about this platform that a person
+opening a spreadsheet does not have. `outcome` sits beside it carrying the raw value, for
+filters and pivot tables that have to match exactly.
+
+Filters: `date_from` / `date_to` (on `due_on`), `mait`, `mpp`, `outcome`, `consent`
+(`accepted` / `declined` / `pending`), and `search` on a Mait's name or vendor code — the
+oversight screen passes its search box through, so a file taken from that screen holds what was
+on it.
+
+Mobile numbers are masked and Aadhaar is absent, as in every export from this system: the file
+leaves the platform. Every export is audit-logged as `pii_access` against the admin who ran it,
+with the filters used.
+
+### What a pregnancy diagnosis costs
+
+| Method | Endpoint | Description | Auth |
+| --- | --- | --- | --- |
+| GET / PATCH | `/admin/pregnancy/rate/` | The two prices, read and set from the Rates screen | Admin |
+| GET | `/reports/pregnancy/` | CSV of every check: who agreed, who refused, who has not been visited | Admin |
+
+**Flat, not per breed** — the one place this differs from the insemination rate. A straw's
+price follows the bull it came from and so belongs on `BreedConfig`; putting a hand on an
+animal is the same work whatever she is, and pricing it eighteen times would be seventeen extra
+chances to leave one at zero. One row, two figures, the same member / non-member split for the
+same reason: a member is charged against a milk payment the dairy already owes her and hands
+over nothing in the yard, a non-member pays the Mait in cash on the spot.
+
+**Zero means not priced, never free.** `pd_price_for` returns `None`, and the app tells the
+Mait the visit is chargeable without naming a figure — a farmer hears any number a Mait reads
+out as final, and "nothing" is the one that cannot be walked back.
+
+Every serialized check carries **`price`**, already resolved for that owner, so the handset
+never has to combine a rate with an owner type itself — it reads the round once and then works
+it with no signal, and a figure the app derives is a figure that can disagree with the one the
+dairy bills. On recording, the figure is **stamped onto the check as `amount_charged`** rather
+than re-derived on read: a price quoted in a yard is a fact about that day, and reading it back
+through next quarter's rate would silently restate every visit already made.
+
+`/dashboard/summary/` carries `pregnancy.declined_30d` and an `exceptions.declined_checks`
+queue grouped **by MPP**, not by Mait. One owner turning a Mait away on a wet morning is not
+anybody's problem; the same village doing it week after week is, and it is an awareness
+conversation with that collection point rather than anything the Mait can fix on their round.
+Thirty days rather than all time, because a lifetime total only ever rises and stops meaning
+anything within a quarter.
+
 **Conception rate is a percentage of settled inseminations, not of checks.** An insemination
 is settled once it can no longer change: something on its chain came back `pregnant`, or every
 check on it is recorded and none booked another. One still carrying an open check is in
@@ -362,6 +480,13 @@ rate by staying at home, and counting checks rather than chains would score an
 unsure-then-pregnant insemination as half a failure. Before anything settles the rate is
 `null`, not `0.0`: no rate is a platform whose first checks are not due yet, and a tile
 rendering those the same way raises a false alarm in its first ninety days.
+
+A serialized check carries **`owner_mobile`** — the member's or the non-member's, read off the
+same pair `owner_name` is read off, unmasked like every other phone number this platform serves
+(only Aadhaar is masked). It is there so a check can be rung before it is walked: the visit
+falls ninety days after the straw, and by then the animal may be at a relative's and the owner
+at market. `member_code` beside it is what the dairy's own office identifies her by, which is
+what gets read out when the call becomes "which AKANKSHA?".
 
 A serialized check carries the event's own pin — `gps_lat`, `gps_lng` and `gps_source`, read
 off the AI event, null on an event captured before GPS was mandatory. A check has no location
