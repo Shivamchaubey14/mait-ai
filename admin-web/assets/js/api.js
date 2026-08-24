@@ -192,6 +192,45 @@ window.MaitAI = window.MaitAI || {};
     };
   }
 
+  /**
+   * Read a response body through, reporting how far along it is.
+   *
+   * `response.blob()` resolves once, at the end, which is a spinner however it is drawn. The
+   * body is a stream, so it can be read chunk by chunk and measured against `Content-Length`.
+   *
+   * Falls back to `blob()` untouched wherever the browser has no readable stream or the
+   * server sent no length. In that case the caller is told `null` rather than a made-up
+   * fraction: "unknown" is a state a bar can render honestly and a wrong number is not.
+   */
+  function measured(response, onProgress) {
+    const total = Number(response.headers.get('Content-Length'));
+    if (!response.body || !response.body.getReader || !total) {
+      onProgress(null);
+      return response.blob();
+    }
+
+    const reader = response.body.getReader();
+    const chunks = [];
+    let received = 0;
+
+    const pump = function () {
+      return reader.read().then(function (result) {
+        if (result.done) {
+          return new Blob(chunks, { type: response.headers.get('Content-Type') || '' });
+        }
+        chunks.push(result.value);
+        received += result.value.length;
+        // Clamped: a gzipped response reports the compressed length in the header and the
+        // decompressed length through the reader, which otherwise walks the bar past 100%.
+        onProgress(Math.min(1, received / total));
+        return pump();
+      });
+    };
+
+    onProgress(0);
+    return pump();
+  }
+
   /* --- public surface ------------------------------------------------------------------
    * Mirrors docs/API_CONTRACT.md. Keep it in step — the contract is frozen, and a client
    * that drifts from it fails in production rather than in review.
@@ -200,9 +239,51 @@ window.MaitAI = window.MaitAI || {};
     tokens: tokens,
     problemToLines: problemToLines,
 
-    /** Exposed for the one caller that streams a file and cannot go through request(). */
+    /** Exposed for the callers that stream a file and cannot go through request(). */
     baseUrl: function () {
       return BASE_URL;
+    },
+
+    /**
+     * Fetch an export and hand it to the browser as a file.
+     *
+     * Not a plain link. These endpoints stream and they need the bearer token, and an
+     * `<a href>` arrives unauthenticated — which bounces the operator to the login screen
+     * with no explanation and no file. So the blob is fetched, wrapped in an object URL and
+     * clicked programmatically.
+     *
+     * Lives here rather than on a screen because two screens export now, and a download that
+     * forgets its `Authorization` header on one of them is a bug nobody sees until an admin
+     * needs the file.
+     *
+     * Returns a promise that rejects on a non-2xx, so the caller owns the wording of the
+     * failure — "try a narrower date range" is true of one export and not of the other.
+     *
+     * `onProgress` is optional and receives a fraction, or `null` where the length is not
+     * known. A streamed export sends no `Content-Length` — it cannot, it has not finished
+     * counting — so a caller that wants a bar has to be told when to show a determinate one
+     * and when to show a stripe that only says "working". Guessing at a total and then
+     * revising it is what makes a progress bar run to the end and jump back.
+     */
+    download: function (path, filename, onProgress) {
+      return fetch(BASE_URL + path, {
+        headers: { Authorization: 'Bearer ' + tokens.get().access },
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error('export failed: ' + response.status);
+          }
+          return onProgress ? measured(response, onProgress) : response.blob();
+        })
+        .then(function (blob) {
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+        });
     },
 
     /**
@@ -446,6 +527,27 @@ window.MaitAI = window.MaitAI || {};
 
     deleteBreed: function (id) {
       return request({ path: '/admin/breeds/' + id + '/', method: 'DELETE' });
+    },
+
+    /**
+     * Which masters have a landed upload behind them, and what it was.
+     *
+     * Asked rather than worked out from the upload history, because "landed" means a
+     * particular set of statuses and a portal that guessed wrong would offer a download of a
+     * file that never became the master.
+     */
+    uploadSnapshots: function () {
+      return request({ path: '/admin/uploads/snapshots/' });
+    },
+
+    // One row, not a collection — a pregnancy diagnosis is the same work whatever the animal,
+    // so it is priced once rather than eighteen times like the breeds above.
+    pregnancyRate: function () {
+      return request({ path: '/admin/pregnancy/rate/' });
+    },
+
+    updatePregnancyRate: function (body) {
+      return request({ path: '/admin/pregnancy/rate/', method: 'PATCH', body: body });
     },
 
     approveIndent: function (id) {

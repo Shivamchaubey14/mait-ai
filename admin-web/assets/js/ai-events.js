@@ -247,6 +247,44 @@
     return params;
   }
 
+  /**
+   * Export what is on the screen.
+   *
+   * It was a stub saying the export "arrives with the reports screen" — which it did, on a
+   * different screen, and left an operator who had already built the query here to rebuild it
+   * there. The endpoint takes the same filters this list does, so the file can simply be the
+   * list.
+   *
+   * **`limit` and `offset` are dropped on the way out.** They are how this table pages, not
+   * part of the query, and passing them through would hand back the twenty-five rows that
+   * happened to be on screen — a file that looks complete, is not, and says nothing about it.
+   * The endpoint has its own ceiling for the genuinely enormous case.
+   *
+   * The fetch-as-blob dance lives in `api.download`: these endpoints stream and need the
+   * bearer token, and a plain link arrives unauthenticated.
+   */
+  function exportCsv() {
+    MaitAI.shell.clearAlert();
+
+    const params = query();
+    delete params.limit;
+    delete params.offset;
+    const search = $.param(params);
+
+    $('#export').prop('disabled', true);
+    $('#export-label').text('Preparing…');
+
+    MaitAI.api
+      .download('/reports/export/' + (search ? '?' + search : ''), 'ai-events.csv')
+      .catch(function () {
+        MaitAI.shell.alert('The export could not be produced. Try a narrower date range.');
+      })
+      .finally(function () {
+        $('#export').prop('disabled', false);
+        $('#export-label').text('Export CSV');
+      });
+  }
+
   function load() {
     MaitAI.shell.clearAlert();
     MaitAI.api
@@ -332,8 +370,6 @@
       }, 350);
     });
 
-    $('#export').on('click', function () {
-      MaitAI.shell.alert('CSV export arrives with the reports screen.', 'warn');
-    });
+    $('#export').on('click', exportCsv);
   });
 })(window.MaitAI, jQuery);
