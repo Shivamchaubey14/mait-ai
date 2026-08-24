@@ -5,34 +5,121 @@
  *
  * The **rate cell**, because a bare "47.2%" in a table column is a number nobody can weigh:
  * 50% of two inseminations and 50% of two hundred read identically, and the first one means
- * nothing at all. So the cell is a bar, the percentage, and the fraction it came from, stacked
- * — the bar for scanning down the column, the fraction for believing any one row of it.
+ * nothing at all. So the cell is the percentage, the fraction it came from, and a bar under
+ * both — the bar for scanning down the column, the fraction for believing any one row of it.
  *
  * The **round panel**, which is cards rather than another table. The table above already
- * answers "how many"; this answers "which animals", and it is read down a phone to the Mait it
- * belongs to — a name, a village and a due date, not fourteen columns.
+ * answers "how many"; this answers "which animals, and where", and it is read down a phone to
+ * the Mait it belongs to — a name, a village, a pin and a due date, not fourteen columns.
+ *
+ * Only pregnancy.html loads this file, so the selectors here are free to be short. Anything
+ * that would be useful on a second screen belongs in portal.css instead.
  */
 
 @import url('forms.css');
 
-/* --- the rate column ------------------------------------------------------------------- */
-
-.rate {
-  display: grid;
-  grid-template-columns: 64px auto;
-  grid-template-areas:
-    'bar value'
-    'bar of';
-  align-items: center;
-  gap: 0 var(--space-2);
+/* --- the table -----------------------------------------------------------------------------
+ * Fixed layout, and every column but one measured.
+ *
+ * Left to `auto` the browser sizes columns to their *content* and then hands the leftover
+ * width to whichever column has the longest text, which on this table is the roster of MPP
+ * codes: at 1400px the Mait column ran to 294px and MPPs to 193px to hold "001302, 001404",
+ * while the rate cell — the column the screen exists for — was squeezed into what was left.
+ * A summary table of seven short columns should not reflow every time a Mait with four MPPs
+ * scrolls into view.
+ *
+ * So the counts get exactly the width their headers need, the rate gets room for a bar and a
+ * fraction, and the slack lands in Mait and MPPs, which are the two that can use it.
+ */
+.table--checks {
+  table-layout: fixed;
+  /* Below this the columns would be narrower than their own headings; `.table-wrap` scrolls
+     it instead, which is the shared behaviour every wide table on this portal already has. */
+  min-width: 900px;
 }
 
-.rate .bar {
-  grid-area: bar;
+.table--checks .col-mait {
+  /* 22%, not 26. The Mait column holds a name and a vendor code and nothing else; every pixel
+     over that is one the MPP chips beside it need, and at 1280px the difference is a roster of
+     four codes on one line instead of two. */
+  width: 22%;
+}
+
+.table--checks .col-mpps {
+  /* The only unmeasured column. Slack has to land somewhere, and a list of codes is the one
+     thing on the row that gets longer with real data. */
+  width: auto;
+}
+
+.table--checks .col-open {
+  width: 76px;
+}
+
+.table--checks .col-overdue {
+  width: 92px;
+}
+
+.table--checks .col-recorded {
+  width: 96px;
+}
+
+.table--checks .col-rate {
+  /* A percentage, the fraction beside it and a bar under both. Wider than it needs to be
+     at rest, and every pixel of it used on the rows that have a rate at all. */
+  width: 200px;
+}
+
+.table--checks .col-round {
+  width: 100px;
+}
+
+/* Fixed layout will not widen a column to fit a long word, so a name with no spaces in it
+   would paint over the column beside it. */
+.table--checks .table__name,
+.table--checks .table__sub {
+  overflow-wrap: break-word;
+}
+
+/* Every MPP the Mait covers, not the first two of them: the column has the room now, and a
+   silently truncated list is a coverage question an admin cannot answer from this screen. */
+.mpp-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.mpp-codes__code {
+  padding: 1px var(--space-2);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--ink-50);
+  border-radius: var(--radius-sm);
+}
+
+/* --- the rate column -------------------------------------------------------------------
+ * Percentage and fraction on one line, bar beneath them across the full width of the cell.
+ *
+ * The bar used to sit in a 64px grid track beside the figures, which `.bar { min-width: 90px }`
+ * then overflowed by 26px — every rate cell in the column was 26px wider than it claimed, and
+ * that is what pushed this table past the panel. Under the figures it needs no track of its
+ * own, it is twice as long to read a length off, and the numbers start at the same x in every
+ * row.
+ */
+.rate {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 184px;
+}
+
+.rate__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 .rate__value {
-  grid-area: value;
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: var(--text-body);
@@ -43,20 +130,31 @@
 /* What the percentage is of. Muted and small: it qualifies the figure beside it rather than
    competing with it, but it is the half that makes a one-row claim believable. */
 .rate__of {
-  grid-area: of;
   font-size: var(--text-caption);
   line-height: var(--leading-tight);
+  white-space: nowrap;
   color: var(--color-text-muted);
+}
+
+/* The shared bar carries a 90px floor so it is never a stub in a flex row. Here it spans the
+   cell and the floor is what would break it. */
+.rate .bar {
+  width: 100%;
+  min-width: 0;
 }
 
 /* --- the round panel -------------------------------------------------------------------
  * A surface for the cards, not a card itself — the same treatment the Inventory holding panel
  * gets, so the two drill-downs in this portal open the same way.
+ *
+ * `--color-background`, not `--ink-50`. The cards below are tinted by outcome and one of those
+ * tints is a cool grey; on an `--ink-50` panel that card disappeared into the panel it sat on.
+ * The warm off-white reads as a surface behind all five.
  */
 #round {
   padding: 0;
   overflow: hidden;
-  background: var(--ink-50);
+  background: var(--color-background);
   border-color: var(--ink-100);
 }
 
@@ -123,13 +221,16 @@
   padding: var(--space-3) var(--space-4) 0;
 }
 
-/* 300px, not 260. At 260 four cards fitted across the panel and every one of them was too
-   narrow for its own contents: "13 Aug 2026" broke across two lines under a one-word label,
-   which is a date that has to be read twice. Three wider cards say the same thing in half the
-   height. */
+/* Smaller cards than the panel first shipped with. At 300px three of them filled a desktop
+   panel and each one stood eleven lines tall, so a round of a dozen animals was a page and a
+   half of scrolling to read a list an admin holds in their head. 250px puts four or five
+   across, and the card below fits in half the height it used to. */
 .round {
+  /* Cards stretch to the tallest in their row rather than each standing to its own content:
+     a recorded check carries two more facts than an open one, and left to themselves the
+     action buttons landed at four different heights across one row. */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: var(--space-3);
   padding: var(--space-4);
 }
@@ -139,7 +240,7 @@
 .check {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
   padding: var(--space-3);
   background: var(--color-surface);
@@ -147,19 +248,62 @@
   border-radius: var(--radius-md);
 }
 
-/* An overdue card is edged rather than filled: the panel holds a dozen of these and a dozen
-   filled yellow cards is a wall of yellow that says nothing about which is worst. The badge
-   on the card carries the number of days. */
+/* The card's own tint says what state the check is in, so the state is legible from across a
+   desk and the eye can group a round without reading a single badge. It replaces the 3px
+   yellow edge the card used to carry: an inset stripe in one corner is a decoration at that
+   size, and on a card whose outcome was already stated by a pill it said nothing twice.
+   The pills stay — the tint groups, the pill names. */
 .check--late {
-  border-color: var(--yolk-300);
-  box-shadow: inset 3px 0 0 var(--color-secondary);
+  background: var(--color-secondary-wash);
+  border-color: var(--yolk-200);
 }
 
+.check--pregnant {
+  background: var(--green-50);
+  border-color: var(--green-200);
+}
+
+.check--empty {
+  background: var(--color-error-wash);
+  border-color: var(--color-error);
+}
+
+/* Grey rather than a fifth colour. "Not sure" is the outcome that settled nothing, and it
+   should not read as urgently as the two that did. */
+.check--unsure {
+  background: var(--ink-50);
+  border-color: var(--ink-200);
+}
+
+/* The head keeps the rule that used to sit on top of the fact list, so the table below opens
+   against a line instead of drawing its own. */
 .check__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.check--late .check__head {
+  border-color: var(--yolk-200);
+}
+
+.check--pregnant .check__head {
+  border-color: var(--green-200);
+}
+
+.check--empty .check__head {
+  border-color: var(--color-error);
+}
+
+.check--unsure .check__head {
+  border-color: var(--ink-200);
+}
+
+.check__who {
+  min-width: 0;
 }
 
 /* The farmer's name leads. It is what an admin says first on the phone, and the Mait finds
@@ -173,57 +317,237 @@
   overflow-wrap: anywhere;
 }
 
-.check__tag {
+/* Member or non-member. The ear tag has moved into the table below, beside the animal's other
+   facts; what is worth carrying under the farmer's name is which of the two kinds of farmer
+   they are, because that is what decides how the insemination was paid for. */
+.check__owner-kind {
   font-size: var(--text-caption);
+  line-height: var(--leading-tight);
   color: var(--color-text-muted);
   overflow-wrap: anywhere;
 }
 
-/* Two columns where they fit and one where they do not, rather than two always: a fixed pair
-   on a narrow card is what squeezed the dates in the first place. */
-.check__facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--space-2) var(--space-3);
+.check__head .pill {
+  flex: none;
 }
 
+/* --- the fact table ----------------------------------------------------------------------
+ * Label left, value right, a hairline between every row: the portal's own table, shrunk to fit
+ * a card. Two columns of left-aligned text are two ragged edges with no relationship between
+ * them — the eye travels a different distance on every line to find the value, and on a card
+ * of six facts that is six separate readings. Anchored right, the values form a column of
+ * their own, dates line up digit under digit, and one glance down the card answers "when is
+ * this due" without reading a single label.
+ *
+ * It stays a `<dl>`. These are label/value pairs, not a grid of data, and a real `<table>`
+ * would announce a row-and-column structure to a screen reader that the content has not got.
+ * The grid is on the list itself, so the markup is bare `dt`/`dd` with no wrapper: a `div`
+ * around each pair would put both halves of it in one cell.
+ *
+ * The pairs *were* `div`s in an auto-fit grid, and every value sat 40px right of its own label
+ * because `dd` carries `margin-inline-start: 40px` from the user agent and nothing reset it.
+ * That is what the misalignment on these cards was.
+ */
+.check__facts {
+  display: grid;
+  grid-template-columns: minmax(52px, auto) minmax(0, 1fr);
+  /* Stretch, not `baseline`. Baseline alignment shifts each cell's *box* until the text inside
+     lines up, and a 12px label beside a 13px value ends up two pixels higher — which put the
+     two halves of every row rule at two different heights and drew each one as a broken step.
+     Stretched, both cells span the row and the rule is one line. The text is brought back into
+     line by the matched line-heights below rather than by moving the boxes. */
+  align-items: stretch;
+}
+
+.check__facts dt,
+.check__facts dd {
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+/* The list opens against the card's head, which carries its own rule. A second hairline on the
+   first row would draw two lines a pixel apart. */
+.check__facts dt:first-child,
+.check__facts dt:first-child + dd {
+  border-top: 0;
+}
+
+/* 1.35 against the value's 1.25: 12px and 13px text sit on the same baseline only if their
+   line boxes are the same height, and 12 × 1.35 and 13 × 1.25 are both 16.2px. */
 .check__facts dt {
+  padding-right: var(--space-2);
   font-size: var(--text-caption);
   font-weight: 600;
   letter-spacing: 0.06em;
+  line-height: 1.35;
   text-transform: uppercase;
   color: var(--color-text-muted);
 }
 
 /* `break-word`, not `anywhere`. `anywhere` breaks at the tightest opportunity even when the
    line would have fitted, and it turned JAFRABADI into "JAFRABA / DI" — a breed nobody can
-   read. These values are short; only the ear tag beside them is unbounded. */
+   read. These values are short; only the ear tag beside them is unbounded.
+ *
+ * `tabular-nums` is what makes a column of dates a column: proportional digits give the 1 in
+ * "13 Aug" and the 2 in "20 Aug" different widths, and four dates under each other come out a
+ * pixel ragged. */
 .check__facts dd {
-  font-size: var(--text-body);
+  margin: 0;
+  font-size: var(--text-label);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  text-align: right;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
+}
+
+/* The ear tag is the one value in the table that is a printed identifier rather than a fact
+   about the animal, and the one an admin reads out digit by digit down the phone. Given the
+   treatment codes get everywhere else on this portal. */
+.check__facts .fact--tag {
+  font-family: var(--font-heading);
+  color: var(--color-primary-dark);
+}
+
+/* Said in words rather than left blank. A blank cell reads as data that failed to arrive; this
+   animal simply has no tag, which is ordinary and is itself the answer. */
+.check__facts .fact--none {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* A tinted card needs its own hairlines: `--color-border` is a grey drawn for white, and on the
+   yellow and red cards it reads as a smudge. */
+.check--late .check__facts dt,
+.check--late .check__facts dd,
+.check--late .check__where {
+  border-color: var(--yolk-200);
+}
+
+.check--pregnant .check__facts dt,
+.check--pregnant .check__facts dd,
+.check--pregnant .check__where {
+  border-color: var(--green-200);
+}
+
+.check--empty .check__facts dt,
+.check--empty .check__facts dd,
+.check--empty .check__where {
+  border-color: var(--color-error);
+}
+
+.check--unsure .check__facts dt,
+.check--unsure .check__facts dd,
+.check--unsure .check__where {
+  border-color: var(--ink-200);
+}
+
+/* ...and off the first row again, which the tone rules above have just put back. */
+.check--late .check__facts dt:first-child,
+.check--late .check__facts dt:first-child + dd,
+.check--pregnant .check__facts dt:first-child,
+.check--pregnant .check__facts dt:first-child + dd,
+.check--empty .check__facts dt:first-child,
+.check--empty .check__facts dt:first-child + dd,
+.check--unsure .check__facts dt:first-child,
+.check--unsure .check__facts dt:first-child + dd {
+  border-top: 0;
+}
+
+/* --- where ------------------------------------------------------------------------------
+ * The village names the collection point; the pin names the yard. An admin ringing a Mait
+ * about a check they have not walked is asked "which house?", and until now this screen could
+ * only answer with the name of the village.
+ */
+.check__where {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.check__pin {
+  flex: none;
+  margin-top: 1px;
+  color: var(--color-text-muted);
+}
+
+.check__pin svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.check__place {
+  min-width: 0;
+}
+
+.check__village {
+  font-size: var(--text-label);
+  font-weight: 600;
+  line-height: var(--leading-tight);
   color: var(--color-text);
   overflow-wrap: break-word;
+}
+
+/* Figures, not prose: a pin shows roughly where, and a dispute is settled on exactly where.
+   The same six decimals the AI event screen prints, so one location is one string on both. */
+.check__coords {
+  font-size: var(--text-caption);
+  line-height: var(--leading-tight);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* What the Mait typed in the yard, kept in their words and visibly quoted rather than folded
    in among the facts above it. */
 .check__note {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-body);
+  padding: var(--space-2);
+  font-size: var(--text-label);
+  line-height: var(--leading-tight);
   color: var(--color-text);
   background: var(--ink-50);
   border-left: 2px solid var(--ink-200);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  overflow-wrap: break-word;
 }
 
-.check__link {
+/* On a tinted card the quote inverts: white on the wash, rather than a grey block that reads
+   as a hole cut in the card. */
+.check--late .check__note,
+.check--pregnant .check__note,
+.check--empty .check__note,
+.check--unsure .check__note {
+  background: var(--color-surface);
+}
+
+/* --- what an admin can do from the card --------------------------------------------------
+ * Buttons, not a sentence in link blue. Both are the reason the card is on the screen — the
+ * pin is useless if it cannot be opened on a map, and half the calls this panel is read
+ * during end on the insemination record. `margin-top: auto` pins the row to the bottom of the
+ * card so a short card and a tall one in the same row end on the same line.
+ */
+.check__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin-top: auto;
-  font-size: var(--text-label);
-  font-weight: 600;
-  color: var(--color-primary-dark);
+  padding-top: var(--space-1);
 }
 
-.check__link:hover {
-  text-decoration: underline;
+.check__btn {
+  flex: 1 1 auto;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-caption);
+}
+
+.check__btn .btn__icon {
+  width: 14px;
+  height: 14px;
 }
 
 /* --- panel states ----------------------------------------------------------------------- */
@@ -242,10 +566,11 @@
 }
 
 /* Placeholders, so the panel keeps its shape while the request is in flight rather than
-   snapping open around content that arrives a moment later. */
+   snapping open around content that arrives a moment later. Sized to the card it stands in
+   for, which is shorter than it used to be. */
 .round__skeleton {
-  height: 168px;
-  background: var(--color-background);
+  height: 210px;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }

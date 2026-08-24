@@ -35,6 +35,23 @@ class PregnancyCheckSerializer(serializers.ModelSerializer):
     animal_type = serializers.CharField(source="ai_event.animal.animal_type", read_only=True)
     ear_tag_no = serializers.CharField(source="ai_event.animal.ear_tag_no", read_only=True)
     breed = serializers.SerializerMethodField()
+    # Where the insemination was actually captured, off the event. A check has no pin of its
+    # own — the Mait records the result in the same yard, from the handset, and it is the
+    # event's pin that says which yard that is. An admin reading the round down the phone is
+    # asked "which house?" more often than any other question, and `mpp_name` is the village,
+    # not the household. Null on an event captured before GPS was mandatory, and never
+    # silently swapped for the village's own centre: an approximate pin drawn as an exact one
+    # is worse than no pin.
+    gps_lat = serializers.DecimalField(
+        source="ai_event.gps_lat", max_digits=10, decimal_places=7, read_only=True
+    )
+    gps_lng = serializers.DecimalField(
+        source="ai_event.gps_lng", max_digits=10, decimal_places=7, read_only=True
+    )
+    # Whether the pin is the handset's own reading or one lifted out of a chosen photograph's
+    # EXIF, which can be anywhere and any time (see `AIEvent.gps_source`). The two are never
+    # presented as the same thing.
+    gps_source = serializers.CharField(source="ai_event.gps_source", read_only=True)
     served_on = serializers.SerializerMethodField()
     days_until = serializers.SerializerMethodField()
     days_since_ai = serializers.SerializerMethodField()
@@ -56,6 +73,9 @@ class PregnancyCheckSerializer(serializers.ModelSerializer):
             "animal_type",
             "ear_tag_no",
             "breed",
+            "gps_lat",
+            "gps_lng",
+            "gps_source",
             "served_on",
             "due_on",
             "days_until",

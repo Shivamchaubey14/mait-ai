@@ -191,16 +191,19 @@
 
         <section class="panel panel--flush" aria-label="Checks by Mait">
           <div class="table-wrap">
-            <table class="table">
+            <!-- The column classes carry the widths. Left to size themselves the two text
+                 columns took every spare pixel on the row and the rate cell — the one the
+                 screen exists for — got what was left; see pregnancy.css. -->
+            <table class="table table--checks">
               <thead>
                 <tr>
-                  <th scope="col">Mait</th>
-                  <th scope="col">MPPs</th>
-                  <th class="table__num" scope="col">Open</th>
-                  <th class="table__num" scope="col">Overdue</th>
-                  <th class="table__num" scope="col">Recorded</th>
-                  <th scope="col">Conception rate</th>
-                  <th scope="col">Round</th>
+                  <th class="col-mait" scope="col">Mait</th>
+                  <th class="col-mpps" scope="col">MPPs</th>
+                  <th class="table__num col-open" scope="col">Open</th>
+                  <th class="table__num col-overdue" scope="col">Overdue</th>
+                  <th class="table__num col-recorded" scope="col">Recorded</th>
+                  <th class="col-rate" scope="col">Conception rate</th>
+                  <th class="col-round" scope="col">Round</th>
                 </tr>
               </thead>
               <tbody id="rows">

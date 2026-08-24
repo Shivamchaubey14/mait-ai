@@ -52,7 +52,7 @@
     }
     return (
       '<span class="rate">' +
-      ui.bar(row.conception_rate, rateTone(row.conception_rate)) +
+      '<span class="rate__line">' +
       '<span class="rate__value">' +
       row.conception_rate.toFixed(1) +
       '%</span>' +
@@ -63,6 +63,11 @@
       ' of ' +
       ui.number(row.decided) +
       '</span>' +
+      '</span>' +
+      // Under the figures rather than beside them: a bar the width of the cell is a length
+      // worth comparing down the column, and the 64px track it used to sit in was narrower
+      // than the bar's own minimum, which is what pushed this table past its panel.
+      ui.bar(row.conception_rate, rateTone(row.conception_rate)) +
       '</span>'
     );
   }
@@ -83,8 +88,18 @@
       ui.identity(holder.name, holder.sahayak_vendor_code) +
       '</td>' +
       '<td>' +
+      // Every code, not the first two: a Mait covering four MPPs and a Mait covering two read
+      // identically once the list is silently cut, and which villages a round spans is half of
+      // why an admin opens this screen. Chips rather than a comma list, so the count is
+      // countable at a glance.
       (holder.mpp_codes.length
-        ? ui.escapeHtml(holder.mpp_codes.slice(0, 2).join(', '))
+        ? '<span class="mpp-codes">' +
+          holder.mpp_codes
+            .map(function (code) {
+              return '<span class="mpp-codes__code">' + ui.escapeHtml(code) + '</span>';
+            })
+            .join('') +
+          '</span>'
         : '<span class="table__sub">None</span>') +
       '</td>' +
       '<td class="table__num">' +
@@ -151,77 +166,235 @@
     unsure: 'warn',
   };
 
+  /** "1 day", "11 days". A badge reading "1 days overdue" is a badge nobody wrote on purpose. */
+  function days(count) {
+    return count + (count === 1 ? ' day' : ' days');
+  }
+
   function dueBadge(check) {
     if (check.outcome) {
       return ui.pill(check.outcome_display, OUTCOME_TONE[check.outcome] || 'info');
     }
-    const days = check.days_until;
-    if (days < 0) {
-      return ui.pill(Math.abs(days) + ' days overdue', 'warn');
+    const until = check.days_until;
+    if (until < 0) {
+      return ui.pill(days(Math.abs(until)) + ' overdue', 'warn');
     }
-    if (days === 0) {
+    if (until === 0) {
       return ui.pill('Due today', 'info');
     }
-    return ui.pill('In ' + days + ' days', 'info');
+    return ui.pill('In ' + days(until), 'info');
+  }
+
+  /**
+   * Which tint the card wears.
+   *
+   * The tint groups and the pill names — an admin scanning a round of a dozen animals should
+   * be able to see the shape of it (four yellow, two green, one red) before reading a word.
+   * An open check that is not yet overdue stays white on purpose: nothing is wrong with it.
+   */
+  function cardTone(check) {
+    if (check.outcome) {
+      return (
+        {
+          pregnant: ' check--pregnant',
+          not_pregnant: ' check--empty',
+          unsure: ' check--unsure',
+        }[check.outcome] || ''
+      );
+    }
+    return check.days_until < 0 ? ' check--late' : '';
+  }
+
+  /**
+   * The pin, in the form a dispute is settled on.
+   *
+   * Hemispheres are computed rather than assumed. Every MPP on this platform is north and
+   * east today, and a card that prints "° N" beside a negative number is a card that will be
+   * believed anyway.
+   */
+  /** Null on an event captured before the handset sent a position. Zero is a real place. */
+  function hasPin(check) {
+    return (
+      check.gps_lat !== null &&
+      check.gps_lat !== undefined &&
+      check.gps_lng !== null &&
+      check.gps_lng !== undefined
+    );
+  }
+
+  function coords(lat, lng) {
+    return (
+      Math.abs(lat).toFixed(4) +
+      '° ' +
+      (lat >= 0 ? 'N' : 'S') +
+      ', ' +
+      Math.abs(lng).toFixed(4) +
+      '° ' +
+      (lng >= 0 ? 'E' : 'W')
+    );
+  }
+
+  const PIN_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11M12 12a2.5 2.5 0 1 0 0-5 ' +
+    '2.5 2.5 0 0 0 0 5"/></svg>';
+
+  const DOC_SVG =
+    '<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M6 3h9l5 5v13H6zM14 3v6h6M9 14h7M9 18h5"/></svg>';
+
+  /**
+   * Where the check is, said twice.
+   *
+   * `mpp_name` is the collection point — the village. It is what the round is planned by and
+   * it is not enough to find a yard with, which is the question an admin on the phone is
+   * actually being asked. The coordinates under it are the event's own pin, recorded by the
+   * handset at capture, and they are the answer.
+   *
+   * A pin lifted out of a chosen photograph's EXIF can be anywhere and any time, so it is
+   * labelled rather than passed off as the handset's own reading.
+   */
+  function whereBlock(check) {
+    const place =
+      ui.escapeHtml(check.mpp_name || 'Unknown village') +
+      (check.mpp_code ? ' · ' + ui.escapeHtml(check.mpp_code) : '');
+
+    return (
+      '<div class="check__where">' +
+      '<span class="check__pin" aria-hidden="true">' +
+      PIN_SVG +
+      '</span>' +
+      '<div class="check__place">' +
+      '<p class="check__village">' +
+      place +
+      '</p>' +
+      '<p class="check__coords">' +
+      (hasPin(check)
+        ? coords(Number(check.gps_lat), Number(check.gps_lng)) +
+          (check.gps_source === 'exif' ? ' · from the photo' : '')
+        : 'No pin was recorded') +
+      '</p>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  /**
+   * The two things an admin does from a card, as buttons rather than as a sentence in link
+   * blue. Opening the pin on a map is the whole point of carrying the coordinates, and half
+   * the calls this panel is read during end on the insemination record.
+   *
+   * The map link is the same keyless Google URL the AI event screen uses, so one location
+   * opens the same way from both screens. No map is framed here: a dozen cross-origin frames
+   * in one panel is a dozen network requests for a picture nobody asked for yet.
+   */
+  function actions(check) {
+    const point = hasPin(check) ? Number(check.gps_lat) + ',' + Number(check.gps_lng) : '';
+
+    return (
+      '<div class="check__actions">' +
+      (point
+        ? '<a class="btn check__btn" target="_blank" rel="noopener noreferrer" href="' +
+          'https://www.google.com/maps/search/?api=1&query=' +
+          encodeURIComponent(point) +
+          '" aria-label="Open ' +
+          ui.escapeHtml(point) +
+          ' in Google Maps in a new tab">' +
+          '<span class="btn__icon">' +
+          PIN_SVG +
+          '</span>Map</a>'
+        : '') +
+      '<a class="btn check__btn" href="ai-event.html?id=' +
+      encodeURIComponent(check.ai_event_id) +
+      '">' +
+      DOC_SVG +
+      'Insemination</a>' +
+      '</div>'
+    );
+  }
+
+  /**
+   * "Buffalo · MURRAH". The species is spelled out the way `ai-events.js` and `products.js`
+   * already spell it — `BUFF` is a database code and no admin should have to learn it — and
+   * the breed is left exactly as the semen batch carries it, because that is the string
+   * printed on the straw.
+   */
+  function animal(check) {
+    const species = check.animal_type ? (check.animal_type === 'BUFF' ? 'Buffalo' : 'Cow') : '—';
+    return species + (check.breed ? ' · ' + check.breed : '');
+  }
+
+  /**
+   * A row of the card's table.
+   *
+   * `tone` is a class on the value, not on the pair: the label is furniture and always reads
+   * the same, and it is the value that is a code, or missing, or ordinary.
+   */
+  function fact(label, value, tone) {
+    return (
+      '<dt>' +
+      ui.escapeHtml(label) +
+      '</dt><dd' +
+      (tone ? ' class="' + tone + '"' : '') +
+      '>' +
+      ui.escapeHtml(value) +
+      '</dd>'
+    );
   }
 
   function checkCard(check) {
     const owner = check.owner_name || 'Unnamed';
-    const tag = check.ear_tag_no ? check.ear_tag_no : 'No ear tag';
+    // A member's insemination is settled against their milk payment and a non-member's is
+    // paid in cash, so this is the first thing an admin needs to know about the name above it.
+    const kind = check.owner_type === 'member' ? 'Member' : 'Non-member';
 
-    const facts = [
-      ['Due', ui.date(check.due_on)],
-      ['Served', ui.date(check.served_on)],
-      ['Village', check.mpp_name || '—'],
-      ['Animal', (check.animal_type || '—') + (check.breed ? ' · ' + check.breed : '')],
-    ];
+    // The tag leads the table. It is the only line on the card that identifies the *animal*
+    // rather than the visit, it is what the Mait is asked for when a farmer keeps four
+    // buffalo, and it is read out digit by digit — so it is stated as a row of its own rather
+    // than tucked under the owner's name where it used to sit.
+    let rows =
+      (check.ear_tag_no
+        ? fact('Tag', check.ear_tag_no, 'fact--tag')
+        : fact('Tag', 'Not tagged', 'fact--none')) +
+      fact('Due', ui.date(check.due_on)) +
+      fact('Served', ui.date(check.served_on)) +
+      fact('Animal', animal(check));
 
     if (check.calving_due_on) {
       // The one fact on the card a farmer has already been told, so it is stated plainly and
       // never recomputed — the gestation constants will be revised and her month must not
       // silently move.
-      facts.push(['Calving due', ui.date(check.calving_due_on)]);
+      rows += fact('Calving', ui.date(check.calving_due_on));
     }
     if (check.checked_at) {
-      facts.push(['Checked', ui.dateTime(check.checked_at)]);
+      rows += fact('Checked', ui.dateTime(check.checked_at));
     }
 
     return (
       '<article class="check' +
-      (!check.outcome && check.days_until < 0 ? ' check--late' : '') +
+      cardTone(check) +
       '">' +
       '<div class="check__head">' +
-      '<div>' +
+      '<div class="check__who">' +
       '<p class="check__owner">' +
       ui.escapeHtml(owner) +
       '</p>' +
-      '<p class="check__tag">' +
-      ui.escapeHtml(tag) +
-      ' · ' +
-      ui.escapeHtml(check.mpp_code || '') +
+      '<p class="check__owner-kind">' +
+      kind +
       '</p>' +
       '</div>' +
       dueBadge(check) +
       '</div>' +
+      // Bare `dt`/`dd` pairs, not a `div` around each: the grid that lines the two columns up
+      // is on the list itself, and a wrapper would put every pair in one cell of it.
       '<dl class="check__facts">' +
-      facts
-        .map(function (pair) {
-          return (
-            '<div><dt>' +
-            ui.escapeHtml(pair[0]) +
-            '</dt><dd>' +
-            ui.escapeHtml(pair[1]) +
-            '</dd></div>'
-          );
-        })
-        .join('') +
+      rows +
       '</dl>' +
+      whereBlock(check) +
       (check.note ? '<p class="check__note">' + ui.escapeHtml(check.note) + '</p>' : '') +
-      // Straight to the record a dispute is actually settled from, rather than making an
-      // admin search the AI events list for an animal they are already looking at.
-      '<a class="check__link" href="ai-event.html?id=' +
-      encodeURIComponent(check.ai_event_id) +
-      '">Open the insemination</a>' +
+      actions(check) +
       '</article>'
     );
   }

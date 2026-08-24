@@ -363,6 +363,15 @@ unsure-then-pregnant insemination as half a failure. Before anything settles the
 `null`, not `0.0`: no rate is a platform whose first checks are not due yet, and a tile
 rendering those the same way raises a false alarm in its first ninety days.
 
+A serialized check carries the event's own pin — `gps_lat`, `gps_lng` and `gps_source`, read
+off the AI event, null on an event captured before GPS was mandatory. A check has no location
+of its own: the Mait records the result in the same yard, from the handset, and it is the
+insemination's pin that says which yard that is. `mpp_name` is the collection point — the
+village the round is planned by — and it is not enough to find a house with, which is the
+question an admin ringing a Mait about a dropped check is actually being asked. The village
+centre is never substituted for a missing pin: an approximate location drawn as an exact one
+is worse than no location.
+
 The same figure is on `/dashboard/summary/` under `pregnancy`, computed by the same module so
 the tile and the screen it links to cannot disagree, and overdue checks are a queue on that
 endpoint's `exceptions` as `overdue_checks`. `/ai-events/{id}/` carries the event's own chain
