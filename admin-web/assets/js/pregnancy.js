@@ -160,10 +160,13 @@
    * phone to the Mait it belongs to.
    */
 
+  // A refusal is neutral, not red. Red on this screen means the insemination failed, and an
+  // owner who would not have the animal examined has told us nothing about whether it did.
   const OUTCOME_TONE = {
     pregnant: 'good',
     not_pregnant: 'bad',
     unsure: 'warn',
+    declined: null,
   };
 
   /** "1 day", "11 days". A badge reading "1 days overdue" is a badge nobody wrote on purpose. */
@@ -199,6 +202,9 @@
           pregnant: ' check--pregnant',
           not_pregnant: ' check--empty',
           unsure: ' check--unsure',
+          // The same grey as "not sure", because it settled just as little. What separates
+          // the two is the pill, and the row of facts underneath saying nothing was found.
+          declined: ' check--unsure',
         }[check.outcome] || ''
       );
     }
@@ -233,6 +239,23 @@
       (lng >= 0 ? 'E' : 'W')
     );
   }
+
+  /**
+   * "98765 43210". Ten digits in one run is a string nobody reads back correctly down a phone,
+   * and this number exists to be read back down a phone. Split 5–5, which is how an Indian
+   * mobile is said out loud; anything that is not ten digits is left exactly as it came,
+   * because a number this function does not recognise is one it must not reformat.
+   */
+  function phone(raw) {
+    const digits = String(raw || '').replace(/\D/g, '');
+    return digits.length === 10 ? digits.slice(0, 5) + ' ' + digits.slice(5) : String(raw || '');
+  }
+
+  const PHONE_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M7 3h3l1.6 4-2 1.4a12 12 0 0 0 5 5L16 11.4 20 13v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1' +
+    ' 5 6.2 2 2 0 0 1 7 3"/></svg>';
 
   const PIN_SVG =
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
@@ -282,9 +305,75 @@
   }
 
   /**
+   * Who this farmer is, on one line: kind, code, and a number to ring.
+   *
+   * It replaces a block of its own further down the card. That block repeated the word
+   * "Member" directly under a line that already said "Member" — the card was introducing the
+   * same fact twice and spending a rule and two lines of height to do it. Everything here
+   * identifies the same person, so it belongs on the same line, and the line was already
+   * there.
+   *
+   * Who she is and how to reach her are two groups on one wrapping row, and only the first
+   * carries a middot. A separator between the code and the number looked right on a wide card
+   * and left a dot dangling at the end of a wrapped line on every narrow one — and the number
+   * carries its own glyph and its own colour, which sets it apart from the grey text beside
+   * it better than punctuation did anyway.
+   *
+   * A member's code is sixteen digits and will not share a 250px card with a phone number, so
+   * on a narrow card this is two lines — but two lines of one thought, in one place, rather
+   * than two blocks pretending to be different subjects.
+   *
+   * **Why the number is here at all.** A check falls ninety days after the straw. By then the
+   * animal may be at a relative's and the owner at market, and the Mait finds that out by
+   * walking there. One call answers it, and the number used to live on another screen.
+   *
+   * `tel:` because on a desk with a softphone that dials, and everywhere else it is still
+   * selectable text — which is what an admin reading it down the line to a Mait needs.
+   */
+  function ownerLine(check) {
+    const isMember = check.owner_type === 'member';
+
+    // Her member code is what the dairy's own office identifies her by, so it is what gets
+    // read out when the call becomes "which AKANKSHA?" — and there are several.
+    const who =
+      isMember && check.member_code
+        ? 'Member<span class="check__dot" aria-hidden="true">·</span>' +
+          '<span class="check__code">' +
+          ui.escapeHtml(check.member_code) +
+          '</span>'
+        : isMember
+          ? 'Member'
+          : 'Non-member';
+
+    const reach = check.owner_mobile
+      ? '<a class="check__phone" href="tel:' +
+        encodeURIComponent(String(check.owner_mobile).replace(/\s/g, '')) +
+        '">' +
+        PHONE_SVG +
+        ui.escapeHtml(phone(check.owner_mobile)) +
+        '</a>'
+      : // Said rather than left out: a member's number is optional in the SAP master, and a
+        // line that simply stops reads as a field that failed to load.
+        '<span class="check__phone--none">No number</span>';
+
+    return (
+      '<p class="check__owner-kind">' +
+      '<span class="check__who-is">' +
+      who +
+      '</span>' +
+      reach +
+      '</p>'
+    );
+  }
+
+  /**
    * The two things an admin does from a card, as buttons rather than as a sentence in link
    * blue. Opening the pin on a map is the whole point of carrying the coordinates, and half
    * the calls this panel is read during end on the insemination record.
+   *
+   * A colour each, because they go to two different kinds of place: the map is a reference
+   * opened in somebody else's tab, and the insemination is this platform's own record. See
+   * pregnancy.css.
    *
    * The map link is the same keyless Google URL the AI event screen uses, so one location
    * opens the same way from both screens. No map is framed here: a dozen cross-origin frames
@@ -296,7 +385,7 @@
     return (
       '<div class="check__actions">' +
       (point
-        ? '<a class="btn check__btn" target="_blank" rel="noopener noreferrer" href="' +
+        ? '<a class="btn check__btn check__btn--map" target="_blank" rel="noopener noreferrer" href="' +
           'https://www.google.com/maps/search/?api=1&query=' +
           encodeURIComponent(point) +
           '" aria-label="Open ' +
@@ -306,7 +395,7 @@
           PIN_SVG +
           '</span>Map</a>'
         : '') +
-      '<a class="btn check__btn" href="ai-event.html?id=' +
+      '<a class="btn check__btn check__btn--event" href="ai-event.html?id=' +
       encodeURIComponent(check.ai_event_id) +
       '">' +
       DOC_SVG +
@@ -346,9 +435,6 @@
 
   function checkCard(check) {
     const owner = check.owner_name || 'Unnamed';
-    // A member's insemination is settled against their milk payment and a non-member's is
-    // paid in cash, so this is the first thing an admin needs to know about the name above it.
-    const kind = check.owner_type === 'member' ? 'Member' : 'Non-member';
 
     // The tag leads the table. It is the only line on the card that identifies the *animal*
     // rather than the visit, it is what the Mait is asked for when a farmer keeps four
@@ -371,6 +457,15 @@
     if (check.checked_at) {
       rows += fact('Checked', ui.dateTime(check.checked_at));
     }
+    // What the visit cost, on the recorded ones only. Stamped at the time rather than
+    // re-derived, so a row still shows what the farmer was actually quoted after the dairy
+    // re-prices. A refused visit has none — nothing was examined, so nothing is billed — and
+    // that is said in words rather than left as an empty cell.
+    if (check.outcome) {
+      rows += check.amount_charged
+        ? fact('Charged', ui.money(Number(check.amount_charged)))
+        : fact('Charged', check.outcome === 'declined' ? 'Nothing' : 'No rate set', 'fact--none');
+    }
 
     return (
       '<article class="check' +
@@ -381,9 +476,7 @@
       '<p class="check__owner">' +
       ui.escapeHtml(owner) +
       '</p>' +
-      '<p class="check__owner-kind">' +
-      kind +
-      '</p>' +
+      ownerLine(check) +
       '</div>' +
       dueBadge(check) +
       '</div>' +
@@ -510,13 +603,17 @@
         );
         $('#due').text(ui.number(summary.due_this_week));
         $('#recorded').text(ui.number(summary.recorded));
+        // Refusals are named, never added to "not". Folding them in would report an owner
+        // who would not open the gate as an insemination that failed, and the two are the
+        // opposite kind of news: one is about the animal, the other is about the round.
         $('#recorded-foot').text(
           ui.number(summary.pregnant) +
             ' pregnant · ' +
             ui.number(summary.not_pregnant) +
             ' not · ' +
             ui.number(summary.unsure) +
-            ' unsure'
+            ' unsure' +
+            (summary.declined ? ' · ' + ui.number(summary.declined) + ' declined' : '')
         );
         $('#mait-count').text(ui.number(summary.maits));
 
@@ -528,6 +625,37 @@
         state.loaded = true;
         MaitAI.shell.alert(problem.detail);
         ui.rows($('#rows'), [], row, 'Could not load pregnancy checks.', 7);
+      });
+  }
+
+  /**
+   * Take the round away as a file.
+   *
+   * The report answers the question this screen can only answer one Mait at a time: **who
+   * agreed to a check and who did not**, every farmer on one sheet, sortable. That is a
+   * field-meeting document and a follow-up list, and neither is something anybody builds by
+   * reading cards off a panel.
+   *
+   * It carries the search box with it. An admin who has typed a Mait's name and then exports
+   * means that Mait — a file that quietly held all sixty-two would be the wrong document, and
+   * they would not find out until they had sent it.
+   */
+  function exportReport() {
+    MaitAI.shell.clearAlert();
+    const term = ($('#search').val() || '').trim();
+    const query = term ? '?search=' + encodeURIComponent(term) : '';
+
+    $('#export').prop('disabled', true);
+    $('#export-label').text('Preparing…');
+
+    MaitAI.api
+      .download('/reports/pregnancy/' + query, 'pregnancy-checks.csv')
+      .catch(function () {
+        MaitAI.shell.alert('The report could not be produced. Try again in a moment.');
+      })
+      .finally(function () {
+        $('#export').prop('disabled', false);
+        $('#export-label').text('Download report');
       });
   }
 
@@ -557,6 +685,8 @@
     });
 
     $('#search').on('input', render);
+
+    $('#export').on('click', exportReport);
 
     $('#refresh').on('click', function () {
       load();

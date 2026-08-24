@@ -21,7 +21,41 @@
             </p>
           </div>
           <div class="topbar__actions">
-            <button class="btn" id="refresh" type="button">Refresh</button>
+            <!-- Ink, the same treatment the Reports screen gives its export: it is the same
+                 act — a file leaving the platform — and an operator should not have to learn
+                 it twice. -->
+            <button class="btn btn--dark" id="export" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+              </svg>
+              <!-- Its own element so "Preparing…" can replace the words without taking the
+                   glyph beside them with it. -->
+              <span id="export-label">Download report</span>
+            </button>
+            <button class="btn btn--soft" id="refresh" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5" />
+              </svg>
+              Refresh
+            </button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
         </header>

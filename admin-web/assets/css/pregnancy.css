@@ -317,14 +317,63 @@
   overflow-wrap: anywhere;
 }
 
-/* Member or non-member. The ear tag has moved into the table below, beside the animal's other
-   facts; what is worth carrying under the farmer's name is which of the two kinds of farmer
-   they are, because that is what decides how the insemination was paid for. */
+/* Everything that identifies the farmer, on one line under her name: which kind she is, her
+   member code, and a number to ring. The ear tag is not here — that identifies the *animal*
+   and lives in the table below with the animal's other facts.
+ *
+ * A wrapping flex row rather than a sentence, so the parts stay whole when the line breaks:
+ * a sixteen-digit member code and a phone number will not share 250px, and a code split
+ * across two lines is a code nobody can read back down a phone. */
 .check__owner-kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
   font-size: var(--text-caption);
   line-height: var(--leading-tight);
   color: var(--color-text-muted);
+}
+
+/* Kind and code travel as one flex item, so the row can only break between *who she is* and
+   *how to reach her* — never inside the pair, and never straight after a separator. A middot
+   left dangling at the end of a wrapped line is what a dot between all three parts produced
+   on every card narrower than about 300px. */
+.check__who-is {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.check__dot {
+  color: var(--ink-200);
+}
+
+.check__code {
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+/* The one part of this line that is acted on rather than read, so it is the only part that
+   carries colour and weight. Underlined only on hover: three things competing to look
+   clickable at rest is a card nobody scans. */
+.check__phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.check__phone svg {
+  width: 12px;
+  height: 12px;
+}
+
+.check__phone--none {
+  color: var(--color-text-disabled);
 }
 
 .check__head .pill {
@@ -537,12 +586,60 @@
   padding-top: var(--space-1);
 }
 
+/* --- the two things an admin does from a card -----------------------------------------------
+ * Filled, and a colour each.
+ *
+ * `.btn`'s own background is `--color-surface`, which on a white card is a control you can
+ * only find by hovering for the border to matter — and on a tinted card it was the one white
+ * shape on the wash, reading as a gap rather than as a button. Two identical grey buttons are
+ * barely better: a panel holding twenty of them is forty rectangles an operator has to read
+ * the label of.
+ *
+ * So: blue for the map and green for the record. Not decoration — they go to two different
+ * kinds of place. The map is a reference, opened in someone else's tab and closed again; the
+ * insemination is this platform's own record, the thing a dispute is actually settled from,
+ * and green is what this portal uses for its own primary destinations. After a day on the
+ * screen the shape is enough and the label is confirmation.
+ *
+ * Washes rather than solid fills, because these sit on cards that are themselves tinted, and
+ * two saturated buttons on a yellow card is a card with three things shouting. The wash holds
+ * ink text at full contrast, which is the rule tokens.css states for every one of them.
+ *
+ * The underline that used to appear on hover was `a:hover` in portal.css catching an anchor
+ * dressed as a button. Fixed there, for every `a.btn` in the portal, rather than here.
+ */
 .check__btn {
   flex: 1 1 auto;
   justify-content: center;
-  min-height: 32px;
+  min-height: 34px;
   padding: 0 var(--space-3);
   font-size: var(--text-caption);
+  color: var(--color-text);
+}
+
+.check__btn--map {
+  background: var(--color-info-wash);
+  border-color: var(--color-info-wash);
+}
+
+.check__btn--map:hover {
+  border-color: var(--color-info);
+}
+
+.check__btn--event {
+  color: var(--color-primary-dark);
+  background: var(--green-100);
+  border-color: var(--green-100);
+}
+
+.check__btn--event:hover {
+  border-color: var(--color-primary);
+}
+
+/* The glyph carries the tone and the button carries the wash — the same way round as a tile,
+   a notice and a queue card, so all four read as one family. */
+.check__btn--map .btn__icon {
+  color: var(--color-info);
 }
 
 .check__btn .btn__icon {
