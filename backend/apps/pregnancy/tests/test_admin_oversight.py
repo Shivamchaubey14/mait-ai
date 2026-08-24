@@ -258,3 +258,67 @@ def test_event_detail_carries_the_chain(admin_client, insemination):
     # table has room for.
     listed = admin_client.get("/api/v1/ai-events/").json()["results"][0]
     assert "pregnancy_checks" not in listed
+
+
+# --- the export --------------------------------------------------------------------------
+#
+# The report exists to answer the one question the screens can only answer a Mait at a time:
+# who agreed to a check and who did not. Everything below pins that column, because it is the
+# one a person will sort on and the one nobody can reconstruct from `outcome` without already
+# knowing how this platform works.
+
+
+def _rows(response):
+    body = b"".join(response.streaming_content).decode()
+    lines = [line for line in body.splitlines() if line]
+    header = lines[0].split(",")
+    return header, [dict(zip(header, line.split(","))) for line in lines[1:]]
+
+
+def test_the_report_says_who_agreed_and_who_refused(admin_client, insemination):
+    _, accepted = insemination(due_in_days=-5)
+    record_check(accepted, outcome=PregnancyCheck.Outcome.PREGNANT)
+    _, refused = insemination(due_in_days=-4)
+    record_check(refused, outcome=PregnancyCheck.Outcome.DECLINED)
+    _, owed = insemination(due_in_days=3)
+
+    response = admin_client.get("/api/v1/reports/pregnancy/")
+
+    assert response.status_code == 200
+    header, rows = _rows(response)
+    assert "owner_consent" in header
+
+    consent = {int(row["check_id"]): row["owner_consent"] for row in rows}
+    assert consent[accepted.id] == "Accepted"
+    assert consent[refused.id] == "Declined"
+    assert consent[owed.id] == "Not visited yet"
+
+
+def test_the_report_can_be_narrowed_to_the_refusals(admin_client, insemination):
+    _, accepted = insemination(due_in_days=-5)
+    record_check(accepted, outcome=PregnancyCheck.Outcome.PREGNANT)
+    _, refused = insemination(due_in_days=-4)
+    record_check(refused, outcome=PregnancyCheck.Outcome.DECLINED)
+
+    response = admin_client.get("/api/v1/reports/pregnancy/?consent=declined")
+
+    _, rows = _rows(response)
+    assert [int(row["check_id"]) for row in rows] == [refused.id]
+
+
+def test_the_report_carries_no_full_mobile_number(admin_client, insemination, member):
+    # The file leaves this system — an inbox, a shared drive, a laptop. A column of numbers in
+    # the clear is a contact list walking out with it.
+    member.mobile_no = "9876543210"
+    member.save(update_fields=["mobile_no"])
+    _, check = insemination(due_in_days=-1)
+    record_check(check, outcome=PregnancyCheck.Outcome.PREGNANT)
+
+    body = b"".join(admin_client.get("/api/v1/reports/pregnancy/").streaming_content).decode()
+
+    assert "9876543210" not in body
+    assert "3210" in body
+
+
+def test_the_report_is_an_admin_surface(mait_client):
+    assert mait_client.get("/api/v1/reports/pregnancy/").status_code == 403

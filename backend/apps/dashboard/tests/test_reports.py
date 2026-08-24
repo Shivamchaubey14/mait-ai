@@ -80,3 +80,56 @@ def test_no_search_exports_everything(admin_client, two_events):
 
     assert "FINDME-001" in text
     assert "OTHER-002" in text
+
+
+def test_the_export_carries_the_member_code(admin_client, two_events, member):
+    """
+    A name identifies a farmer to a person; a code identifies her to the dairy.
+
+    The file gets reconciled against milk payments and looked up in SAP, and neither of those
+    keys on "AKANKSHA" — of whom there are several. So the code travels beside the name rather
+    than instead of it.
+    """
+    text = body_of(admin_client.get("/api/v1/reports/export/"))
+
+    header = text.splitlines()[0].split(",")
+    assert "member_code" in header
+    # Beside the name, so a reader scanning the sheet finds them together.
+    assert header.index("member_code") == header.index("farmer_name") + 1
+
+    column = header.index("member_code")
+    assert all(
+        line.split(",")[column] == member.member_code for line in text.splitlines()[1:] if line
+    )
+
+
+def test_a_non_member_has_no_code_to_give(admin_client, mait, mpp, animal, stocked_mait, db):
+    # Empty rather than absent, and honest: a non-member has no membership number, and
+    # `farmer_type` on the same row already says so.
+    from apps.masterdata.models import NonMember
+
+    farmer = NonMember.objects.create(
+        mpp=mpp,
+        name="Not A Member",
+        mobile_no="9000000001",
+        aadhar_no="111122223333",
+        created_by_mait=mait,
+    )
+    AIEvent.objects.create(
+        client_uuid=uuid.uuid4(),
+        mait=mait,
+        mpp=mpp,
+        owner_type=AIEvent.OwnerType.NON_MEMBER,
+        non_member=farmer,
+        animal=animal,
+        semen_batch=stocked_mait(1)[0],
+        straw_unique_no="NONMEMBER-001",
+        status=AIEvent.Status.STRAW_VERIFIED,
+    )
+
+    text = body_of(admin_client.get("/api/v1/reports/export/"))
+    header = text.splitlines()[0].split(",")
+    row = next(line for line in text.splitlines()[1:] if "NONMEMBER-001" in line).split(",")
+
+    assert row[header.index("member_code")] == ""
+    assert row[header.index("farmer_type")] == "non_member"
