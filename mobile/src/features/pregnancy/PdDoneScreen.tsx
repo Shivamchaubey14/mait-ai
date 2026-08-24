@@ -12,7 +12,13 @@
  * reason this screen exists rather than dropping straight back to the list. She is not in
  * calf, she is in heat, and the Mait is standing in the yard with a flask. Making them go
  * back to Home and start a six-step capture from scratch is how a second service gets
- * postponed to a day nobody comes.
+ * postponed to a day nobody comes. Never offered after a refusal: the owner has just said no
+ * to a hand on the animal, and asking to inseminate her is not the next thing to say.
+ *
+ * **What is owed, and by whom.** This is where the amount is acted on: a member's comes out
+ * of her milk payment and there is nothing to do in the yard, a non-member's is cash to be
+ * collected before anybody leaves. Opposite instructions, so the screen gives one of them
+ * rather than a number and a shrug. A refused visit is not billed and says so.
  *
  * **What is left.** The next check and where it is, so a round keeps moving without a trip
  * back to the list to find out.
@@ -25,6 +31,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import type { PdOutcome, PregnancyCheck } from '@api/types';
+import { settlementFor } from './charge';
 import {
   colors,
   MIN_TOUCH_TARGET,
@@ -59,12 +66,47 @@ export default function PdDoneScreen({
   const insets = useSafeAreaInsets();
 
   const outcomeWord = t(
-    outcome === 'pregnant'
-      ? 'pd.pregnant'
-      : outcome === 'not_pregnant'
-        ? 'pd.notPregnant'
-        : 'pd.unsure',
+    {
+      pregnant: 'pd.pregnant',
+      not_pregnant: 'pd.notPregnant',
+      unsure: 'pd.unsure',
+      declined: 'pd.declined',
+    }[outcome] ?? 'pd.unsure',
   );
+
+  const declined = outcome === 'declined';
+
+  // The one place a Mait acts on the money, so it is a card rather than a line: collect it,
+  // or tell her it comes off her payment. `charge.ts` decides which — the same function the
+  // record screen quoted from, so the figure named before the visit and the figure named
+  // after it are one figure.
+  const settlement = settlementFor(check, outcome);
+  const settlementCopy = {
+    member: {
+      title: t('pd.doneChargeMemberTitle', {
+        amount: settlement.kind === 'member' ? settlement.amount : 0,
+      }),
+      body: t('pd.doneChargeMemberBody'),
+      icon: 'receipt-outline' as const,
+    },
+    nonMember: {
+      title: t('pd.doneChargeNonMemberTitle', {
+        amount: settlement.kind === 'nonMember' ? settlement.amount : 0,
+      }),
+      body: t('pd.doneChargeNonMemberBody'),
+      icon: 'cash-outline' as const,
+    },
+    unpriced: {
+      title: t('pd.doneChargeUnpricedTitle'),
+      body: t('pd.doneChargeUnpricedBody'),
+      icon: 'help-circle-outline' as const,
+    },
+    none: {
+      title: t('pd.doneChargeNoneTitle'),
+      body: t('pd.doneChargeNoneBody'),
+      icon: 'remove-circle-outline' as const,
+    },
+  }[settlement.kind];
 
   // Only where she is open to service. Offering it after a positive check would be offering
   // to inseminate a pregnant animal.
@@ -110,6 +152,36 @@ export default function PdDoneScreen({
             </View>
           )}
         </View>
+
+        {/* Money first among the things left to do. A Mait putting the phone away with cash
+            uncollected is the failure this card exists to prevent, and it is only ever one
+            tap from the end of the visit. */}
+        <View
+          style={[styles.settlement, settlement.kind === 'nonMember' && styles.settlementCollect]}
+          testID="pd-settlement"
+        >
+          <View style={styles.settlementIcon}>
+            <Ionicons
+              name={settlementCopy.icon}
+              size={20}
+              color={settlement.kind === 'nonMember' ? colors.primaryDark : colors.textMuted}
+            />
+          </View>
+          <View style={styles.statusBody}>
+            <Text style={styles.settlementTitle}>{settlementCopy.title}</Text>
+            <Text style={styles.settlementBody}>{settlementCopy.body}</Text>
+          </View>
+        </View>
+
+        {/* A refusal leaves nothing to decide, so the screen says so instead of leaving the
+            Mait looking for the action they are used to seeing here. The reassurance is the
+            point: the row is closed, the walk counted, and the animal is not lost. */}
+        {declined && (
+          <View style={styles.aside} testID="pd-done-declined">
+            <Text style={styles.againTitle}>{t('pd.doneDeclinedTitle')}</Text>
+            <Text style={styles.againBody}>{t('pd.doneDeclinedBody')}</Text>
+          </View>
+        )}
 
         {canServeAgain && (
           <View style={styles.again} testID="pd-serve-again">
@@ -226,6 +298,32 @@ const styles = StyleSheet.create({
   },
   pillLabel: { ...typography.caption, color: yolk[800] },
 
+  // Quiet by default and green only when there is cash to take. A member's line is a
+  // statement about what the dairy will do later; a non-member's is an instruction for the
+  // next thirty seconds, and only that one earns the colour.
+  settlement: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    marginTop: spacing[4],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  settlementCollect: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
+  settlementIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  settlementTitle: { ...typography.h3, color: colors.ink },
+  settlementBody: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+
   again: {
     marginTop: spacing[4],
     padding: spacing[4],
@@ -233,6 +331,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryWash,
     borderWidth: 1,
     borderColor: colors.primary,
+  },
+  // The same card without the green. Nothing here is an opportunity to act on — it is the
+  // screen confirming there is nothing left to do — and green would read as one.
+  aside: {
+    marginTop: spacing[4],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   againTitle: { ...typography.h3, color: colors.ink },
   againBody: {

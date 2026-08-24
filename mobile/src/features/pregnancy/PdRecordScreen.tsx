@@ -1,10 +1,28 @@
 /**
- * What the Mait found.
+ * What the Mait found — and first, whether they were allowed to look.
  *
- * Three answers, and the screen says what each one *does* before it is chosen — a calving
+ * **The permission comes before the examination, on the screen as in the yard.** A Mait
+ * arrives, greets the owner and asks whether to go ahead; only then does a hand go on the
+ * animal. A screen that opens on three findings asks the Mait to answer a question they have
+ * not been given permission to ask yet, and it leaves them nothing to tap when the answer is
+ * no — at which point the row stays open forever or gets closed with a guess. Both are worse
+ * than the extra tap.
+ *
+ * So the flow is two stages. Stage one is the owner's answer. Yes opens the findings; no is
+ * itself the record, and there is nothing further to do — no outcome to choose, no photograph
+ * to take, no charge, because nothing was examined.
+ *
+ * Then three answers, and the screen says what each one *does* before it is chosen — a calving
  * date, a fresh insemination today, or another visit in three weeks. A Mait who does not know
  * that "not sure" books a recheck will avoid it and guess instead, and a guess in this record
- * is a conception rate nobody can trust.
+ * is a conception rate nobody can trust. A refusal says what it does too: the check closes and
+ * nothing further is asked, so the Mait is not left wondering whether it will come back.
+ *
+ * **And what it costs, before it is done.** The price is on the findings stage rather than
+ * only at the end, because the Mait has to be able to say it in the yard *before* putting a
+ * hand on the animal — a figure produced afterwards is a bill, not a quote. Member and
+ * non-member are opposite instructions (deduct later versus collect now), so `charge.ts`
+ * decides which and both screens read the one answer.
  *
  * The consequences themselves are the server's: `services.py` decides what an outcome means.
  * What is here is the choosing, and saying plainly what is about to happen.
@@ -30,6 +48,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import type { PdOutcome, PregnancyCheck } from '@api/types';
+import { settlementFor } from './charge';
 import FlowCamera from '@/features/aiFlow/FlowCamera';
 import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
@@ -71,6 +90,8 @@ function Choice({
   selected,
   onPress,
   testID,
+  role = 'radio',
+  tone = 'good',
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
@@ -78,21 +99,35 @@ function Choice({
   selected: boolean;
   onPress: () => void;
   testID: string;
+  /**
+   * `radio` for the findings, which are chosen and then committed by the button at the foot.
+   * `button` for "yes, go ahead", which is not an answer being recorded — it is the way
+   * through to the screen that records one, and announcing it as a radio would tell a screen
+   * reader that tapping it selects something.
+   */
+  role?: 'radio' | 'button';
+  /** A refusal is not a finding, so it does not turn the card green when chosen. */
+  tone?: 'good' | 'plain';
 }): React.JSX.Element {
   return (
     <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      accessibilityRole={role}
+      accessibilityState={role === 'radio' ? { selected } : undefined}
       accessibilityLabel={`${label}. ${hint}`}
       onPress={onPress}
       style={({ pressed }) => [
         styles.choice,
-        selected && styles.choiceOn,
+        selected && (tone === 'plain' ? styles.choiceOnPlain : styles.choiceOn),
         pressed && styles.pressed,
       ]}
       testID={testID}
     >
-      <View style={[styles.choiceIcon, selected && styles.choiceIconOn]}>
+      <View
+        style={[
+          styles.choiceIcon,
+          selected && (tone === 'plain' ? styles.choiceIconOnPlain : styles.choiceIconOn),
+        ]}
+      >
         <Ionicons name={icon} size={20} color={selected ? colors.surface : colors.textMuted} />
       </View>
 
@@ -106,9 +141,16 @@ function Choice({
 
       {/* A filled tick rather than a dot: this is read in sunlight, and a ring with a smaller
           ring inside it is not a shape that survives that. */}
-      <View style={[styles.tick, selected && styles.tickOn]}>
-        {selected && <Ionicons name="checkmark" size={15} color={colors.surface} />}
-      </View>
+      {role === 'radio' ? (
+        <View
+          style={[styles.tick, selected && (tone === 'plain' ? styles.tickOnPlain : styles.tickOn)]}
+        >
+          {selected && <Ionicons name="checkmark" size={15} color={colors.surface} />}
+        </View>
+      ) : (
+        // A chevron, not a tick: this one goes somewhere rather than marking an answer.
+        <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+      )}
     </Pressable>
   );
 }
@@ -133,6 +175,9 @@ export default function PdRecordScreen({
   const insets = useSafeAreaInsets();
   const [outcome, setOutcome] = useState<PdOutcome | null>(null);
   const [camera, setCamera] = useState(false);
+  // Stage one until the owner has answered. `null` is "not asked yet" and is different from
+  // `false`: one is a screen waiting for a tap, the other is a refusal about to be recorded.
+  const [consented, setConsented] = useState<boolean | null>(null);
 
   const animal = t(`animalType.${check.animal_type}`, { defaultValue: check.animal_type });
   const subject = check.ear_tag_no
@@ -154,6 +199,23 @@ export default function PdRecordScreen({
   // walk back to the yard, not after a request fails.
   const needsPhoto = outcome === 'not_pregnant' && !photoUri;
   const canSave = !!outcome && !needsPhoto && !busy;
+  const declining = consented === false;
+
+  // What this visit costs and who settles it. Read once here so the wording and the figure
+  // cannot drift apart between the label and the line under it.
+  const settlement = settlementFor(check, outcome);
+  const chargeLine =
+    settlement.kind === 'member'
+      ? t('pd.chargeMember', { amount: settlement.amount })
+      : settlement.kind === 'nonMember'
+        ? t('pd.chargeNonMember', { amount: settlement.amount })
+        : t('pd.chargeUnpriced');
+  const chargeHint =
+    settlement.kind === 'member'
+      ? t('pd.chargeMemberHint')
+      : settlement.kind === 'nonMember'
+        ? t('pd.chargeNonMemberHint')
+        : t('pd.chargeUnpricedHint');
 
   if (camera) {
     // The flow's own camera rather than a new one: it already handles the permission gate,
@@ -173,12 +235,19 @@ export default function PdRecordScreen({
     );
   }
 
-  const heroTop = (
+  /**
+   * The back arrow goes back one stage, not out of the screen.
+   *
+   * From the findings it returns to the owner's question, because a Mait who taps "yes" and
+   * then realises the owner was answering something else has to be able to undo it. Only from
+   * the first stage does it leave.
+   */
+  const heroTop = (onPress: () => void) => (
     <View style={styles.heroTop}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('common.back')}
-        onPress={onBack}
+        onPress={onPress}
         style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
         testID="pd-back"
       >
@@ -201,19 +270,23 @@ export default function PdRecordScreen({
    * worse than one that was never offered.
    */
   if (check.outcome) {
-    const answer =
-      check.outcome === 'pregnant'
-        ? t('pd.pregnant')
-        : check.outcome === 'not_pregnant'
-          ? t('pd.notPregnant')
-          : t('pd.unsure');
+    const answer = t(
+      {
+        pregnant: 'pd.pregnant',
+        not_pregnant: 'pd.notPregnant',
+        unsure: 'pd.unsure',
+        declined: 'pd.declined',
+      }[check.outcome] ?? 'pd.unsure',
+    );
+    // A refusal is grey with the unsure results rather than red with the failures. Nothing
+    // went wrong and nobody is at fault — the animal was simply not examined.
     const tone =
       check.outcome === 'pregnant' ? 'good' : check.outcome === 'not_pregnant' ? 'bad' : 'unsure';
 
     return (
       <View style={styles.root}>
         <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
-          {heroTop}
+          {heroTop(onBack)}
           <Text style={styles.heroTitle}>{t('pd.recorded')}</Text>
           <Text style={styles.heroSubtitle} numberOfLines={2}>
             {subject}
@@ -231,7 +304,9 @@ export default function PdRecordScreen({
                     ? 'checkmark'
                     : check.outcome === 'not_pregnant'
                       ? 'close'
-                      : 'help'
+                      : check.outcome === 'declined'
+                        ? 'hand-left-outline'
+                        : 'help'
                 }
                 size={20}
                 color={colors.surface}
@@ -256,6 +331,11 @@ export default function PdRecordScreen({
           {check.outcome === 'unsure' && (
             <Text style={styles.settledNote}>{t('pd.recordedRecheck')}</Text>
           )}
+          {check.outcome === 'declined' && (
+            <Text style={styles.settledNote} testID="pd-recorded-declined">
+              {t('pd.recordedDeclined')}
+            </Text>
+          )}
 
           {/* Why there is nothing to tap, said rather than left to be discovered. */}
           <View style={styles.locked} testID="pd-locked">
@@ -267,10 +347,89 @@ export default function PdRecordScreen({
     );
   }
 
+  /**
+   * Stage one: the owner's answer.
+   *
+   * This is the question the Mait asks at the gate, and the screen asks it in the same order.
+   * "Yes" is a way through and nothing is written by it. "No" is the record — so it is chosen
+   * here and committed at the foot, the same two taps every other answer on this screen takes,
+   * because it is just as final and just as uneditable afterwards.
+   */
+  if (consented !== true) {
+    return (
+      <View style={styles.root}>
+        <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
+          {heroTop(onBack)}
+
+          <Text style={styles.heroTitle}>{t('pd.consentAsk')}</Text>
+          <Text style={styles.heroSubtitle} numberOfLines={2}>
+            {subject}
+          </Text>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <Text style={styles.sectionLabel}>{t('pd.consentLabel')}</Text>
+
+          <Choice
+            icon="checkmark"
+            role="button"
+            label={t('pd.consentYes')}
+            hint={t('pd.consentYesHint')}
+            selected={false}
+            onPress={() => setConsented(true)}
+            testID="pd-consent-yes"
+          />
+          <Choice
+            icon="hand-left-outline"
+            tone="plain"
+            label={t('pd.consentNo')}
+            hint={t('pd.consentNoHint')}
+            selected={declining}
+            onPress={() => setConsented(false)}
+            testID="pd-consent-no"
+          />
+
+          {/* What recording a refusal actually does, before it is done. A Mait who thinks it
+              writes the animal off will avoid the button and leave the row open instead. */}
+          {declining && (
+            <View style={styles.aside} testID="pd-decline-note">
+              <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+              <Text style={styles.asideText}>{t('pd.declineWhatHappens')}</Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* No foot at all until an answer is chosen. A disabled button under two live choices
+            is a third thing to read and reason about on a screen that asks one question. */}
+        {declining && (
+          <View style={[styles.foot, { paddingBottom: spacing[3] + insets.bottom }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: busy, busy }}
+              disabled={busy}
+              onPress={() => onSave('declined', null)}
+              style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
+              testID="pd-decline-save"
+            >
+              {busy ? (
+                <ActivityIndicator color={colors.surface} />
+              ) : (
+                <>
+                  <Text style={styles.ctaLabel}>{t('pd.declineSave')}</Text>
+                  <Ionicons name="arrow-forward" size={18} color={colors.surface} />
+                </>
+              )}
+            </Pressable>
+          </View>
+        )}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
-        {heroTop}
+        {heroTop(() => setConsented(null))}
 
         <Text style={styles.heroTitle}>{t('pd.ask')}</Text>
         <Text style={styles.heroSubtitle} numberOfLines={2}>
@@ -279,6 +438,24 @@ export default function PdRecordScreen({
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        {/* Before the findings, not after them. The Mait says this to the owner while the
+            animal is still standing there, and a price produced once the work is done is a
+            bill rather than a quote. */}
+        <Text style={styles.sectionLabel}>{t('pd.chargeLabel')}</Text>
+        <View style={styles.charge} testID="pd-charge">
+          <View style={styles.chargeIcon}>
+            <Ionicons
+              name={settlement.kind === 'nonMember' ? 'cash-outline' : 'receipt-outline'}
+              size={20}
+              color={settlement.kind === 'unpriced' ? colors.secondaryPressed : colors.primaryDark}
+            />
+          </View>
+          <View style={styles.chargeBody}>
+            <Text style={styles.chargeTitle}>{chargeLine}</Text>
+            <Text style={styles.chargeHint}>{chargeHint}</Text>
+          </View>
+        </View>
+
         <Choice
           icon="checkmark"
           label={t('pd.pregnant')}
@@ -459,6 +636,29 @@ const styles = StyleSheet.create({
   },
   lockedText: { ...typography.caption, color: colors.textMuted, flex: 1, lineHeight: 18 },
 
+  charge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    padding: spacing[4],
+    marginBottom: spacing[4],
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chargeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+  chargeBody: { flex: 1 },
+  chargeTitle: { ...typography.bodyStrong, color: colors.ink },
+  chargeHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+
   choice: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -473,6 +673,9 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   choiceOn: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
+  // Chosen, but not an achievement. Green is this app's colour for a result that went well,
+  // and a refusal is neither good nor bad — it is a visit that did not happen.
+  choiceOnPlain: { backgroundColor: colors.background, borderColor: colors.textMuted },
   choiceIcon: {
     width: 34,
     height: 34,
@@ -482,6 +685,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   choiceIconOn: { backgroundColor: colors.primary },
+  choiceIconOnPlain: { backgroundColor: colors.textMuted },
   choiceBody: { flex: 1 },
   choiceLabel: { ...typography.h3, color: colors.ink },
   choiceHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
@@ -495,6 +699,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tickOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tickOnPlain: { backgroundColor: colors.textMuted, borderColor: colors.textMuted },
+
+  // What the chosen answer is about to do. Same construction as the locked notice below it,
+  // so the two things this screen says out loud are said the same way.
+  aside: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[3],
+    marginTop: spacing[2],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  asideText: { ...typography.caption, color: colors.textMuted, flex: 1, lineHeight: 18 },
 
   photo: {
     flexDirection: 'row',

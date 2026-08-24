@@ -52,15 +52,20 @@ export function shortDate(iso: string | null): string {
 }
 
 /**
- * The three answers, each as a mark, a tone and a word.
+ * What a visit can end in, each as a mark, a tone and a word.
  *
  * One table, read by the badge on a row and by the legend below it, so the two can never
  * come to disagree about what a symbol means.
+ *
+ * A refusal takes the neutral tone rather than the red one. Red on this row means the
+ * insemination failed, and an owner who would not have the animal examined has not told us
+ * that — a Mait scanning the Done tab must not read a row of refusals as a row of failures.
  */
 export const OUTCOMES = [
   { key: 'pregnant', icon: 'checkmark', tone: 'good', label: 'pd.pregnant' },
   { key: 'not_pregnant', icon: 'close', tone: 'bad', label: 'pd.notPregnant' },
   { key: 'unsure', icon: 'help', tone: 'unsure', label: 'pd.unsure' },
+  { key: 'declined', icon: 'hand-left-outline', tone: 'unsure', label: 'pd.declined' },
 ] as const;
 
 function outcomeWord(outcome: string, t: (key: string) => string): string {
@@ -90,6 +95,8 @@ function DayBadge({ check }: { check: PregnancyCheck }): React.JSX.Element {
   // Once it is answered there are no days left to count, and a "4 LATE" against a check
   // done last month is a lie the badge tells at a glance. The answer takes its place.
   if (check.outcome) {
+    // Falls back to "not sure" — the honest answer for a row carrying something this build
+    // does not recognise, and the only one of the four that claims nothing.
     const found = OUTCOMES.find(row => row.key === check.outcome) ?? OUTCOMES[2];
     return (
       <View

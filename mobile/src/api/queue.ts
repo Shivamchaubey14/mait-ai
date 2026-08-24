@@ -21,6 +21,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { IDEMPOTENCY_TTL_HOURS } from '@/config/env';
+import type { PdOutcome } from './types';
 
 const STORAGE_KEY = 'maitai.queue.v1';
 
@@ -40,6 +41,7 @@ export type QueuedKind =
  * reached, so a list that had to ask the server who these people were would be blank exactly
  * when it is needed.
  */
+
 export interface QueuedLabel {
   /** Whose insemination it was. */
   farmer: string;
@@ -51,9 +53,15 @@ export interface QueuedLabel {
   at: string;
   /** The event this job belongs to, for the screens that need to reopen it. */
   eventId?: number;
-  /** A pregnancy check waiting to send, and what was found. */
+  /**
+   * A pregnancy check waiting to send, and what the visit produced.
+   *
+   * `PdOutcome` rather than the union spelled out again: a refusal queues like any other
+   * answer — an owner is at least as likely to decline in a yard with no signal as anywhere
+   * else — and a second copy of the list is a second place to forget to add to.
+   */
   checkId?: number;
-  outcome?: 'pregnant' | 'not_pregnant' | 'unsure';
+  outcome?: PdOutcome;
 }
 
 export interface QueuedJob {

@@ -58,6 +58,9 @@ function check(over: Partial<PregnancyCheck> = {}): PregnancyCheck {
     calving_due_on: null,
     photo_url: '',
     note: '',
+    // A member, priced at ₹100 by default. Cases about the money override these.
+    price: '100.00',
+    amount_charged: null,
     ...over,
   };
 }
@@ -203,7 +206,7 @@ describe('the list', () => {
 
 // --- recording -------------------------------------------------------------------------
 
-describe('recording what was found', () => {
+describe('asking the owner first', () => {
   const props = {
     check: check(),
     onBack: jest.fn(),
@@ -212,10 +215,254 @@ describe('recording what was found', () => {
     onPhoto: jest.fn(),
   };
 
+  it('asks permission before it asks what was found', () => {
+    // The order of the screen is the order of the visit. A Mait greets the owner and asks
+    // whether to go ahead; a screen that opens on three findings has skipped that.
+    render(withArea(<PdRecordScreen {...props} />));
+
+    expect(screen.getByTestId('pd-consent-yes')).toBeTruthy();
+    expect(screen.getByTestId('pd-consent-no')).toBeTruthy();
+    expect(screen.queryByTestId('pd-outcome-pregnant')).toBeNull();
+    expect(screen.queryByTestId('pd-photo')).toBeNull();
+  });
+
+  it('opens the findings once the owner agrees', () => {
+    render(withArea(<PdRecordScreen {...props} />));
+
+    fireEvent.press(screen.getByTestId('pd-consent-yes'));
+
+    expect(screen.getByTestId('pd-outcome-pregnant')).toBeTruthy();
+    expect(screen.getByTestId('pd-outcome-not-pregnant')).toBeTruthy();
+    expect(screen.getByTestId('pd-outcome-unsure')).toBeTruthy();
+  });
+
+  it('agreeing writes nothing on its own', () => {
+    // "Yes" is a way through to the screen that records an answer, not an answer.
+    const onSave = jest.fn();
+    render(withArea(<PdRecordScreen {...props} onSave={onSave} />));
+
+    fireEvent.press(screen.getByTestId('pd-consent-yes'));
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing further once the owner declines', () => {
+    // The whole point of the step: no outcome to choose and no photograph to take, because
+    // nothing was examined.
+    render(withArea(<PdRecordScreen {...props} />));
+
+    fireEvent.press(screen.getByTestId('pd-consent-no'));
+
+    expect(screen.queryByTestId('pd-outcome-pregnant')).toBeNull();
+    expect(screen.queryByTestId('pd-outcome-not-pregnant')).toBeNull();
+    expect(screen.queryByTestId('pd-outcome-unsure')).toBeNull();
+    expect(screen.queryByTestId('pd-photo')).toBeNull();
+  });
+
+  it('says what recording a refusal will do, before it is recorded', () => {
+    // A Mait who thinks it writes the animal off will avoid the button and leave the row open.
+    render(withArea(<PdRecordScreen {...props} />));
+
+    fireEvent.press(screen.getByTestId('pd-consent-no'));
+
+    // No follow-up is promised any more: the check closes and that is the whole of it.
+    expect(screen.getByTestId('pd-decline-note')).toHaveTextContent(/closed/i);
+    expect(screen.getByTestId('pd-decline-note')).not.toHaveTextContent(/7 days/);
+  });
+
+  it('records the refusal as its own outcome, with no photograph', () => {
+    const onSave = jest.fn();
+    render(withArea(<PdRecordScreen {...props} onSave={onSave} />));
+
+    fireEvent.press(screen.getByTestId('pd-consent-no'));
+    fireEvent.press(screen.getByTestId('pd-decline-save'));
+
+    expect(onSave).toHaveBeenCalledWith('declined', null);
+  });
+
+  it('commits the refusal on a second tap, never the first', () => {
+    // As final and as uneditable as any other answer here, so it takes the same two taps.
+    const onSave = jest.fn();
+    render(withArea(<PdRecordScreen {...props} onSave={onSave} />));
+
+    fireEvent.press(screen.getByTestId('pd-consent-no'));
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByTestId('pd-decline-save')).toBeTruthy();
+  });
+
+  it('goes back to the owner question rather than out of the screen', () => {
+    // A Mait who taps "yes" and finds the owner was answering something else has to be able
+    // to undo it without losing the check.
+    const onBack = jest.fn();
+    render(withArea(<PdRecordScreen {...props} onBack={onBack} />));
+
+    fireEvent.press(screen.getByTestId('pd-consent-yes'));
+    fireEvent.press(screen.getByTestId('pd-back'));
+
+    expect(onBack).not.toHaveBeenCalled();
+    expect(screen.getByTestId('pd-consent-yes')).toBeTruthy();
+
+    // And from the first stage it does leave.
+    fireEvent.press(screen.getByTestId('pd-back'));
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it('shows a refusal already on the record as what it was', () => {
+    render(
+      withArea(
+        <PdRecordScreen
+          {...props}
+          check={check({
+            outcome: 'declined',
+            outcome_display: 'Owner declined',
+            checked_at: '2026-08-20T11:00:00Z',
+          })}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('pd-recorded')).toBeTruthy();
+    expect(screen.getByTestId('pd-recorded-declined')).toHaveTextContent(/[Nn]othing was/);
+    expect(screen.queryByTestId('pd-consent-yes')).toBeNull();
+  });
+});
+
+describe('what the visit costs', () => {
+  const props = {
+    check: check(),
+    onBack: jest.fn(),
+    onSave: jest.fn(),
+    photoUri: null as string | null,
+    onPhoto: jest.fn(),
+  };
+
+  const atFindings = (over: Partial<PregnancyCheck> = {}) => {
+    render(withArea(<PdRecordScreen {...props} check={check(over)} />));
+    fireEvent.press(screen.getByTestId('pd-consent-yes'));
+  };
+
+  it('quotes a member the deduction, not a collection', () => {
+    // She hands over nothing in the yard. A Mait who reads "collect ₹100" off this screen
+    // asks a member for money the dairy is already taking out of her milk payment.
+    atFindings({ owner_type: 'member', price: '100.00' });
+
+    expect(screen.getByTestId('pd-charge')).toHaveTextContent(/100/);
+    expect(screen.getByTestId('pd-charge')).toHaveTextContent(/milk payment/i);
+    // Not the instruction — "Nothing to collect" is fine and is in fact the point; what must
+    // never appear against a member is "Collect ₹ …".
+    expect(screen.getByTestId('pd-charge')).not.toHaveTextContent(/[Cc]ollect ₹/);
+  });
+
+  it('tells a non-member visit to collect the cash', () => {
+    atFindings({ owner_type: 'non_member', price: '150.00' });
+
+    expect(screen.getByTestId('pd-charge')).toHaveTextContent(/150/);
+    expect(screen.getByTestId('pd-charge')).toHaveTextContent(/[Cc]ollect/);
+  });
+
+  it('says the price before the examination, not only after it', () => {
+    // A figure produced once the work is done is a bill. The Mait has to be able to say it
+    // while the animal is still standing there.
+    atFindings({ price: '100.00' });
+
+    expect(screen.getByTestId('pd-charge')).toBeTruthy();
+    expect(screen.getByTestId('pd-outcome-pregnant')).toBeTruthy();
+  });
+
+  it('never renders an unset rate as free', () => {
+    // Null is "nobody has priced it", and a farmer hears any figure a Mait reads out as
+    // final. Zero is the one that cannot be walked back.
+    atFindings({ price: null });
+
+    expect(screen.getByTestId('pd-charge')).not.toHaveTextContent(/₹/);
+    expect(screen.getByTestId('pd-charge')).toHaveTextContent(/no rate set/i);
+  });
+
+  it('charges nothing for a refused visit', () => {
+    render(
+      withArea(
+        <PdDoneScreen
+          check={check({ owner_type: 'non_member', price: '150.00' })}
+          outcome="declined"
+          queued={false}
+          next={null}
+          onStartAi={jest.fn()}
+          onOpenNext={jest.fn()}
+          onBackToList={jest.fn()}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('pd-settlement')).toHaveTextContent(/[Nn]othing to charge/);
+    expect(screen.getByTestId('pd-settlement')).not.toHaveTextContent(/150/);
+  });
+
+  it('closes on the instruction, not on a number', () => {
+    render(
+      withArea(
+        <PdDoneScreen
+          check={check({ owner_type: 'non_member', price: '150.00' })}
+          outcome="pregnant"
+          queued={false}
+          next={null}
+          onStartAi={jest.fn()}
+          onOpenNext={jest.fn()}
+          onBackToList={jest.fn()}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('pd-settlement')).toHaveTextContent(/[Cc]ollect ₹ 150/);
+  });
+
+  it('bills what was stamped, not what the rate says today', () => {
+    // A visit recorded last month was charged at last month's price. Re-quoting it through
+    // the current rate would tell a Mait a figure the dairy is not billing.
+    render(
+      withArea(
+        <PdDoneScreen
+          check={check({ owner_type: 'non_member', price: '150.00', amount_charged: '120.00' })}
+          outcome="pregnant"
+          queued={false}
+          next={null}
+          onStartAi={jest.fn()}
+          onOpenNext={jest.fn()}
+          onBackToList={jest.fn()}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('pd-settlement')).toHaveTextContent(/120/);
+    expect(screen.getByTestId('pd-settlement')).not.toHaveTextContent(/150/);
+  });
+});
+
+describe('recording what was found', () => {
+  const props = {
+    check: check(),
+    onBack: jest.fn(),
+    onSave: jest.fn(),
+    // Widened, so a case can override it with a real file. Inferred from `null` it is a
+    // `null`-only field and `withConsent({ photoUri: '...' })` will not type.
+    photoUri: null as string | null,
+    onPhoto: jest.fn(),
+  };
+
+  /**
+   * The findings sit behind the owner's permission now, so every case about them has to walk
+   * through the gate first — which is the same thing the Mait does in the yard.
+   */
+  const withConsent = (overrides: Partial<typeof props> = {}) => {
+    const view = render(withArea(<PdRecordScreen {...props} {...overrides} />));
+    fireEvent.press(screen.getByTestId('pd-consent-yes'));
+    return view;
+  };
+
   it('says what each answer will do, before it is chosen', () => {
     // A Mait who does not know that "not sure" books a recheck will avoid it and guess, and a
     // guess in this record is a conception rate nobody can trust.
-    render(withArea(<PdRecordScreen {...props} />));
+    withConsent();
 
     expect(screen.getByText(/Calving due about/)).toBeTruthy();
     expect(screen.getByText(/inseminated again today/)).toBeTruthy();
@@ -223,7 +470,7 @@ describe('recording what was found', () => {
   });
 
   it('will not save until an answer is chosen', () => {
-    render(withArea(<PdRecordScreen {...props} />));
+    withConsent();
 
     expect(screen.getByTestId('pd-save').props.accessibilityState.disabled).toBe(true);
   });
@@ -231,7 +478,7 @@ describe('recording what was found', () => {
   it('refuses not-pregnant without a photograph', () => {
     // The outcome that costs somebody money and the one a farmer disputes six months later.
     const onSave = jest.fn();
-    render(withArea(<PdRecordScreen {...props} onSave={onSave} photoUri={null} />));
+    withConsent({ onSave, photoUri: null });
 
     fireEvent.press(screen.getByTestId('pd-outcome-not-pregnant'));
 
@@ -242,7 +489,7 @@ describe('recording what was found', () => {
 
   it('takes not-pregnant once there is a photograph', () => {
     const onSave = jest.fn();
-    render(withArea(<PdRecordScreen {...props} onSave={onSave} photoUri="file:///a.jpg" />));
+    withConsent({ onSave, photoUri: 'file:///a.jpg' });
 
     fireEvent.press(screen.getByTestId('pd-outcome-not-pregnant'));
     fireEvent.press(screen.getByTestId('pd-save'));
@@ -253,7 +500,7 @@ describe('recording what was found', () => {
   it('does not demand a photograph for the other two', () => {
     // Requiring one everywhere would teach a Mait to photograph a wall to get past the screen.
     const onSave = jest.fn();
-    render(withArea(<PdRecordScreen {...props} onSave={onSave} photoUri={null} />));
+    withConsent({ onSave, photoUri: null });
 
     fireEvent.press(screen.getByTestId('pd-outcome-pregnant'));
     fireEvent.press(screen.getByTestId('pd-save'));
@@ -264,7 +511,7 @@ describe('recording what was found', () => {
   it('opens the camera when the photograph is asked for', () => {
     // Reported broken: the button did nothing. It has to reach the flow's own camera, which
     // already owns the permission gate, the resize and the EXIF strip.
-    render(withArea(<PdRecordScreen {...props} />));
+    withConsent();
 
     fireEvent.press(screen.getByTestId('pd-photo'));
 
@@ -318,7 +565,7 @@ describe('recording what was found', () => {
   });
 
   it('names the animal and how long she has been carrying', () => {
-    render(withArea(<PdRecordScreen {...props} />));
+    withConsent();
 
     expect(screen.getByText(/Kavita Devi/)).toBeTruthy();
     expect(screen.getByText(/92 days/)).toBeTruthy();

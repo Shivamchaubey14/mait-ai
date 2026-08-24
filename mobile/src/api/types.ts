@@ -527,7 +527,15 @@ export interface IndentDraft {
  * days, and a handset in a village with one bar must not have to join three responses to draw
  * one. `days_until` is negative when the check is overdue.
  */
-export type PdOutcome = 'pregnant' | 'not_pregnant' | 'unsure';
+/**
+ * What a visit produced. Three findings and a refusal.
+ *
+ * `declined` is not a finding — the owner would not have the animal examined, so nothing was
+ * looked at. It closes the check, books nothing behind it and is never billed, and the server
+ * keeps it out of the conception rate. Nothing on the handset should ever add it to
+ * `not_pregnant`.
+ */
+export type PdOutcome = 'pregnant' | 'not_pregnant' | 'unsure' | 'declined';
 
 export interface PregnancyCheck {
   id: number;
@@ -552,6 +560,15 @@ export interface PregnancyCheck {
   /** How long she has been carrying, if she is. */
   days_since_ai: number | null;
   outcome: PdOutcome | '';
+  /**
+   * What this visit costs *this* owner, already resolved by the server — a member and a
+   * non-member are quoted different figures for the same work. A string, because it is money
+   * and a float is not; `null` where the dairy has not set a rate, which is emphatically not
+   * the same as free and must never be rendered as a zero.
+   */
+  price: string | null;
+  /** What was actually charged, stamped when the visit was recorded. Null on a refusal. */
+  amount_charged: string | null;
   outcome_display: string;
   checked_at: string | null;
   calving_due_on: string | null;
