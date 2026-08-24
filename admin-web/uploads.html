@@ -32,7 +32,7 @@
               >
                 <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
               </svg>
-              Download templates
+              Download masters
             </button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
@@ -146,6 +146,199 @@
         </section>
       </main>
     </div>
+
+    <!-- Which master do you want a copy of?
+
+         A `<dialog>` rather than a div with a scrim, for the reasons the AI event lightbox
+         gives: Escape closes it, focus is trapped inside it, and everything behind it is
+         inert to a screen reader without a line of script.
+
+         The three rows wear the same colours and the same glyphs as the three upload cards
+         behind them, so the modal reads as the page it opened from rather than as a list of
+         words. -->
+    <!-- `autofocus` on the dialog itself, with `tabindex="-1"` to make it focusable. Without
+         it the browser focuses the first control inside, which here is Close — so the ring
+         lands on the way out of a dialog the operator has just chosen to open, and a screen
+         reader starts on "Close" rather than on the question being asked. -->
+    <dialog class="picker" id="masters" aria-labelledby="masters-title" tabindex="-1" autofocus>
+      <div class="picker__head">
+        <div>
+          <h2 class="picker__title" id="masters-title">Download a master</h2>
+          <p class="picker__lede">
+            The workbook this platform is running on, as it was last uploaded.
+          </p>
+        </div>
+        <button class="btn picker__close" id="masters-close" type="button" aria-label="Close">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="picker__body">
+        <article class="master master--member" data-master="member">
+          <span class="master__icon master__icon--member" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M3 20a6 6 0 0 1 12 0M17 11a3 3 0 1 0 0-6M21 20a6 6 0 0 0-4-5.6"
+              />
+            </svg>
+          </span>
+
+          <div class="master__body">
+            <h3 class="master__title">Member master</h3>
+            <p class="master__meta" data-meta="member">Checking…</p>
+
+            <!-- Hidden until a download starts, and only then given a role: an
+                 `aria-live` bar sitting on the page announces itself on open. -->
+            <div class="master__bar" data-bar="member" hidden>
+              <span class="master__fill" data-fill="member"></span>
+            </div>
+          </div>
+
+          <button
+            class="btn master__get"
+            type="button"
+            data-get="member"
+            aria-label="Download the Member master as it was last uploaded"
+            disabled
+          >
+            <svg
+              class="btn__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+            </svg>
+            <span class="visually-hidden">Download</span>
+          </button>
+        </article>
+
+        <article class="master master--mait" data-master="mait">
+          <span class="master__icon master__icon--mait" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M5 21a7 7 0 0 1 14 0" />
+            </svg>
+          </span>
+
+          <div class="master__body">
+            <h3 class="master__title">Mait master</h3>
+            <p class="master__meta" data-meta="mait">Checking…</p>
+
+            <!-- Hidden until a download starts, and only then given a role: an
+                 `aria-live` bar sitting on the page announces itself on open. -->
+            <div class="master__bar" data-bar="mait" hidden>
+              <span class="master__fill" data-fill="mait"></span>
+            </div>
+          </div>
+
+          <button
+            class="btn master__get"
+            type="button"
+            data-get="mait"
+            aria-label="Download the Mait master as it was last uploaded"
+            disabled
+          >
+            <svg
+              class="btn__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+            </svg>
+            <span class="visually-hidden">Download</span>
+          </button>
+        </article>
+
+        <article class="master master--mpp" data-master="mpp">
+          <span class="master__icon master__icon--mpp" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6" />
+            </svg>
+          </span>
+
+          <div class="master__body">
+            <h3 class="master__title">MPP master</h3>
+            <p class="master__meta" data-meta="mpp">Checking…</p>
+
+            <!-- Hidden until a download starts, and only then given a role: an
+                 `aria-live` bar sitting on the page announces itself on open. -->
+            <div class="master__bar" data-bar="mpp" hidden>
+              <span class="master__fill" data-fill="mpp"></span>
+            </div>
+          </div>
+
+          <button
+            class="btn master__get"
+            type="button"
+            data-get="mpp"
+            aria-label="Download the MPP master as it was last uploaded"
+            disabled
+          >
+            <svg
+              class="btn__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+            </svg>
+            <span class="visually-hidden">Download</span>
+          </button>
+        </article>
+      </div>
+
+      <!-- Said here rather than discovered in Excel. The protection stops the accident; it is
+           not a seal, and a portal that implied otherwise would be inviting somebody to treat
+           one of these files as evidence. -->
+      <p class="picker__foot">
+        Each file opens read-only, so a stray keystroke cannot alter a master on its way to
+        somebody. To change the data, correct the SAP export and upload that — editing a copy
+        changes nothing here.
+      </p>
+    </dialog>
 
     <script src="assets/vendor/jquery-3.7.1.min.js"></script>
     <script src="assets/js/api.js"></script>

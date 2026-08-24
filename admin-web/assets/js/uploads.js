@@ -438,6 +438,138 @@
       });
   }
 
+  /* --- downloading a master --------------------------------------------------------------
+   * The button used to say "Download templates" and then explain that there were none — the
+   * templates are the SAP exports themselves, which is true and was no help to anybody. What
+   * an admin actually wants before re-uploading a corrected master is the one currently in
+   * force: open it, check a column, be sure the platform is running on what they think.
+   *
+   * So the modal offers the three masters and hands back the last upload that landed for
+   * each, rebuilt and locked. The locking is the server's (`snapshots.py`); what is here is
+   * the choosing, the progress and the honesty about which files exist.
+   */
+
+  // Derived from the list above rather than written out again. The two would drift the day a
+  // fourth master arrives, and the failure would be a dialog quietly missing a row.
+  const MASTER_TYPES = MASTERS.map(function (master) {
+    return master.type;
+  });
+
+  /** "12 Aug 2026 · 105,433 rows · Member.xlsx" — provenance, in the order it gets asked. */
+  function masterMeta(row) {
+    if (!row.available) {
+      // Not an error and not empty: a master nobody has uploaded yet is an ordinary state on
+      // a fresh deployment, and the row should say which of the three it is waiting for.
+      return 'Nothing uploaded yet';
+    }
+    return (
+      ui.date(row.uploaded_at) +
+      ' · ' +
+      ui.number(row.success_rows) +
+      (row.failed_rows ? ' of ' + ui.number(row.total_rows) : '') +
+      ' rows · ' +
+      row.file_name
+    );
+  }
+
+  function paintMasters(rows) {
+    rows.forEach(function (row) {
+      $('[data-meta="' + row.upload_type + '"]').text(masterMeta(row));
+      $('[data-get="' + row.upload_type + '"]').prop('disabled', !row.available);
+    });
+  }
+
+  function openMasters() {
+    const dialog = document.getElementById('masters');
+    if (!dialog.open) {
+      // `showModal`, not `show`: it is what makes the page behind inert and gives Escape its
+      // meaning.
+      dialog.showModal();
+    }
+
+    MASTER_TYPES.forEach(function (key) {
+      $('[data-meta="' + key + '"]').text('Checking…');
+      $('[data-get="' + key + '"]').prop('disabled', true);
+      $('[data-bar="' + key + '"]')
+        .prop('hidden', true)
+        .removeClass('is-indeterminate');
+      $('[data-fill="' + key + '"]').css('width', 0);
+    });
+
+    // Read on open rather than cached from page load: an upload may have finished in the
+    // meantime, and a dialog offering yesterday's file is the specific mistake this feature
+    // exists to prevent.
+    MaitAI.api
+      .uploadSnapshots()
+      .done(function (data) {
+        paintMasters(data.results || []);
+      })
+      .fail(function (problem) {
+        MASTER_TYPES.forEach(function (key) {
+          $('[data-meta="' + key + '"]').text('Could not check');
+        });
+        MaitAI.shell.alert(problem.detail);
+      });
+  }
+
+  function closeMasters() {
+    const dialog = document.getElementById('masters');
+    if (dialog.open) {
+      dialog.close();
+    }
+  }
+
+  /**
+   * A click on a dialog's backdrop is dispatched to the dialog element itself — there is no
+   * backdrop node to listen on — so the hit has to be tested against its box. `e.target ===
+   * dialog` alone would also fire on the dialog's own padding.
+   */
+  function backdropCloses(event) {
+    const box = event.currentTarget.getBoundingClientRect();
+    const outside =
+      event.clientX < box.left ||
+      event.clientX > box.right ||
+      event.clientY < box.top ||
+      event.clientY > box.bottom;
+    if (outside) {
+      closeMasters();
+    }
+  }
+
+  function downloadMaster(key) {
+    const $button = $('[data-get="' + key + '"]').prop('disabled', true);
+    const $bar = $('[data-bar="' + key + '"]').prop('hidden', false);
+    const $fill = $('[data-fill="' + key + '"]').css('width', 0);
+
+    MaitAI.api
+      .download('/admin/uploads/snapshots/' + key + '/', key + '-master.xlsx', function (fraction) {
+        // `null` means the length was not sent, so there is no fraction to draw. A stripe
+        // that travels says "working" honestly; a guessed percentage does not.
+        if (fraction === null) {
+          $bar.addClass('is-indeterminate');
+          return;
+        }
+        $bar.removeClass('is-indeterminate');
+        $fill.css('width', Math.round(fraction * 100) + '%');
+      })
+      .then(function () {
+        $fill.css('width', '100%');
+        // Left on screen for a moment rather than cleared on the same frame: a bar that
+        // vanishes the instant it fills never showed the operator that it finished.
+        window.setTimeout(function () {
+          $bar.prop('hidden', true).removeClass('is-indeterminate');
+          $fill.css('width', 0);
+        }, 900);
+      })
+      .catch(function () {
+        $bar.prop('hidden', true).removeClass('is-indeterminate');
+        MaitAI.shell.alert('That master could not be prepared. Try again in a moment.');
+      })
+      .finally(function () {
+        $button.prop('disabled', false);
+      });
+  }
+
   $(function () {
     if (!MaitAI.shell.requireSession()) {
       return;
@@ -496,11 +628,11 @@
       this.value = '';
     });
 
-    $('#templates').on('click', function () {
-      MaitAI.shell.alert(
-        'Templates are the SAP exports themselves — upload the file SAP produces, unedited.',
-        'warn'
-      );
+    $('#templates').on('click', openMasters);
+    $('#masters-close').on('click', closeMasters);
+    $('#masters').on('click', backdropCloses);
+    $('#masters').on('click', '[data-get]', function () {
+      downloadMaster(String($(this).data('get')));
     });
   });
 })(window.MaitAI, jQuery);

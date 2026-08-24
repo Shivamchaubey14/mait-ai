@@ -247,3 +247,209 @@
   font-style: italic;
   color: var(--color-text-muted);
 }
+
+/* --- picking a master to download ------------------------------------------------------
+ * A `<dialog>`, so Escape, focus trapping and inertness behind it come from the browser
+ * rather than from three hundred bytes of script that will be subtly wrong.
+ *
+ * The three rows carry the same washes and the same glyphs as the three upload cards behind
+ * them. That is the whole reason this is a modal and not a menu: picking the wrong master
+ * here is harmless, but the operator is about to look at a file and decide whether the
+ * platform is running on the right data, and the row they clicked should be recognisably the
+ * card they upload to.
+ */
+.picker {
+  width: min(560px, 94vw);
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-raised);
+}
+
+.picker::backdrop {
+  background: rgb(12 21 27 / 55%);
+}
+
+.picker__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.picker__title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h2);
+  color: var(--color-ink);
+}
+
+.picker__lede {
+  margin-top: var(--space-1);
+  font-size: var(--text-label);
+  color: var(--color-text-muted);
+}
+
+/* Square, iconic and quiet — the dialog's own control, not one of its actions. */
+.picker__close {
+  flex: none;
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  margin-left: auto;
+  justify-content: center;
+}
+
+.picker__close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.picker__body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.picker__foot {
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-caption);
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+  background: var(--ink-50);
+  border-top: 1px solid var(--color-border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+/* --- one master ------------------------------------------------------------------------ */
+
+.master {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* The same three colours the cards on the page wear, and for the same reason they were given
+   them: picking the wrong master imports 105,000 members as Maits, so the three should be
+   three distinct objects at a glance rather than three identical rectangles. */
+.master--member {
+  background: var(--color-primary-wash);
+  border-color: var(--green-200);
+}
+
+.master--mait {
+  background: var(--color-info-wash);
+  border-color: var(--ink-100);
+}
+
+.master--mpp {
+  background: var(--color-secondary-wash);
+  border-color: var(--yolk-200);
+}
+
+/* White chip, coloured glyph — the way round every tinted thing in this portal does it. */
+.master__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+}
+
+.master__icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.master__icon--member {
+  color: var(--color-primary-dark);
+}
+
+.master__icon--mait {
+  color: var(--color-info);
+}
+
+.master__icon--mpp {
+  color: var(--color-secondary-pressed);
+}
+
+.master__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.master__title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h3);
+  line-height: var(--leading-tight);
+  color: var(--color-ink);
+}
+
+.master__meta {
+  font-size: var(--text-caption);
+  line-height: var(--leading-tight);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The button is the row's action, so it is square and glyph-only: a row whose label already
+   names the master does not need the word "Download" three times down the dialog. */
+.master__get {
+  flex: none;
+  width: 42px;
+  min-height: 42px;
+  padding: 0;
+  justify-content: center;
+  background: var(--color-surface);
+}
+
+.master__get:hover:not([disabled]) {
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+
+.master__get .btn__icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- how far along ---------------------------------------------------------------------
+ * The same construction the import progress uses further up this file, at half the height:
+ * this is a transfer of a file already built, so it is over in a second or two and does not
+ * need to be the loudest thing in the dialog.
+ */
+.master__bar {
+  height: 6px;
+  margin-top: var(--space-2);
+  overflow: hidden;
+  background: var(--color-surface);
+  border-radius: var(--radius-pill);
+}
+
+.master__fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: var(--radius-pill);
+  /* The width is what moves, so the width is what is eased. A bar that jumps between chunks
+     reads as a redraw rather than as progress. */
+  transition: width 200ms ease;
+}
+
+/* Where the server sent no length there is no fraction to draw, and a made-up one is worse
+   than none: a stripe that travels says "working, length unknown" and never goes backwards. */
+.master__bar.is-indeterminate .master__fill {
+  width: 34%;
+  transition: none;
+  animation: running-slide 1.1s ease-in-out infinite;
+}
