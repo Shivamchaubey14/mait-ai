@@ -21,6 +21,7 @@
     'low-stock',
     'stale-indents',
     'overdue-checks',
+    'declined-checks',
   ];
   const KEY = {
     'pending-payments': 'pending_payments',
@@ -28,6 +29,7 @@
     'low-stock': 'low_stock',
     'stale-indents': 'stale_indents',
     'overdue-checks': 'overdue_checks',
+    'declined-checks': 'declined_checks',
   };
 
   const state = { queues: {} };

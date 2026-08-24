@@ -167,6 +167,7 @@
     'low-stock': 'low_stock',
     'stale-indents': 'stale_indents',
     'overdue-checks': 'overdue_checks',
+    'declined-checks': 'declined_checks',
   };
 
   function renderExceptions(data) {
