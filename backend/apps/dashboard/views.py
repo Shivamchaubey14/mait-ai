@@ -33,6 +33,10 @@ from apps.pregnancy.oversight import rates_by_mait
 from .models import DailyAIAggregate, PlatformMilestone
 
 MAX_EXCEPTION_ROWS = 3
+
+#: How far back the dashboard looks for refused pregnancy checks. A working signal, not a
+#: lifetime total — see `_pregnancy`.
+DECLINE_WINDOW_DAYS = 30
 MAX_TREND_DAYS = 120
 
 # Coverage is reported for the whole network but tabulated for the largest villages only —
@@ -126,22 +130,31 @@ def summary(request):
 
 
 def _pregnancy() -> dict:
-    """Conception rate and the round nobody is walking.
+    """Conception rate, the round nobody is walking, and the yards that turned a Mait away.
 
     The same arithmetic the pregnancy oversight screen shows, from the same module, so the
     tile and the screen it links to cannot disagree.
+
+    `declined` is the last thirty days rather than all time. It is on the dashboard as a
+    working signal — is this happening, and is it getting worse — and a lifetime total answers
+    neither: it only ever goes up, so it stops meaning anything within a quarter of go-live.
     """
     today = timezone.localdate()
     _, overall = rates_by_mait()
     return {
         **overall.as_dict(),
         "overdue": PregnancyCheck.objects.filter(outcome="", due_on__lt=today).count(),
+        "declined_30d": PregnancyCheck.objects.filter(
+            outcome=PregnancyCheck.Outcome.DECLINED,
+            checked_at__gte=timezone.now() - timedelta(days=DECLINE_WINDOW_DAYS),
+        ).count(),
     }
 
 
 def _exceptions() -> dict:
     """
-    The queues from SRS §6.7.6, and pregnancy checks nobody has walked (§9.11).
+    The queues from SRS §6.7.6, and the two pregnancy queues (§9.11): checks nobody has
+    walked, and visits an owner refused.
 
     Each returns a bounded sample alongside the full count — the count is what tells an admin
     how bad it is, and the sample is what tells them where to start.
@@ -253,6 +266,30 @@ def _exceptions() -> dict:
         for row in by_mait
     ]
 
+    # Refused visits, grouped by village rather than by Mait or by animal. A single owner
+    # turning a Mait away on a wet morning is not a problem anybody should be paged about; the
+    # same village doing it repeatedly is, and it is an awareness conversation with that
+    # collection point rather than anything the Mait can fix on their own round. Windowed to
+    # the last thirty days for the same reason the tile is — see `_pregnancy`.
+    declined = PregnancyCheck.objects.filter(
+        outcome=PregnancyCheck.Outcome.DECLINED,
+        checked_at__gte=timezone.now() - timedelta(days=DECLINE_WINDOW_DAYS),
+    )
+    declined_by_mpp = (
+        declined.values("ai_event__mpp__mpp_name").annotate(n=Count("id")).order_by("-n")
+    )
+    declined_rows = [
+        {
+            "label": row["ai_event__mpp__mpp_name"] or "Unknown village",
+            "meta": f"{row['n']} owner(s) declined",
+            # Waiting, not blocked, and not anybody's failure. The animal is still in the
+            # round — a refusal books the next attempt — so this is yellow like the overdue
+            # queue rather than red.
+            "severity": "warning",
+        }
+        for row in declined_by_mpp[:MAX_EXCEPTION_ROWS]
+    ]
+
     return {
         # Every queue states its own `more` — how many rows it left out — rather than letting
         # the screen infer it. The screen's arithmetic was `count - len(rows)`, which only
@@ -295,6 +332,13 @@ def _exceptions() -> dict:
             "count": overdue.count(),
             "rows": overdue_rows,
             "more": max(0, overdue_by_mait.count() - len(overdue_rows)),
+        },
+        # Counts refusals and samples the villages behind them, so `more` is stated the same
+        # way the overdue queue states it rather than subtracted.
+        "declined_checks": {
+            "count": declined.count(),
+            "rows": declined_rows,
+            "more": max(0, declined_by_mpp.count() - len(declined_rows)),
         },
     }
 
