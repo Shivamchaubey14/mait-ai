@@ -378,6 +378,59 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminNonMemberDetail'
           description: ''
+  /api/v1/admin/pregnancy/:
+    get:
+      operationId: admin_pregnancy_retrieve
+      description: |-
+        Admin oversight. The Mait-facing endpoints only ever report the caller's own checks, so this is the only view that can answer whether anybody's round is being dropped.
+
+        Sorted most overdue first: the screen is opened to find the rounds nobody is walking, not to browse a roster. Every active Mait appears, including the ones with no checks at all — a Mait whose inseminations are too recent to have booked one reads very differently from a Mait ignoring twenty, and a list built only from check rows could not tell them apart.
+
+        `conception_rate` is a percentage of **settled inseminations**, not of checks: an unsure result books a recheck, and an event whose second check came back pregnant did not fail. An insemination still carrying an open check is in neither half of the fraction — otherwise a Mait improves their own rate by staying at home.
+      summary: Pregnancy diagnosis across every Mait
+      tags:
+      - pregnancy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/admin/pregnancy/{mait_id}/:
+    get:
+      operationId: admin_pregnancy_retrieve_2
+      description: |-
+        The drill-down behind a row of the oversight table, in the same shape the app shows that Mait — so an admin reading it down the phone is looking at the same list.
+
+        `window=due` is open checks, **oldest first**: this screen is read to find what has been dropped, and the app's soonest-first order buries exactly that at the bottom. `done` is what was recorded, newest first. `all` is both.
+      summary: One Mait's pregnancy checks
+      parameters:
+      - in: path
+        name: mait_id
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: window
+        schema:
+          type: string
+        description: '`due` (default), `done`, or `all`.'
+      tags:
+      - pregnancy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/admin/products/:
     get:
       operationId: admin_products_list
@@ -1263,7 +1316,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AIEvent'
+                $ref: '#/components/schemas/AIEventDetail'
           description: ''
   /api/v1/ai-events/{id}/complete/:
     post:
@@ -1861,7 +1914,7 @@ paths:
     get:
       operationId: dashboard_summary_retrieve
       description: |-
-        AI events today, this week, this month and lifetime, the all-time highs, and the four exception queues (SRS §6.7.1, §6.7.2, §6.7.6).
+        AI events today, this week, this month and lifetime, the all-time highs, and the exception queues (SRS §6.7.1, §6.7.2, §6.7.6) and conception rate (§9.11).
 
         The month comparison is against the *same day* last month, not the whole of it — a month-to-date total against a completed month always looks like a collapse.
       summary: Headline counts and exceptions
@@ -3022,6 +3075,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/PregnancyCheck'
           description: ''
+  /api/v1/pregnancy-checks/route/:
+    get:
+      operationId: pregnancy_checks_route_retrieve
+      description: Both orderings in one response, so the reorder screen needs no
+        second request and the figures cannot move between the two screens. **Distances
+        are straight lines scaled for winding, not road geometry.** There is no routing
+        service configured for this platform. Good enough to order stops; not good
+        enough to quote without saying what it is, which the app does.
+      summary: Today's round, ordered two ways
+      parameters:
+      - in: query
+        name: lat
+        schema:
+          type: number
+          format: double
+      - in: query
+        name: lng
+        schema:
+          type: number
+          format: double
+      tags:
+      - pregnancy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/reports/export/:
     get:
       operationId: reports_export_retrieve
@@ -3116,7 +3201,7 @@ components:
           description: Generated on the device before the first sync attempt.
         status:
           allOf:
-          - $ref: '#/components/schemas/AIEventStatusEnum'
+          - $ref: '#/components/schemas/StatusA5cEnum'
           readOnly: true
         status_display:
           type: string
@@ -3399,22 +3484,216 @@ components:
       - animal_id
       - client_uuid
       - mpp_code
-    AIEventStatusEnum:
-      enum:
-      - draft
-      - straw_verified
-      - photo_captured
-      - payment_pending
-      - completed
-      - cancelled
-      type: string
+    AIEventDetail:
+      type: object
       description: |-
-        * `draft` - Draft
-        * `straw_verified` - Straw verified
-        * `photo_captured` - Photo captured
-        * `payment_pending` - Payment pending
-        * `completed` - Completed
-        * `cancelled` - Cancelled
+        One event, with the question of whether it worked.
+
+        An insemination is not finished when the straw is used — it is finished when somebody
+        finds out whether it took, and that answer lives on a chain of pregnancy checks rather
+        than on the event (docs/API_CONTRACT.md §9.11). The detail screen is where a dispute is
+        settled from, so it is the one place that trail belongs.
+
+        Detail only, and deliberately not on ``AIEventSerializer`` itself: the list renders 25
+        events at a time and the app renders it offline, so a reverse lookup per row would be 25
+        extra queries to show something no list column has room for.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client_uuid:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Generated on the device before the first sync attempt.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusA5cEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        mpp:
+          type: integer
+          readOnly: true
+        mpp_code:
+          type: string
+          readOnly: true
+        mpp_name:
+          type: string
+          readOnly: true
+        mait:
+          type: integer
+          readOnly: true
+        mait_name:
+          type: string
+          readOnly: true
+        mait_code:
+          type: string
+          readOnly: true
+        payment:
+          allOf:
+          - $ref: '#/components/schemas/PaymentSummary'
+          nullable: true
+          readOnly: true
+        owner_type:
+          allOf:
+          - $ref: '#/components/schemas/OwnerTypeEnum'
+          readOnly: true
+        member:
+          type: integer
+          readOnly: true
+          nullable: true
+        member_code:
+          type: string
+          readOnly: true
+          default: ''
+        non_member:
+          type: integer
+          readOnly: true
+          nullable: true
+        owner_name:
+          type: string
+          readOnly: true
+        animal:
+          type: integer
+          readOnly: true
+        animal_type:
+          type: string
+          readOnly: true
+        breed:
+          type: string
+          readOnly: true
+        ear_tag_no:
+          type: string
+          readOnly: true
+        semen_breed:
+          type: string
+          readOnly: true
+          default: ''
+        doses:
+          type: integer
+          readOnly: true
+          description: How many straws of the breed this insemination used. Two in
+            one visit is ordinary practice on a difficult animal, and both come off
+            the Mait's flask — so the count is the event's, not an assumption of one
+            held anywhere else.
+        consumables:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIEventConsumable'
+          readOnly: true
+        amount_due:
+          type: string
+          nullable: true
+          readOnly: true
+        straw_unique_no:
+          type: string
+          readOnly: true
+          description: Denormalised from the batch so history survives any master-data
+            cleanup.
+        stock_deducted:
+          type: boolean
+          readOnly: true
+          description: False on a record closed without a stock movement, because
+            the straw it holds had already left the Mait's holding — used by another
+            event, or corrected away underneath it. The insemination happened and
+            the straw is spent either way; what this says is that the count cannot
+            account for this event, so a report comparing straws against completions
+            has the answer on the record.
+        ai_photo_url:
+          type: string
+          readOnly: true
+        photo_source:
+          allOf:
+          - $ref: '#/components/schemas/PhotoSourceEnum'
+          readOnly: true
+          description: |-
+            Whether the proof photo was taken through the app's own camera or chosen from the handset's gallery. A live capture is evidence that this animal was served at this place and time; a chosen one is a photograph of something, and the record has to be able to tell an auditor which it is holding.
+
+            * `camera` - Taken on the handset
+            * `gallery` - Chosen from the gallery
+        gps_lat:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          readOnly: true
+          nullable: true
+        gps_lng:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          readOnly: true
+          nullable: true
+        gps_source:
+          allOf:
+          - $ref: '#/components/schemas/GpsSourceEnum'
+          readOnly: true
+          description: |-
+            Where the pin came from: the handset's own position at the moment of capture, or the coordinates written into a chosen photograph's EXIF. The second can be anywhere and any time, so it is never quietly presented as the first.
+
+            * `device` - The handset's own position
+            * `photo` - Written into the photograph
+        performed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the AI was actually performed — set at photo capture,
+            not at sync, so an offline event reports the real time.
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_reason:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        pregnancy_checks:
+          type: array
+          items: {}
+          readOnly: true
+      required:
+      - ai_photo_url
+      - amount_due
+      - animal
+      - animal_type
+      - breed
+      - cancelled_reason
+      - client_uuid
+      - completed_at
+      - consumables
+      - created_at
+      - doses
+      - ear_tag_no
+      - gps_lat
+      - gps_lng
+      - gps_source
+      - id
+      - mait
+      - mait_code
+      - mait_name
+      - member
+      - member_code
+      - mpp
+      - mpp_code
+      - mpp_name
+      - non_member
+      - owner_name
+      - owner_type
+      - payment
+      - performed_at
+      - photo_source
+      - pregnancy_checks
+      - semen_breed
+      - status
+      - status_display
+      - stock_deducted
+      - straw_unique_no
     AIEventTimeline:
       type: object
       description: One step of the audit trail, served by ``GET /ai-events/{id}/timeline/``.
@@ -6367,6 +6646,22 @@ components:
         * `pending` - Pending
         * `verified` - Verified
         * `failed` - Failed
+    StatusA5cEnum:
+      enum:
+      - draft
+      - straw_verified
+      - photo_captured
+      - payment_pending
+      - completed
+      - cancelled
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `straw_verified` - Straw verified
+        * `photo_captured` - Photo captured
+        * `payment_pending` - Payment pending
+        * `completed` - Completed
+        * `cancelled` - Cancelled
     StrawValidation:
       type: object
       description: |-

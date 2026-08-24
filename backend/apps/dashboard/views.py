@@ -27,6 +27,8 @@ from apps.indents.models import STALE_AFTER_DAYS, IndentRequest, stale_indent_q
 from apps.inventory.models import MaitInventory, ProductType
 from apps.masterdata.models import Mait
 from apps.payments.models import OTPLog, Payment
+from apps.pregnancy.models import PregnancyCheck
+from apps.pregnancy.oversight import rates_by_mait
 
 from .models import DailyAIAggregate, PlatformMilestone
 
@@ -59,7 +61,7 @@ def _completed_between(start, end=None):
     summary="Headline counts and exceptions",
     description=(
         "AI events today, this week, this month and lifetime, the all-time highs, and the "
-        "four exception queues (SRS §6.7.1, §6.7.2, §6.7.6).\n\n"
+        "exception queues (SRS §6.7.1, §6.7.2, §6.7.6) and conception rate (§9.11).\n\n"
         "The month comparison is against the *same day* last month, not the whole of it — a "
         "month-to-date total against a completed month always looks like a collapse."
     ),
@@ -113,13 +115,33 @@ def summary(request):
                 else None
             ),
             "exceptions": _exceptions(),
+            # Not from the aggregate tables, unlike everything above it: those know nothing
+            # about pregnancy, and the alternative was a tile reading 0.0% until somebody
+            # remembered to extend the nightly rebuild. It is one grouped query over a table
+            # holding one row per insemination, and it is the number this platform is
+            # ultimately judged on — worth the read (docs/API_CONTRACT.md §9.11).
+            "pregnancy": _pregnancy(),
         }
     )
 
 
+def _pregnancy() -> dict:
+    """Conception rate and the round nobody is walking.
+
+    The same arithmetic the pregnancy oversight screen shows, from the same module, so the
+    tile and the screen it links to cannot disagree.
+    """
+    today = timezone.localdate()
+    _, overall = rates_by_mait()
+    return {
+        **overall.as_dict(),
+        "overdue": PregnancyCheck.objects.filter(outcome="", due_on__lt=today).count(),
+    }
+
+
 def _exceptions() -> dict:
     """
-    The four queues from SRS §6.7.6.
+    The queues from SRS §6.7.6, and pregnancy checks nobody has walked (§9.11).
 
     Each returns a bounded sample alongside the full count — the count is what tells an admin
     how bad it is, and the sample is what tells them where to start.
@@ -212,11 +234,68 @@ def _exceptions() -> dict:
             }
         )
 
+    # A check nobody did does not stop mattering, and an animal quietly dropped from the
+    # round is a conception rate computed over the visits that happened to be convenient. So
+    # overdue checks are a queue like any other, sampled by the Mait carrying the most of
+    # them — which is the call to make, not the individual animal.
+    overdue = PregnancyCheck.objects.filter(outcome="", due_on__lt=timezone.localdate())
+    overdue_by_mait = overdue.values("mait_id", "mait__name").annotate(n=Count("id")).order_by("-n")
+    by_mait = overdue_by_mait[:MAX_EXCEPTION_ROWS]
+    overdue_rows = [
+        {
+            "label": row["mait__name"],
+            "meta": f"{row['n']} check(s) overdue",
+            # Waiting, not blocked: the Mait can still work, and the animal is still carrying
+            # or not whatever anybody does about it today. Yellow, by the rule the Exceptions
+            # screen states out loud.
+            "severity": "warning",
+        }
+        for row in by_mait
+    ]
+
     return {
-        "pending_payments": {"count": pending.count(), "rows": pending_rows},
-        "failed_otps": {"count": sum(row["n"] for row in failed), "rows": failed_rows},
-        "low_stock": {"count": len(low_list), "rows": low_rows},
-        "stale_indents": {"count": stale.count(), "rows": stale_rows},
+        # Every queue states its own `more` — how many rows it left out — rather than letting
+        # the screen infer it. The screen's arithmetic was `count - len(rows)`, which only
+        # holds where a queue samples the same thing it counts, and exactly one of these does.
+        # The other three count events and sample the people or the categories behind them, so
+        # subtracting produced a "N more" underneath rows that had already accounted for
+        # everything: one Mait line for two overdue checks read as another Mait hiding.
+        "pending_payments": {
+            # Individual payments, sampled oldest first. The one queue where subtracting was
+            # right all along, and it is stated here so it stays right by declaration.
+            "count": pending.count(),
+            "rows": pending_rows,
+            "more": max(0, pending.count() - len(pending_rows)),
+        },
+        "failed_otps": {
+            # Counts failures and samples the numbers behind them: one number that failed
+            # eleven times is one row and eleven towards the count.
+            "count": sum(row["n"] for row in failed),
+            "rows": failed_rows,
+            "more": max(0, len(failed) - len(failed_rows)),
+        },
+        "low_stock": {
+            # Two summary lines standing for every low Mait, so nothing is ever left out.
+            "count": len(low_list),
+            "rows": low_rows,
+            "more": 0,
+        },
+        "stale_indents": {
+            # Rows are categories, not indents: the three between them cover every stale one,
+            # which is why "Never reached Indent Easy" was given a row of its own.
+            "count": stale.count(),
+            "rows": stale_rows,
+            "more": 0,
+        },
+        # `more` stated rather than left to be worked out. Every other queue here samples
+        # rows of the same thing it counts, so a reader can subtract; this one counts checks
+        # and samples Maits, and subtracting gave "1 more" under a row that already accounted
+        # for every overdue check on the platform.
+        "overdue_checks": {
+            "count": overdue.count(),
+            "rows": overdue_rows,
+            "more": max(0, overdue_by_mait.count() - len(overdue_rows)),
+        },
     }
 
 

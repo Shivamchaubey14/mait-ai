@@ -339,6 +339,34 @@ event, and it belongs to the Mait who served the animal.
 | GET | `/pregnancy-checks/` | The Mait's own checks. `?window=due` (default) is everything open that is overdue or falls inside the seven-day alert window; `done` is what has been recorded, newest first; `all` is both | Mait |
 | GET | `/pregnancy-checks/{id}/` | One check | Mait |
 | POST | `/pregnancy-checks/{id}/record/` | What the Mait found: `outcome`, optional `photo_url` and `note`, and a `client_uuid` | Mait |
+| GET | `/admin/pregnancy/` | Every Mait's checks rolled up: open, overdue, recorded and conception rate, most overdue first | Admin |
+| GET | `/admin/pregnancy/{mait_id}/` | One Mait's checks, oldest first. `?window=due` (default) / `done` / `all` | Admin |
+
+The two `admin/` routes are a separate surface, not the Mait's with a filter on it. Every
+Mait-facing endpoint scopes itself to `request.user.mait_profile`; an admin has none, so the
+portal calling them gets an *empty list rather than an error* — a screen that looks like it
+works and reports nothing. Same split as `admin/inventory/`, for the same reason.
+
+An admin's question is not the Mait's. The app answers "which yard do I walk to"; the portal
+answers **is anybody's round being dropped** — so the oversight list is most-overdue-first,
+the drill-down is oldest-first rather than the app's soonest-first, and every active Mait
+appears including the ones holding no checks at all. A Mait whose inseminations are too recent
+to have booked a check reads very differently from a Mait ignoring twenty, and a list built
+from check rows alone cannot tell them apart.
+
+**Conception rate is a percentage of settled inseminations, not of checks.** An insemination
+is settled once it can no longer change: something on its chain came back `pregnant`, or every
+check on it is recorded and none booked another. One still carrying an open check is in
+neither half of the fraction — counting it as a failure would let a Mait improve their own
+rate by staying at home, and counting checks rather than chains would score an
+unsure-then-pregnant insemination as half a failure. Before anything settles the rate is
+`null`, not `0.0`: no rate is a platform whose first checks are not due yet, and a tile
+rendering those the same way raises a false alarm in its first ninety days.
+
+The same figure is on `/dashboard/summary/` under `pregnancy`, computed by the same module so
+the tile and the screen it links to cannot disagree, and overdue checks are a queue on that
+endpoint's `exceptions` as `overdue_checks`. `/ai-events/{id}/` carries the event's own chain
+as `pregnancy_checks` — detail only, never the list, which renders 25 rows at a time offline.
 
 The list response carries `due_this_week` and `overdue` alongside the page, so the Profile
 row, the screen's own headline and the list agree on one number rather than each counting for

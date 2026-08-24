@@ -13,17 +13,21 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status, viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.permissions import IsMait
+from apps.core.pagination import StandardLimitOffsetPagination
+from apps.core.permissions import IsAdmin, IsMait
+from apps.masterdata.models import Mait
 
 from .models import ALERT_WINDOW_DAYS, PregnancyCheck
+from .oversight import Rate, counts_by_mait, empty_counts, rates_by_mait
 from .route import late_first, minutes_for, road_minutes, shortest_first
 from .serializers import PregnancyCheckSerializer, RecordCheckSerializer
 from .services import CheckAlreadyRecorded, PhotoRequired, record_check
@@ -230,3 +234,145 @@ class PregnancyCheckViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         return Response(self.get_serializer(check).data)
+
+
+# ==========================================================================================
+# Admin oversight
+# ==========================================================================================
+# The endpoints above are the Mait's own, scoped by `request.user.mait_profile`. An admin has
+# no such profile, so calling them from the portal answers an empty list rather than an error
+# — which is the worst of both, a screen that looks like it works and reports nothing.
+#
+# So the portal gets its own surface, the way `apps.inventory` does: a Mait view and a
+# separate admin-wide one, rather than a single view trying to guess which audience is asking
+# from a query parameter that can be omitted or altered.
+
+
+def _mait_identity(mait) -> dict:
+    return {
+        "mait_id": mait.id,
+        "name": mait.name,
+        "sahayak_vendor_code": mait.sahayak_vendor_code,
+        "mpp_codes": [mpp.mpp_code for mpp in mait.mpps.all()],
+    }
+
+
+@extend_schema(
+    tags=["pregnancy"],
+    summary="Pregnancy diagnosis across every Mait",
+    description=(
+        "Admin oversight. The Mait-facing endpoints only ever report the caller's own "
+        "checks, so this is the only view that can answer whether anybody's round is being "
+        "dropped.\n\n"
+        "Sorted most overdue first: the screen is opened to find the rounds nobody is "
+        "walking, not to browse a roster. Every active Mait appears, including the ones with "
+        "no checks at all — a Mait whose inseminations are too recent to have booked one "
+        "reads very differently from a Mait ignoring twenty, and a list built only from "
+        "check rows could not tell them apart.\n\n"
+        "`conception_rate` is a percentage of **settled inseminations**, not of checks: an "
+        "unsure result books a recheck, and an event whose second check came back pregnant "
+        "did not fail. An insemination still carrying an open check is in neither half of "
+        "the fraction — otherwise a Mait improves their own rate by staying at home."
+    ),
+    responses={200: dict},
+)
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def pregnancy_oversight(request):
+    today = timezone.localdate()
+    counts = counts_by_mait(today)
+    rates, overall = rates_by_mait()
+
+    rows = []
+    for mait in Mait.objects.filter(is_active=True).prefetch_related("mpps"):
+        rate = rates.get(mait.id, Rate())
+        rows.append(
+            {
+                **_mait_identity(mait),
+                **counts.get(mait.id, empty_counts()),
+                **rate.as_dict(),
+            }
+        )
+
+    # Most overdue first, then the fullest open list, then by name so the order is stable
+    # between two loads of an unchanged screen.
+    rows.sort(key=lambda row: (-row["overdue"], -row["open"], row["name"]))
+
+    return Response(
+        {
+            "summary": {
+                "maits": len(rows),
+                "open": sum(row["open"] for row in rows),
+                "overdue": sum(row["overdue"] for row in rows),
+                "due_this_week": sum(row["due_this_week"] for row in rows),
+                "recorded": sum(row["recorded"] for row in rows),
+                "pregnant": sum(row["pregnant"] for row in rows),
+                "not_pregnant": sum(row["not_pregnant"] for row in rows),
+                "unsure": sum(row["unsure"] for row in rows),
+                "alert_window_days": ALERT_WINDOW_DAYS,
+                **overall.as_dict(),
+            },
+            "results": rows,
+        }
+    )
+
+
+@extend_schema(
+    tags=["pregnancy"],
+    summary="One Mait's pregnancy checks",
+    description=(
+        "The drill-down behind a row of the oversight table, in the same shape the app shows "
+        "that Mait — so an admin reading it down the phone is looking at the same list.\n\n"
+        "`window=due` is open checks, **oldest first**: this screen is read to find what has "
+        "been dropped, and the app's soonest-first order buries exactly that at the bottom. "
+        "`done` is what was recorded, newest first. `all` is both."
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="window",
+            description="`due` (default), `done`, or `all`.",
+            required=False,
+            type=str,
+        )
+    ],
+    responses={200: dict},
+)
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def mait_pregnancy_checks(request, mait_id: int):
+    mait = get_object_or_404(Mait.objects.prefetch_related("mpps"), pk=mait_id)
+    today = timezone.localdate()
+
+    mine = PregnancyCheck.objects.filter(mait=mait)
+    counts = counts_by_mait(today, mine).get(mait.id, empty_counts())
+    rates, _ = rates_by_mait(mine)
+
+    base = mine.select_related(
+        "ai_event",
+        "ai_event__mpp",
+        "ai_event__animal",
+        "ai_event__member",
+        "ai_event__non_member",
+        "ai_event__semen_batch",
+    )
+
+    window = request.query_params.get("window", "due")
+    if window == "done":
+        checks = base.exclude(outcome="").order_by("-checked_at")
+    elif window == "all":
+        checks = base.order_by("outcome", "due_on", "id")
+    else:
+        checks = base.filter(outcome="").order_by("due_on", "id")
+
+    paginator = StandardLimitOffsetPagination()
+    page = paginator.paginate_queryset(checks, request)
+    serialized = PregnancyCheckSerializer(page, many=True, context={"today": today}).data
+
+    response = paginator.get_paginated_response(serialized)
+    response.data["mait"] = _mait_identity(mait)
+    response.data["summary"] = {
+        **counts,
+        **rates.get(mait.id, Rate()).as_dict(),
+        "alert_window_days": ALERT_WINDOW_DAYS,
+    }
+    return response

@@ -168,6 +168,34 @@ class AIEventSerializer(serializers.ModelSerializer):
         return PaymentSummarySerializer(payment).data
 
 
+class AIEventDetailSerializer(AIEventSerializer):
+    """
+    One event, with the question of whether it worked.
+
+    An insemination is not finished when the straw is used — it is finished when somebody
+    finds out whether it took, and that answer lives on a chain of pregnancy checks rather
+    than on the event (docs/API_CONTRACT.md §9.11). The detail screen is where a dispute is
+    settled from, so it is the one place that trail belongs.
+
+    Detail only, and deliberately not on ``AIEventSerializer`` itself: the list renders 25
+    events at a time and the app renders it offline, so a reverse lookup per row would be 25
+    extra queries to show something no list column has room for.
+    """
+
+    pregnancy_checks = serializers.SerializerMethodField()
+
+    class Meta(AIEventSerializer.Meta):
+        fields = [*AIEventSerializer.Meta.fields, "pregnancy_checks"]
+
+    def get_pregnancy_checks(self, event) -> list:
+        # Imported here rather than at module scope: `apps.pregnancy` imports the AI event
+        # model, and hoisting this makes the two modules import each other at startup.
+        from apps.pregnancy.serializers import PregnancyCheckSerializer
+
+        checks = event.pregnancy_checks.all().order_by("due_on", "id")
+        return PregnancyCheckSerializer(checks, many=True, context=self.context).data
+
+
 class AIEventCompleteSerializer(serializers.Serializer):
     """
     The one decision a completion can carry.

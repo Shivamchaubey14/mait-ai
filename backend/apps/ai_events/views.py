@@ -30,6 +30,7 @@ from .models import AIEvent
 from .serializers import (
     AIEventCompleteSerializer,
     AIEventCreateSerializer,
+    AIEventDetailSerializer,
     AIEventPhotoSerializer,
     AIEventSerializer,
     AIEventTimelineSerializer,
@@ -151,6 +152,12 @@ class AIEventViewSet(
             "mpp", "member", "non_member", "animal", "mait", "payment"
         ).order_by("-created_at")
 
+        if self.action == "retrieve":
+            # Only the detail serializer reads the chain. Prefetched rather than left to the
+            # serializer, which would otherwise issue one query per check on the one screen
+            # a dispute is settled from.
+            base = base.prefetch_related("pregnancy_checks__ai_event__semen_batch")
+
         user = self.request.user
         if getattr(user, "role", None) in (Role.SUPER_ADMIN, Role.ADMIN):
             return base
@@ -163,6 +170,9 @@ class AIEventViewSet(
     def get_serializer_class(self):
         if self.action == "create":
             return AIEventCreateSerializer
+        if self.action == "retrieve":
+            # The detail screen alone carries the pregnancy chain — see the serializer.
+            return AIEventDetailSerializer
         return AIEventSerializer
 
     def get_serializer_context(self):
