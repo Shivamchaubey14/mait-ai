@@ -201,6 +201,33 @@ a:hover {
   background: var(--color-background);
 }
 
+/* An anchor wearing `.btn` is a button, and a button does not sprout an underline when the
+   cursor crosses it — the fill is what says it is live. `a:hover` at the top of this file was
+   catching every one of them: the two on a pregnancy card, "Open the queue" on Maits, the back
+   links on the detail screens. The rule is here rather than on any one page because the
+   mistake was never one page's. */
+a.btn:hover {
+  text-decoration: none;
+}
+
+/* A secondary action, filled.
+ *
+ * `.btn` is white on a white page, which makes a control you find by hovering for the border
+ * to matter — the same defect the pregnancy cards had. This is for the buttons that are real
+ * actions but not the screen's answer: Refresh, mostly. It stays quiet enough that a screen
+ * carrying one of these and one `--dark` still says which is which.
+ */
+.btn--soft {
+  background: var(--ink-50);
+  border-color: var(--ink-100);
+}
+
+.btn--soft:hover {
+  color: var(--color-primary-dark);
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+}
+
 /* One green screen-owning action per view. A second green button on the same screen means
    neither is the answer to "what do I do here". */
 .btn--primary,
@@ -721,6 +748,12 @@ a:hover {
   font-family: var(--font-heading);
   font-weight: 700;
   color: var(--color-text-muted);
+}
+
+/* A count that is itself the problem — "Not priced" rather than a figure. Yellow, because it
+   is work waiting rather than something broken: the same rule the queue cards follow. */
+.panel__count--warn {
+  color: var(--color-secondary-pressed);
 }
 
 /* --- a card that opens somewhere ---------------------------------------------------------
