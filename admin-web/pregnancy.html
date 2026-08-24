@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pregnancy diagnosis · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <!-- pregnancy.css imports forms.css, which imports portal.css. -->
+    <link rel="stylesheet" href="assets/css/pregnancy.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="pregnancy">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Pregnancy diagnosis</h1>
+            <p class="topbar__meta">
+              Ninety days after the straw · <span id="mait-count">—</span> Maits on the round
+            </p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn" id="refresh" type="button">Refresh</button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- Conception rate leads. It is the number this platform is ultimately judged on, and
+             the only one on the screen that says whether any of the work is achieving
+             anything — the three beside it qualify it by saying how much of the round the
+             rate was actually computed over. -->
+        <section class="tiles" aria-label="Diagnosis summary">
+          <article class="tile tile--good">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M8 12.5l2.5 2.5L16 9.5" /></svg
+              ></span>
+              Conception rate
+            </p>
+            <p class="tile__value" id="rate">—</p>
+            <p class="tile__foot" id="rate-foot">Of inseminations with an answer</p>
+          </article>
+          <article class="tile tile--warn">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3 2 20h20zM12 9v5M12 17.5v.5" /></svg
+              ></span>
+              Overdue
+            </p>
+            <p class="tile__value tile__value--warn" id="overdue">—</p>
+            <!-- Yellow, not red. A check nobody walked is waiting work, not blocked work —
+                 the same rule the Exceptions screen states out loud. -->
+            <p class="tile__foot" id="overdue-foot">Nobody has walked these</p>
+          </article>
+          <article class="tile tile--info">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7.5V12l3.5 2" /></svg
+              ></span>
+              Due this week
+            </p>
+            <p class="tile__value" id="due">—</p>
+            <!-- Says so out loud, because the app's own list means the same thing by the
+                 phrase and two surfaces using one word for two populations is how a Mait and
+                 an admin end up arguing about which number is wrong. -->
+            <p class="tile__foot">Open, including the overdue ones</p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M6 3h9l5 5v13H6zM14 3v6h6M9 14h7M9 18h7" /></svg
+              ></span>
+              Recorded
+            </p>
+            <p class="tile__value" id="recorded">—</p>
+            <p class="tile__foot" id="recorded-foot">Visits on the record</p>
+          </article>
+        </section>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search Mait or MPP"
+            aria-label="Search Mait or MPP"
+          />
+          <button
+            class="chip chip--warn is-active"
+            id="filter-overdue"
+            type="button"
+            aria-pressed="true"
+          >
+            Most overdue first
+          </button>
+        </section>
+
+        <!-- Opened by clicking a row, above the table rather than in a dialog: an admin is
+             usually reading it down the phone to the Mait it belongs to and wants the list
+             still in view. Same shape as the Inventory holding panel, for the same reason. -->
+        <section class="panel" id="round" aria-labelledby="round-title" hidden>
+          <div class="round__banner">
+            <span class="round__mark" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M5 21a7 7 0 0 1 14 0" />
+              </svg>
+            </span>
+            <div class="round__who">
+              <h2 class="round__name-line" id="round-title">—</h2>
+              <p class="round__meta" id="round-count">—</p>
+            </div>
+            <button class="btn round__close" id="round-close" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+              Close
+            </button>
+          </div>
+
+          <div class="round__tabs" role="tablist" aria-label="Which checks">
+            <button
+              class="chip is-active"
+              data-window="due"
+              role="tab"
+              aria-selected="true"
+              type="button"
+            >
+              Still owed
+            </button>
+            <button class="chip" data-window="done" role="tab" aria-selected="false" type="button">
+              Recorded
+            </button>
+            <button class="chip" data-window="all" role="tab" aria-selected="false" type="button">
+              Everything
+            </button>
+          </div>
+
+          <div class="round" id="round-body"></div>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Checks by Mait">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Mait</th>
+                  <th scope="col">MPPs</th>
+                  <th class="table__num" scope="col">Open</th>
+                  <th class="table__num" scope="col">Overdue</th>
+                  <th class="table__num" scope="col">Recorded</th>
+                  <th scope="col">Conception rate</th>
+                  <th scope="col">Round</th>
+                </tr>
+              </thead>
+              <tbody id="rows">
+                <tr>
+                  <td class="table__empty" colspan="7">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="notice">
+          <span class="notice__icon" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">The rate is of inseminations, not of visits</p>
+            <p class="notice__body">
+              An unsure result books another check three weeks out, and an insemination whose second
+              check came back pregnant did not fail. One still waiting for a visit is counted on
+              neither side — otherwise a Mait improves their own rate by staying at home.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/controls.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/pregnancy.js"></script>
+  </body>
+</html>

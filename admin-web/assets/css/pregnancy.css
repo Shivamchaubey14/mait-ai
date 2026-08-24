@@ -1,0 +1,251 @@
+/**
+ * Pregnancy diagnosis oversight (W18) — the rate column and the round behind a Mait's row.
+ *
+ * Two things this file has to draw that the shared components do not.
+ *
+ * The **rate cell**, because a bare "47.2%" in a table column is a number nobody can weigh:
+ * 50% of two inseminations and 50% of two hundred read identically, and the first one means
+ * nothing at all. So the cell is a bar, the percentage, and the fraction it came from, stacked
+ * — the bar for scanning down the column, the fraction for believing any one row of it.
+ *
+ * The **round panel**, which is cards rather than another table. The table above already
+ * answers "how many"; this answers "which animals", and it is read down a phone to the Mait it
+ * belongs to — a name, a village and a due date, not fourteen columns.
+ */
+
+@import url('forms.css');
+
+/* --- the rate column ------------------------------------------------------------------- */
+
+.rate {
+  display: grid;
+  grid-template-columns: 64px auto;
+  grid-template-areas:
+    'bar value'
+    'bar of';
+  align-items: center;
+  gap: 0 var(--space-2);
+}
+
+.rate .bar {
+  grid-area: bar;
+}
+
+.rate__value {
+  grid-area: value;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-body);
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+}
+
+/* What the percentage is of. Muted and small: it qualifies the figure beside it rather than
+   competing with it, but it is the half that makes a one-row claim believable. */
+.rate__of {
+  grid-area: of;
+  font-size: var(--text-caption);
+  line-height: var(--leading-tight);
+  color: var(--color-text-muted);
+}
+
+/* --- the round panel -------------------------------------------------------------------
+ * A surface for the cards, not a card itself — the same treatment the Inventory holding panel
+ * gets, so the two drill-downs in this portal open the same way.
+ */
+#round {
+  padding: 0;
+  overflow: hidden;
+  background: var(--ink-50);
+  border-color: var(--ink-100);
+}
+
+/* Banded in ink, because the panel opens over a table of other Maits and the first thing it
+   has to answer is which one is being looked at. */
+.round__banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-ink);
+}
+
+.round__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  background: var(--color-surface);
+}
+
+.round__mark svg {
+  width: 20px;
+  height: 20px;
+}
+
+.round__who {
+  min-width: 0;
+  flex: 1;
+}
+
+.round__name-line {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h3);
+  color: var(--color-surface);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.round__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-caption);
+  color: var(--ink-100);
+}
+
+/* Closing a panel is not a destructive act — red on this portal is Reject and Log out. */
+.round__close {
+  flex: none;
+  margin-left: auto;
+}
+
+.round__tabs {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+/* 300px, not 260. At 260 four cards fitted across the panel and every one of them was too
+   narrow for its own contents: "13 Aug 2026" broke across two lines under a one-word label,
+   which is a date that has to be read twice. Three wider cards say the same thing in half the
+   height. */
+.round {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+/* --- one check -------------------------------------------------------------------------- */
+
+.check {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* An overdue card is edged rather than filled: the panel holds a dozen of these and a dozen
+   filled yellow cards is a wall of yellow that says nothing about which is worst. The badge
+   on the card carries the number of days. */
+.check--late {
+  border-color: var(--yolk-300);
+  box-shadow: inset 3px 0 0 var(--color-secondary);
+}
+
+.check__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* The farmer's name leads. It is what an admin says first on the phone, and the Mait finds
+   the animal from it faster than from any tag. */
+.check__owner {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h3);
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.check__tag {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Two columns where they fit and one where they do not, rather than two always: a fixed pair
+   on a narrow card is what squeezed the dates in the first place. */
+.check__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2) var(--space-3);
+}
+
+.check__facts dt {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* `break-word`, not `anywhere`. `anywhere` breaks at the tightest opportunity even when the
+   line would have fitted, and it turned JAFRABADI into "JAFRABA / DI" — a breed nobody can
+   read. These values are short; only the ear tag beside them is unbounded. */
+.check__facts dd {
+  font-size: var(--text-body);
+  color: var(--color-text);
+  overflow-wrap: break-word;
+}
+
+/* What the Mait typed in the yard, kept in their words and visibly quoted rather than folded
+   in among the facts above it. */
+.check__note {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-body);
+  color: var(--color-text);
+  background: var(--ink-50);
+  border-left: 2px solid var(--ink-200);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.check__link {
+  margin-top: auto;
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+}
+
+.check__link:hover {
+  text-decoration: underline;
+}
+
+/* --- panel states ----------------------------------------------------------------------- */
+
+.round__empty,
+.round__more {
+  grid-column: 1 / -1;
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+}
+
+.round__error {
+  grid-column: 1 / -1;
+  font-size: var(--text-body);
+  color: var(--color-error);
+}
+
+/* Placeholders, so the panel keeps its shape while the request is in flight rather than
+   snapping open around content that arrives a moment later. */
+.round__skeleton {
+  height: 168px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}

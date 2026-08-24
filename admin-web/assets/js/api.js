@@ -377,6 +377,29 @@ window.MaitAI = window.MaitAI || {};
       return request({ path: '/admin/inventory/' + maitId + '/' });
     },
 
+    /**
+     * Pregnancy diagnosis rolled up per Mait.
+     *
+     * `/admin/pregnancy/`, not the `/pregnancy-checks/` the app uses: that one scopes itself
+     * to the caller's own `mait_profile`, and an admin has none — so it answers an empty list
+     * rather than a 403, which is the worst of both. A screen that looks like it loaded and
+     * says nobody owes a check.
+     */
+    pregnancyOversight: function () {
+      return request({ path: '/admin/pregnancy/' });
+    },
+
+    /**
+     * One Mait's checks, in the same shape the app shows them.
+     *
+     * `window` is `due` (open, oldest first), `done` or `all`. Oldest first rather than the
+     * app's soonest-first: this screen is read to find what has been dropped, and soonest
+     * puts exactly that at the bottom.
+     */
+    maitPregnancyChecks: function (maitId, query) {
+      return request({ path: '/admin/pregnancy/' + maitId + '/', query: query });
+    },
+
     indents: function (query) {
       return request({ path: '/indents/', query: query });
     },

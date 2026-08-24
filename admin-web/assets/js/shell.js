@@ -41,6 +41,11 @@ window.MaitAI = window.MaitAI || {};
     rates: 'M20.6 13.4 12 22l-9-9V3h10zM7.5 7.5h.01',
     indents: 'M6 3h9l5 5v13H6zM14 3v6h6M9 13h7M9 17h5',
     leaderboard: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+    /* A booked visit, not a medical glyph. Pregnancy diagnosis is a round somebody walks
+       on a date — the section is about whether the visit happened, so it is a calendar
+       with a tick in it rather than a stethoscope, which would read as the whole of
+       animal health. */
+    pregnancy: 'M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M9.5 14.5l2 2 3.5-4',
     exceptions: 'M12 3 2 20h20zM12 9v5M12 17.5v.5',
     reports: 'M6 3h9l5 5v13H6zM14 3v6h6M9 14h7M9 18h7',
     users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M2 20a7 7 0 0 1 14 0M18 8v6M15 11h6',
@@ -78,6 +83,10 @@ window.MaitAI = window.MaitAI || {};
     { key: 'rates', label: 'Rates', href: 'rates.html' },
     { key: 'indents', label: 'Indents', href: 'indents.html' },
     { key: 'leaderboard', label: 'Leaderboard', href: 'leaderboard.html' },
+    // After the leaderboard and before the exception queues: it is the other half of how
+    // a Mait is judged. The leaderboard counts what was sold, this counts what it
+    // achieved, and reading one without the other is how volume gets rewarded on its own.
+    { key: 'pregnancy', label: 'Pregnancy', href: 'pregnancy.html' },
     { key: 'exceptions', label: 'Exceptions', href: 'exceptions.html', badge: true },
     { key: 'reports', label: 'Reports', href: 'reports.html' },
     { key: 'users', label: 'Users & roles', href: 'users.html' },
