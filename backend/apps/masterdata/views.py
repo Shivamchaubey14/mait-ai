@@ -9,6 +9,7 @@ time out at the proxy long before it finished (SRS §6.1.6).
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Count, Max, Q
 from django.http import Http404, HttpResponse
 from django.utils import timezone
@@ -56,6 +57,17 @@ from .verification import (
     mask_mobile,
     resolve_farmer,
 )
+
+
+#: How long a progress record outlives its poll. Long enough that a slow client still finds it,
+#: short enough that a download nobody watched does not sit in the cache for the afternoon.
+PROGRESS_TTL_SECONDS = 120
+
+
+def _progress_key(token: str) -> str:
+    # Namespaced and bounded. The token comes from a client, so it is never interpolated into
+    # a key at whatever length it happens to arrive.
+    return f"master-snapshot-progress:{token[:64]}"
 
 
 @extend_schema(tags=["master-data"])
@@ -241,6 +253,33 @@ class MasterUploadViewSet(
         return Response({"results": results})
 
     @extend_schema(
+        summary="How far a master download has got",
+        description=(
+            "Polled while `snapshots/{master}/` is in flight, keyed by the token the client "
+            "sent with it."
+            "\n\n"
+            "The wait on that endpoint is almost entirely the workbook being rebuilt, and "
+            "until it is finished there is not one byte to send — so a client measuring the "
+            "transfer sees nothing, then everything. This is the part that can honestly be "
+            "measured: rows copied, out of rows to copy."
+            "\n\n"
+            "Zeroes where the token is unknown, which is the ordinary state for the first poll "
+            "or two before the builder has reached its first checkpoint."
+        ),
+        parameters=[
+            OpenApiParameter("token", description="The token sent with the download", type=str)
+        ],
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"], url_path="snapshots-progress")
+    def snapshot_progress(self, request):
+        # A path that cannot collide with `snapshots/{master}/` rather than one that has to be
+        # declared before it and stay there. Route order is not the sort of thing anybody
+        # checks when adding an action.
+        token = request.query_params.get("token") or ""
+        return Response(cache.get(_progress_key(token)) or {"rows": 0, "total": 0})
+
+    @extend_schema(
         summary="Download the last upload of a master, locked",
         description=(
             "The workbook this platform is currently running on, rebuilt and protected."
@@ -283,8 +322,23 @@ class MasterUploadViewSet(
             meta={"upload_type": upload_type, "file_name": upload.file_name},
         )
 
-        payload = build_snapshot(upload).getvalue()
+        # The client mints a token and polls `snapshots-progress/` with it while this request
+        # is in flight. Optional: a caller that does not want progress simply omits it, and a
+        # download that nobody is watching writes nothing.
+        token = request.query_params.get("progress") or ""
+        on_row = None
+        if token:
+            key = _progress_key(token)
 
+            def on_row(written, total):
+                cache.set(key, {"rows": written, "total": total}, PROGRESS_TTL_SECONDS)
+
+        payload = build_snapshot(upload, on_row=on_row).getvalue()
+
+        if token:
+            # Cleared rather than left to expire. The next download with a recycled token would
+            # otherwise open on the last one's finished position and count backwards.
+            cache.delete(_progress_key(token))
         stamp = timezone.localtime(upload.finished_at or upload.created_at).strftime("%Y-%m-%d")
 
         # One body, with its length stated.
