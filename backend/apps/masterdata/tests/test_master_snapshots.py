@@ -237,3 +237,28 @@ def test_the_header_stays_put_and_can_be_filtered(admin_client, upload):
     assert sheet.protection.sheet is True
     assert sheet.protection.autoFilter is False
     assert sheet.protection.sort is False
+
+
+def test_the_length_is_sent_and_is_readable_cross_origin(admin_client, upload):
+    """
+    What a real progress bar needs from the server.
+
+    A length, so the client draws a fraction rather than a stripe that only says "working" —
+    and permission to read it, because on the development path the portal is on :8080 and the
+    API on :8000, and `Content-Length` is not a CORS-safelisted response header. Without the
+    expose header the browser hides it and the percentage quietly disappears.
+
+    Sending it in chunks was tried and reverted: `runserver` is wsgiref and does a blocking
+    write per chunk, which turned a 482 KB file into a 12.6-second download.
+    """
+    upload(
+        rows=[("MPP Code", "MPPName")]
+        + [(f"{n:06d}", uuid.uuid4().hex) for n in range(2000)]
+    )
+
+    response = admin_client.get("/api/v1/admin/uploads/snapshots/mpp/")
+
+    assert int(response["Content-Length"]) == len(response.content)
+    exposed = response["Access-Control-Expose-Headers"]
+    assert "Content-Length" in exposed
+    assert "Content-Disposition" in exposed
