@@ -22,9 +22,10 @@ provenance banner saying which upload this is and when it landed. A copy of a ma
 date on it is the thing that gets mistaken for the current one three weeks later.
 
 **Formatted on the way out**, because a master is opened to be read rather than to be tidied.
-Columns are sized to what is actually in them and the header row is frozen so it survives a
-scroll through a hundred thousand rows. A file that opens as a wall of `#####` over a header
-that scrolls away is one an admin fixes by hand before they can use it, every time.
+Columns are sized to what is actually in them, the header row is frozen so it survives a scroll
+through a hundred thousand rows, and the filter arrows are left usable even though every cell is
+locked — sorting a column is reading, not editing. A file that opens as a wall of `#####` over a
+header that scrolls away is one an admin fixes by hand before they can use it, every time.
 
 The formatting has to be decided before a single row is written: a write-only sheet takes its
 widths and its frozen pane *before* the first append, and set afterwards they are silently
@@ -181,6 +182,11 @@ def build_snapshot(upload: DataUploadLog) -> io.BytesIO:
 
         sheet.protection.sheet = True
         sheet.protection.password = SHEET_PASSWORD
+        # Sorting and filtering are how a spreadsheet gets read, and neither changes a value.
+        # Locking them would make the file harder to use without making it any safer — the
+        # cells are what must not move, and they stay locked.
+        sheet.protection.autoFilter = False
+        sheet.protection.sort = False
         sheet.protection.enable()
 
         for column in range(1, columns + 1):
@@ -196,6 +202,12 @@ def build_snapshot(upload: DataUploadLog) -> io.BytesIO:
             # disappears on row forty is a file an admin scrolls back up in to remember which
             # column they are reading.
             sheet.freeze_panes = f"A{header_row + 1}"
+            last_column = get_column_letter(columns)
+            # `source_rows` counts the header with the data, so the filter's last row is the
+            # header row plus the data beneath it. Where the file does not declare its size
+            # the range covers the header alone, which Excel extends down the contiguous block.
+            data_rows = max(0, min(source_rows, MAX_SNAPSHOT_ROWS + 1) - 1)
+            sheet.auto_filter.ref = f"A{header_row}:{last_column}{header_row + data_rows}"
 
         for text, font in banner:
             cell = WriteOnlyCell(sheet, value=text)
