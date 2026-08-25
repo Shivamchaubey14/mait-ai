@@ -324,7 +324,8 @@ has not been.
 | Method | Endpoint | Description | Auth |
 | --- | --- | --- | --- |
 | GET | `/admin/uploads/snapshots/` | Which masters have a landed upload behind them, and what it was | Admin |
-| GET | `/admin/uploads/snapshots/{member\|mait\|mpp}/` | That upload, rebuilt as a protected workbook | Admin |
+| GET | `/admin/uploads/snapshots/{member\|mait\|mpp}/` | That upload, rebuilt as a protected workbook. `?progress=<token>` to report position | Admin |
+| GET | `/admin/uploads/snapshots-progress/` | How far a build has got, by `?token=` — rows copied out of rows to copy | Admin |
 
 Not a blank template — the templates are the SAP exports themselves, which this portal has
 always said. This is **what was last loaded**, so an admin about to re-upload a corrected
@@ -339,12 +340,27 @@ The workbook is rebuilt rather than streamed back, which is what lets the first 
 provenance banner: which upload, when it landed, how many rows were accepted, who sent it. A
 copy of a master with no date on it gets mistaken for the current one three weeks later.
 
+The workbook arrives **formatted**: columns sized to their contents and bounded at both ends,
+the header row frozen, and the filter left usable even though the cells are locked — sorting is
+reading, not editing, and a reference file nobody can sort gets copied into an unprotected
+workbook to be worked with.
+
 **Protected, not sealed.** The sheet carries Excel's own protection, which stops the accidental
 edit — a stray keystroke, a dragged column — on a file that may be forwarded to somebody. It is
 not encryption: it can be removed by anyone who means to, and one of these files is not
-evidence. `Content-Length` is sent, so the portal draws a real progress bar rather than a
-spinner. Downloads are audit-logged as `pii_access`: the masters carry names, mobile numbers
+evidence. Downloads are audit-logged as `pii_access`: the masters carry names, mobile numbers
 and member codes.
+
+**Watching it happen.** An xlsx is a zip and is not valid until its last byte is written, so
+until the build finishes there is not one byte to send — on the Member master that is most of
+three minutes during which a client measuring the transfer sees nothing, then everything. Pass
+`?progress=<token>` and poll `snapshots-progress/?token=` for rows copied out of rows to copy,
+which is the only honest measure of that phase.
+
+`Content-Length` is sent on the download **and named in `Access-Control-Expose-Headers`**. On
+the no-Docker development path the portal is on :8080 and the API on :8000, and without that
+the browser hides the length: the file still downloads and the percentage just never appears,
+with nothing saying why.
 
 ## 9.10 Admin — users
 
