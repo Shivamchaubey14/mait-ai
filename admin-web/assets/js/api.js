@@ -553,6 +553,20 @@ window.MaitAI = window.MaitAI || {};
       return request({ path: '/admin/uploads/snapshots/' });
     },
 
+    /**
+     * How far a master download has got, by the token it was started with.
+     *
+     * Rows copied, out of rows to copy. It is the only honest measure of that wait: an xlsx
+     * cannot be sent until it is finished, so until then the transfer has nothing to report
+     * and the browser sees a flat zero.
+     */
+    uploadSnapshotProgress: function (token) {
+      return request({
+        path: '/admin/uploads/snapshots-progress/',
+        query: { token: token },
+      });
+    },
+
     // One row, not a collection — a pregnancy diagnosis is the same work whatever the animal,
     // so it is priced once rather than eighteen times like the breeds above.
     pregnancyRate: function () {

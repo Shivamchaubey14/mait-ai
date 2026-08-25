@@ -560,9 +560,19 @@
     $('[data-progress="' + key + '"]').prop('hidden', false);
 
     if (update.phase === 'preparing') {
-      $bar.addClass('is-indeterminate');
+      // A fraction arrives once the server has reached its first checkpoint. Before that
+      // there is nothing to be a percentage of, and the stripe says so.
+      if (update.fraction === null || update.fraction === undefined) {
+        $bar.addClass('is-indeterminate');
+        $('[data-phase="' + key + '"]').text('Preparing the file…');
+        $('[data-percent="' + key + '"]').text('');
+        return;
+      }
+      const built = Math.round(update.fraction * 100);
+      $bar.removeClass('is-indeterminate');
+      $fill.css('width', built + '%');
       $('[data-phase="' + key + '"]').text('Preparing the file…');
-      $('[data-percent="' + key + '"]').text('');
+      $('[data-percent="' + key + '"]').text(built + '%');
       return;
     }
 
@@ -590,14 +600,64 @@
     $('[data-percent="' + key + '"]').text(percent + '%');
   }
 
+  /**
+   * A key for one download, minted here.
+   *
+   * Not a counter and not the master's name: two tabs open on this screen would collide on
+   * either, and the second download would watch the first one's progress.
+   */
+  function progressToken() {
+    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
   function downloadMaster(key) {
     const $button = $('[data-get="' + key + '"]').prop('disabled', true);
     resetProgress(key);
 
+    // The build is the wait, and the transfer is not: the server cannot send a byte of an
+    // xlsx until the whole workbook is finished. So the rows being copied are polled while
+    // the request is in flight, and the bar spends the long phase counting something real.
+    const token = progressToken();
+    let building = true;
+
+    const poll = function () {
+      if (!building) {
+        return;
+      }
+      MaitAI.api
+        .uploadSnapshotProgress(token)
+        .done(function (position) {
+          if (building && position.total) {
+            showProgress(key, {
+              phase: 'preparing',
+              fraction: Math.min(1, position.rows / position.total),
+            });
+          }
+        })
+        .always(function () {
+          if (building) {
+            // Chained rather than on an interval: a slow poll must not stack up behind
+            // itself on a connection that is already carrying the download.
+            window.setTimeout(poll, 400);
+          }
+        });
+    };
+    window.setTimeout(poll, 250);
+
     MaitAI.api
-      .download('/admin/uploads/snapshots/' + key + '/', key + '-master.xlsx', function (update) {
-        showProgress(key, update);
-      })
+      .download(
+        '/admin/uploads/snapshots/' + key + '/?progress=' + encodeURIComponent(token),
+        key + '-master.xlsx',
+        function (update) {
+          if (update.phase !== 'preparing') {
+            // The first byte has landed, so the build is over and the poll has nothing left
+            // to say. Stopped here rather than in `.then`, or a reply already in flight would
+            // paint a stale build percentage over the transfer.
+            building = false;
+          }
+          showProgress(key, update);
+        }
+      )
       .then(function () {
         // Left on screen for a moment rather than cleared on the same frame: a bar that
         // vanishes the instant it fills never showed the operator that it finished.
@@ -610,6 +670,7 @@
         MaitAI.shell.alert('That master could not be prepared. Try again in a moment.');
       })
       .finally(function () {
+        building = false;
         $button.prop('disabled', false);
       });
   }
