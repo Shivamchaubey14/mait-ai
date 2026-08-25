@@ -203,10 +203,23 @@
             <h3 class="master__title">Member master</h3>
             <p class="master__meta" data-meta="member">Checking…</p>
 
-            <!-- Hidden until a download starts, and only then given a role: an
-                 `aria-live` bar sitting on the page announces itself on open. -->
-            <div class="master__bar" data-bar="member" hidden>
-              <span class="master__fill" data-fill="member"></span>
+            <!-- Hidden until a download starts. The phase is `role="status"` and the
+                 percentage is not: three announcements ("Preparing", "Downloading",
+                 "Saved") are useful, and a number changing two hundred times is a
+                 screen reader nobody can hear over. -->
+            <div class="master__progress" data-progress="member" hidden>
+              <p class="master__status">
+                <span data-phase="member" role="status"></span>
+                <span class="master__percent" data-percent="member" aria-hidden="true"></span>
+              </p>
+              <!-- A styled div, like the import bars further down this page, and with no
+                   `progressbar` role on purpose. The role's value would be announced on every
+                   chunk — a couple of hundred times for a large master — and what a listener
+                   actually needs is the three phase changes, which the status line above
+                   carries. The bar is the visual half of the same fact. -->
+              <div class="master__bar" data-bar="member" aria-hidden="true">
+                <span class="master__fill" data-fill="member"></span>
+              </div>
             </div>
           </div>
 
@@ -251,10 +264,23 @@
             <h3 class="master__title">Mait master</h3>
             <p class="master__meta" data-meta="mait">Checking…</p>
 
-            <!-- Hidden until a download starts, and only then given a role: an
-                 `aria-live` bar sitting on the page announces itself on open. -->
-            <div class="master__bar" data-bar="mait" hidden>
-              <span class="master__fill" data-fill="mait"></span>
+            <!-- Hidden until a download starts. The phase is `role="status"` and the
+                 percentage is not: three announcements ("Preparing", "Downloading",
+                 "Saved") are useful, and a number changing two hundred times is a
+                 screen reader nobody can hear over. -->
+            <div class="master__progress" data-progress="mait" hidden>
+              <p class="master__status">
+                <span data-phase="mait" role="status"></span>
+                <span class="master__percent" data-percent="mait" aria-hidden="true"></span>
+              </p>
+              <!-- A styled div, like the import bars further down this page, and with no
+                   `progressbar` role on purpose. The role's value would be announced on every
+                   chunk — a couple of hundred times for a large master — and what a listener
+                   actually needs is the three phase changes, which the status line above
+                   carries. The bar is the visual half of the same fact. -->
+              <div class="master__bar" data-bar="mait" aria-hidden="true">
+                <span class="master__fill" data-fill="mait"></span>
+              </div>
             </div>
           </div>
 
@@ -299,10 +325,23 @@
             <h3 class="master__title">MPP master</h3>
             <p class="master__meta" data-meta="mpp">Checking…</p>
 
-            <!-- Hidden until a download starts, and only then given a role: an
-                 `aria-live` bar sitting on the page announces itself on open. -->
-            <div class="master__bar" data-bar="mpp" hidden>
-              <span class="master__fill" data-fill="mpp"></span>
+            <!-- Hidden until a download starts. The phase is `role="status"` and the
+                 percentage is not: three announcements ("Preparing", "Downloading",
+                 "Saved") are useful, and a number changing two hundred times is a
+                 screen reader nobody can hear over. -->
+            <div class="master__progress" data-progress="mpp" hidden>
+              <p class="master__status">
+                <span data-phase="mpp" role="status"></span>
+                <span class="master__percent" data-percent="mpp" aria-hidden="true"></span>
+              </p>
+              <!-- A styled div, like the import bars further down this page, and with no
+                   `progressbar` role on purpose. The role's value would be announced on every
+                   chunk — a couple of hundred times for a large master — and what a listener
+                   actually needs is the three phase changes, which the status line above
+                   carries. The bar is the visual half of the same fact. -->
+              <div class="master__bar" data-bar="mpp" aria-hidden="true">
+                <span class="master__fill" data-fill="mpp"></span>
+              </div>
             </div>
           </div>
 

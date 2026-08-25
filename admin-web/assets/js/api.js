@@ -199,13 +199,13 @@ window.MaitAI = window.MaitAI || {};
    * body is a stream, so it can be read chunk by chunk and measured against `Content-Length`.
    *
    * Falls back to `blob()` untouched wherever the browser has no readable stream or the
-   * server sent no length. In that case the caller is told `null` rather than a made-up
-   * fraction: "unknown" is a state a bar can render honestly and a wrong number is not.
+   * server sent no length. The caller is told the length is unknown rather than handed a
+   * made-up fraction: "unknown" is a state a bar can draw honestly and a wrong number is not.
    */
   function measured(response, onProgress) {
     const total = Number(response.headers.get('Content-Length'));
     if (!response.body || !response.body.getReader || !total) {
-      onProgress(null);
+      onProgress({ phase: 'receiving', fraction: null });
       return response.blob();
     }
 
@@ -222,12 +222,12 @@ window.MaitAI = window.MaitAI || {};
         received += result.value.length;
         // Clamped: a gzipped response reports the compressed length in the header and the
         // decompressed length through the reader, which otherwise walks the bar past 100%.
-        onProgress(Math.min(1, received / total));
+        onProgress({ phase: 'receiving', fraction: Math.min(1, received / total) });
         return pump();
       });
     };
 
-    onProgress(0);
+    onProgress({ phase: 'receiving', fraction: 0 });
     return pump();
   }
 
@@ -259,13 +259,23 @@ window.MaitAI = window.MaitAI || {};
      * Returns a promise that rejects on a non-2xx, so the caller owns the wording of the
      * failure — "try a narrower date range" is true of one export and not of the other.
      *
-     * `onProgress` is optional and receives a fraction, or `null` where the length is not
-     * known. A streamed export sends no `Content-Length` — it cannot, it has not finished
-     * counting — so a caller that wants a bar has to be told when to show a determinate one
-     * and when to show a stripe that only says "working". Guessing at a total and then
-     * revising it is what makes a progress bar run to the end and jump back.
+     * `onProgress` is optional and receives `{ phase, fraction }`:
+     *
+     *   `preparing`  the request is out and nothing has come back. On these endpoints that is
+     *                where most of the wait lives — an xlsx is a zip and cannot be valid until
+     *                its central directory is written, so the server has to finish building
+     *                before it can send a byte. Reported as its own phase because a bar sitting
+     *                at 0% for four seconds and then filling looks broken, and it is not.
+     *   `receiving`  bytes arriving. `fraction` is 0–1, or `null` where no `Content-Length`
+     *                came back — a streamed export cannot send one, it has not finished
+     *                counting. Guessing a total and then revising it is what makes a bar run
+     *                to the end and jump back.
+     *   `done`       the file is in hand.
      */
     download: function (path, filename, onProgress) {
+      if (onProgress) {
+        onProgress({ phase: 'preparing', fraction: null });
+      }
       return fetch(BASE_URL + path, {
         headers: { Authorization: 'Bearer ' + tokens.get().access },
       })
@@ -283,6 +293,9 @@ window.MaitAI = window.MaitAI || {};
           link.click();
           document.body.removeChild(link);
           URL.revokeObjectURL(link.href);
+          if (onProgress) {
+            onProgress({ phase: 'done', fraction: 1 });
+          }
         });
     },
 

@@ -427,9 +427,34 @@
  * this is a transfer of a file already built, so it is over in a second or two and does not
  * need to be the loudest thing in the dialog.
  */
+.master__progress {
+  margin-top: var(--space-2);
+}
+
+/* The word on the left, the number on the right — the same shape the import cards above use
+   for their own progress, so a percentage always appears in the place a percentage appears. */
+.master__status {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+/* Tabular, or the number jitters sideways as it counts: 8% is narrower than 88%, and a figure
+   that moves while it changes is one the eye keeps re-finding. */
+.master__percent {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-label);
+  color: var(--color-primary-dark);
+  font-variant-numeric: tabular-nums;
+}
+
 .master__bar {
   height: 6px;
-  margin-top: var(--space-2);
   overflow: hidden;
   background: var(--color-surface);
   border-radius: var(--radius-pill);

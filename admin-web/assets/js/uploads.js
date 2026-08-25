@@ -490,10 +490,7 @@
     MASTER_TYPES.forEach(function (key) {
       $('[data-meta="' + key + '"]').text('Checking…');
       $('[data-get="' + key + '"]').prop('disabled', true);
-      $('[data-bar="' + key + '"]')
-        .prop('hidden', true)
-        .removeClass('is-indeterminate');
-      $('[data-fill="' + key + '"]').css('width', 0);
+      resetProgress(key);
     });
 
     // Read on open rather than cached from page load: an upload may have finished in the
@@ -536,33 +533,80 @@
     }
   }
 
+  function resetProgress(key) {
+    $('[data-progress="' + key + '"]').prop('hidden', true);
+    $('[data-bar="' + key + '"]').removeClass('is-indeterminate');
+    $('[data-fill="' + key + '"]').css('width', 0);
+    $('[data-phase="' + key + '"]').text('');
+    $('[data-percent="' + key + '"]').text('');
+  }
+
+  /**
+   * Show where the download has got to, in the two phases it actually has.
+   *
+   * The wait on these is not one thing. An xlsx is a zip and cannot be valid until its central
+   * directory is written, so the server builds the whole workbook before it sends a byte —
+   * which on the Member master is most of the wait, and during it there is genuinely no
+   * fraction to draw. Calling that 0% and then filling the bar in a single frame is what made
+   * this look like a delay followed by a green rectangle rather than a download.
+   *
+   * So: a travelling stripe and the word "Preparing" while the server works, then a real
+   * percentage counting up as the bytes arrive. Both are true, and between them they say what
+   * is happening at every moment.
+   */
+  function showProgress(key, update) {
+    const $bar = $('[data-bar="' + key + '"]');
+    const $fill = $('[data-fill="' + key + '"]');
+    $('[data-progress="' + key + '"]').prop('hidden', false);
+
+    if (update.phase === 'preparing') {
+      $bar.addClass('is-indeterminate');
+      $('[data-phase="' + key + '"]').text('Preparing the file…');
+      $('[data-percent="' + key + '"]').text('');
+      return;
+    }
+
+    if (update.phase === 'done') {
+      $bar.removeClass('is-indeterminate');
+      $fill.css('width', '100%');
+      $('[data-phase="' + key + '"]').text('Saved to your downloads');
+      $('[data-percent="' + key + '"]').text('100%');
+      return;
+    }
+
+    // `fraction === null` is a body with no declared length, so there is nothing to be a
+    // percentage of. The stripe says "working" honestly; a guessed number does not.
+    if (update.fraction === null) {
+      $bar.addClass('is-indeterminate');
+      $('[data-phase="' + key + '"]').text('Downloading…');
+      $('[data-percent="' + key + '"]').text('');
+      return;
+    }
+
+    const percent = Math.round(update.fraction * 100);
+    $bar.removeClass('is-indeterminate');
+    $fill.css('width', percent + '%');
+    $('[data-phase="' + key + '"]').text('Downloading…');
+    $('[data-percent="' + key + '"]').text(percent + '%');
+  }
+
   function downloadMaster(key) {
     const $button = $('[data-get="' + key + '"]').prop('disabled', true);
-    const $bar = $('[data-bar="' + key + '"]').prop('hidden', false);
-    const $fill = $('[data-fill="' + key + '"]').css('width', 0);
+    resetProgress(key);
 
     MaitAI.api
-      .download('/admin/uploads/snapshots/' + key + '/', key + '-master.xlsx', function (fraction) {
-        // `null` means the length was not sent, so there is no fraction to draw. A stripe
-        // that travels says "working" honestly; a guessed percentage does not.
-        if (fraction === null) {
-          $bar.addClass('is-indeterminate');
-          return;
-        }
-        $bar.removeClass('is-indeterminate');
-        $fill.css('width', Math.round(fraction * 100) + '%');
+      .download('/admin/uploads/snapshots/' + key + '/', key + '-master.xlsx', function (update) {
+        showProgress(key, update);
       })
       .then(function () {
-        $fill.css('width', '100%');
         // Left on screen for a moment rather than cleared on the same frame: a bar that
         // vanishes the instant it fills never showed the operator that it finished.
         window.setTimeout(function () {
-          $bar.prop('hidden', true).removeClass('is-indeterminate');
-          $fill.css('width', 0);
-        }, 900);
+          resetProgress(key);
+        }, 1400);
       })
       .catch(function () {
-        $bar.prop('hidden', true).removeClass('is-indeterminate');
+        resetProgress(key);
         MaitAI.shell.alert('That master could not be prepared. Try again in a moment.');
       })
       .finally(function () {
