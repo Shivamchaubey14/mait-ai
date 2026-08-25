@@ -333,6 +333,24 @@ class DataUploadLog(TimeStampedModel):
         "rejected row up to MAX_ERRORS_STORED — except a whole-file failure, which stores a "
         "single explanation and rejects no rows.",
     )
+    #: The locked, formatted copy of this upload, built once and kept.
+    #:
+    #: Rebuilding the Member master is 105,000 rows and takes the better part of three minutes,
+    #: and the source it is built from never changes — a corrected master is a new upload and a
+    #: new row. So the answer is cached against the row it was derived from, where it cannot go
+    #: stale: there is no invalidation problem to get wrong, only a file that either exists or
+    #: does not.
+    #:
+    #: Built when the import finishes, so the first download is as quick as the rest. Built on
+    #: demand as well, for the uploads that predate this and for a warm-up that failed.
+    snapshot_file = models.FileField(
+        upload_to="uploads/master-snapshots/%Y/%m/", blank=True, null=True
+    )
+    #: What the builder looked like when that file was made. A change to the formatting has to
+    #: reach the copies people download, and the only thing that can say so is a stamp compared
+    #: against the code — a cached file is otherwise correct forever by definition.
+    snapshot_version = models.PositiveSmallIntegerField(default=0)
+
     celery_task_id = models.CharField(max_length=64, blank=True, db_index=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)

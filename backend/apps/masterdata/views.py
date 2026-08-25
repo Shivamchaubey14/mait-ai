@@ -47,7 +47,7 @@ from .serializers import (
     NonMemberSerializer,
     UploadErrorRowSerializer,
 )
-from .snapshots import build_snapshot, latest_upload
+from .snapshots import has_snapshot, latest_upload, snapshot_bytes
 from .storage import store_aadhaar_image
 from .tasks import process_master_upload
 from .templates_xlsx import assignment_template_response
@@ -209,8 +209,8 @@ class MasterUploadViewSet(
     @extend_schema(
         summary="Which masters have a copy to download",
         description=(
-            "One entry per SAP master, saying whether there is a landed upload behind it and "
-            "what it was."
+            "One entry per SAP master, saying whether there is a landed upload behind it, "
+            "what it was, and whether its workbook is already built."
             "\n\n"
             "Sent as a list rather than left for the screen to assemble from the history, "
             "because the screen would have to know which statuses count as landed — and a "
@@ -244,6 +244,10 @@ class MasterUploadViewSet(
                         if upload
                         else ""
                     ),
+                    # Whether this one is already built. The Member master takes minutes to
+                    # rebuild from scratch, and a button that looks identical whether it will
+                    # answer in a second or in three is a button an operator gives up on.
+                    "ready": bool(upload and has_snapshot(upload)),
                     "total_rows": upload.total_rows if upload else 0,
                     "success_rows": upload.success_rows if upload else 0,
                     "failed_rows": upload.failed_rows if upload else 0,
@@ -333,7 +337,7 @@ class MasterUploadViewSet(
             def on_row(written, total):
                 cache.set(key, {"rows": written, "total": total}, PROGRESS_TTL_SECONDS)
 
-        payload = build_snapshot(upload, on_row=on_row).getvalue()
+        payload = snapshot_bytes(upload, on_row=on_row)
 
         if token:
             # Cleared rather than left to expire. The next download with a recycled token would

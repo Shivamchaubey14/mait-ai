@@ -11,8 +11,10 @@ running on*. Everything under test here protects that answer.
     than no file at all;
   - it must say **where it came from**, because a copy with no date on it is the thing that
     gets mistaken for the current one three weeks later;
-  - and it must arrive **readable**, because a file that opens as a wall of `#####` under a
-    header that scrolls away is one an admin re-formats by hand before every use.
+  - it must arrive **readable**, because a file that opens as a wall of `#####` under a
+    header that scrolls away is one an admin re-formats by hand before every use;
+  - and it must be built **once**, because rebuilding the Member master is 165 seconds and a
+    request held open that long is a proxy timeout rather than a download.
 
 It also has to say how big it is, and say it in a way a cross-origin portal is allowed to
 read — that header is the whole difference between a percentage and a stripe.
@@ -22,6 +24,7 @@ from __future__ import annotations
 
 import io
 import uuid
+from unittest import mock
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -31,8 +34,13 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
+from apps.masterdata import snapshots, tasks
 from apps.masterdata.models import DataUploadLog
-from apps.masterdata.snapshots import MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH
+from apps.masterdata.snapshots import (
+    MAX_COLUMN_WIDTH,
+    MIN_COLUMN_WIDTH,
+    SNAPSHOT_VERSION,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -262,3 +270,108 @@ def test_the_length_is_sent_and_is_readable_cross_origin(admin_client, upload):
     exposed = response["Access-Control-Expose-Headers"]
     assert "Content-Length" in exposed
     assert "Content-Disposition" in exposed
+
+
+# --- built once ----------------------------------------------------------------------------
+#
+# Rebuilding the Member master measures at 165 seconds for a 27 MB file. On demand that is a
+# request held open for most of three minutes; behind nginx it is a proxy timeout. So the
+# workbook is kept against the upload it was built from — a row that never changes, because a
+# corrected master arrives as a new upload.
+
+
+def test_the_workbook_is_kept_and_not_rebuilt(admin_client, upload):
+    log = upload()
+
+    first = admin_client.get("/api/v1/admin/uploads/snapshots/mpp/")
+    log.refresh_from_db()
+    assert log.snapshot_file, "the copy is kept against the upload it came from"
+    assert log.snapshot_version == SNAPSHOT_VERSION
+
+    # The second download must not touch the builder at all.
+    with mock.patch("apps.masterdata.snapshots.build_snapshot") as build:
+        second = admin_client.get("/api/v1/admin/uploads/snapshots/mpp/")
+
+    build.assert_not_called()
+    assert second.content == first.content
+
+
+def test_a_formatting_change_reaches_the_copies_people_download(admin_client, upload):
+    # The one way a kept file can go stale: the rules that made it changed. A version behind
+    # the code is rebuilt rather than served, or a formatting fix lands for new uploads and
+    # silently never reaches the masters anybody actually opens.
+    log = upload()
+    admin_client.get("/api/v1/admin/uploads/snapshots/mpp/")
+    log.refresh_from_db()
+
+    DataUploadLog.objects.filter(pk=log.pk).update(snapshot_version=SNAPSHOT_VERSION - 1)
+
+    with mock.patch(
+        "apps.masterdata.snapshots.build_snapshot", wraps=snapshots.build_snapshot
+    ) as build:
+        admin_client.get("/api/v1/admin/uploads/snapshots/mpp/")
+
+    build.assert_called_once()
+    log.refresh_from_db()
+    assert log.snapshot_version == SNAPSHOT_VERSION
+
+
+def test_a_copy_missing_from_storage_is_rebuilt_rather_than_a_500(admin_client, upload):
+    # The row says there is a file and storage disagrees: a bucket lifecycle rule, a database
+    # restored against a fresh volume. The source is still here and the copy was only ever
+    # about speed, so this rebuilds.
+    log = upload()
+    admin_client.get("/api/v1/admin/uploads/snapshots/mpp/")
+    log.refresh_from_db()
+    log.snapshot_file.storage.delete(log.snapshot_file.name)
+
+    response = admin_client.get("/api/v1/admin/uploads/snapshots/mpp/")
+
+    assert response.status_code == 200
+    assert sheet_of(response).cell(5, 1).value == "MPP Code"
+
+
+def test_the_import_builds_the_copy_before_anybody_asks(db, admin, upload):
+    # So the first download is as quick as the tenth. The import already ran for minutes; this
+    # is a fraction of it, and it is the difference between a download and a timeout.
+    log = upload(status=DataUploadLog.Status.QUEUED)
+    assert not log.snapshot_file
+
+    tasks._warm_snapshot(log)
+
+    log.refresh_from_db()
+    assert log.snapshot_file
+    assert log.snapshot_version == SNAPSHOT_VERSION
+
+
+def test_a_failed_warm_up_does_not_fail_the_import(db, upload):
+    """
+    The import is the job; the copy is a convenience.
+
+    An admin who cannot download a spreadsheet is in a better position than one whose
+    105,000-row import is reported as failed because a spreadsheet could not be written — and
+    the download path rebuilds on demand anyway, so this costs time and nothing else.
+    """
+    log = upload()
+
+    with mock.patch(
+        "apps.masterdata.tasks.store_snapshot", side_effect=OSError("disk full")
+    ):
+        tasks._warm_snapshot(log)  # must not raise
+
+    log.refresh_from_db()
+    assert not log.snapshot_file
+
+
+def test_the_listing_says_which_masters_are_ready(admin_client, upload):
+    # A button that looks identical whether it will answer in a second or in three minutes is
+    # a button an operator gives up on.
+    upload(upload_type=DataUploadLog.UploadType.MPP)
+
+    before = admin_client.get("/api/v1/admin/uploads/snapshots/").json()["results"]
+    assert {row["upload_type"]: row["ready"] for row in before}["mpp"] is False
+
+    admin_client.get("/api/v1/admin/uploads/snapshots/mpp/")
+
+    after = admin_client.get("/api/v1/admin/uploads/snapshots/").json()["results"]
+    assert {row["upload_type"]: row["ready"] for row in after}["mpp"] is True

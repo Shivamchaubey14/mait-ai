@@ -42,13 +42,29 @@ rest of the stream. One open, one pass.
 Streamed at both ends: `read_only` on the way in and `write_only` on the way out, because the
 Member master is ~28 MB and about a hundred thousand rows, and materialising that twice is a
 worker held for the length of a download.
+
+**And built once.** Even streamed, rebuilding the Member master measures at 165 seconds for a
+27 MB file — fine on a development machine with a progress bar in front of it, and a proxy
+timeout behind nginx. So the finished workbook is kept on the upload row it was derived from.
+
+That row is immutable: a corrected master is a *new* upload with a new row, so there is no
+invalidation to get wrong and no staleness to reason about — the file either exists for that
+upload or it does not. The one thing that can go out of date is this module: change how a
+workbook is formatted and every kept copy is a copy of the old rules, which is why
+`SNAPSHOT_VERSION` exists and is compared before a stored file is served.
+
+`process_master_upload` builds it as the import finishes, so the first download is as quick as
+the tenth. On demand is the fallback, for uploads that predate this and for a warm-up that
+failed.
 """
 
 from __future__ import annotations
 
 import io
+import logging
 from itertools import chain, islice
 
+from django.core.files.base import ContentFile
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell import WriteOnlyCell
@@ -56,6 +72,13 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from .models import DataUploadLog
+
+logger = logging.getLogger(__name__)
+
+#: Bumped whenever this module changes what a workbook looks like. A stored copy built under an
+#: older number is rebuilt rather than served — otherwise a formatting fix reaches new uploads
+#: and silently never reaches the masters anybody actually downloads.
+SNAPSHOT_VERSION = 1
 
 #: Beyond this the honest answer is the database, not a spreadsheet. The masters sit well
 #: inside it; the cap is here so one malformed upload cannot turn a download into an outage.
@@ -267,3 +290,65 @@ def build_snapshot(upload: DataUploadLog, on_row=None) -> io.BytesIO:
     finally:
         # A read-only workbook holds the file open; the importer learned this the hard way.
         source.close()
+
+
+def has_snapshot(upload: DataUploadLog) -> bool:
+    """Whether a download would be served from the kept copy rather than built."""
+    return bool(upload.snapshot_file) and upload.snapshot_version == SNAPSHOT_VERSION
+
+
+def snapshot_bytes(upload: DataUploadLog, on_row=None) -> bytes:
+    """
+    The locked workbook for this upload — from the kept copy where there is one.
+
+    `on_row` is only called when there is something to report. Serving a stored file has no
+    rows to count and takes no measurable time, and a caller drawing a progress bar from
+    nothing would flash a phase that was never true.
+    """
+    if has_snapshot(upload):
+        try:
+            upload.snapshot_file.open("rb")
+            try:
+                return upload.snapshot_file.read()
+            finally:
+                upload.snapshot_file.close()
+        except (FileNotFoundError, OSError):
+            # The row says there is a file and storage disagrees — a bucket lifecycle rule, a
+            # restored database against a fresh volume. Rebuild rather than 500: the source is
+            # still here, and the point of the copy was only ever speed.
+            logger.warning(
+                "Master snapshot missing from storage, rebuilding",
+                extra={"upload_id": upload.id, "upload_type": upload.upload_type},
+            )
+
+    return store_snapshot(upload, on_row=on_row)
+
+
+def store_snapshot(upload: DataUploadLog, on_row=None) -> bytes:
+    """
+    Build the workbook, keep it against the upload, and hand back the bytes.
+
+    Two admins asking at once will both build it, and the second write wins with identical
+    content — a locked copy of an immutable source is the same file whoever makes it. Worth
+    the wasted work rather than a lock that has to be released correctly on every path out of
+    a three-minute function.
+    """
+    payload = build_snapshot(upload, on_row=on_row).getvalue()
+
+    name = f"{upload.upload_type}-master-{upload.id}.xlsx"
+    # `save` writes through `default_storage`, so this lands in the encrypted bucket in
+    # production and in MEDIA_ROOT on the development path — the same route the upload itself
+    # took to get here.
+    upload.snapshot_file.save(name, ContentFile(payload), save=False)
+    upload.snapshot_version = SNAPSHOT_VERSION
+    upload.save(update_fields=["snapshot_file", "snapshot_version", "updated_at"])
+
+    logger.info(
+        "Master snapshot built",
+        extra={
+            "upload_id": upload.id,
+            "upload_type": upload.upload_type,
+            "bytes": len(payload),
+        },
+    )
+    return payload
