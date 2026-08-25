@@ -9,13 +9,19 @@ running on*. Everything under test here protects that answer.
     lie the feature exists to prevent;
   - it must arrive **locked**, because a master that reaches somebody subtly altered is worse
     than no file at all;
-  - and it must say **where it came from**, because a copy with no date on it is the thing that
-    gets mistaken for the current one three weeks later.
+  - it must say **where it came from**, because a copy with no date on it is the thing that
+    gets mistaken for the current one three weeks later;
+  - and it must arrive **readable**, because a file that opens as a wall of `#####` under a
+    header that scrolls away is one an admin re-formats by hand before every use.
+
+It also has to say how big it is, and say it in a way a cross-origin portal is allowed to
+read — that header is the whole difference between a percentage and a stripe.
 """
 
 from __future__ import annotations
 
 import io
+import uuid
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -26,6 +32,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
 from apps.masterdata.models import DataUploadLog
+from apps.masterdata.snapshots import MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH
 
 pytestmark = pytest.mark.django_db
 
@@ -82,8 +89,6 @@ def upload(db, admin):
 
 
 def sheet_of(response):
-    # A whole response rather than a stream: the file is built in memory so its length can be
-    # sent, which is what lets the portal draw a real progress bar instead of a spinner.
     book = load_workbook(io.BytesIO(response.content))
     return book[book.sheetnames[0]]
 
@@ -183,3 +188,52 @@ def test_a_mait_cannot_download_a_master(db, mait, upload):
 
     assert client.get("/api/v1/admin/uploads/snapshots/mpp/").status_code == 403
     assert client.get("/api/v1/admin/uploads/snapshots/").status_code == 403
+
+
+# --- readable on arrival -------------------------------------------------------------------
+
+
+def test_the_columns_are_sized_to_what_is_in_them(admin_client, upload):
+    # Naive autofit is not the goal — one long address column that pushes every other column
+    # off the screen is as unusable as a column of hashes. Measured, then bounded.
+    upload(
+        rows=(
+            ("MPP Code", "MPPName", "Address"),
+            ("001302", "ALI PUR", "A" * 200),
+            ("001303", "BAROLI", "short"),
+        )
+    )
+
+    sheet = sheet_of(admin_client.get("/api/v1/admin/uploads/snapshots/mpp/"))
+
+    code = sheet.column_dimensions["A"].width
+    address = sheet.column_dimensions["C"].width
+
+    assert code >= MIN_COLUMN_WIDTH
+    # "MPP Code" plus room for the filter arrow, not the width of the word "Address".
+    assert code >= len("MPP Code")
+    assert address == MAX_COLUMN_WIDTH
+
+
+def test_a_narrow_column_still_gets_a_usable_width(admin_client, upload):
+    upload(rows=(("ID",), ("1",), ("2",)))
+
+    sheet = sheet_of(admin_client.get("/api/v1/admin/uploads/snapshots/mpp/"))
+
+    assert sheet.column_dimensions["A"].width == MIN_COLUMN_WIDTH
+
+
+def test_the_header_stays_put_and_can_be_filtered(admin_client, upload):
+    upload()
+
+    sheet = sheet_of(admin_client.get("/api/v1/admin/uploads/snapshots/mpp/"))
+
+    # Three banner lines and a spacer put the header on row 5, so the freeze is below it.
+    assert sheet.freeze_panes == "A6"
+    assert sheet.auto_filter.ref == "A5:B7"
+
+    # Sorting and filtering are reading, not editing, and stay usable on a locked sheet. The
+    # cells themselves are still protected.
+    assert sheet.protection.sheet is True
+    assert sheet.protection.autoFilter is False
+    assert sheet.protection.sort is False
