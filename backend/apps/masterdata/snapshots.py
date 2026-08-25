@@ -67,6 +67,9 @@ MAX_SNAPSHOT_ROWS = 200_000
 #: six wide on row 100,000.
 WIDTH_SAMPLE_ROWS = 400
 
+#: How often the builder reports its position while copying rows. See `build_snapshot`.
+PROGRESS_EVERY_ROWS = 250
+
 #: Bounds on a measured column. The floor keeps a two-letter header from collapsing to nothing;
 #: the ceiling stops one long address column from pushing every other column off the screen,
 #: which is the failure mode of naive autofit.
@@ -153,13 +156,19 @@ def _measure(head: list) -> tuple[dict[int, int], int]:
     return widths, columns
 
 
-def build_snapshot(upload: DataUploadLog) -> io.BytesIO:
+def build_snapshot(upload: DataUploadLog, on_row=None) -> io.BytesIO:
     """
     Rebuild an upload as a protected, readable workbook.
 
     Only the first sheet is carried. Every master this platform reads is one sheet of rows; a
     second sheet in a SAP export has never been data, and copying one would put something in
     an admin's hands that the importer itself ignored.
+
+    `on_row(written, total)` is called as the copy proceeds, if given. This is the only honest
+    measure of the wait: the Member master is a hundred thousand rows and takes most of a
+    minute to rebuild, and until it is finished there is not a single byte to send. A client
+    told nothing during that draws a bar sitting at zero and then filling in one frame, which
+    reads as a broken download rather than a slow one.
     """
     upload.file.seek(0)
     source = load_workbook(upload.file, read_only=True, data_only=True)
@@ -240,6 +249,16 @@ def build_snapshot(upload: DataUploadLog) -> io.BytesIO:
             else:
                 sheet.append(list(row))
             written += 1
+
+            # Every few hundred rows rather than every row: the reporting is a network hop to
+            # the cache, and a hundred thousand of them would cost more than the work being
+            # measured. At this interval the Member master reports about four hundred times,
+            # which is a bar that moves smoothly and a cost nobody can see.
+            if on_row is not None and written % PROGRESS_EVERY_ROWS == 0:
+                on_row(written, source_rows)
+
+        if on_row is not None:
+            on_row(written, source_rows)
 
         buffer = io.BytesIO()
         book.save(buffer)
