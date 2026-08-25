@@ -283,22 +283,38 @@ class MasterUploadViewSet(
             meta={"upload_type": upload_type, "file_name": upload.file_name},
         )
 
-        buffer = build_snapshot(upload)
-        payload = buffer.getvalue()
+        payload = build_snapshot(upload).getvalue()
+
         stamp = timezone.localtime(upload.finished_at or upload.created_at).strftime("%Y-%m-%d")
 
+        # One body, with its length stated.
+        #
+        # An xlsx is a zip and is not valid until its central directory is written, so there is
+        # no honest way to stream one as it is assembled: the build has to finish first. Sending
+        # the finished bytes in chunks *was* tried, to give the browser's reader more than one
+        # reading to draw a bar from — and it made this endpoint take **12.6 seconds** for a
+        # 482 KB file. `runserver` is wsgiref, which does a blocking write per chunk, so
+        # fifteen chunks cost about eight tenths of a second each. Behind gunicorn it would be
+        # fine and here it is unusable, and the development path is the one people run.
+        #
+        # So the framing is left to TCP, which delivers it in several reads anyway, and the
+        # part of the wait that was actually invisible — the server building the workbook — is
+        # reported by the client as its own phase instead. `Content-Length` matters either way:
+        # it is what makes the bar a fraction rather than a stripe that only says "working".
         response = HttpResponse(
             payload,
-            content_type=(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ),
+            content_type=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
         )
         response["Content-Disposition"] = (
             f'attachment; filename="{upload_type}-master-{stamp}.xlsx"'
         )
-        # Stated so the browser can draw a real progress bar rather than a spinner. The file
-        # is built in memory and its length is known; a streamed response could not say.
         response["Content-Length"] = str(len(payload))
+        # Readable cross-origin. On the no-Docker development path the portal is served on
+        # :8080 and the API on :8000, and `Content-Length` is not a CORS-safelisted response
+        # header — without this the browser hides it, `measured()` finds no total, and the
+        # percentage silently becomes a stripe. Behind nginx the two share an origin and this
+        # header is redundant; it costs nothing and the dev path is where it is noticed.
+        response["Access-Control-Expose-Headers"] = "Content-Length, Content-Disposition"
         return response
 
     @extend_schema(
