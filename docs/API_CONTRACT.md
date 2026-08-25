@@ -351,6 +351,18 @@ not encryption: it can be removed by anyone who means to, and one of these files
 evidence. Downloads are audit-logged as `pii_access`: the masters carry names, mobile numbers
 and member codes.
 
+**Built once.** Rebuilding the Member master measures at 129 seconds for a 27 MB workbook, so
+the finished file is kept against the upload row it came from and served from there afterwards —
+0.1 seconds instead of two minutes. That row is immutable, since a corrected master arrives as a
+new upload, so there is no invalidation to get wrong: the copy exists for an upload or it does
+not. `process_master_upload` builds it as the import finishes, so the first download is as quick
+as the tenth; the download path still builds on demand for uploads that predate this and for a
+warm-up that failed, and `snapshots/` reports `ready` so the screen can say which is which.
+
+The one thing that can go stale is the *builder*. `SNAPSHOT_VERSION` is compared before a kept
+file is served, so a change to how a workbook is formatted reaches the copies people download
+rather than only new uploads.
+
 **Watching it happen.** An xlsx is a zip and is not valid until its last byte is written, so
 until the build finishes there is not one byte to send — on the Member master that is most of
 three minutes during which a client measuring the transfer sees nothing, then everything. Pass

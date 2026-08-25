@@ -468,7 +468,12 @@
       ui.number(row.success_rows) +
       (row.failed_rows ? ' of ' + ui.number(row.total_rows) : '') +
       ' rows · ' +
-      row.file_name
+      row.file_name +
+      // The workbook is normally built when the import finishes, so a download is a file
+      // read. An upload that predates that — or whose warm-up failed — is built on the click,
+      // and the Member master takes minutes. A button that looks identical either way is a
+      // button an operator gives up on halfway through.
+      (row.ready ? '' : ' · first download will take a few minutes')
     );
   }
 
