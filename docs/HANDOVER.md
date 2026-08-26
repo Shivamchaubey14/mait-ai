@@ -61,6 +61,32 @@ The admin portal does the same trick in `admin-web/assets/js/api.js`: served on 
 than 80/443/8000 it points at `:8000` directly, because behind nginx the portal and API share
 an origin and a relative path is correct there.
 
+### Reaching the portal from another machine
+
+Django also serves the portal itself in DEBUG — `http://127.0.0.1:8000/` is the same screens
+as `:8080`, on the same origin as the API (see the block at the foot of `config/urls.py`).
+The static server on 8080 is still the convenient way to work; the point of the 8000 copy is
+that **one** origin means one tunnel:
+
+```powershell
+ngrok http 8000 --url=https://apolonia-unvouchsafed-joy.ngrok-free.dev
+```
+
+That single tunnel is then the whole product — the portal for the office and `/api/v1` for
+the handsets, which is already what `mobile/eas.json` points the preview build at. Tunnelling
+:8080 instead does not work: the browser gets the portal on :443 and every request it makes
+goes to a `:8000` that does not exist out there.
+
+Free-tier ngrok answers anything browser-shaped with an interstitial, so a first-time visitor
+clicks "Visit Site" once. Requests the portal makes carry `ngrok-skip-browser-warning`, the
+same header `mobile/src/api/client.ts` has always sent — without it every screen reports a
+server fault, because the JSON it parses is ngrok's warning page.
+
+**This is a development server.** `DEBUG=True` returns a full traceback and the settings with
+it on any error, the fixed dev OTP is live, the throttles are loosened to 500 logins an hour,
+and the database holds real member data. Fine for showing colleagues for an afternoon; for
+anything standing, use `docs/DEPLOYMENT.md`.
+
 ### Credentials and seeded data (development only)
 
 | | |

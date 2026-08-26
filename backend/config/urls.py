@@ -8,7 +8,9 @@ Everything the clients use lives under /api/v1/ (SRS §9.11). A breaking change 
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.generic import RedirectView
+from django.views.static import serve
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -47,3 +49,28 @@ if settings.DEBUG:
         urlpatterns += [path("__debug__/", include(debug_toolbar.urls))]
     except ImportError:
         pass
+
+    # ------------------------------------------------------------------------------------
+    # The admin portal, on the same origin as the API (development only).
+    #
+    # Deployed, nginx does this: infra/nginx/admin-web.dev.conf serves the static files and
+    # proxies /api/ to the API container, which is why the portal's api.js uses a relative
+    # path whenever it is served from an ordinary port.
+    #
+    # Locally the two sit on different ports, which is fine until the portal has to be
+    # reached from anywhere but this machine. Through a tunnel the browser is handed the
+    # portal on :443 and every request it makes goes to a :8000 that does not exist out
+    # there. Serving both from Django puts them on one origin, so a single tunnel is the
+    # whole product — the portal for the office and /api/v1 for the handsets, which is
+    # already what the mobile preview build points at.
+    #
+    # Named patterns rather than a document root: admin-web also holds node_modules and the
+    # project's own package files, and none of that should be reachable — least of all when
+    # the port is open to the internet.
+    _portal = settings.BASE_DIR.parent / "admin-web"
+    if _portal.is_dir():
+        urlpatterns += [
+            path("", RedirectView.as_view(url="/index.html", permanent=False)),
+            re_path(r"^(?P<path>[\w-]+\.html)$", serve, {"document_root": _portal}),
+            re_path(r"^assets/(?P<path>.*)$", serve, {"document_root": _portal / "assets"}),
+        ]
