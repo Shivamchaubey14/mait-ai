@@ -148,6 +148,10 @@ window.MaitAI = window.MaitAI || {};
       url: BASE_URL + '/auth/refresh/',
       method: 'POST',
       contentType: 'application/json',
+      // This call does not go through `request`, so it needs the tunnel header of its own —
+      // see `settings.beforeSend` below. Without it a session behind ngrok survives exactly
+      // one access token and then bounces the operator to login every fifteen minutes.
+      headers: { 'ngrok-skip-browser-warning': 'true' },
       data: JSON.stringify({ refresh: stored.refresh }),
     })
       .done(function (data) {
@@ -188,6 +192,13 @@ window.MaitAI = window.MaitAI || {};
       if (access) {
         xhr.setRequestHeader('Authorization', 'Bearer ' + access);
       }
+      // Harmless everywhere, and the difference between working and not when the portal is
+      // reached through an ngrok tunnel — which is how somebody off this network opens it.
+      // Without it ngrok's free tier answers anything browser-shaped with an HTML
+      // interstitial, which arrives here as a JSON parse failure and reads, on every screen
+      // at once, as the server being down. mobile/src/api/client.ts carries the same header
+      // for the same reason.
+      xhr.setRequestHeader('ngrok-skip-browser-warning', 'true');
     };
 
     return $.ajax(settings).catch(function (jqXHR) {
@@ -320,7 +331,12 @@ window.MaitAI = window.MaitAI || {};
         onProgress({ phase: 'preparing', fraction: null });
       }
       return fetch(BASE_URL + path, {
-        headers: { Authorization: 'Bearer ' + tokens.get().access },
+        headers: {
+          Authorization: 'Bearer ' + tokens.get().access,
+          // fetch, not $.ajax, so the tunnel header is repeated here — an export that came
+          // back as ngrok's interstitial would save a page of HTML named report.csv.
+          'ngrok-skip-browser-warning': 'true',
+        },
       })
         .then(function (response) {
           if (!response.ok) {
