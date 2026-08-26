@@ -219,6 +219,19 @@ and a forward arrow (`Continue →`, `Save & continue →`, `Submit proof →`).
 until the step is genuinely satisfiable. A secondary route out of the step, when there is
 one, sits above it as a green text link (`Add a non-member`), never as a second button.
 
+**A step that sends something before it moves on shows what it is waiting for.** The button
+greying out says "not yet"; it does not say whether anything is happening, and a Mait on one
+bar of signal cannot tell a slow upload from an app that has stopped — so they tap again, or
+back out of a capture that was working. A caption and a thin bar sit above the button while
+the work runs: `Sending the photo…` filling by the bytes actually gone, then
+`Catching up — 2 of 3…` by the captures actually sent.
+
+**The bar only ever draws a figure the handset measured.** Where the size of the job is not
+known — a body whose length the platform will not report, a record being written to the
+offline queue — a segment sweeps instead of a bar creeping to an invented percentage. One
+made-up number here is spent against every other number in the app, and a Mait decides very
+quickly which of them to believe. The same rule the portal's download progress follows.
+
 ## Admin portal screen pattern (W2–W17)
 
 The portal is one shell with a page poured into it. Screens are listed in
@@ -228,6 +241,14 @@ The portal is one shell with a page poured into it. Screens are listed in
 per section, each with a leading dot. The current section is a filled green pill. A count of
 things needing a human rides on the Exceptions link itself, so it is visible from every
 screen rather than only once someone thinks to look.
+
+**Which sections are in it is per account.** An Admin is given the screens their job needs,
+on Users & roles; a Super Admin has all of them by role. The menu is only the convenient
+half of that — the endpoints behind each section refuse what the account may not reach, so
+a URL typed into the address bar gets the same answer as a link that was never drawn. A
+section somebody asks for and does not hold is a full-width warning notice with the way back
+to a section they do hold, not a redirect: bouncing them to the dashboard answers a question
+they did not ask.
 
 **Topbar.** Page title in H1 with a one-line meta beneath it — the row count and the scope
 (`31,540 this month`, `2,940 MPPs across 14 districts`). Actions sit right: a neutral

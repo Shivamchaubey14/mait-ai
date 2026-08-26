@@ -34,6 +34,7 @@ window.MaitAI = window.MaitAI || {};
   })();
 
   const STORAGE_KEY = 'maitai.tokens';
+  const PROFILE_KEY = 'maitai.profile';
 
   /* --- token storage ------------------------------------------------------------------
    * sessionStorage, not localStorage: back-office machines are shared, and a token that
@@ -52,6 +53,47 @@ window.MaitAI = window.MaitAI || {};
     },
     clear() {
       sessionStorage.removeItem(STORAGE_KEY);
+      // The profile goes with them. It says which sections this account may open, and one
+      // left behind would draw the last person's sidebar for the next person to sign in.
+      sessionStorage.removeItem(PROFILE_KEY);
+    },
+  };
+
+  /* --- who is signed in ----------------------------------------------------------------
+   * The portal is one static file per screen, so without this every page would have to ask
+   * the API who it is serving before it could draw its own sidebar — and would draw the
+   * wrong one, or none, for as long as that took.
+   *
+   * A convenience and never a control. Each section's endpoints check access for themselves,
+   * because a menu has nothing to say about a URL typed into the address bar.
+   */
+  const profile = {
+    get() {
+      try {
+        return JSON.parse(sessionStorage.getItem(PROFILE_KEY));
+      } catch (e) {
+        return null;
+      }
+    },
+    set(value) {
+      if (!value) {
+        return null;
+      }
+      // Only the parts a screen actually draws. The rest of `/auth/me/` is a Mait's scope,
+      // which no portal screen reads.
+      const kept = {
+        id: value.id,
+        username: value.username,
+        full_name: value.full_name,
+        role: value.role,
+        role_display: value.role_display,
+        portal_sections: value.portal_sections || [],
+      };
+      sessionStorage.setItem(PROFILE_KEY, JSON.stringify(kept));
+      return kept;
+    },
+    clear() {
+      sessionStorage.removeItem(PROFILE_KEY);
     },
   };
 
@@ -237,6 +279,7 @@ window.MaitAI = window.MaitAI || {};
    */
   MaitAI.api = {
     tokens: tokens,
+    profile: profile,
     problemToLines: problemToLines,
 
     /** Exposed for the callers that stream a file and cannot go through request(). */
@@ -344,8 +387,17 @@ window.MaitAI = window.MaitAI || {};
       });
     },
 
+    /** The signed-in account, including the portal sections it may open. */
     me: function () {
-      return request({ path: '/auth/me/' });
+      return request({ path: '/auth/me/' }).then(function (data) {
+        profile.set(data);
+        return data;
+      });
+    },
+
+    /** Every section an account can be given — what the access editor lists. */
+    portalSections: function () {
+      return request({ path: '/admin/users/portal-sections/' });
     },
 
     /**

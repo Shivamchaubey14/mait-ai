@@ -25,7 +25,7 @@
     // Already signed in — skip the form rather than making someone re-enter a password they
     // have a valid session for.
     if (api.tokens.get().access) {
-      window.location.replace('index.html');
+      window.location.replace(MaitAI.shell.landing());
       return;
     }
 
@@ -60,7 +60,12 @@
       api
         .login(username, password)
         .done(function () {
-          window.location.replace('index.html');
+          // The profile before the redirect, not after: it carries the sections this account
+          // holds, and the page it lands on draws its sidebar from them. Fetching it there
+          // instead means every sign-in opens on a full menu that shortens a moment later.
+          api.me().always(function () {
+            window.location.replace(MaitAI.shell.landing());
+          });
         })
         .fail(function (problem) {
           // The API returns one message for every failure — an unknown username and a wrong

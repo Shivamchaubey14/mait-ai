@@ -111,18 +111,49 @@ window.MaitAI = window.MaitAI || {};
       .html();
   }
 
+  /**
+   * The sections this account has been given, in sidebar order.
+   *
+   * `null` means the answer is not known yet — the profile is cached at sign-in, but a tab
+   * opened from a bookmark can reach a screen before it has been fetched. Drawing the whole
+   * menu and correcting it a moment later is the lesser wrong: a sidebar that flashes empty
+   * on every cold load reads as a broken portal, and nothing here decides access anyway —
+   * the endpoints behind each section refuse what this account may not reach.
+   */
+  function assigned() {
+    const stored = MaitAI.api.profile.get();
+    return stored && stored.portal_sections ? stored.portal_sections : null;
+  }
+
+  function visibleSections() {
+    const keys = assigned();
+    if (!keys) {
+      return SECTIONS;
+    }
+    return SECTIONS.filter(function (section) {
+      return keys.indexOf(section.key) >= 0;
+    });
+  }
+
+  function isAssigned(key) {
+    const keys = assigned();
+    return !keys || !key || keys.indexOf(key) >= 0;
+  }
+
   function renderSidebar(active) {
-    const links = SECTIONS.map(function (section) {
-      const isActive = section.key === active;
-      return [
-        '<a class="side__link' + (isActive ? ' is-active' : '') + '"',
-        ' href="' + section.href + '"' + (isActive ? ' aria-current="page"' : '') + '>',
-        icon(section.key, 'side__icon'),
-        '<span class="side__label">' + escapeHtml(section.label) + '</span>',
-        section.badge ? '<span class="side__badge" id="exception-badge" hidden>0</span>' : '',
-        '</a>',
-      ].join('');
-    }).join('');
+    const links = visibleSections()
+      .map(function (section) {
+        const isActive = section.key === active;
+        return [
+          '<a class="side__link' + (isActive ? ' is-active' : '') + '"',
+          ' href="' + section.href + '"' + (isActive ? ' aria-current="page"' : '') + '>',
+          icon(section.key, 'side__icon'),
+          '<span class="side__label">' + escapeHtml(section.label) + '</span>',
+          section.badge ? '<span class="side__badge" id="exception-badge" hidden>0</span>' : '',
+          '</a>',
+        ].join('');
+      })
+      .join('');
 
     return [
       '<aside class="side">',
@@ -175,6 +206,81 @@ window.MaitAI = window.MaitAI || {};
   }
 
   /**
+   * What a screen this account was not given looks like.
+   *
+   * Not a redirect. Somebody following a link from an email, or a bookmark left from before
+   * their access was narrowed, has asked a specific question — bouncing them to the
+   * dashboard answers a different one and leaves them to work out what happened. The
+   * sidebar stays, so the sections they do have are one click away.
+   */
+  function refuse(active) {
+    const $shell = $('.shell');
+    if (!$shell.find('.side').length) {
+      $shell.prepend(renderSidebar(null));
+      wireAccount();
+    }
+    const asked = SECTIONS.filter(function (section) {
+      return section.key === active;
+    })[0];
+    const first = visibleSections()[0];
+
+    $('.content').html(
+      [
+        '<header class="topbar"><div>',
+        '<h1 class="topbar__title">Not one of your sections</h1>',
+        '<p class="topbar__meta">Portal access is set per account on Users &amp; roles</p>',
+        '</div><div class="topbar__actions">',
+        '<button class="btn btn--logout" id="account" type="button">Log out</button>',
+        '</div></header>',
+
+        '<div class="notice notice--warn">',
+        '<span class="notice__icon" aria-hidden="true">',
+        icon('warn'),
+        '</span><div><p class="notice__title">',
+        asked
+          ? escapeHtml(asked.label) + ' has not been assigned to this account.'
+          : 'This screen has not been assigned to this account.',
+        '</p><p class="notice__body">',
+        first
+          ? 'Everything you have been given is still in the sidebar. If you need this one, ' +
+            'ask an administrator to add it.'
+          : 'No sections are assigned to this account yet, which is why the sidebar is ' +
+            'empty. An administrator sets them on Users &amp; roles.',
+        '</p></div></div>',
+
+        first
+          ? '<a class="btn btn--primary" href="' +
+            first.href +
+            '">Go to ' +
+            escapeHtml(first.label) +
+            '</a>'
+          : '',
+      ].join('')
+    );
+    wireAccount();
+  }
+
+  /**
+   * Re-read who is signed in, after the page has already drawn itself from the cache.
+   *
+   * Access changes while people are logged in — that is the whole point of assigning it —
+   * and the cached copy is from sign-in. Cheap enough to do on every page load, and the
+   * screen only moves if the answer actually changed.
+   */
+  function refreshProfile(active) {
+    const before = JSON.stringify(assigned());
+    MaitAI.api.me().done(function () {
+      if (JSON.stringify(assigned()) === before) {
+        return;
+      }
+      $('.side').replaceWith(renderSidebar(active));
+      if (!isAssigned(active)) {
+        refuse(active);
+      }
+    });
+  }
+
+  /**
    * Sign the user out and return to login.
    *
    * Clears the tokens whether or not the blacklist call succeeds — a refresh token this
@@ -222,21 +328,47 @@ window.MaitAI = window.MaitAI || {};
       $shell.prepend(renderSidebar(active));
       wireAccount();
       decorate();
+      refreshProfile(active);
       return active;
+    },
+
+    /** Which sections this account may open — the access editor reads it. */
+    assigned: assigned,
+
+    /**
+     * Where this account should land after signing in.
+     *
+     * The dashboard for most people, and the first section they actually hold for anyone
+     * who was not given it. Sending a rates clerk to a screen that refuses them is a poor
+     * first thing to see after typing a password.
+     */
+    landing: function () {
+      const first = visibleSections()[0];
+      return first ? first.href : 'index.html';
     },
 
     /** Re-run the icon slots after a screen has rendered notices of its own. */
     decorate: decorate,
 
     /**
-     * Send anyone without a session to login before the page renders anything.
+     * Send anyone without a session to login, and anyone without this section elsewhere.
      *
-     * The API would reject the requests anyway; this is so a back-office user sees a login
-     * form rather than a screenful of empty tables and an error.
+     * Both for the same reason: the API would reject the requests anyway, and this is so a
+     * back-office user sees a login form or a sentence explaining the refusal rather than a
+     * screenful of empty tables and an error.
+     *
+     * Every screen already calls this before it loads anything, which is why the section
+     * check lives here rather than in `mount` — a screen that has been refused must not go
+     * on to fire the requests it was written to fire.
      */
     requireSession: function () {
       if (!MaitAI.api.tokens.get().access) {
         window.location.href = 'login.html';
+        return false;
+      }
+      const active = $('.shell').data('page');
+      if (!isAssigned(active)) {
+        refuse(active);
         return false;
       }
       return true;
