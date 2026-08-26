@@ -33,6 +33,51 @@ class IsMait(_RolePermission):
     allowed_roles = (Role.MAIT,)
 
 
+class InPortalSection(BasePermission):
+    """
+    An office account may only reach the sections it has been assigned (SRS §6.8.3).
+
+    The second half of portal RBAC. ``IsAdmin`` settles what kind of account may call an
+    endpoint at all; this settles which of them, because two back-office admins doing
+    different jobs should not both be able to rewrite the rate card.
+
+    Enforced here rather than by rendering a shorter sidebar. A sidebar decides what is easy
+    to find; it does not decide anything at all about a URL typed into the bar, and the
+    portal is one static file per screen.
+
+    Maits pass straight through. They have no portal — their scope is the MPPs they cover and
+    the querysets already apply it — so gating them by section would refuse the app the
+    master data it runs on.
+
+    Use ``in_section`` to build one; do not subclass this directly.
+    """
+
+    sections: tuple[str, ...] = ()
+    message = "Your account has not been given access to this part of the portal."
+
+    def has_permission(self, request, view) -> bool:
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if not user.is_admin:
+            return True
+        return user.can_view_section(*self.sections)
+
+
+def in_section(*sections: str) -> type[InPortalSection]:
+    """
+    A permission that admits an office account holding any of ``sections``.
+
+    Any, not all: several endpoints serve more than one screen — the AI events list is also
+    what Reports queries, and the SAP upload history is also the Assignment screen's — and an
+    admin given one of the two must not be refused it because they lack the other.
+
+        permission_classes = [IsAdmin, in_section(PortalSection.PRODUCTS)]
+    """
+    name = "In_" + "_".join(section.replace("-", "_") for section in sections)
+    return type(name, (InPortalSection,), {"sections": tuple(sections)})
+
+
 class IsAdminOrMaitReadOnly(BasePermission):
     """
     Admins do anything; a Mait may only read.
