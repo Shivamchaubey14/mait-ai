@@ -1,9 +1,8 @@
 /**
  * Application shell.
  *
- * Wires the providers every screen depends on, holds on the splash until the design-system
- * fonts are ready, then hands off to the navigator, which decides between login and the
- * capture flow based on whether there is a session.
+ * Wires the providers every screen depends on and reads the stored session at launch. Which
+ * of splash, login and the navigator is on screen is `src/navigation/Shell.tsx`.
  */
 
 import React, { useEffect } from 'react';
@@ -17,29 +16,9 @@ import '@/i18n';
 import { maitaiApi } from '@api/endpoints';
 import { profileRefreshed, sessionRestored } from '@/features/auth/authSlice';
 import { loadSession } from '@/features/auth/session';
-import SplashScreen from '@/features/auth/SplashScreen';
-import RootNavigator from '@/navigation';
-import { store, useAppSelector } from '@/store';
+import Shell from '@/navigation/Shell';
+import { store } from '@/store';
 import { colors } from '@theme/tokens';
-
-/**
- * Holds the splash until both the fonts and the stored session are ready.
- *
- * Rendering the navigator first would show the login screen for a frame on every cold start,
- * which a Mait reads as having been signed out — the exact thing persistence exists to stop.
- */
-function Shell({ fontsLoaded }: { fontsLoaded: boolean }): React.JSX.Element {
-  const restored = useAppSelector(state => state.auth.restored);
-  if (fontsLoaded && restored) {
-    return <RootNavigator />;
-  }
-
-  // Two things are being waited on, so the bar can report which of them have landed rather
-  // than sitting at a made-up fraction. It starts at a fifth so there is something to see on
-  // the first frame — an empty track reads as a bar that is not working.
-  const done = (fontsLoaded ? 1 : 0) + (restored ? 1 : 0);
-  return <SplashScreen progress={0.2 + done * 0.4} />;
-}
 
 export default function App(): React.JSX.Element {
   // Quicksand for headings, Nunito Sans for body (docs/SCREEN_INVENTORY.md). Rendering

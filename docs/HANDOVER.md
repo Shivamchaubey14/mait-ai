@@ -125,6 +125,13 @@ the encrypted S3 bucket in production without the view knowing.
 tabs (Home, Stock, History, Settings), the capture flow through step 5, request-stock with a
 multi-line form and a review sheet, and the offline queue.
 
+`src/navigation/Shell.tsx` is the session gate, and login and the navigator are **siblings**
+under it rather than nested. The navigator holds every bit of "where am I" state in
+`useState`, so while it rendered the login screen itself it stayed mounted across a sign-out
+and the next sign-in resumed on whatever tab was last lit — Profile, in practice, because
+that is the only screen with a sign-out on it. Keep them siblings: a session gets a
+navigator, and it goes when the session does. `__tests__/landsOnHome.test.tsx` covers it.
+
 **Admin portal.** All 16 screens, W2–W17, on one shared shell (`portal.css`, `shell.js`,
 `ui.js`). Which of them a given account sees is assigned per user on Users & roles —
 `User.portal_sections`, keyed by the `data-page` attribute each screen already carries. The

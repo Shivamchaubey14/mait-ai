@@ -6,6 +6,11 @@
  * bar under it is an invitation to leave halfway, with an animal served, a straw scanned and
  * nothing recorded.
  *
+ * **This is the signed-in shell, and only ever mounted with a session.** `App.tsx` chooses
+ * between it and the login screen. It used to make that choice itself, which left it mounted
+ * across a sign-out with every piece of its state intact — including which tab was lit, so
+ * signing out from Profile and back in landed on Profile rather than Home.
+ *
  * The capture's `client_uuid` is minted once, when the flow starts, and carried through every
  * step. That is what makes the event safe to retry from the offline queue (ADR 0003) — a key
  * generated at send time would be new on every attempt and deduplicate nothing.
@@ -18,6 +23,7 @@ import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
 
 import { attachPhoto, completeEvent } from '@api/capture';
+import type { CaptureProgress } from '@api/capture';
 import { ErrorCode, errorCodeOf, newClientUuid } from '@api/client';
 import {
   maitaiApi,
@@ -64,7 +70,6 @@ import SelectNonMemberScreen from '@/features/aiFlow/SelectNonMemberScreen';
 import UnfinishedScreen from '@/features/aiFlow/UnfinishedScreen';
 import { resumePoint, whatIsMissing } from '@/features/aiFlow/resume';
 import OwnerTypeScreen, { OwnerType } from '@/features/aiFlow/OwnerTypeScreen';
-import LoginScreen from '@/features/auth/LoginScreen';
 import { useLiveScope } from '@/features/auth/liveScope';
 import AiEventDetailScreen from '@/features/history/AiEventDetailScreen';
 import AiEventsScreen from '@/features/history/AiEventsScreen';
@@ -329,6 +334,14 @@ export default function RootNavigator(): React.JSX.Element {
   const [payFailed, setPayFailed] = useState<string | null>(null);
 
   const [uploading, setUploading] = useState(false);
+  /**
+   * How far the proof photo has got, for the button on step 6.
+   *
+   * Separate from `uploading` rather than folded into it: the button is disabled the moment it
+   * is tapped, and the first byte report arrives some time after that. One boolean can only
+   * say "waiting"; this says what for.
+   */
+  const [sending, setSending] = useState<CaptureProgress | null>(null);
   const [pending, setPending] = useState(0);
   const [online, setOnline] = useState(true);
 
@@ -609,10 +622,6 @@ export default function RootNavigator(): React.JSX.Element {
     const subscription = BackHandler.addEventListener('hardwareBackPress', goBack);
     return () => subscription.remove();
   }, [goBack]);
-
-  if (!accessToken) {
-    return <LoginScreen />;
-  }
 
   /**
    * Write what the Mait found, offline or not.
@@ -1150,6 +1159,7 @@ export default function RootNavigator(): React.JSX.Element {
     return (
       <CapturePhotoScreen
         busy={uploading}
+        progress={sending}
         onCaptured={async photo => {
           setUploading(true);
           const outcome = await attachPhoto(
@@ -1158,8 +1168,12 @@ export default function RootNavigator(): React.JSX.Element {
             photo,
             accessToken,
             captureLabel(),
+            setSending,
           );
           setUploading(false);
+          // Cleared before the step changes, so a second capture does not open its review
+          // screen wearing the tail of the first one's upload.
+          setSending(null);
           setPending(outcome.remaining);
           if (outcome.sent) {
             setLastSyncAt(clockTime());
