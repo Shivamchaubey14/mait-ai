@@ -23,10 +23,10 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.models import Role
+from apps.accounts.models import PortalSection, Role
 from apps.core.idempotency import idempotent
 from apps.core.models import AuditLog
-from apps.core.permissions import IsAdmin, IsMait
+from apps.core.permissions import IsAdmin, IsMait, in_section
 from apps.core.services import record_audit
 
 from .models import IndentRequest, stale_indent_q
@@ -89,8 +89,8 @@ class IndentViewSet(
         # Fulfilment is a back-office decision. Enforced here rather than by hiding buttons —
         # a Mait who could approve their own request could credit themselves stock.
         if self.action in ("approve", "reject", "issue"):
-            return [IsAdmin()]
-        return [IsAuthenticated()]
+            return [IsAdmin(), in_section(PortalSection.INDENTS)()]
+        return [IsAuthenticated(), in_section(PortalSection.INDENTS)()]
 
     def get_queryset(self):
         base = IndentRequest.objects.select_related("mait").order_by("-requested_at")

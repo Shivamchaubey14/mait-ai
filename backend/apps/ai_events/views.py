@@ -19,10 +19,10 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.models import Role
+from apps.accounts.models import PortalSection, Role
 from apps.core.idempotency import idempotent
 from apps.core.models import AuditLog
-from apps.core.permissions import IsMait
+from apps.core.permissions import IsMait, in_section
 from apps.core.services import record_audit
 from apps.core.timeframe import end_of_day, start_of_day
 
@@ -137,7 +137,12 @@ class AIEventViewSet(
         # wider: an admin resolving a dispute needs the same record.
         if self.action in ("create", "photo", "complete"):
             return [IsMait()]
-        return [IsAuthenticated()]
+        # Reading is where the portal comes in, and two of its screens read this: the AI
+        # events roster and the Reports query builder, which runs the same filters.
+        return [
+            IsAuthenticated(),
+            in_section(PortalSection.AI_EVENTS, PortalSection.REPORTS)(),
+        ]
 
     def get_queryset(self):
         """

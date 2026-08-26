@@ -9,9 +9,10 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
+from apps.accounts.models import PortalSection
 from apps.core.exceptions import RecordInUse
 from apps.core.models import AuditLog
-from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait
+from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait, in_section
 from apps.core.services import record_audit
 
 from .models import Animal, BreedConfig
@@ -43,7 +44,9 @@ class BreedAdminViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = BreedConfigWriteSerializer
-    permission_classes = [IsAdmin]
+    # Products maintains the list; Rates reads it to price each breed's straw, so an admin
+    # given one of the two screens must not be refused the catalogue behind it.
+    permission_classes = [IsAdmin, in_section(PortalSection.PRODUCTS, PortalSection.RATES)]
     queryset = BreedConfig.objects.all().order_by("animal_type", "display_order", "name")
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["animal_type", "is_active"]

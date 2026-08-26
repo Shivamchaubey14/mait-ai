@@ -20,8 +20,9 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from apps.accounts.models import PortalSection
 from apps.ai_events.models import AIEvent
-from apps.core.permissions import IsAdmin
+from apps.core.permissions import IsAdmin, in_section
 from apps.core.timeframe import end_of_day, local_day, start_of_day
 from apps.indents.models import STALE_AFTER_DAYS, IndentRequest, stale_indent_q
 from apps.inventory.models import MaitInventory, ProductType
@@ -72,7 +73,7 @@ def _completed_between(start, end=None):
     responses={200: dict},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.DASHBOARD, PortalSection.EXCEPTIONS)])
 def summary(request):
     today = timezone.localdate()
     week_start = today - timedelta(days=today.weekday())
@@ -358,7 +359,7 @@ def _exceptions() -> dict:
     responses={200: dict},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.DASHBOARD)])
 def trends(request):
     try:
         days = min(MAX_TREND_DAYS, max(1, int(request.query_params.get("days", 30))))
@@ -434,7 +435,7 @@ def trends(request):
     responses={200: dict},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.LEADERBOARD)])
 def mait_performance(request):
     try:
         days = min(MAX_TREND_DAYS, max(1, int(request.query_params.get("days", 30))))
@@ -579,7 +580,7 @@ def mait_performance(request):
     responses={200: dict},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.MPPS)])
 def mpp_coverage(request):
     from apps.masterdata.models import MPP
 
@@ -666,7 +667,7 @@ def mpp_coverage(request):
     responses={200: dict},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.DASHBOARD, PortalSection.MAITS)])
 def activation_readiness(request):
     total = Mait.objects.filter(is_active=True).count()
     activated = Mait.objects.filter(is_active=True, user__isnull=False).count()

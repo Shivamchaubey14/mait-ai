@@ -22,10 +22,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.admin_serializers import MPPAssignmentSerializer
+from apps.accounts.models import PortalSection
 from apps.animals.queries import animals_with_history
 from apps.core.dispatch import run_in_background
 from apps.core.models import AuditLog
-from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait
+from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait, in_section
 from apps.core.services import record_audit
 from apps.payments.models import OTPLog
 from apps.payments.services import issue_otp, verify_otp
@@ -58,7 +59,6 @@ from .verification import (
     resolve_farmer,
 )
 
-
 #: How long a progress record outlives its poll. Long enough that a slow client still finds it,
 #: short enough that a download nobody watched does not sit in the cache for the afternoon.
 PROGRESS_TTL_SECONDS = 120
@@ -78,7 +78,9 @@ class MasterUploadViewSet(
 
     queryset = DataUploadLog.objects.select_related("uploaded_by").all()
     serializer_class = DataUploadLogSerializer
-    permission_classes = [IsAdmin]
+    # Assignment uploads its own workbook through this viewset and reads the same history,
+    # so it opens it too — see `uploadAssignments` in the portal's api.js.
+    permission_classes = [IsAdmin, in_section(PortalSection.UPLOADS, PortalSection.ASSIGNMENTS)]
     parser_classes = [MultiPartParser, FormParser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["upload_type", "status"]
@@ -466,7 +468,12 @@ class MPPViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
         request=MPPAssignmentSerializer,
         responses={200: MPPDetailSerializer},
     )
-    @action(detail=True, methods=["patch"], url_path="assign-mait", permission_classes=[IsAdmin])
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path="assign-mait",
+        permission_classes=[IsAdmin, in_section(PortalSection.ASSIGNMENTS)],
+    )
     def assign_mait(self, request, mpp_code=None):
         mpp = self.get_object()
         serializer = MPPAssignmentSerializer(data=request.data, context={"request": request})
@@ -504,7 +511,7 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
     unindexed search here would be the slowest thing a Mait does all day.
     """
 
-    permission_classes = [IsAdminOrMaitReadOnly]
+    permission_classes = [IsAdminOrMaitReadOnly, in_section(PortalSection.MEMBERS)]
     lookup_field = "member_code"
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["mpp__mpp_code", "activation_status", "mobile_no"]
@@ -719,7 +726,7 @@ class AdminNonMemberViewSet(
     fifty rows costing a hundred queries.
     """
 
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdmin, in_section(PortalSection.NON_MEMBERS)]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["mpp__mpp_code", "created_by_mait", "relation"]
     search_fields = ["name", "mobile_no", "father_husband_name"]

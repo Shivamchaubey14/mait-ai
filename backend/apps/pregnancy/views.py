@@ -22,9 +22,10 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.accounts.models import PortalSection
 from apps.core.pagination import StandardLimitOffsetPagination
+from apps.core.permissions import IsAdmin, IsMait, in_section
 from apps.core.services import record_audit
-from apps.core.permissions import IsAdmin, IsMait
 from apps.masterdata.models import Mait
 
 from .models import ALERT_WINDOW_DAYS, PregnancyCheck, PregnancyRate
@@ -287,7 +288,7 @@ def _mait_identity(mait) -> dict:
     responses={200: dict},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.PREGNANCY)])
 def pregnancy_oversight(request):
     today = timezone.localdate()
     counts = counts_by_mait(today)
@@ -349,7 +350,7 @@ def pregnancy_oversight(request):
     responses={200: dict},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.PREGNANCY)])
 def mait_pregnancy_checks(request, mait_id: int):
     mait = get_object_or_404(Mait.objects.prefetch_related("mpps"), pk=mait_id)
     today = timezone.localdate()
@@ -413,14 +414,14 @@ def _the_pd_rate() -> PregnancyRate:
         "same work whatever animal it is."
         "\n\n"
         "**Zero means not priced, never free.** A rate nobody has entered reaches a "
-        "Mait as \"chargeable, amount not set\" rather than as a farmer being told "
+        'Mait as "chargeable, amount not set" rather than as a farmer being told '
         "the visit costs nothing. `PATCH` accepts either rate on its own."
     ),
     request=PregnancyRateSerializer,
     responses={200: PregnancyRateSerializer},
 )
 @api_view(["GET", "PATCH"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.RATES)])
 def pregnancy_rate(request):
     rate = _the_pd_rate()
 

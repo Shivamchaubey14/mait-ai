@@ -22,11 +22,12 @@ from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import api_view, permission_classes
 
+from apps.accounts.models import PortalSection
 from apps.ai_events.models import AIEvent
 from apps.ai_events.views import search_events
 from apps.core.fields import mask
 from apps.core.models import AuditLog
-from apps.core.permissions import IsAdmin
+from apps.core.permissions import IsAdmin, in_section
 from apps.core.services import record_audit
 from apps.core.timeframe import end_of_day, local_day, start_of_day
 from apps.pregnancy.models import PregnancyCheck
@@ -116,7 +117,7 @@ def _parse_date(value):
     responses={200: bytes},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.REPORTS, PortalSection.AI_EVENTS)])
 def export_csv(request):
     queryset = AIEvent.objects.select_related(
         "mpp", "mait", "member", "non_member", "animal", "payment"
@@ -280,23 +281,34 @@ def _pregnancy_rows(queryset, today):
         "this system. Every export is audit-logged against the admin who ran it."
     ),
     parameters=[
-        OpenApiParameter("date_from", description="Due on or after, YYYY-MM-DD", required=False, type=str),
-        OpenApiParameter("date_to", description="Due on or before, YYYY-MM-DD", required=False, type=str),
+        OpenApiParameter(
+            "date_from", description="Due on or after, YYYY-MM-DD", required=False, type=str
+        ),
+        OpenApiParameter(
+            "date_to", description="Due on or before, YYYY-MM-DD", required=False, type=str
+        ),
         OpenApiParameter("mait", description="Mait id", required=False, type=int),
         OpenApiParameter("mpp", description="MPP code", required=False, type=str),
-        OpenApiParameter("outcome", description="pregnant / not_pregnant / unsure / declined", required=False, type=str),
+        OpenApiParameter(
+            "outcome",
+            description="pregnant / not_pregnant / unsure / declined",
+            required=False,
+            type=str,
+        ),
         OpenApiParameter(
             "consent",
             description="accepted / declined / pending — the same split as `owner_consent`.",
             required=False,
             type=str,
         ),
-        OpenApiParameter("search", description="Mait name or vendor code", required=False, type=str),
+        OpenApiParameter(
+            "search", description="Mait name or vendor code", required=False, type=str
+        ),
     ],
     responses={200: bytes},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.REPORTS, PortalSection.PREGNANCY)])
 def export_pregnancy_csv(request):
     queryset = PregnancyCheck.objects.select_related(
         "mait",
@@ -328,9 +340,7 @@ def export_pregnancy_csv(request):
     if consent == "declined":
         queryset = queryset.filter(outcome=PregnancyCheck.Outcome.DECLINED)
     elif consent == "accepted":
-        queryset = queryset.exclude(outcome="").exclude(
-            outcome=PregnancyCheck.Outcome.DECLINED
-        )
+        queryset = queryset.exclude(outcome="").exclude(outcome=PregnancyCheck.Outcome.DECLINED)
     elif consent == "pending":
         queryset = queryset.filter(outcome="")
 

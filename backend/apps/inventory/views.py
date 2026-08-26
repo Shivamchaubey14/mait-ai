@@ -19,6 +19,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.models import PortalSection
 from apps.animals.models import BreedConfig
 from apps.core.exceptions import (
     BreedRequired,
@@ -26,7 +27,7 @@ from apps.core.exceptions import (
     RecordInUse,
     StrawAlreadyConsumed,
 )
-from apps.core.permissions import IsAdmin, IsMait
+from apps.core.permissions import IsAdmin, IsMait, in_section
 from apps.masterdata.models import Mait
 
 from .models import Consumable, MaitInventory, MaitInventoryLedger, ProductType, SemenBatch
@@ -304,7 +305,7 @@ def inventory_summary(request):
     responses={200: InventorySummarySerializer},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.INVENTORY)])
 def mait_inventory_detail(request, mait_id: int):
     mait = get_object_or_404(Mait, pk=mait_id)
     payload = build_summary(mait)
@@ -329,7 +330,7 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = ConsumableWriteSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdmin, in_section(PortalSection.PRODUCTS)]
     queryset = Consumable.objects.all().order_by("category", "display_order", "name")
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
 
@@ -457,7 +458,7 @@ class LedgerViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     responses={200: dict},
 )
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsAdmin, in_section(PortalSection.INVENTORY)])
 def inventory_oversight(request):
     lines = (
         MaitInventory.objects.filter(product_type=ProductType.STRAW, qty_available__gt=0)
