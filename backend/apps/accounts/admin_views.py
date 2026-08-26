@@ -17,7 +17,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.models import AuditLog
-from apps.core.permissions import IsAdmin
+from apps.core.permissions import IsAdmin, in_section
 from apps.core.services import record_audit
 from apps.masterdata.models import MPP, Mait
 
@@ -28,7 +28,7 @@ from .admin_serializers import (
     MaitActivationSerializer,
     MaitUpdateSerializer,
 )
-from .models import Role, User
+from .models import PortalSection, Role, User
 
 
 @extend_schema(tags=["auth"])
@@ -60,6 +60,25 @@ class AdminUserViewSet(
             return AdminUserUpdateSerializer
         return AdminUserSerializer
 
+    # This viewset backs three sidebar sections, not one. The account list is Users & roles,
+    # the roster and activation queue are Maits, and coverage is edited from both Maits and
+    # Assignment — so the section is a property of the action rather than of the class.
+    SECTION_BY_ACTION = {
+        "maits": (PortalSection.MAITS, PortalSection.ASSIGNMENTS),
+        "update_mait": (PortalSection.MAITS, PortalSection.ASSIGNMENTS),
+        "pending_maits": (PortalSection.MAITS,),
+        "activate_mait": (PortalSection.MAITS,),
+        # The activation screen reads the account list to show who already has a login, so
+        # Maits reaches it too. Creating and amending accounts does not.
+        "list": (PortalSection.USERS, PortalSection.MAITS),
+        "retrieve": (PortalSection.USERS, PortalSection.MAITS),
+        "portal_sections": (PortalSection.USERS,),
+    }
+
+    def get_permissions(self):
+        sections = self.SECTION_BY_ACTION.get(self.action, (PortalSection.USERS,))
+        return [IsAdmin(), in_section(*sections)()]
+
     @extend_schema(
         summary="Create an office account",
         description=(
@@ -90,7 +109,26 @@ class AdminUserViewSet(
     )
     def partial_update(self, request, *args, **kwargs):
         user = self.get_object()
-        before = {"is_active": user.is_active, "role": user.role, "mobile_no": user.mobile_no}
+
+        # Nobody edits their own access. An Admin holding Users & roles could otherwise
+        # untick it and lock themselves out of the only screen that could put it back —
+        # and the recovery is a Super Admin, who may be on leave.
+        if "portal_sections" in request.data and user.id == request.user.id:
+            return Response(
+                {
+                    "portal_sections": [
+                        "You cannot change your own portal access. " "Ask another administrator."
+                    ]
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        before = {
+            "is_active": user.is_active,
+            "role": user.role,
+            "mobile_no": user.mobile_no,
+            "portal_sections": user.allowed_sections,
+        }
 
         serializer = AdminUserUpdateSerializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -107,12 +145,33 @@ class AdminUserViewSet(
                     "is_active": user.is_active,
                     "role": user.role,
                     "mobile_no": user.mobile_no,
+                    "portal_sections": user.allowed_sections,
                 },
                 # Never record whether a password was involved beyond the fact of it.
                 "password_reset": "password" in request.data,
             },
         )
         return Response(AdminUserSerializer(user).data)
+
+    @extend_schema(
+        summary="The portal's sections",
+        description=(
+            "Every section an Admin account can be given, in sidebar order — the catalogue "
+            "the access editor on Users & roles builds its list from.\n\n"
+            "Served rather than hardcoded in the portal so the two cannot drift: a section "
+            "added here appears in the editor without a second edit, and one the API has "
+            "never heard of can never be ticked."
+        ),
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"], url_path="portal-sections")
+    def portal_sections(self, request):
+        return Response(
+            {
+                "results": [{"key": key, "label": label} for key, label in PortalSection.choices],
+                "count": len(PortalSection.values),
+            }
+        )
 
     @extend_schema(
         summary="Activate a Mait",

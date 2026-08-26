@@ -387,6 +387,8 @@ paths:
         Sorted most overdue first: the screen is opened to find the rounds nobody is walking, not to browse a roster. Every active Mait appears, including the ones with no checks at all — a Mait whose inseminations are too recent to have booked one reads very differently from a Mait ignoring twenty, and a list built only from check rows could not tell them apart.
 
         `conception_rate` is a percentage of **settled inseminations**, not of checks: an unsure result books a recheck, and an event whose second check came back pregnant did not fail. An insemination still carrying an open check is in neither half of the fraction — otherwise a Mait improves their own rate by staying at home.
+
+        `declined` counts the visits an owner refused. It is reported beside the three findings and never added to them: nobody examined the animal, so the insemination is in neither half of the rate either. A refusal books the next attempt, so those checks are still in `open` as well — the round has not lost the animal.
       summary: Pregnancy diagnosis across every Mait
       tags:
       - pregnancy
@@ -430,6 +432,58 @@ paths:
               schema:
                 type: object
                 additionalProperties: {}
+          description: ''
+  /api/v1/admin/pregnancy/rate/:
+    get:
+      operationId: admin_pregnancy_rate_retrieve
+      description: |-
+        The two prices, read and set from the Rates screen.
+
+        Flat rather than per breed, unlike the insemination rate: a straw's price follows the bull it came from, and this one follows the visit, which is the same work whatever animal it is.
+
+        **Zero means not priced, never free.** A rate nobody has entered reaches a Mait as "chargeable, amount not set" rather than as a farmer being told the visit costs nothing. `PATCH` accepts either rate on its own.
+      summary: What a pregnancy diagnosis costs
+      tags:
+      - pregnancy
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PregnancyRate'
+          description: ''
+    patch:
+      operationId: admin_pregnancy_rate_partial_update
+      description: |-
+        The two prices, read and set from the Rates screen.
+
+        Flat rather than per breed, unlike the insemination rate: a straw's price follows the bull it came from, and this one follows the visit, which is the same work whatever animal it is.
+
+        **Zero means not priced, never free.** A rate nobody has entered reaches a Mait as "chargeable, amount not set" rather than as a farmer being told the visit costs nothing. `PATCH` accepts either rate on its own.
+      summary: What a pregnancy diagnosis costs
+      tags:
+      - pregnancy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPregnancyRateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPregnancyRateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPregnancyRateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PregnancyRate'
           description: ''
   /api/v1/admin/products/:
     get:
@@ -923,6 +977,85 @@ paths:
               schema:
                 $ref: '#/components/schemas/DataUploadLog'
           description: ''
+  /api/v1/admin/uploads/snapshots/:
+    get:
+      operationId: admin_uploads_snapshots_retrieve
+      description: |-
+        One entry per SAP master, saying whether there is a landed upload behind it, what it was, and whether its workbook is already built.
+
+        Sent as a list rather than left for the screen to assemble from the history, because the screen would have to know which statuses count as landed — and a portal offering a download of a failed upload is a portal handing back a file that never became the master.
+      summary: Which masters have a copy to download
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/admin/uploads/snapshots-progress/:
+    get:
+      operationId: admin_uploads_snapshots_progress_retrieve
+      description: |-
+        Polled while `snapshots/{master}/` is in flight, keyed by the token the client sent with it.
+
+        The wait on that endpoint is almost entirely the workbook being rebuilt, and until it is finished there is not one byte to send — so a client measuring the transfer sees nothing, then everything. This is the part that can honestly be measured: rows copied, out of rows to copy.
+
+        Zeroes where the token is unknown, which is the ordinary state for the first poll or two before the builder has reached its first checkpoint.
+      summary: How far a master download has got
+      parameters:
+      - in: query
+        name: token
+        schema:
+          type: string
+        description: The token sent with the download
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/admin/uploads/snapshots/{upload_type}/:
+    get:
+      operationId: admin_uploads_snapshots_retrieve_2
+      description: |-
+        The workbook this platform is currently running on, rebuilt and protected.
+
+        Not a blank template — the templates are the SAP exports themselves, which this portal has always said. This is *what we last loaded*, so an admin about to re-upload a corrected master can open the one in force and check a column against it.
+
+        **Protected, not sealed.** The sheet carries Excel's own protection, which stops the accidental edit — a stray keystroke, a dragged column — and can be removed by anyone who means to. It is not encryption, and one of these files is not evidence.
+
+        404 where nothing has landed for that master yet.
+      summary: Download the last upload of a master, locked
+      parameters:
+      - in: path
+        name: upload_type
+        schema:
+          type: string
+          pattern: ^[a-z]+$
+        required: true
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/admin/users/:
     get:
       operationId: admin_users_list
@@ -1164,6 +1297,26 @@ paths:
         flags the ones whose SAP record has no number — those cannot receive an OTP
         until one is supplied at activation.
       summary: Maits awaiting activation
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/admin/users/portal-sections/:
+    get:
+      operationId: admin_users_portal_sections_retrieve
+      description: |-
+        Every section an Admin account can be given, in sidebar order — the catalogue the access editor on Users & roles builds its list from.
+
+        Served rather than hardcoded in the portal so the two cannot drift: a section added here appears in the editor without a second edit, and one the API has never heard of can never be ticked.
+      summary: The portal's sections
       tags:
       - auth
       security:
@@ -3153,6 +3306,66 @@ paths:
                 type: string
                 format: binary
           description: ''
+  /api/v1/reports/pregnancy/:
+    get:
+      operationId: reports_pregnancy_retrieve
+      description: |-
+        Who agreed to a check and who did not, one row per check.
+
+        `owner_consent` is the column this report exists for: **Accepted** where somebody examined the animal, **Declined** where the owner refused, and **Not visited yet** where the check is still owed. `outcome` carries the raw value beside it for filtering.
+
+        Filter with `date_from` / `date_to` (on the due date), `mait`, `mpp`, `outcome` and `consent`. `search` matches a Mait's name or vendor code, so a file taken from the oversight screen matches what was on it.
+
+        Mobile numbers are masked and Aadhaar is absent, as in every export: the file leaves this system. Every export is audit-logged against the admin who ran it.
+      summary: Export pregnancy diagnosis as CSV
+      parameters:
+      - in: query
+        name: consent
+        schema:
+          type: string
+        description: accepted / declined / pending — the same split as `owner_consent`.
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: Due on or after, YYYY-MM-DD
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: Due on or before, YYYY-MM-DD
+      - in: query
+        name: mait
+        schema:
+          type: integer
+        description: Mait id
+      - in: query
+        name: mpp
+        schema:
+          type: string
+        description: MPP code
+      - in: query
+        name: outcome
+        schema:
+          type: string
+        description: pregnant / not_pregnant / unsure / declined
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Mait name or vendor code
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/semen-batches/{unique_no}/validate/:
     get:
       operationId: semen_batches_validate_retrieve
@@ -3998,6 +4211,21 @@ components:
         assigned_mpp_count:
           type: integer
           readOnly: true
+        portal_sections:
+          type: array
+          items:
+            type: string
+          description: |-
+            What the account actually reaches, not what is stored against it.
+
+            A Super Admin holds an empty list and reaches everything; returning the column would
+            show the screen an account with no access at all, which is the opposite of the truth.
+          readOnly: true
+        portal_section_total:
+          type: integer
+          description: The size of the catalogue, so "12 of 17" can be written without
+            hardcoding 17.
+          readOnly: true
       required:
       - assigned_mpp_count
       - created_at
@@ -4008,6 +4236,8 @@ components:
       - last_login_at
       - mait_name
       - mobile_no
+      - portal_section_total
+      - portal_sections
       - role
       - role_display
       - sahayak_vendor_code
@@ -4046,6 +4276,12 @@ components:
           type: string
           writeOnly: true
           minLength: 10
+        portal_sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalSectionsEnum'
+          description: Sidebar sections this account may open. The complete set, not
+            an addition — anything missing from it is removed. Admins only.
       required:
       - full_name
       - password
@@ -4519,6 +4755,17 @@ components:
           items:
             type: string
           readOnly: true
+        portal_sections:
+          type: array
+          items:
+            type: string
+          description: |-
+            The portal sections this account may open, in sidebar order.
+
+            What the admin portal draws its sidebar from, and empty for a Mait — the app has no
+            sections. It is a convenience, never the control: every endpoint behind a section
+            checks for itself, because a sidebar has no say over a URL typed into the bar.
+          readOnly: true
       required:
       - assigned_mpp_codes
       - email
@@ -4528,6 +4775,7 @@ components:
       - last_login_at
       - mait_id
       - mobile_no
+      - portal_sections
       - role
       - role_display
       - sahayak_vendor_code
@@ -5704,11 +5952,13 @@ components:
       - pregnant
       - not_pregnant
       - unsure
+      - declined
       type: string
       description: |-
         * `pregnant` - Pregnant
         * `not_pregnant` - Not pregnant
         * `unsure` - Not sure
+        * `declined` - Owner declined
     OwnerTypeEnum:
       enum:
       - member
@@ -6121,6 +6371,12 @@ components:
           type: string
           writeOnly: true
           minLength: 10
+        portal_sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalSectionsEnum'
+          description: Sidebar sections this account may open. The complete set, not
+            an addition — anything missing from it is removed. Admins only.
     PatchedAnimalPhotoRequest:
       type: object
       description: |-
@@ -6284,6 +6540,27 @@ components:
         back:
           type: string
           format: binary
+    PatchedPregnancyRateRequest:
+      type: object
+      description: |-
+        The two prices, as the Rates screen edits them.
+
+        Zero is allowed and means *not priced*; negative is not. There is no such thing as being
+        paid to examine an animal, and a minus sign typed into a rupee field is a typo every time.
+      properties:
+        member_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: 'What a member is charged for one pregnancy diagnosis, in rupees.
+            She hands over nothing: the dairy deducts it from her milk payment at
+            the next payout. Zero means not priced, never free.'
+        non_member_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: What a non-member pays the Mait on the spot, in rupees. Zero
+            means not priced, never free.
     Payment:
       type: object
       description: Read shape for one payment.
@@ -6438,6 +6715,44 @@ components:
       description: |-
         * `camera` - Taken on the handset
         * `gallery` - Chosen from the gallery
+    PortalSectionsEnum:
+      enum:
+      - dashboard
+      - uploads
+      - ai-events
+      - maits
+      - mpps
+      - assignments
+      - members
+      - non-members
+      - inventory
+      - products
+      - rates
+      - indents
+      - leaderboard
+      - pregnancy
+      - exceptions
+      - reports
+      - users
+      type: string
+      description: |-
+        * `dashboard` - Dashboard
+        * `uploads` - SAP upload
+        * `ai-events` - AI events
+        * `maits` - Maits
+        * `mpps` - MPPs
+        * `assignments` - Assignment
+        * `members` - Members
+        * `non-members` - Non-members
+        * `inventory` - Inventory
+        * `products` - Products
+        * `rates` - Rates
+        * `indents` - Indents
+        * `leaderboard` - Leaderboard
+        * `pregnancy` - Pregnancy
+        * `exceptions` - Exceptions
+        * `reports` - Reports
+        * `users` - Users & roles
     PregnancyCheck:
       type: object
       properties:
@@ -6452,6 +6767,16 @@ components:
           readOnly: true
         owner_type:
           type: string
+          readOnly: true
+        owner_mobile:
+          type: string
+          description: |-
+            The owner's number, whichever kind of owner they are.
+
+            Read the same way `get_owner_name` reads the name, off the same pair, so one farmer is
+            one person across the record. Blank rather than null when there is none: a member's
+            number is optional in the SAP master and a screen that has to tell null from "" is a
+            screen with two empty states for one fact.
           readOnly: true
         mpp_id:
           type: integer
@@ -6479,6 +6804,19 @@ components:
           type: string
           readOnly: true
         breed:
+          type: string
+          readOnly: true
+        gps_lat:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          readOnly: true
+        gps_lng:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          readOnly: true
+        gps_source:
           type: string
           readOnly: true
         served_on:
@@ -6524,8 +6862,27 @@ components:
         note:
           type: string
           readOnly: true
+        price:
+          type: string
+          nullable: true
+          description: |-
+            The rate this owner would pay for the visit, as a string, or null when unpriced.
+
+            Null is not zero and the app must not render it as one. A rate nobody has entered is
+            an administrator's omission, and the handset says the visit is chargeable without
+            naming a figure rather than quoting a farmer nothing.
+
+            Resolved once per response through the serializer context, because a page of a hundred
+            checks would otherwise ask the same one-row table a hundred times.
+          readOnly: true
+        amount_charged:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
       required:
       - ai_event_id
+      - amount_charged
       - animal_id
       - animal_type
       - breed
@@ -6535,6 +6892,9 @@ components:
       - days_until
       - due_on
       - ear_tag_no
+      - gps_lat
+      - gps_lng
+      - gps_source
       - id
       - member_code
       - mpp_code
@@ -6544,10 +6904,44 @@ components:
       - note
       - outcome
       - outcome_display
+      - owner_mobile
       - owner_name
       - owner_type
       - photo_url
+      - price
       - served_on
+    PregnancyRate:
+      type: object
+      description: |-
+        The two prices, as the Rates screen edits them.
+
+        Zero is allowed and means *not priced*; negative is not. There is no such thing as being
+        paid to examine an animal, and a minus sign typed into a rupee field is a typo every time.
+      properties:
+        service:
+          allOf:
+          - $ref: '#/components/schemas/ServiceEnum'
+          readOnly: true
+        member_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: 'What a member is charged for one pregnancy diagnosis, in rupees.
+            She hands over nothing: the dairy deducts it from her milk payment at
+            the next payout. Zero means not priced, never free.'
+        non_member_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: What a non-member pays the Mait on the spot, in rupees. Zero
+            means not priced, never free.
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - service
+      - updated_at
     ProductTypeEnum:
       enum:
       - straw
@@ -6636,6 +7030,11 @@ components:
       - received_date
       - semen_station
       - unique_straw_no
+    ServiceEnum:
+      enum:
+      - pd
+      type: string
+      description: '* `pd` - Pregnancy diagnosis'
     StatusA39Enum:
       enum:
       - pending

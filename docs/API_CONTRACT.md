@@ -301,6 +301,18 @@ say which bundle it came out of. Validate then answers `reason: "breed_required"
 | GET | `/reports/export/` | CSV/Excel export of AI events / payments (query-filtered) | Admin |
 | GET | `/reports/pregnancy/` | CSV of every pregnancy check: who agreed, who refused, who has not been visited (§9.11) | Admin |
 
+`/dashboard/summary/` and `/dashboard/trends/` answer for the same days, and are counted so
+that they cannot disagree. The aggregate tables these screens exist for are rewritten by an
+hourly job that reworks the last couple of days each run — an insemination captured offline
+can arrive hours late and land on one of them — so a day inside that window is either missing,
+an hour behind, or about to change. Both endpoints therefore count the recent tail from the
+events themselves and take only the settled days off the aggregate.
+
+That matters because the two are read side by side: the tile says "−100% on yesterday" and the
+chart draws the yesterday it was measured against. Reading the chart from the aggregate alone
+put a rise on the tile above a flat bar, and on a deployment with no worker running it drew
+every day flat back to whenever somebody last ran `rebuild_ai_aggregates` by hand.
+
 The AI event export carries **`member_code` beside `farmer_name`**, not instead of it. A name
 is what a person recognises; a code is what the dairy's own systems key on, and a file that
 gets reconciled against a milk payment or looked up in SAP needs both — there are several
@@ -385,6 +397,32 @@ with nothing saying why.
 | GET | `/admin/users/pending-maits/` | Sahayaks with no login yet | Admin |
 | POST | `/admin/users/activate-mait/` | Give a Sahayak a mobile number and a login | Admin |
 | PATCH | `/admin/users/maits/{vendor_code}/` | Correct one Mait's name, mobile or MPP coverage | Admin |
+| GET | `/admin/users/portal-sections/` | The catalogue of portal sections an Admin account can be given | Admin |
+
+### Portal access
+
+Role says what kind of account someone has. `portal_sections` says which of the portal's
+seventeen screens that account is there to work — the sidebar it sees, and the endpoints it
+may call. Two back-office admins are rarely the same job: the one who runs the SAP imports
+has no business in Rates.
+
+The keys are the `data-page` attribute each portal screen already carries, so a section is
+the same string in the sidebar, in the page it opens and in the permission behind it.
+
+* `POST /admin/users/` accepts `portal_sections`. Omitted, a new Admin gets all of them —
+  the behaviour every account had before access was assignable.
+* `PATCH /admin/users/{id}/` accepts it as the **complete set**, not an addition. An empty
+  list is a real answer and leaves the account signed in to an empty sidebar.
+* Both refuse it for a Super Admin, who reaches every section by role, and for a Mait, who
+  has no portal. Nobody may change **their own** access — the one account that could put
+  Users & roles back is the one that just gave it away.
+* `GET /admin/users/` and `GET /auth/me/` return the sections the account actually reaches,
+  in sidebar order, so a Super Admin reads as holding all seventeen rather than none.
+
+Enforcement is on every endpoint behind a section, not on the sidebar: the portal is one
+static file per screen, and a shorter menu has nothing to say about a URL typed into the
+address bar. Endpoints two screens share — the AI event list that Reports also queries, the
+upload history Assignment also reads — admit an account holding **either**.
 
 `/admin/users/maits/` hides retired records unless `?include_retired=true` — those are the
 pseudo-Maits the MPP master used to mint from its Sahayak column, kept so old AI events still

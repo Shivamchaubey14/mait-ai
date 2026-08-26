@@ -98,6 +98,7 @@ class CurrentUserSerializer(serializers.ModelSerializer):
     mait_id = serializers.SerializerMethodField()
     sahayak_vendor_code = serializers.SerializerMethodField()
     assigned_mpp_codes = serializers.SerializerMethodField()
+    portal_sections = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -114,8 +115,19 @@ class CurrentUserSerializer(serializers.ModelSerializer):
             "mait_id",
             "sahayak_vendor_code",
             "assigned_mpp_codes",
+            "portal_sections",
         ]
         read_only_fields = fields
+
+    def get_portal_sections(self, obj) -> list[str]:
+        """
+        The portal sections this account may open, in sidebar order.
+
+        What the admin portal draws its sidebar from, and empty for a Mait — the app has no
+        sections. It is a convenience, never the control: every endpoint behind a section
+        checks for itself, because a sidebar has no say over a URL typed into the bar.
+        """
+        return obj.allowed_sections
 
     def _mait(self, obj):
         return getattr(obj, "mait_profile", None)

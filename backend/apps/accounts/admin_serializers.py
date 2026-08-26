@@ -15,7 +15,31 @@ from rest_framework import serializers
 
 from apps.masterdata.models import MPP, Mait
 
-from .models import Role, User, mobile_validator
+from .models import PortalSection, Role, User, mobile_validator
+
+
+def portal_sections_field(**kwargs) -> serializers.ListField:
+    """
+    The write shape for portal access, in one place.
+
+    Create and update both take it and both must reject the same things, and a list of
+    seventeen string keys is exactly the sort of field that grows a second, laxer copy.
+    """
+    return serializers.ListField(
+        child=serializers.ChoiceField(choices=PortalSection.choices),
+        allow_empty=True,
+        help_text=(
+            "Sidebar sections this account may open. The complete set, not an addition — "
+            "anything missing from it is removed. Admins only."
+        ),
+        **kwargs,
+    )
+
+
+def normalise_sections(sections) -> list[str]:
+    """De-duplicate and put back into sidebar order, so stored access reads like the menu."""
+    held = set(sections or [])
+    return [section for section in PortalSection.values if section in held]
 
 
 class AdminUserSerializer(serializers.ModelSerializer):
@@ -27,6 +51,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
         source="mait_profile.sahayak_vendor_code", read_only=True, default=None
     )
     assigned_mpp_count = serializers.SerializerMethodField()
+    portal_sections = serializers.SerializerMethodField()
+    portal_section_total = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -44,12 +70,27 @@ class AdminUserSerializer(serializers.ModelSerializer):
             "mait_name",
             "sahayak_vendor_code",
             "assigned_mpp_count",
+            "portal_sections",
+            "portal_section_total",
         ]
         read_only_fields = fields
 
     def get_assigned_mpp_count(self, obj) -> int:
         mait = getattr(obj, "mait_profile", None)
         return mait.mpps.count() if mait is not None else 0
+
+    def get_portal_sections(self, obj) -> list[str]:
+        """
+        What the account actually reaches, not what is stored against it.
+
+        A Super Admin holds an empty list and reaches everything; returning the column would
+        show the screen an account with no access at all, which is the opposite of the truth.
+        """
+        return obj.allowed_sections
+
+    def get_portal_section_total(self, obj) -> int:
+        """The size of the catalogue, so "12 of 17" can be written without hardcoding 17."""
+        return len(PortalSection.values)
 
 
 class AdminUserCreateSerializer(serializers.Serializer):
@@ -68,11 +109,31 @@ class AdminUserCreateSerializer(serializers.Serializer):
     )
     role = serializers.ChoiceField(choices=[Role.ADMIN, Role.SUPER_ADMIN])
     password = serializers.CharField(write_only=True, min_length=10)
+    portal_sections = portal_sections_field(required=False)
 
     def validate_username(self, value: str) -> str:
         if User.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError("That username is already taken.")
         return value
+
+    def validate(self, attrs):
+        """
+        Default a new Admin to the whole portal.
+
+        Omitting the field has to mean something, and the only safe reading is the behaviour
+        every account had before access existed. An account created by an integration that
+        has never heard of sections would otherwise sign in to an empty sidebar and read as
+        a broken portal rather than as a permissions decision nobody made.
+        """
+        if attrs["role"] == Role.SUPER_ADMIN:
+            # Stored empty: `allowed_sections` gives a Super Admin everything unconditionally,
+            # and a column that also said so would be a second answer to drift from the first.
+            attrs["portal_sections"] = []
+        else:
+            attrs["portal_sections"] = normalise_sections(
+                attrs.get("portal_sections", PortalSection.values)
+            )
+        return attrs
 
     @transaction.atomic
     def create(self, validated_data):
@@ -96,6 +157,22 @@ class AdminUserUpdateSerializer(serializers.Serializer):
     is_active = serializers.BooleanField(required=False)
     role = serializers.ChoiceField(choices=Role.choices, required=False)
     password = serializers.CharField(write_only=True, required=False, min_length=10)
+    portal_sections = portal_sections_field(required=False)
+
+    def validate_portal_sections(self, value):
+        """
+        Only an Admin has an access list to change.
+
+        A Super Admin reaches every section by role, so writing one would store a list that
+        is never read and show an operator a set of ticks that decides nothing. A Mait has no
+        portal at all.
+        """
+        if self.instance and self.instance.role != Role.ADMIN:
+            raise serializers.ValidationError(
+                "Only an Admin account has portal access to assign. "
+                "A Super Admin already reaches every section, and a Mait has no portal."
+            )
+        return normalise_sections(value)
 
     def validate_role(self, value):
         """
