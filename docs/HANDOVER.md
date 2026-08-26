@@ -67,6 +67,7 @@ an origin and a relative path is correct there.
 | --- | --- |
 | App | `9999999999` / `123456` — a fixed dev OTP, wired via `DEV_FIXED_OTP_NUMBERS` in `backend/.env`. Production refuses to boot if it is set. |
 | Portal | `admin` / `MaitAdmin@2026` |
+| Portal, restricted | `rateclerk` / `RateClerk@2026x` — an Admin holding Dashboard, Products and Rates only, for checking per-account portal access |
 
 The demo Mait is ROHIT KUMAR (`5500000054`), assigned MPPs 001302, 001308 and 001371, holding
 straws in three breeds plus consumables and equipment. None of that survives a database reset;
@@ -99,7 +100,12 @@ tabs (Home, Stock, History, Settings), the capture flow through step 5, request-
 multi-line form and a review sheet, and the offline queue.
 
 **Admin portal.** All 16 screens, W2–W17, on one shared shell (`portal.css`, `shell.js`,
-`ui.js`).
+`ui.js`). Which of them a given account sees is assigned per user on Users & roles —
+`User.portal_sections`, keyed by the `data-page` attribute each screen already carries. The
+sidebar is filtered from `/auth/me/`; the refusal that actually holds is `in_section(...)` on
+every endpoint behind a section (`apps/core/permissions.py`). Endpoints two screens share —
+the AI event list Reports also queries, the upload history Assignment also reads — admit an
+account holding either.
 
 ---
 

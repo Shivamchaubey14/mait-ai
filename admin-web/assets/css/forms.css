@@ -49,6 +49,12 @@
   color: var(--color-error);
 }
 
+/* Something worth reading twice before saving, but not an error — a change that takes access
+   away rather than one the form will refuse. */
+.field__hint--warn {
+  color: var(--color-secondary-pressed);
+}
+
 /* --- iconed fields ------------------------------------------------------------------------
    A glyph on a tinted chip beside the label, so a form of six identical boxes is told apart by
    shape before a word of it is read. The chip carries the tone and the glyph carries the

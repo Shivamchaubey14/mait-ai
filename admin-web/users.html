@@ -190,12 +190,47 @@
               <p class="field__hint">They are asked to change it on first sign-in</p>
             </div>
 
+            <!-- Full width, under the five short fields: it is seventeen ticks, and it is
+                 the field that decides what this account is for. -->
+            <div class="field field--iconed field--wide" id="new-access-field">
+              <label class="field__label" for="new-access">
+                <span class="field__icon field__icon--pages" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 3h7v7H3zM14 3h7v4h-7zM14 11h7v10h-7zM3 14h7v7H3z" />
+                  </svg>
+                </span>
+                Pages they can open
+                <span class="field__count" id="new-access-count">—</span>
+              </label>
+              <div class="access__quick">
+                <button class="btn btn--good-outline" type="button" id="new-access-all">
+                  Select all
+                </button>
+                <button class="btn" type="button" id="new-access-none">Clear</button>
+              </div>
+              <div class="access" id="new-access" role="group" aria-label="Pages"></div>
+              <p class="field__hint" id="new-access-hint">
+                This is the whole sidebar they will see. It can be changed afterwards.
+              </p>
+            </div>
+
             <div class="form-actions">
               <button class="btn btn--primary" type="submit">Create account</button>
               <button class="btn" type="button" id="create-cancel">Cancel</button>
             </div>
           </form>
         </section>
+
+        <!-- The access editor renders itself in here, the way the Mait editor does on the
+             two screens that open it. -->
+        <div id="access-editor"></div>
 
         <section class="panel panel--flush" aria-labelledby="roster-title">
           <div class="panel__head panel__head--flush">
@@ -225,6 +260,9 @@
                   <th scope="col">User</th>
                   <th scope="col">Username</th>
                   <th scope="col">Role</th>
+                  <!-- What the account is for, in a column of its own. Role says what kind
+                       of account it is; this says which of the seventeen screens it works. -->
+                  <th scope="col">Pages</th>
                   <th scope="col">Scope</th>
                   <th scope="col">Last sign-in</th>
                   <th scope="col">Status</th>
@@ -236,7 +274,7 @@
               </thead>
               <tbody id="rows">
                 <tr>
-                  <td class="table__empty" colspan="7">Loading…</td>
+                  <td class="table__empty" colspan="8">Loading…</td>
                 </tr>
               </tbody>
             </table>
@@ -250,7 +288,9 @@
             <p class="notice__title">Field staff never get a portal account</p>
             <p class="notice__body">
               Maits sign in to the app with an OTP. Portal roles are Admin and Super Admin only, and
-              a Mait is activated from their SAP record on the Maits screen.
+              a Mait is activated from their SAP record on the Maits screen. A Super Admin reaches
+              every page by role, so only an Admin has pages to assign — and nobody changes their
+              own.
             </p>
           </div>
         </div>

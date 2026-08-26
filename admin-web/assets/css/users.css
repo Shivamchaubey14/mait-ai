@@ -7,6 +7,7 @@
  */
 
 @import url('forms.css');
+@import url('editor.css');
 
 /* The search keeps the full width it has on every other screen. It was capped here when the
    Role select was still the browser's own, whose intrinsic width was what pushed it onto a
@@ -93,4 +94,167 @@
 .field__icon--secret {
   color: var(--color-secondary-pressed);
   background: var(--color-secondary-wash);
+}
+
+/* --- portal access ------------------------------------------------------------------------
+   Which of the seventeen screens an account is there to work — the sidebar, handed out.
+
+   Cards rather than a column of checkboxes. Seventeen ticked boxes in a list is a form to be
+   read line by line; the same seventeen as a grid carrying the sidebar's own glyphs is the
+   menu itself, and an operator recognises the shape of it before they read a single label. */
+.access {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: var(--space-2);
+}
+
+.access__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-label);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.access__item:hover {
+  border-color: var(--green-300);
+}
+
+/* On is the sidebar's own colouring — the green pill an active section wears — so a ticked
+   card and the link it stands for read as the same thing. */
+.access__item.is-on {
+  color: var(--color-text);
+  font-weight: 600;
+  border-color: var(--color-primary);
+  background: var(--color-primary-wash);
+}
+
+/* Kept focusable and kept where it is: hiding it with `display: none` takes it out of the tab
+   order, and a grid of seventeen controls nobody can reach by keyboard is not a control. */
+.access__check {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.access__item:has(.access__check:focus-visible) {
+  outline: 2px solid var(--color-primary-dark);
+  outline-offset: 2px;
+}
+
+.access__mark {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-disabled);
+}
+
+.access__item.is-on .access__mark {
+  color: var(--color-primary-dark);
+}
+
+.access__mark svg {
+  width: 17px;
+  height: 17px;
+}
+
+.access__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The tick is the only thing that appears rather than changes, so the card's state survives
+   being read in a photocopy — colour is never carrying it alone. */
+.access__state {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-primary-dark);
+  visibility: hidden;
+}
+
+.access__item.is-on .access__state {
+  visibility: visible;
+}
+
+.access__state svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Select all / Clear. Above the grid and right-aligned, out of the way of the labels: they
+   are shortcuts through seventeen clicks, not two of the seventeen. */
+.access__quick {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.access__quick .btn {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-caption);
+}
+
+/* The pill in the editor head is `pill--admin`, which is info-on-info-wash — and the panel
+   behind it is that same wash, so it vanished into the card and left the role as three words
+   of blue text. Paper under it, the way editor.css puts paper under its field chips. */
+.access-editor .editor__head .pill {
+  background: var(--color-surface);
+}
+
+.field__icon--pages {
+  color: var(--color-primary-dark);
+  background: var(--color-surface);
+}
+
+/* --- the roster's own column ----------------------------------------------------------------
+   `12 of 17` is data, so it takes the heading face the rest of the portal's codes and counts
+   take, and it does not wrap: "No portal" broken across two lines in a narrow column reads as
+   two separate facts about the row. */
+.user-pages {
+  white-space: nowrap;
+}
+
+/* The count, as the control that changes it. A button rather than a link because it opens a
+   panel on this page; styled as neither until it is hovered, so a column of them reads as
+   figures and not as a column of buttons. */
+.pages-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.pages-link svg {
+  width: 13px;
+  height: 13px;
+  color: var(--color-text-disabled);
+}
+
+.pages-link:hover .table__code,
+.pages-link:focus-visible .table__code {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+.pages-link:hover svg,
+.pages-link:focus-visible svg {
+  color: var(--color-primary-dark);
 }
