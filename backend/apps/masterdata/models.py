@@ -9,6 +9,8 @@ month's file refreshes rather than duplicates.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.db import models
 
 from apps.accounts.models import mobile_validator
@@ -247,6 +249,33 @@ class NonMember(TimeStampedModel):
     aadhar_front_url = models.CharField(max_length=500, blank=True)
     aadhar_back_url = models.CharField(max_length=500, blank=True)
 
+    # What she keeps and what it gives, as she reports it at registration.
+    #
+    # For the record, not for a rule: nothing in the app prices, scopes or refuses anything on
+    # these. They are what turns a roster of names into a picture of the herd behind it — how
+    # much milk is coming off farmers the dairy has no SAP record of, and which villages hold
+    # cattle nobody is serving yet.
+    #
+    # Counted separately by species rather than as one herd number, because a cow and a
+    # buffalo are different animals to inseminate, give very different yields, and the whole
+    # breed catalogue is already split the same way (`animals.AnimalType`).
+    #
+    # Zero is a real answer and also what every row registered before the question existed
+    # carries, which is why `herd_recorded` is reported alongside the totals rather than left
+    # for somebody to infer from an average that quietly includes them.
+    cattle_cows = models.PositiveSmallIntegerField(
+        default=0, help_text="Cows she keeps, as reported at registration."
+    )
+    cattle_buffaloes = models.PositiveSmallIntegerField(
+        default=0, help_text="Buffaloes she keeps, as reported at registration."
+    )
+    daily_yield_litres = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Litres of milk a day across the herd, as reported at registration.",
+    )
+
     mpp = models.ForeignKey(
         MPP,
         on_delete=models.PROTECT,
@@ -284,6 +313,11 @@ class NonMember(TimeStampedModel):
     @property
     def masked_aadhar(self) -> str:
         return mask(self.aadhar_no)
+
+    @property
+    def cattle_total(self) -> int:
+        """Her whole herd. Derived rather than stored, so it cannot disagree with its parts."""
+        return self.cattle_cows + self.cattle_buffaloes
 
 
 # How many rejected rows one upload keeps, so a file where every row fails cannot grow the JSON

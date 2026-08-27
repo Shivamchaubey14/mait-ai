@@ -303,6 +303,19 @@ class NonMemberSerializer(serializers.ModelSerializer):
     aadhar_front_captured = serializers.SerializerMethodField()
     aadhar_back_captured = serializers.SerializerMethodField()
 
+    # Her herd, and what it gives. Recorded, never enforced — see the note on the model.
+    #
+    # Capped rather than left open, because the only thing standing between this and a wild
+    # figure is somebody's thumb on a handset in a yard: a stray digit turns eight litres into
+    # eighty and, once it is averaged across a district, into a number an operator has no way
+    # of unpicking. The ceilings are far above any smallholder and low enough to catch a slip.
+    cattle_cows = serializers.IntegerField(required=False, min_value=0, max_value=500)
+    cattle_buffaloes = serializers.IntegerField(required=False, min_value=0, max_value=500)
+    daily_yield_litres = serializers.DecimalField(
+        required=False, max_digits=6, decimal_places=2, min_value=0, max_value=9999
+    )
+    cattle_total = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = NonMember
         fields = [
@@ -317,6 +330,10 @@ class NonMemberSerializer(serializers.ModelSerializer):
             "aadhar_front_captured",
             "aadhar_back_captured",
             "consent",
+            "cattle_cows",
+            "cattle_buffaloes",
+            "cattle_total",
+            "daily_yield_litres",
             "mpp",
             "created_by_mait",
             "consent_captured_at",
@@ -460,6 +477,11 @@ class AdminNonMemberListSerializer(serializers.ModelSerializer):
     aadhar_back_captured = serializers.SerializerMethodField()
     animal_count = serializers.IntegerField(read_only=True, default=0)
     ai_event_count = serializers.IntegerField(read_only=True, default=0)
+    # What she reported keeping, as against `animal_count` — the animals actually on file
+    # because one of them has been served. The two are different questions and the gap between
+    # them is the useful part: a farmer with nine cattle and one registered animal is eight
+    # inseminations nobody has asked her about.
+    cattle_total = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = NonMember
@@ -481,6 +503,10 @@ class AdminNonMemberListSerializer(serializers.ModelSerializer):
             "registered_by_code",
             "animal_count",
             "ai_event_count",
+            "cattle_cows",
+            "cattle_buffaloes",
+            "cattle_total",
+            "daily_yield_litres",
             "consent_captured_at",
             "created_at",
         ]

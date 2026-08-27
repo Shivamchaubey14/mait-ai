@@ -105,8 +105,47 @@ back, so a file downloaded and returned unedited is a no-op.
 Only the assignment moves. MPPs are never created here: they come from SAP, and an unknown
 code is reported as a bad row rather than quietly brought into existence. A Mait *may* be
 created when the row names them, since a new Sahayak has to start somewhere. A blank Sahayak
-column unassigns the MPP, and a blank mobile leaves the one on record alone — clearing it
-would lock a working Mait out of the app.
+column unassigns the MPP.
+
+Even here the Mait record itself is left alone: the name and mobile in the sheet identify who
+a code belongs to and create one who is genuinely new, but they no longer write over an
+existing roster entry. The number is corrected on the Maits screen far more often than the
+sheet is regenerated, and a stale cell coming back in would put the old one back.
+
+### Her herd, at registration
+
+`POST /non-members/` accepts three optional figures alongside her details:
+
+| Field | Meaning |
+| --- | --- |
+| `cattle_cows` | Cows she keeps, 0–500 |
+| `cattle_buffaloes` | Buffaloes she keeps, 0–500 |
+| `daily_yield_litres` | Litres of milk a day across the herd, 0–9999.99 |
+
+`cattle_total` comes back derived, so it cannot disagree with its parts.
+
+**For the record, never for a rule.** Nothing prices, scopes or refuses anything on these. A
+non-member is a household the dairy has no SAP record of — her cattle are counted nowhere and
+her milk sits outside every figure the plant reports — so what a Mait writes down at
+registration is the only measure of her there is.
+
+**Optional on purpose.** The registration form already runs to eight fields; a required herd
+count is the one a Mait guesses at to get past it, and a guess is worse than a blank because a
+blank is visible. The app omits the keys entirely when the boxes were left empty, rather than
+sending zeros — "she was not asked" and "she has none" are different answers.
+
+The ceilings are there because the only thing between this and a stray digit is somebody's
+thumb in a yard: eight litres typed as eighty cannot be unpicked once it has been averaged
+across a district.
+
+The figures are read on the **Non-members** screen, beside the animals actually on file. They
+are deliberately *not* on the dashboard: that page is about inseminations, and a herd census
+sitting among them invites the two to be read as one story. `GET /admin/non-members/` carries
+them per farmer, which is where the question "who has cattle nobody is serving" is asked.
+
+Note that zero means "never asked" as often as it means "she has none" — every farmer
+registered before this existed carries zeros — so any average taken over these has to count
+the rows that actually carry figures rather than the whole roster.
 
 ## 9.3 MPP, member & non-member
 
