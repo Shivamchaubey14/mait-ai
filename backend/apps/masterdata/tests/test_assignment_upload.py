@@ -20,7 +20,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
 from apps.masterdata.models import MPP, DataUploadLog, Mait
-from apps.masterdata.tasks import _upsert_assignment
+from apps.masterdata.tasks import _apply_assignment
 from apps.masterdata.templates_xlsx import build_assignment_workbook
 
 pytestmark = pytest.mark.django_db
@@ -71,7 +71,7 @@ def row(mpp_code="", vendor="", name="", mobile=""):
 
 
 def apply(**kwargs):
-    _upsert_assignment(row(**kwargs), Context())
+    _apply_assignment(row(**kwargs), Context())
 
 
 class TestAssigning:
@@ -133,12 +133,12 @@ class TestRefusals:
 
     def test_the_same_mpp_twice_in_one_file_is_refused(self, mpp, mait):
         context = Context()
-        _upsert_assignment(row(mpp.mpp_code, mait.sahayak_vendor_code), context)
+        _apply_assignment(row(mpp.mpp_code, mait.sahayak_vendor_code), context)
 
         # One MPP has one Mait, so a repeat is a contradiction: the later row would silently
         # win and the count would still look clean.
         with pytest.raises(ValueError, match="more than once"):
-            _upsert_assignment(row(mpp.mpp_code, mait.sahayak_vendor_code), context)
+            _apply_assignment(row(mpp.mpp_code, mait.sahayak_vendor_code), context)
 
     def test_an_unparseable_mobile_is_refused(self, mpp, mait):
         with pytest.raises(ValueError, match="not a usable Indian mobile number"):
@@ -160,11 +160,24 @@ class TestLeavingThingsAlone:
         mait.refresh_from_db()
         assert mait.mobile_no == "9876500001"
 
-    def test_a_supplied_mobile_does_update(self, mpp, mait):
+    def test_a_supplied_mobile_does_not_overwrite_the_one_on_record(self, mpp, mait):
+        """
+        The sheet assigns coverage. It does not correct the roster.
+
+        The number is corrected on the Maits screen after a phone call far more often than
+        the sheet is regenerated, so a stale cell coming back in would put the old one back
+        and lock a working Mait out — with nothing on screen to say why.
+        """
+        mait.mobile_no = "9876500001"
+        mait.save(update_fields=["mobile_no"])
+
         apply(mpp_code=mpp.mpp_code, vendor=mait.sahayak_vendor_code, mobile="98765 43210")
 
         mait.refresh_from_db()
-        assert mait.mobile_no == "9876543210"
+        assert mait.mobile_no == "9876500001"
+        # The one thing it is for still happened.
+        mpp.refresh_from_db()
+        assert mpp.mait_id == mait.id
 
     def test_a_float_looking_code_still_matches(self, mpp, mait):
         # Real MPP codes are numeric ("001302"), and openpyxl hands those back as floats —
@@ -214,7 +227,7 @@ class TestTemplate:
 
         context = Context()
         for line in range(2, sheet.max_row + 1):
-            _upsert_assignment(
+            _apply_assignment(
                 {
                     "mpp code": sheet.cell(row=line, column=1).value,
                     "mait vendor": sheet.cell(row=line, column=4).value,

@@ -66,6 +66,7 @@ class DataUploadLogSerializer(serializers.ModelSerializer):
             "total_rows",
             "processed_rows",
             "success_rows",
+            "skipped_rows",
             "failed_rows",
             "progress_percent",
             "error_count",

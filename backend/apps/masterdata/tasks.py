@@ -8,8 +8,15 @@ Four behaviours matter and are easy to get wrong:
 
 * **Header detection.** ``Member.xlsx`` opens with four title rows and a blank line; the real
   header is row 6. The first row cannot be assumed (SRS §6.1.2).
-* **Upsert by natural key**, so re-uploading last month's file refreshes rather than
-  duplicates (SRS §6.1.3).
+* **Insert by natural key, never overwrite.** Re-uploading last month's file adds whatever is
+  new and leaves every record already on file exactly as it is (SRS §6.1.3). SAP is where a
+  record is born, not the authority on it forever afterwards: by the time a master is uploaded
+  again the office has corrected mobile numbers over the phone and fixed spellings on screen,
+  and an upsert would silently undo that while reporting a clean import. The assignment sheet
+  is the one exception, because changing an existing record is the only thing it does.
+* **Safe to run mid-shift.** Nothing existing is written, so an import takes no locks on the
+  rows Maits are reading, and each row commits in its own savepoint rather than one long
+  transaction.
 * **Partial success.** Invalid rows are skipped and reported; valid rows still commit
   (SRS §6.1.4). Rejecting 105k rows because twelve have a malformed mobile number would make
   the feature unusable.
@@ -28,15 +35,19 @@ from collections.abc import Iterator
 from typing import Any
 
 from celery import shared_task
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from openpyxl import load_workbook
 
 from . import columns as cols
-from .snapshots import store_snapshot
 from .models import MAX_ERRORS_STORED, MPP, DataUploadLog, Mait, Member
+from .snapshots import store_snapshot
 
 logger = logging.getLogger(__name__)
+
+#: What one row did, so the run can report inserts and no-ops apart from failures.
+CREATED = "created"
+SKIPPED = "skipped"
 
 CHUNK_SIZE = 1000
 # Rows between progress writes. Smaller than a chunk on purpose: the chunk size is a
@@ -106,34 +117,55 @@ def _warm_snapshot(upload: DataUploadLog) -> None:
     try:
         store_snapshot(upload)
     except Exception:
-        logger.exception(
-            "Could not pre-build the downloadable copy of upload %s", upload.id
-        )
+        logger.exception("Could not pre-build the downloadable copy of upload %s", upload.id)
 
 
 class ImportContext:
     """
     Per-run state shared across rows.
 
-    Exists for two reasons. The MPP lookup is cached because resolving it per row costs one
-    query per member, and there are 105,000 of them against a table of only ~3,100 — the
-    whole map fits in memory many times over.
+    The MPP lookup is cached because resolving it per row costs one query per member, and
+    there are 105,000 of them against a table of only ~3,100 — the whole map fits in memory
+    many times over.
+
+    ``on_record`` is the same idea applied to the question every row now has to answer: does
+    this record already exist? Read once as a set of natural keys, so deciding to skip a row
+    costs no query and — the point of the exercise — takes no lock on the row being skipped.
+    The Member master is the largest of them at ~105,000 short strings.
 
     ``seen_keys`` catches a natural key appearing twice *within one file*. The real Member
-    export contains 50 such duplicates, and because rows are upserted, the later row would
-    silently overwrite the earlier one and the count would look clean. Flagging them turns a
-    silent data loss into a reported row (SRS §6.1.4).
+    export contains 50 such duplicates; flagging them turns a silent no-op into a reported row
+    (SRS §6.1.4).
     """
 
     def __init__(self, upload_type: str = "") -> None:
         self.mpp_ids: dict[str, int] = {}
         self.seen_keys: set[str] = set()
+        self.on_record: set[str] = set()
         # Carried so a rejected row can be reported with the cells that identify it, which
         # differ per file — see `columns.IDENTITY`.
         self.upload_type = upload_type
 
     def load_mpp_map(self) -> None:
         self.mpp_ids = dict(MPP.objects.values_list("mpp_code", "id"))
+
+    def load_existing_keys(self) -> None:
+        """
+        Every natural key this file could collide with, read in one query.
+
+        A snapshot, and deliberately not refreshed: a key inserted by somebody else while the
+        import runs is caught by the unique constraint instead, which is the only check that
+        is actually free of a race. See ``_insert_or_skip``.
+        """
+        source = {
+            DataUploadLog.UploadType.MEMBER: (Member, "member_code"),
+            DataUploadLog.UploadType.MPP: (MPP, "mpp_code"),
+            DataUploadLog.UploadType.MAIT: (Mait, "sahayak_vendor_code"),
+        }.get(self.upload_type)
+        if source is None:
+            return
+        model, field = source
+        self.on_record = set(model.objects.values_list(field, flat=True))
 
     def check_duplicate(self, key: str) -> None:
         if key in self.seen_keys:
@@ -143,15 +175,18 @@ class ImportContext:
 
 def _import_workbook(upload: DataUploadLog) -> dict[str, int]:
     handler = {
-        DataUploadLog.UploadType.MEMBER: _upsert_member,
-        DataUploadLog.UploadType.MAIT: _upsert_vendor,
-        DataUploadLog.UploadType.MPP: _upsert_mpp_and_sahayak,
-        DataUploadLog.UploadType.ASSIGNMENT: _upsert_assignment,
+        DataUploadLog.UploadType.MEMBER: _insert_member,
+        DataUploadLog.UploadType.MAIT: _insert_vendor,
+        DataUploadLog.UploadType.MPP: _insert_mpp_and_sahayak,
+        DataUploadLog.UploadType.ASSIGNMENT: _apply_assignment,
     }[upload.upload_type]
 
     context = ImportContext(upload.upload_type)
     if upload.upload_type == DataUploadLog.UploadType.MEMBER:
         context.load_mpp_map()
+    # One query, before any row is read: what is already on record decides every skip, and
+    # asking per row would be 105,000 round trips against a table the import is not writing to.
+    context.load_existing_keys()
 
     workbook = load_workbook(upload.file, read_only=True, data_only=True)
     try:
@@ -187,7 +222,7 @@ def _read_and_apply(upload: DataUploadLog, workbook, handler, context) -> dict[s
         )
 
     errors: list[dict[str, Any]] = []
-    success = failed = processed = 0
+    success = skipped = failed = processed = 0
     batch: list[dict[str, Any]] = []
 
     for row_number, row in _iter_rows(sheet, header_row_index, headers):
@@ -195,26 +230,29 @@ def _read_and_apply(upload: DataUploadLog, workbook, handler, context) -> dict[s
         batch.append({"row_number": row_number, "data": row})
 
         if len(batch) >= CHUNK_SIZE:
-            ok, bad = _commit_batch(batch, handler, errors, context)
+            ok, same, bad = _commit_batch(batch, handler, errors, context)
             success += ok
+            skipped += same
             failed += bad
             batch = []
-            _report_progress(upload, processed, success, failed)
+            _report_progress(upload, processed, success, skipped, failed)
         elif processed % PROGRESS_EVERY == 0:
             # Reading runs ahead of applying by up to one chunk, which is exactly what the two
             # stage tiles say it does. Without this, a file of a thousand rows commits once —
             # at the end — and the bar has nothing to report until there is nothing left to
             # wait for, which is the state the operator described as "stuck at 0%".
-            _report_progress(upload, processed, success, failed)
+            _report_progress(upload, processed, success, skipped, failed)
 
     if batch:
-        ok, bad = _commit_batch(batch, handler, errors, context)
+        ok, same, bad = _commit_batch(batch, handler, errors, context)
         success += ok
+        skipped += same
         failed += bad
 
     upload.total_rows = processed
     upload.processed_rows = processed
     upload.success_rows = success
+    upload.skipped_rows = skipped
     upload.failed_rows = failed
     upload.error_report = errors[:MAX_ERRORS_STORED]
     upload.save(
@@ -222,13 +260,21 @@ def _read_and_apply(upload: DataUploadLog, workbook, handler, context) -> dict[s
             "total_rows",
             "processed_rows",
             "success_rows",
+            "skipped_rows",
             "failed_rows",
             "error_report",
             "updated_at",
         ]
     )
-    logger.info("Upload %s finished: %s ok, %s failed of %s", upload.id, success, failed, processed)
-    return {"total": processed, "success": success, "failed": failed}
+    logger.info(
+        "Upload %s finished: %s added, %s already on record, %s failed of %s",
+        upload.id,
+        success,
+        skipped,
+        failed,
+        processed,
+    )
+    return {"total": processed, "success": success, "skipped": skipped, "failed": failed}
 
 
 def _missing_columns(required, headers) -> list[str]:
@@ -248,19 +294,26 @@ def _missing_columns(required, headers) -> list[str]:
     return sorted(missing)
 
 
-def _commit_batch(batch, handler, errors, context: ImportContext) -> tuple[int, int]:
+def _commit_batch(batch, handler, errors, context: ImportContext) -> tuple[int, int, int]:
     """
     Commit one chunk.
 
     Each row gets its own savepoint so a single bad row cannot roll back the other 999.
     That is what makes partial success work (SRS §6.1.4).
+
+    A row whose record is already on file is neither a success nor a failure — it is a row the
+    upload deliberately did nothing with, and counting it either way would misreport the run.
+    A re-upload of an unchanged master is 105,000 skips, no errors, and nothing written.
     """
-    ok = bad = 0
+    ok = skipped = bad = 0
     for item in batch:
         try:
             with transaction.atomic():
-                handler(item["data"], context)
-            ok += 1
+                outcome = handler(item["data"], context)
+            if outcome == SKIPPED:
+                skipped += 1
+            else:
+                ok += 1
         except Exception as exc:
             bad += 1
             if len(errors) < MAX_ERRORS_STORED:
@@ -274,14 +327,17 @@ def _commit_batch(batch, handler, errors, context: ImportContext) -> tuple[int, 
                         "fields": cols.identity_of(item["data"], context.upload_type),
                     }
                 )
-    return ok, bad
+    return ok, skipped, bad
 
 
-def _report_progress(upload: DataUploadLog, processed: int, success: int, failed: int) -> None:
+def _report_progress(
+    upload: DataUploadLog, processed: int, success: int, skipped: int, failed: int
+) -> None:
     """Update the counters the progress endpoint polls (SRS §6.1.6)."""
     DataUploadLog.objects.filter(pk=upload.pk).update(
         processed_rows=processed,
         success_rows=success,
+        skipped_rows=skipped,
         failed_rows=failed,
         updated_at=timezone.now(),
     )
@@ -396,9 +452,39 @@ def _is_active(value) -> bool:
 # --------------------------------------------------------------------------------------
 
 
-def _upsert_mpp_and_sahayak(row: dict, context: ImportContext) -> None:
+def _insert_or_skip(model, key_field: str, key: str, context: ImportContext, **fields) -> str:
     """
-    Upsert one row of ``Sahyak.xlsx``.
+    Create the record, or leave the existing one exactly as it is.
+
+    **A master upload inserts. It never overwrites.** SAP is where a record is born, not the
+    authority on it forever afterwards: by the time a master is re-uploaded the office has
+    corrected mobile numbers over the phone, fixed spellings on the Maits screen and moved
+    coverage on Assignment. An upsert would silently undo all of it, and nothing on any screen
+    would say a correction had been reverted — the file simply looked like it had imported
+    cleanly. Re-uploading a master is now additive, so it is safe to do at any time, including
+    in the middle of a working day.
+
+    The in-memory check answers almost every row. The ``IntegrityError`` behind it is the one
+    that cannot race: the key set is a snapshot taken when the run began, and a record created
+    by somebody else since — an admin activating a Mait, a second import — is caught by the
+    unique constraint instead. Its own savepoint, because a failed statement poisons the
+    transaction it ran in and the caller has more rows to commit.
+    """
+    if key in context.on_record:
+        return SKIPPED
+    try:
+        with transaction.atomic():
+            model.objects.create(**{key_field: key}, **fields)
+    except IntegrityError:
+        context.on_record.add(key)
+        return SKIPPED
+    context.on_record.add(key)
+    return CREATED
+
+
+def _insert_mpp_and_sahayak(row: dict, context: ImportContext) -> str:
+    """
+    Insert one row of ``Sahyak.xlsx``, or leave the collection point alone.
 
     **This file is MPP data. It does not define Maits.**
 
@@ -409,16 +495,19 @@ def _upsert_mpp_and_sahayak(row: dict, context: ImportContext) -> None:
     them, and the real roster is the ZMAI vendor export (SRS §18.2, now settled).
 
     So the Sahayak is kept here as what it is — the contact for this collection point — and
-    ``mait`` is deliberately absent from the defaults below. Coverage is assigned from the
+    ``mait`` is deliberately absent from the fields below. Coverage is assigned from the
     assignment sheet (SRS §6.2.2), and a master refresh must not silently undo it.
     """
     mpp_code = _clean(cols.pick(row, *cols.MPP["mpp_code"]))
     if not mpp_code:
         raise ValueError("MPP Code is blank.")
 
-    MPP.objects.update_or_create(
-        mpp_code=mpp_code,
-        defaults={
+    return _insert_or_skip(
+        MPP,
+        "mpp_code",
+        mpp_code,
+        context,
+        **{
             "plant_code": _clean(cols.pick(row, *cols.MPP["plant_code"])),
             "plant_name": _clean(cols.pick(row, *cols.MPP["plant_name"])),
             "mpp_name": _clean(cols.pick(row, *cols.MPP["mpp_name"])),
@@ -444,19 +533,24 @@ def _upsert_mpp_and_sahayak(row: dict, context: ImportContext) -> None:
     )
 
 
-def _upsert_vendor(row: dict, context: ImportContext) -> None:
+def _insert_vendor(row: dict, context: ImportContext) -> str:
     """
-    Upsert one row of ``Maits Vendor C.xlsx``.
+    Insert one row of ``Maits Vendor C.xlsx``, or leave the existing Mait alone.
 
     This file's vendor key occupies a different number range (9900000000+) from the ``Sahayak
     Vendor`` codes in ``Sahyak.xlsx`` (5500000003+), so rows loaded here link to no MPP —
     coverage is assigned separately, from the assignment sheet (SRS §6.2.2).
 
-    **Blank does not mean "clear it."** The export has shipped with columns renamed and, in
-    the EXPORT_* variant, with the PAN column carrying no header at all. Overwriting every
-    field unconditionally would silently wipe the PAN, GST and bank details of every Mait the
-    moment a slightly different export was uploaded, and nothing on any screen would say so.
-    So only the fields the row actually carries are written.
+    A Mait already on the roster is the strongest case for not overwriting anything. Their
+    mobile number is the only channel into the app, it is corrected on the Maits screen after
+    a phone call far more often than SAP is corrected, and the export has shipped with columns
+    renamed and — in the EXPORT_* variant — with the PAN column carrying no header at all. A
+    re-upload used to write over whatever it could read and leave the rest, so a slightly
+    different export could put a stale number back and lock a working Mait out, with nothing
+    on any screen to say what had happened.
+
+    Only the fields the row actually carries are written, which still matters: on the insert
+    path a blank cell must not store an empty string where the column means "not supplied".
     """
     vendor_code = _clean(cols.pick(row, *cols.VENDOR["sahayak_vendor_code"]))
     if not vendor_code:
@@ -473,24 +567,19 @@ def _upsert_vendor(row: dict, context: ImportContext) -> None:
     }
     supplied = {field: value for field, value in incoming.items() if value}
 
-    mait = Mait.objects.filter(sahayak_vendor_code=vendor_code).first()
-    if mait is None:
-        Mait.objects.create(sahayak_vendor_code=vendor_code, is_active=True, **supplied)
-        return
-
-    changed = [field for field, value in supplied.items() if getattr(mait, field) != value]
-    if not mait.is_active:
-        mait.is_active = True
-        changed.append("is_active")
-    if changed:
-        for field in changed:
-            if field != "is_active":
-                setattr(mait, field, supplied[field])
-        mait.save(update_fields=[*changed, "updated_at"])
+    return _insert_or_skip(
+        Mait, "sahayak_vendor_code", vendor_code, context, is_active=True, **supplied
+    )
 
 
-def _upsert_member(row: dict, context: ImportContext) -> None:
-    """Upsert one row of ``Member.xlsx``."""
+def _insert_member(row: dict, context: ImportContext) -> str:
+    """
+    Insert one row of ``Member.xlsx``, or leave the existing member alone.
+
+    The MPP is resolved before the skip is decided rather than after, so a file naming a
+    collection point that does not exist is still reported as the broken file it is — even on
+    a re-upload where every row happens to be on record already.
+    """
     member_code = _clean(cols.pick(row, *cols.MEMBER["member_code"]))
     if not member_code:
         raise ValueError("Member code is blank.")
@@ -500,13 +589,16 @@ def _upsert_member(row: dict, context: ImportContext) -> None:
     mpp_code = _clean(cols.pick(row, *cols.MEMBER["mpp_code"]))
     mpp_id = context.mpp_ids.get(mpp_code)
     if mpp_id is None:
-        # Skipped rather than auto-created: inventing an MPP from a member row would place a
+        # Rejected rather than auto-created: inventing an MPP from a member row would place a
         # member at a collection point that may not exist (SRS §6.1.4).
         raise ValueError(f"MPP '{mpp_code}' not found. Upload the MPP master first.")
 
-    Member.objects.update_or_create(
-        member_code=member_code,
-        defaults={
+    return _insert_or_skip(
+        Member,
+        "member_code",
+        member_code,
+        context,
+        **{
             "mpp_id": mpp_id,
             "member_name": _clean(cols.pick(row, *cols.MEMBER["member_name"])),
             "father_husband_name": _clean(cols.pick(row, *cols.MEMBER["father_husband_name"])),
@@ -533,9 +625,21 @@ def _upsert_member(row: dict, context: ImportContext) -> None:
     )
 
 
-def _upsert_assignment(row: dict, context: ImportContext) -> None:
+def _apply_assignment(row: dict, context: ImportContext) -> str:
     """
-    Upsert one row of the assignment workbook.
+    Apply one row of the assignment workbook.
+
+    **The one upload that does change an existing record, because changing one is its whole
+    purpose.** The masters describe records; this file describes a relationship between two of
+    them, and an insert-only assignment sheet could never move an MPP from one Mait to another
+    — which is the only thing it is for. It is also not a SAP export: the portal hands it out
+    already filled with the current mapping, so what comes back is a deliberate edit rather
+    than a refresh that happens to contain old values.
+
+    Even here the record itself is left alone. It used to write a Mait's name and mobile from
+    this sheet where the cells carried them; it no longer does, for the same reason the vendor
+    master no longer does — the number is corrected on the Maits screen, and an assignment
+    upload is not the place to put a stale one back.
 
     This file says one thing: which Mait covers which MPP. An MPP is the village collection
     point a Mait works — it is the area marker the whole app scopes on, so getting a row
@@ -571,7 +675,7 @@ def _upsert_assignment(row: dict, context: ImportContext) -> None:
     if not vendor_code:
         mpp.mait = None
         mpp.save(update_fields=["mait", "updated_at"])
-        return
+        return CREATED
 
     name = _clean(cols.pick(row, *cols.ASSIGNMENT["name"]))
     mobile = _mobile(cols.pick(row, *cols.ASSIGNMENT["mobile_no"]))
@@ -604,19 +708,10 @@ def _upsert_assignment(row: dict, context: ImportContext) -> None:
             mobile_no=mobile,
             is_active=True,
         )
-    else:
-        # Only what the row actually carries. A blank name or mobile leaves the existing one
-        # alone — the file is an assignment sheet, not a replacement for the Sahayak master,
-        # and clearing a mobile would lock a working Mait out of the app.
-        changed = []
-        if name and mait.name != name:
-            mait.name = name
-            changed.append("name")
-        if mobile and mait.mobile_no != mobile:
-            mait.mobile_no = mobile
-            changed.append("mobile_no")
-        if changed:
-            mait.save(update_fields=[*changed, "updated_at"])
+    # An existing Mait is read, never written. The name and mobile in this sheet are there to
+    # identify who a code belongs to and to create one who is genuinely new; they are not an
+    # instruction to correct a record the office may have corrected already.
 
     mpp.mait = mait
     mpp.save(update_fields=["mait", "updated_at"])
+    return CREATED

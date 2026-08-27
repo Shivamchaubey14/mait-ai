@@ -323,6 +323,13 @@ class DataUploadLog(TimeStampedModel):
     total_rows = models.PositiveIntegerField(default=0)
     success_rows = models.PositiveIntegerField(default=0)
     failed_rows = models.PositiveIntegerField(default=0)
+    skipped_rows = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Rows whose record already existed and was therefore left untouched. A master "
+            "upload inserts; it never overwrites (SRS §6.1.4)."
+        ),
+    )
     processed_rows = models.PositiveIntegerField(
         default=0, help_text="Drives the progress endpoint (SRS §6.1.6)."
     )

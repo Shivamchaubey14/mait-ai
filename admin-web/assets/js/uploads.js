@@ -85,6 +85,15 @@
       ui.number(upload.total_rows) +
       '</td>' +
       '<td class="table__num">' +
+      ui.number(upload.success_rows || 0) +
+      '</td>' +
+      '<td class="table__num">' +
+      // A master is uploaded again far more often than it changes, so this is the column
+      // most rows will be counted in. Left as a dash at zero rather than a 0, which reads
+      // as a figure that failed to load.
+      (upload.skipped_rows ? ui.number(upload.skipped_rows) : '—') +
+      '</td>' +
+      '<td class="table__num">' +
       (failed
         ? '<a href="upload-errors.html?id=' + upload.id + '">' + ui.number(failed) + '</a>'
         : '—') +
@@ -230,7 +239,18 @@
       ui.number(run.processed) + (total ? ' of ' + ui.number(total) + ' read' : ' rows read'),
       run.sending ? '' : reading ? 'is-live' : 'is-done'
     );
-    stage($el, 'written', ui.number(run.success) + ' written', reading ? '' : 'is-live');
+    // "Written" used to be the only word here, and on a re-upload of an unchanged master it
+    // read 0 — which looks exactly like an import that did nothing because it was broken.
+    // Saying what was added *and* what was already on record is the difference between a
+    // no-op an operator understands and one they raise a ticket about.
+    stage(
+      $el,
+      'written',
+      ui.number(run.success) +
+        ' added' +
+        (run.skipped ? ' · ' + ui.number(run.skipped) + ' already on record' : ''),
+      reading ? '' : 'is-live'
+    );
     stage(
       $el,
       'report',
@@ -296,6 +316,7 @@
     run.total = upload.total_rows || 0;
     run.processed = upload.processed_rows || 0;
     run.success = upload.success_rows || 0;
+    run.skipped = upload.skipped_rows || 0;
     run.failed = upload.failed_rows || 0;
     run.sending = Boolean((extra || {}).sending);
     run.sentPercent = (extra || {}).sentPercent || 0;
@@ -408,7 +429,7 @@
     MaitAI.api
       .uploadHistory({ limit: LIMIT, offset: state.offset })
       .done(function (page) {
-        ui.rows($('#rows'), page.results, row, 'Nothing has been uploaded yet.', 6);
+        ui.rows($('#rows'), page.results, row, 'Nothing has been uploaded yet.', 8);
         ui.pager(
           $('#pager'),
           { count: page.count, limit: LIMIT, offset: state.offset },
@@ -434,7 +455,7 @@
       })
       .fail(function (problem) {
         MaitAI.shell.alert(problem.detail);
-        ui.rows($('#rows'), [], row, 'Could not load the upload history.', 6);
+        ui.rows($('#rows'), [], row, 'Could not load the upload history.', 8);
       });
   }
 
@@ -712,6 +733,7 @@
         total_rows: 0,
         processed_rows: 0,
         success_rows: 0,
+        skipped_rows: 0,
         failed_rows: 0,
         created_at: startedAt,
       };

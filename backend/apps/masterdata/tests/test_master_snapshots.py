@@ -259,10 +259,7 @@ def test_the_length_is_sent_and_is_readable_cross_origin(admin_client, upload):
     Sending it in chunks was tried and reverted: `runserver` is wsgiref and does a blocking
     write per chunk, which turned a 482 KB file into a 12.6-second download.
     """
-    upload(
-        rows=[("MPP Code", "MPPName")]
-        + [(f"{n:06d}", uuid.uuid4().hex) for n in range(2000)]
-    )
+    upload(rows=[("MPP Code", "MPPName")] + [(f"{n:06d}", uuid.uuid4().hex) for n in range(2000)])
 
     response = admin_client.get("/api/v1/admin/uploads/snapshots/mpp/")
 
@@ -354,9 +351,7 @@ def test_a_failed_warm_up_does_not_fail_the_import(db, upload):
     """
     log = upload()
 
-    with mock.patch(
-        "apps.masterdata.tasks.store_snapshot", side_effect=OSError("disk full")
-    ):
+    with mock.patch("apps.masterdata.tasks.store_snapshot", side_effect=OSError("disk full")):
         tasks._warm_snapshot(log)  # must not raise
 
     log.refresh_from_db()

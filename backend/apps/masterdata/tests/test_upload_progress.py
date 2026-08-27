@@ -66,8 +66,8 @@ def snapshots_of(monkeypatch) -> list[dict]:
     seen: list[dict] = []
     original = tasks._report_progress
 
-    def spy(upload, processed, success, failed):
-        original(upload, processed, success, failed)
+    def spy(upload, processed, success, skipped, failed):
+        original(upload, processed, success, skipped, failed)
         fresh = DataUploadLog.objects.get(pk=upload.pk)
         seen.append(
             {

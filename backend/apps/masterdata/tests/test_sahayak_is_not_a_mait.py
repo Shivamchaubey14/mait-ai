@@ -17,9 +17,16 @@ from django.core.management import call_command
 
 from apps.accounts.models import Role, User
 from apps.masterdata.models import MPP, Mait
-from apps.masterdata.tasks import _upsert_mpp_and_sahayak
+from apps.masterdata.tasks import ImportContext, _insert_mpp_and_sahayak
 
 pytestmark = pytest.mark.django_db
+
+
+def context():
+    """A run's own state. The importer reads the keys already on file from it."""
+    ctx = ImportContext("mpp")
+    ctx.load_existing_keys()
+    return ctx
 
 
 def sahayak_row(mpp_code="001302", vendor="5500000054", name="ROHIT KUMAR", mobile="9876543210"):
@@ -37,14 +44,14 @@ def sahayak_row(mpp_code="001302", vendor="5500000054", name="ROHIT KUMAR", mobi
 
 class TestTheMasterMakesNoMaits:
     def test_importing_the_mpp_master_creates_no_mait(self, db):
-        _upsert_mpp_and_sahayak(sahayak_row(), None)
+        _insert_mpp_and_sahayak(sahayak_row(), context())
 
         # The whole point. One row per village used to mean one Mait per village.
         assert not Mait.objects.exists()
         assert MPP.objects.filter(mpp_code="001302").exists()
 
     def test_the_sahayak_is_kept_as_the_mpp_contact(self, db):
-        _upsert_mpp_and_sahayak(sahayak_row(), None)
+        _insert_mpp_and_sahayak(sahayak_row(), context())
 
         mpp = MPP.objects.get(mpp_code="001302")
         # Not discarded — they are the person at the collection point, and somebody has to be
@@ -54,29 +61,48 @@ class TestTheMasterMakesNoMaits:
         assert mpp.sahayak_mobile_no == "9876543210"
 
     def test_a_master_refresh_leaves_coverage_alone(self, db, mait):
-        _upsert_mpp_and_sahayak(sahayak_row(), None)
+        _insert_mpp_and_sahayak(sahayak_row(), context())
         mpp = MPP.objects.get(mpp_code="001302")
         mpp.mait = mait
         mpp.save(update_fields=["mait"])
 
-        _upsert_mpp_and_sahayak(sahayak_row(name="SOMEONE ELSE"), None)
+        _insert_mpp_and_sahayak(sahayak_row(name="SOMEONE ELSE"), context())
 
-        # Coverage comes from the assignment sheet now. A master upload that silently
-        # reassigned every MPP would undo a season's work in one click.
+        # Coverage comes from the assignment sheet. A master upload that silently reassigned
+        # every MPP would undo a season's work in one click.
         mpp.refresh_from_db()
         assert mpp.mait_id == mait.id
-        assert mpp.sahayak_name == "SOMEONE ELSE"
 
-    def test_the_mpp_still_refreshes(self, db):
-        _upsert_mpp_and_sahayak(sahayak_row(), None)
+    def test_a_master_refresh_leaves_the_whole_record_alone(self, db):
+        """
+        The upload inserts; it never overwrites.
 
-        _upsert_mpp_and_sahayak({**sahayak_row(), "mppname": "BAROLI EAST"}, None)
+        By the time a master is re-uploaded the office has corrected numbers over the phone
+        and fixed spellings on screen. An upsert would silently undo that, and the file would
+        look like it had imported cleanly.
+        """
+        _insert_mpp_and_sahayak(sahayak_row(), context())
 
-        assert MPP.objects.get(mpp_code="001302").mpp_name == "BAROLI EAST"
+        outcome = _insert_mpp_and_sahayak(
+            {**sahayak_row(), "mppname": "BAROLI EAST", "sahayak name": "SOMEONE ELSE"}, context()
+        )
+
+        mpp = MPP.objects.get(mpp_code="001302")
+        assert outcome == "skipped"
+        assert mpp.mpp_name == "BAROLI"
+        assert mpp.sahayak_name == "ROHIT KUMAR"
+
+    def test_a_collection_point_that_is_new_is_still_inserted(self, db):
+        _insert_mpp_and_sahayak(sahayak_row(), context())
+
+        outcome = _insert_mpp_and_sahayak(sahayak_row(mpp_code="001308"), context())
+
+        assert outcome == "created"
+        assert MPP.objects.filter(mpp_code="001308").exists()
 
     def test_a_blank_mpp_code_is_still_refused(self, db):
         with pytest.raises(ValueError, match="blank"):
-            _upsert_mpp_and_sahayak(sahayak_row(mpp_code=""), None)
+            _insert_mpp_and_sahayak(sahayak_row(mpp_code=""), context())
 
 
 class TestRetiring:

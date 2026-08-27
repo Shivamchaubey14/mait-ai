@@ -130,6 +130,10 @@
                   <th scope="col">File</th>
                   <th scope="col">Type</th>
                   <th class="table__num" scope="col">Rows</th>
+                  <!-- What the run actually did. A master is re-uploaded far more often than
+                       it changes, so most of these rows are all skips and no writes. -->
+                  <th class="table__num" scope="col">Added</th>
+                  <th class="table__num" scope="col">On record</th>
                   <th class="table__num" scope="col">Failed</th>
                   <th scope="col">Finished</th>
                   <th scope="col">Status</th>
@@ -137,7 +141,7 @@
               </thead>
               <tbody id="rows">
                 <tr>
-                  <td class="table__empty" colspan="6">Loading…</td>
+                  <td class="table__empty" colspan="8">Loading…</td>
                 </tr>
               </tbody>
             </table>

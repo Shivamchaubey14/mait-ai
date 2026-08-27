@@ -74,7 +74,29 @@ returns `429` with `Retry-After`.
 | GET | `/admin/uploads/assignment-template/` | Download the Mait ↔ MPP sheet, already filled in | Admin |
 | POST | `/admin/uploads/assignments/` | Upload the edited assignment sheet | Admin |
 
-**The assignment sheet is a round trip, not a form.** It is handed out already carrying every
+### A master upload inserts. It never overwrites.
+
+Re-uploading a master adds whatever is new in it and leaves every record already on file
+exactly as it was — the same file uploaded twice writes nothing the second time.
+
+SAP is where a record is born, not the authority on it forever afterwards. By the time a
+master is uploaded again the office has corrected mobile numbers over the phone, fixed
+spellings on the Maits screen and moved coverage on Assignment. The importer used to upsert,
+so a refresh silently undid all of that and reported a clean import while doing it — and a
+Mait whose corrected number was overwritten simply stopped being able to sign in.
+
+* `success_rows` is what was **added**. `skipped_rows` is what was **already on record**.
+  Neither is an error, and a re-upload of an unchanged master is all skips and no failures.
+* A row is still rejected for the reasons it always was — a blank key, a duplicate inside one
+  file, an MPP that does not exist. The collection point on a member row is resolved *before*
+  the skip is decided, so a broken file is still reported as broken on a re-upload.
+* Because nothing existing is written, an import takes no locks on the rows the app is
+  reading. It is safe to upload a master in the middle of a working day.
+* Correcting a record that already exists is a job for the screen that owns it — the Maits
+  screen, Assignment, Users & roles — not for a file.
+
+**The assignment sheet is the one exception, because changing an existing record is the only
+thing it does.** It is handed out already carrying every
 MPP and whoever covers it, so an admin edits the handful of rows that changed instead of
 retyping three thousand. It runs the same pipeline as the SAP masters — queued, polled for
 progress, partial success, row-level errors — and its headers are the ones the importer reads
