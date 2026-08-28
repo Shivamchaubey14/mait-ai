@@ -280,6 +280,58 @@ describe('AddNonMemberScreen', () => {
     expect(url).toContain('/non-members/5/aadhaar/');
   });
 
+  describe('her herd', () => {
+    it('sends what was entered', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(jsonResponse({ id: 5 }, 201));
+      render();
+      fillForm();
+
+      fireEvent.changeText(screen.getByTestId('non-member-cows'), '3');
+      fireEvent.changeText(screen.getByTestId('non-member-buffaloes'), '2');
+      fireEvent.changeText(screen.getByTestId('non-member-litres'), '12.5');
+      fireEvent.press(screen.getByTestId('non-member-save'));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      expect(await requestBody(0)).toMatchObject({
+        cattle_cows: 3,
+        cattle_buffaloes: 2,
+        daily_yield_litres: '12.5',
+      });
+    });
+
+    it('leaves them out entirely when she was not asked', async () => {
+      // A blank is not zero. Sending 0 would record a household with no cattle and no milk,
+      // which is a different answer and the one that drags a district average down.
+      (global.fetch as jest.Mock).mockResolvedValue(jsonResponse({ id: 5 }, 201));
+      render();
+      fillForm();
+
+      fireEvent.press(screen.getByTestId('non-member-save'));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      const body = await requestBody(0);
+      expect(body).not.toHaveProperty('cattle_cows');
+      expect(body).not.toHaveProperty('daily_yield_litres');
+    });
+
+    it('does not block the form', () => {
+      // Optional on a form that already runs to eight fields. A required one is the field a
+      // Mait guesses at to get past it, and a guess is worse than a blank.
+      render();
+      fillForm();
+
+      expect(screen.getByTestId('non-member-save')).toBeEnabled();
+    });
+
+    it('keeps a second decimal point out of the litres box', () => {
+      render();
+
+      fireEvent.changeText(screen.getByTestId('non-member-litres'), '12.5.7');
+
+      expect(screen.getByTestId('non-member-litres').props.value).toBe('12.57');
+    });
+  });
+
   it('goes on when the card upload fails, because she is already registered', async () => {
     // The record is what the flow is standing on. Sending a Mait back to re-enter five fields
     // and re-photograph a document because a village dropped a JPEG would cost more than the

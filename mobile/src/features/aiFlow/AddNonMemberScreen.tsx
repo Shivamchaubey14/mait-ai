@@ -1,5 +1,5 @@
 ﻿/**
- * Step 2b â€” register a Non-Member in the field (SRS Â§6.3 step 2, Â§7 Compliance, M6).
+ * Step 2b â€” register a Non-Member in the field (SRS §6.3 step 2, §7 Compliance, M6).
  *
  * The mobile number is mandatory and validated here as well as server-side. Unlike members,
  * whose numbers come from SAP, this one is being typed by the Mait â€” and it is the only
@@ -65,6 +65,9 @@ const OWNED_FIELDS = [
   'mobile_no',
   'address',
   'aadhar_no',
+  'cattle_cows',
+  'cattle_buffaloes',
+  'daily_yield_litres',
 ];
 
 /** Which face of the card the camera is open for, or null when it is closed. */
@@ -82,6 +85,16 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
   const [mobileNo, setMobileNo] = useState('');
   const [address, setAddress] = useState('');
   const [aadhaar, setAadhaar] = useState('');
+  /**
+   * Her herd, as she reports it. Kept as typed rather than as numbers.
+   *
+   * An empty box is "she was not asked", and a `number` state cannot hold that — it collapses
+   * to 0, which is a different answer and the one that quietly drags a district average down.
+   * Parsed once, on submit.
+   */
+  const [cows, setCows] = useState('');
+  const [buffaloes, setBuffaloes] = useState('');
+  const [litres, setLitres] = useState('');
   /** Unanswered until the Mait says. Nobody should guess between a father and a husband. */
   const [relation, setRelation] = useState<Relation | null>(null);
   /** Where the camera wrote each face of the card. */
@@ -134,6 +147,11 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
         mobile_no: mobileNo,
         address: address.trim(),
         aadhar_no: aadhaar,
+        // Omitted entirely when the box was left empty, so the server keeps its own default
+        // rather than being told a blank means none.
+        ...(cows.trim() ? { cattle_cows: Number(cows) } : {}),
+        ...(buffaloes.trim() ? { cattle_buffaloes: Number(buffaloes) } : {}),
+        ...(litres.trim() ? { daily_yield_litres: litres.trim() } : {}),
         mpp: mpp.id,
         // The tick above the button, sent rather than merely enforced on the handset. It is
         // what stamps `consent_captured_at`, and a consent that exists only as a disabled
@@ -304,6 +322,68 @@ export default function AddNonMemberScreen({ mpp, onCreated, onCancel }: Props):
       </View>
       <Text style={styles.cardsHint}>{t('aiFlow.aadhaarCardHint')}</Text>
 
+      {/* What she keeps and what it gives. Optional on purpose: this is a record of the herd
+          behind a farmer the dairy has no other file on, and a required field on a form that
+          already runs to eight would be the one a Mait guesses at to get past it. A guess is
+          worse than a blank, because a blank is visible and a guess is not. */}
+      <FlowLabel>{t('aiFlow.herd')}</FlowLabel>
+      <View style={styles.herd}>
+        <View style={styles.herdField}>
+          <LabelledField
+            label={t('aiFlow.cows')}
+            optionalNote={t('aiFlow.optionalSuffix')}
+            tone="accent"
+            icon="egg-outline"
+            placeholder="0"
+            value={cows}
+            onChangeText={text => setCows(text.replace(/\D/g, '').slice(0, 3))}
+            error={fieldErrors.cattle_cows?.[0]}
+            keyboardType="number-pad"
+            maxLength={3}
+            testID="non-member-cows"
+          />
+        </View>
+        <View style={styles.herdField}>
+          <LabelledField
+            label={t('aiFlow.buffaloes')}
+            optionalNote={t('aiFlow.optionalSuffix')}
+            tone="accent"
+            icon="egg-outline"
+            placeholder="0"
+            value={buffaloes}
+            onChangeText={text => setBuffaloes(text.replace(/\D/g, '').slice(0, 3))}
+            error={fieldErrors.cattle_buffaloes?.[0]}
+            keyboardType="number-pad"
+            maxLength={3}
+            testID="non-member-buffaloes"
+          />
+        </View>
+      </View>
+
+      <LabelledField
+        label={t('aiFlow.dailyMilk')}
+        optionalNote={t('aiFlow.optionalSuffix')}
+        tone="info"
+        icon="water-outline"
+        hint={t('aiFlow.dailyMilkHint')}
+        placeholder="0"
+        value={litres}
+        // One decimal point, digits either side. Half a litre is an ordinary answer; a second
+        // point is a typo the server would refuse after the Mait had already walked away.
+        onChangeText={text =>
+          setLitres(
+            text
+              .replace(/[^\d.]/g, '')
+              .replace(/(\..*)\./g, '$1')
+              .slice(0, 6),
+          )
+        }
+        error={fieldErrors.daily_yield_litres?.[0]}
+        keyboardType="decimal-pad"
+        maxLength={6}
+        testID="non-member-litres"
+      />
+
       <CheckboxRow
         checked={consent}
         onToggle={() => setConsent(value => !value)}
@@ -328,6 +408,10 @@ const styles = StyleSheet.create({
   consentBrand: { color: colors.primaryDark, fontFamily: typography.bodyStrong.fontFamily },
 
   cards: { flexDirection: 'row', gap: spacing[3] },
+  // Side by side, because they are one question asked twice — stacked, the second reads as a
+  // separate field and gets left blank.
+  herd: { flexDirection: 'row', gap: spacing[3] },
+  herdField: { flex: 1 },
   cardsHint: {
     ...typography.caption,
     color: colors.textMuted,
