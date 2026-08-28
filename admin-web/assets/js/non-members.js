@@ -66,6 +66,27 @@
     return ui.escapeHtml(row.mobile_no);
   }
 
+  /**
+   * Her herd, as cows + buffaloes with the split underneath.
+   *
+   * The total is what a scan down the column compares; the split is what an operator wants
+   * the moment one row stands out, and it costs a line rather than two more columns.
+   */
+  function herdCell(item) {
+    const total = item.cattle_total || 0;
+    if (!total) {
+      return '<span class="table__sub">—</span>';
+    }
+    return (
+      ui.number(total) +
+      '<span class="table__sub">' +
+      ui.number(item.cattle_cows || 0) +
+      ' cow · ' +
+      ui.number(item.cattle_buffaloes || 0) +
+      ' buff</span>'
+    );
+  }
+
   function row(item) {
     // Tinted when there is nothing to check the row against, so a screenful is triaged
     // without reading every Aadhaar cell — the same language the other rosters use.
@@ -98,6 +119,16 @@
       '</td>' +
       '<td>' +
       ui.identity(item.registered_by || '—', item.registered_by_code) +
+      '</td>' +
+      '<td class="table__num">' +
+      herdCell(item) +
+      '</td>' +
+      '<td class="table__num">' +
+      // Zero here means "never asked", which is every row registered before the question
+      // existed. A 0 in a column of figures reads as a farmer with no milk.
+      (Number(item.daily_yield_litres) > 0
+        ? ui.number(Number(item.daily_yield_litres)) + ' L'
+        : '<span class="table__sub">—</span>') +
       '</td>' +
       '<td class="table__num">' +
       ui.number(item.animal_count) +
@@ -180,7 +211,7 @@
           state.noCard
             ? 'Every non-member on file has both faces of their card.'
             : 'No non-members match that search.',
-          8
+          10
         );
         ui.pager(
           $('#pager'),
@@ -193,7 +224,7 @@
       })
       .fail(function (problem) {
         MaitAI.shell.alert(problem.detail);
-        ui.rows($('#rows'), [], row, 'Could not load non-members.', 8);
+        ui.rows($('#rows'), [], row, 'Could not load non-members.', 10);
       });
   }
 
