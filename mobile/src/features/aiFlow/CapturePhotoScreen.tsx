@@ -1,5 +1,5 @@
 ﻿/**
- * Step 5 of the AI capture flow â€” the proof photo (SRS Â§6.3 step 5, M9).
+ * Step 5 of the AI capture flow â€” the proof photo (SRS §6.3 step 5, M9).
  *
  * The camera is the way this step is meant to be answered, and it is what the screen opens
  * on: a photo taken here, now, with the pin and the clock attached, is the only kind that
@@ -21,10 +21,17 @@
  * The GPS fix and the device clock are captured with the shot, not at upload. An event taken
  * in a yard with no signal may not reach the server for hours, and both facts have to describe
  * the moment the photo was taken rather than the moment it finally sent.
+ *
+ * **The pin comes before the camera.** The viewfinder is not mounted, and there is nothing to
+ * press, until the handset has a position. A proof photo with no coordinates cannot be tied to
+ * a village, which is most of what makes it proof — and the old screen let the shutter be
+ * pressed while the fix was still being looked for, so the one shot that mattered was the one
+ * most likely to be taken before the GPS had answered. Waiting is a few seconds; an
+ * unpinnable record is permanent.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -36,8 +43,49 @@ import { useTranslation } from 'react-i18next';
 import { AI_FLOW_STEPS } from '@/config/env';
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
-import { FlowNotice, FlowScreen } from './components';
+import type { CaptureProgress } from '@api/capture';
+
+import { FlowNotice, FlowProgress, FlowScreen } from './components';
 import { exifCoords } from './exif';
+
+/**
+ * How long to wait for a first fix before offering the Mait a way to act.
+ *
+ * `getCurrentPositionAsync` does not time out on its own: under a shed roof it can sit there
+ * for as long as the screen is open, and a spinner that never resolves is indistinguishable
+ * from an app that has hung. Twenty seconds is long enough for a cold start outdoors and short
+ * enough that somebody indoors finds out they need to step outside.
+ */
+const FIX_TIMEOUT_MS = 20_000;
+
+/** Rejects rather than hanging, so a fix that never arrives becomes an answer on screen. */
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('No fix')), ms);
+    }),
+  ]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
+/**
+ * What the handset has been able to tell us about where it is.
+ *
+ * Each phase is a different sentence and a different button — "allow it", "switch it on",
+ * "step outside and try again" — and collapsing them into one "no location" state gives a Mait
+ * advice that does not work for three of the four reasons they are stuck.
+ */
+type PinState =
+  /** The permission dialog, or the first fix, still in flight. */
+  | { phase: 'asking' }
+  /** Refused. `canAskAgain` false means the dialog will not appear again; only Settings will. */
+  | { phase: 'denied'; canAskAgain: boolean }
+  /** Allowed, but location is switched off for the whole handset. */
+  | { phase: 'off' }
+  /** Allowed and switched on, and no position came back before the timeout. */
+  | { phase: 'failed' }
+  | { phase: 'ready'; fix: Location.LocationObject };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -45,6 +93,37 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 function stamp(when: Date): string {
   const time = `${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`;
   return `${when.getDate()} ${MONTHS[when.getMonth()]} · ${time}`;
+}
+
+/**
+ * The two phases of the send, in words and as a bar.
+ *
+ * Returns nothing before the first report arrives, so a tap that resolves instantly — a
+ * handset with no session, where the job goes straight on the queue — does not flash a bar for
+ * one frame on its way to the next screen.
+ */
+function sendingProgress(
+  progress: CaptureProgress | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): { label: string; fraction: number | null } | undefined {
+  if (!progress) {
+    return undefined;
+  }
+  if (progress.stage === 'uploading') {
+    return { label: t('aiFlow.sendingPhoto'), fraction: progress.fraction };
+  }
+  if (progress.stage === 'queueing') {
+    return { label: t('aiFlow.savingToSend'), fraction: null };
+  }
+  // Nothing was waiting behind this capture, so there is no backlog to describe. The bar stays
+  // on the photograph it has just finished rather than announcing a queue of none.
+  if (progress.total === 0) {
+    return { label: t('aiFlow.sendingPhoto'), fraction: 1 };
+  }
+  return {
+    label: t('aiFlow.catchingUp', { done: progress.done, total: progress.total }),
+    fraction: progress.done / progress.total,
+  };
 }
 
 export interface CapturedPhoto {
@@ -63,9 +142,21 @@ interface Props {
   onCaptured: (photo: CapturedPhoto) => void;
   onBack: () => void;
   busy?: boolean;
+  /**
+   * How far the send behind Continue has got, while `busy`.
+   *
+   * Passed down rather than watched here: the screen hands the photo upward and the flow does
+   * the sending, so the flow is the only thing that knows.
+   */
+  progress?: CaptureProgress | null;
 }
 
-export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }: Props) {
+export default function CapturePhotoScreen({
+  onCaptured,
+  onBack,
+  busy = false,
+  progress = null,
+}: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const camera = useRef<CameraView>(null);
@@ -75,8 +166,9 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
   const [taking, setTaking] = useState(false);
   const [picking, setPicking] = useState(false);
   const [galleryDenied, setGalleryDenied] = useState(false);
-  const [fix, setFix] = useState<Location.LocationObject | null>(null);
-  const [locationDenied, setLocationDenied] = useState(false);
+  const [pin, setPin] = useState<PinState>({ phase: 'asking' });
+  /** Bumped by every "try again", which is the whole of what re-runs the look-up. */
+  const [attempt, setAttempt] = useState(0);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [torch, setTorch] = useState(false);
   const [now, setNow] = useState(() => new Date());
@@ -88,33 +180,81 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
     return () => clearInterval(tick);
   }, []);
 
-  // Asked for as the screen opens, not at the shutter: a GPS fix can take several seconds in
-  // a yard, and making the Mait wait after they have already framed the animal is the one
-  // moment they will not wait.
+  // Asked for as the screen opens, and the camera waits on the answer. A fix can take several
+  // seconds in a yard — which is exactly why it is looked for now rather than at the shutter,
+  // where the Mait has already framed the animal and will not wait.
   useEffect(() => {
     let cancelled = false;
+    setPin({ phase: 'asking' });
+
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        if (!cancelled) {
-          setLocationDenied(true);
+      try {
+        const allowed = await Location.requestForegroundPermissionsAsync();
+        if (cancelled) {
+          return;
         }
-        return;
-      }
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      if (!cancelled) {
-        setFix(position);
+        if (allowed.status !== 'granted') {
+          // `canAskAgain` decides whether "Allow location" can do anything at all. Where the
+          // dialog will not come back, offering it again is a button that visibly does
+          // nothing, and the Mait concludes the app is broken rather than that the setting is.
+          setPin({ phase: 'denied', canAskAgain: allowed.canAskAgain !== false });
+          return;
+        }
+
+        // Location switched off for the whole handset is its own answer and its own remedy;
+        // asking for a position would simply throw, and "try again" is not the advice.
+        // Optional-called because it is a native module: where the native side is absent it
+        // hands back nothing rather than a promise, and an unreadable setting is not a reason
+        // to stop (see `useReducedMotion` for the same shape).
+        const servicesOn = await Promise.resolve(Location.hasServicesEnabledAsync?.()).catch(
+          () => undefined,
+        );
+        if (cancelled) {
+          return;
+        }
+        if (servicesOn === false) {
+          setPin({ phase: 'off' });
+          return;
+        }
+
+        const position = await withTimeout(
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          FIX_TIMEOUT_MS,
+        );
+        if (!cancelled) {
+          setPin({ phase: 'ready', fix: position });
+        }
+      } catch {
+        // Timed out, or the handset refused to answer. Either way there is no pin, and the
+        // screen says so with a way to try again rather than spinning for ever.
+        if (!cancelled) {
+          setPin({ phase: 'failed' });
+        }
       }
     })();
+
     return () => {
       cancelled = true;
     };
+  }, [attempt]);
+
+  const retryPin = useCallback(() => setAttempt(count => count + 1), []);
+  // Swallowed rather than surfaced: a handset with no settings screen to open is not a
+  // failure a Mait standing in a yard can do anything about, and the notice above the
+  // button already says what needs to change.
+  const openLocationSettings = useCallback(() => {
+    Linking.openSettings().catch(() => undefined);
   }, []);
 
+  /** The fix, or nothing — the one value the rest of the screen reads. */
+  const fix = pin.phase === 'ready' ? pin.fix : null;
+
   const takePhoto = async () => {
-    if (!camera.current || taking) {
+    // The pin is checked again here, not only by the gate that keeps this screen from
+    // rendering. The gate is what a Mait sees; this is what holds if the fix is ever cleared
+    // while the viewfinder is up. A shot taken between those two states would be the one photo
+    // in the record with no coordinates on it.
+    if (!camera.current || taking || !fix) {
       return;
     }
     setTaking(true);
@@ -150,7 +290,10 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
    * the picture was taken and the handset may be somewhere else entirely by now.
    */
   const pickFromGallery = async () => {
-    if (picking) {
+    // Same rule as the shutter. A chosen photograph usually carries its own pin, but where it
+    // does not it falls back to the handset's — so this route can produce an unpinned record
+    // too, and it is gated on the same fix.
+    if (picking || !fix) {
       return;
     }
     setPicking(true);
@@ -185,6 +328,59 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
       setPicking(false);
     }
   };
+
+  // -- the pin, before anything opens the camera -------------------------------------------
+  //
+  // Deliberately ahead of the camera gate below. Nothing here mounts a `CameraView`, so on
+  // every one of these branches the camera is closed, not merely unusable — which is the
+  // difference between a rule and a hint.
+  if (pin.phase !== 'ready') {
+    const asking = pin.phase === 'asking';
+    const blocked = pin.phase === 'denied' && !pin.canAskAgain;
+
+    const notice =
+      pin.phase === 'denied'
+        ? { title: t('aiFlow.pinDeniedTitle'), body: t('aiFlow.pinDeniedBody') }
+        : pin.phase === 'off'
+          ? { title: t('aiFlow.pinOffTitle'), body: t('aiFlow.pinOffBody') }
+          : pin.phase === 'failed'
+            ? { title: t('aiFlow.pinFailedTitle'), body: t('aiFlow.pinFailedBody') }
+            : { title: t('aiFlow.pinFirstTitle'), body: t('aiFlow.pinFirstBody') };
+
+    return (
+      <FlowScreen
+        step={5}
+        title={t('aiFlow.takePhoto')}
+        subtitle={asking ? t('aiFlow.pinSearchingSubtitle') : t('aiFlow.pinNeededSubtitle')}
+        onBack={onBack}
+        cta={
+          asking
+            ? undefined
+            : {
+                // Settings is the only thing that helps once the dialog has been refused for
+                // good. Everywhere else, another look for a fix is the whole of the remedy.
+                label: blocked ? t('aiFlow.openSettings') : t('aiFlow.tryForPin'),
+                onPress: blocked ? openLocationSettings : retryPin,
+                testID: 'pin-retry',
+              }
+        }
+      >
+        {/* While it is looking, the wait itself is the message. Indeterminate on purpose: a
+            handset searching for satellites cannot say how far through it is, and a bar that
+            crept along would be describing a search it is not watching. */}
+        {asking && (
+          <FlowProgress label={t('aiFlow.findingPin')} fraction={null} testID="pin-searching" />
+        )}
+
+        <FlowNotice
+          tone={asking ? 'info' : 'accent'}
+          title={notice.title}
+          body={notice.body}
+          testID="pin-gate"
+        />
+      </FlowScreen>
+    );
+  }
 
   // -- permission gate -------------------------------------------------------------------
   if (!permission) {
@@ -229,6 +425,10 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
           label: t('common.continue'),
           onPress: () => onCaptured(shot),
           busy,
+          // What the wait is for. Sending the photograph is the slow half of it, and a Mait
+          // watching a greyed-out button with no signal has no way to tell a slow upload from
+          // an app that has stopped.
+          progress: sendingProgress(progress, t),
           testID: 'photo-continue',
         }}
         link={{
@@ -271,6 +471,9 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
           />
         )}
 
+        {/* Kept as a guard rather than an expected path. Nothing reaches this screen without
+            a fix any more, so a null pin here means the invariant above has broken — and the
+            one place that must never be found out quietly is the record itself. */}
         {shot.gpsLat == null && (
           <FlowNotice
             tone="accent"
@@ -330,17 +533,11 @@ export default function CapturePhotoScreen({ onCaptured, onBack, busy = false }:
           knows what they are about to capture rather than discovering it afterwards. */}
       <View style={styles.stampRow}>
         <View style={styles.stampLeft}>
-          <Ionicons
-            name="location-outline"
-            size={16}
-            color={fix ? colors.surface : 'rgba(255,255,255,0.55)'}
-          />
+          <Ionicons name="location-outline" size={16} color={colors.surface} />
+          {/* Always a pin by the time this row is on screen — the viewfinder does not open
+              without one — so it reads the coordinates rather than hedging about them. */}
           <Text style={styles.stampValue} numberOfLines={1}>
-            {locationDenied
-              ? t('aiFlow.noPin')
-              : fix
-                ? `${fix.coords.latitude.toFixed(4)}, ${fix.coords.longitude.toFixed(4)}`
-                : t('aiFlow.findingPin')}
+            {`${pin.fix.coords.latitude.toFixed(4)}, ${pin.fix.coords.longitude.toFixed(4)}`}
           </Text>
         </View>
         <Text style={styles.stampValue}>{stamp(now)}</Text>

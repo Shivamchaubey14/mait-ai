@@ -42,13 +42,82 @@ export interface CaptureOutcome {
  * do; "could not save" tells them to tap again. Absent or unreadable, the caller falls back to
  * its own sentence rather than showing an empty one.
  */
-async function refusal(response: Response): Promise<{ problem?: string }> {
+function problemDetail(body: string | null): { problem?: string } {
   try {
-    const body = (await response.json()) as { detail?: string };
-    return body?.detail ? { problem: body.detail } : {};
+    const parsed = JSON.parse(body ?? '') as { detail?: string };
+    return parsed?.detail ? { problem: parsed.detail } : {};
   } catch {
     return {};
   }
+}
+
+async function refusal(response: Response): Promise<{ problem?: string }> {
+  try {
+    return problemDetail(await response.text());
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * How far the work behind the Continue button has got.
+ *
+ * Two phases, reported separately rather than blended into one number. Sending the photograph
+ * is measured in bytes and catching up is measured in captures, and there is no honest
+ * exchange rate between them — weighting the two to make a single bar move smoothly would be
+ * inventing a figure the handset never measured. So the bar restarts and relabels itself
+ * instead, which is also what a Mait wants to know: whether it is still the photo.
+ */
+export type CaptureProgress =
+  /** Bytes on their way to the server. `fraction` is null where the handset cannot count them. */
+  | { stage: 'uploading'; fraction: number | null }
+  /** No network. Being written to the queue, which takes no measurable time. */
+  | { stage: 'queueing' }
+  /** The backlog going out behind this capture — the `2` and the `3` in "Sending 2 of 3". */
+  | { stage: 'catchingUp'; done: number; total: number };
+
+/**
+ * The photo PATCH, as an upload this screen can watch.
+ *
+ * `fetch` is the transport everywhere else in this module and stays so. It is used here
+ * through `XMLHttpRequest` — the same network stack one layer down, which is what React
+ * Native implements `fetch` on top of — for one reason: `upload.onprogress`. A Mait standing
+ * in a yard with one bar needs to know whether the photo is moving or the handset has stalled,
+ * and a spinner cannot tell them apart.
+ *
+ * Rejects only where `fetch` would: the request never reached a server. Every answer,
+ * including a refusal, resolves — the caller decides what a status means.
+ */
+function putPhoto(
+  url: string,
+  accessToken: string,
+  clientUuid: string,
+  form: FormData,
+  onProgress?: (fraction: number | null) => void,
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('PATCH', url);
+    request.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+    request.setRequestHeader('Idempotency-Key', clientUuid);
+
+    // Absent on an implementation that does not support it, which is not a reason to fail the
+    // send — it is a reason to say the size is unknown and carry on.
+    if (request.upload) {
+      request.upload.onprogress = event => {
+        onProgress?.(event.lengthComputable && event.total > 0 ? event.loaded / event.total : null);
+      };
+    } else {
+      onProgress?.(null);
+    }
+
+    request.onload = () => resolve({ status: request.status, body: request.responseText });
+    request.onerror = () => reject(new Error('Network request failed'));
+    request.ontimeout = () => reject(new Error('Upload timed out'));
+    request.onabort = () => reject(new Error('Upload aborted'));
+
+    request.send(form);
+  });
 }
 
 /**
@@ -70,6 +139,13 @@ export async function attachPhoto(
    * thing that screen must never say to a Mait looking for a record they are afraid they lost.
    */
   label?: QueuedLabel,
+  /**
+   * How far the send has got, for the button the Mait is watching.
+   *
+   * Optional: the queue drains on reconnect with no screen open, and the sync worker passes
+   * nothing.
+   */
+  onProgress?: (progress: CaptureProgress) => void,
 ): Promise<CaptureOutcome> {
   const payload = {
     eventId,
@@ -85,6 +161,7 @@ export async function attachPhoto(
   };
 
   if (!accessToken) {
+    onProgress?.({ stage: 'queueing' });
     await enqueue('attachPhoto', clientUuid, payload, label);
     return { sent: false, queued: true, remaining: await pendingCount() };
   }
@@ -103,20 +180,26 @@ export async function attachPhoto(
   form.append('photo_source', photo.source);
   form.append('gps_source', photo.gpsSource);
 
-  try {
-    const response = await fetch(`${API_BASE_URL}/ai-events/${eventId}/photo/`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Idempotency-Key': clientUuid,
-      },
-      body: form,
-    });
+  // Said before the first byte moves. `onprogress` does not fire until the handset has
+  // something to report, and on a slow link that is several seconds of a button that looks
+  // like it did nothing.
+  onProgress?.({ stage: 'uploading', fraction: 0 });
 
-    if (response.ok) {
+  try {
+    const response = await putPhoto(
+      `${API_BASE_URL}/ai-events/${eventId}/photo/`,
+      accessToken,
+      clientUuid,
+      form,
+      fraction => onProgress?.({ stage: 'uploading', fraction }),
+    );
+
+    if (response.status >= 200 && response.status < 300) {
       // A successful write is the best signal there is that the network is back, so this is
       // where the backlog gets its chance.
-      const result = await drainQueue(accessToken);
+      const result = await drainQueue(accessToken, sync =>
+        onProgress?.({ stage: 'catchingUp', done: sync.done, total: sync.total }),
+      );
       return { sent: true, queued: false, remaining: result.remaining };
     }
 
@@ -127,13 +210,14 @@ export async function attachPhoto(
         sent: false,
         queued: false,
         remaining: await pendingCount(),
-        ...(await refusal(response)),
+        ...problemDetail(response.body),
       };
     }
   } catch {
     // Network. Fall through to the queue.
   }
 
+  onProgress?.({ stage: 'queueing' });
   await enqueue('attachPhoto', clientUuid, payload, label);
   return { sent: false, queued: true, remaining: await pendingCount() };
 }

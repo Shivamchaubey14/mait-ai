@@ -36,6 +36,7 @@ import {
   useListPregnancyChecksQuery,
   useRecordPregnancyCheckMutation,
   useVerifyPaymentOtpMutation,
+  useAttachPaymentProofMutation,
 } from '@api/endpoints';
 import { enqueue, pendingCount, readQueue } from '@api/queue';
 import type { QueuedJob, QueuedLabel } from '@api/queue';
@@ -328,6 +329,9 @@ export default function RootNavigator(): React.JSX.Element {
   const [payMode, setPayMode] = useState<PaymentMode>('COD');
   const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
   const [payCode, setPayCode] = useState('');
+  /** Online only: the reference she read out, and the screen she paid on (SRS §6.5.4). */
+  const [payUtr, setPayUtr] = useState('');
+  const [payProof, setPayProof] = useState<string | null>(null);
   const [payProblem, setPayProblem] = useState<string | null>(null);
   const [payBusy, setPayBusy] = useState(false);
   /** The server's own words when a payment is refused — it knows why and the Mait needs it. */
@@ -366,6 +370,7 @@ export default function RootNavigator(): React.JSX.Element {
 
   const [initiatePayment] = useInitiatePaymentMutation();
   const [verifyPaymentOtp] = useVerifyPaymentOtpMutation();
+  const [attachPaymentProof] = useAttachPaymentProofMutation();
   const inventory = useGetInventorySummaryQuery();
 
   const memberDetail = useGetMemberQuery(farmer?.kind === 'member' ? farmer.memberCode : '', {
@@ -721,9 +726,25 @@ export default function RootNavigator(): React.JSX.Element {
     setEvent(null);
     setOwnerType('member');
     setClientUuid(newClientUuid());
+    clearPaymentDraft();
     // The one step change in the flow that announces itself: this is arriving somewhere, not
     // moving within somewhere. Everything after it is a step, and gets the slide.
     transition.go('capture', () => setStepDirect('ownerType'));
+  };
+
+  /**
+   * Forget the last payment's working state.
+   *
+   * The code, the reference and the screenshot all belong to one farmer and one payment. A
+   * receipt left in state is one that would be attached to the next woman's record, which is
+   * a far worse fault than having to photograph it again.
+   */
+  const clearPaymentDraft = () => {
+    setPayCode('');
+    setPayUtr('');
+    setPayProof(null);
+    setPayProblem(null);
+    setPayFailed(null);
   };
 
   const leaveCapture = () => {
@@ -878,8 +899,7 @@ export default function RootNavigator(): React.JSX.Element {
     if (point.step === 'recordPayment') {
       setPayMode(unfinished.payment?.mode === 'ONLINE' ? 'ONLINE' : 'COD');
       setCodeSentTo(t('payment.herNumber'));
-      setPayCode('');
-      setPayProblem(null);
+      clearPaymentDraft();
     }
 
     setPayFailed(null);
@@ -929,6 +949,21 @@ export default function RootNavigator(): React.JSX.Element {
 
     const outcome = await completeEvent(event.id, clientUuid, accessToken, captureLabel(mode));
     setPending(outcome.remaining);
+
+    // Refused, not merely unsent. Nothing is queued and no retry will help, so the Mait is
+    // told why — and left on the payment screen rather than shown a screen saying it is done.
+    //
+    // This branch was missing, and it is what made an online payment look like it had worked:
+    // the server answered `payment-not-verified`, the event stayed open with its straw still
+    // in stock, and the flow moved to the done screen regardless. The capture then reappeared
+    // in Unfinished with nothing to say what had gone wrong. `resumeCapture` has always
+    // handled this; the first-time path never did.
+    if (!outcome.sent && !outcome.queued) {
+      setPayFailed(outcome.problem ?? t('aiEvent.couldNotClose'));
+      setPayBusy(false);
+      return;
+    }
+
     if (outcome.sent) {
       setLastSyncAt(clockTime());
       inventory.refetch();
@@ -1265,12 +1300,44 @@ export default function RootNavigator(): React.JSX.Element {
             }
             setPayBusy(false);
           }
+
+          /**
+           * Online needs proof before it can be verified, and verified before it can close.
+           *
+           * The farmer's code authorises the payment; it does not evidence that money moved.
+           * The server holds an online payment at `pending` until the UTR and the screenshot
+           * are on file too, so without this the completion is refused, the straw stays in
+           * stock and the capture comes back in Unfinished.
+           *
+           * Sent before the completion rather than after, because completion is the step that
+           * deducts the straw and it must not run against a payment that cannot be verified.
+           */
+          if (payMode === 'ONLINE') {
+            setPayBusy(true);
+            try {
+              await attachPaymentProof({
+                eventId: event.id,
+                utrNumber: payUtr.trim(),
+                screenshot: payProof ?? '',
+              }).unwrap();
+            } catch (err) {
+              const problem = err as { data?: { detail?: string } };
+              setPayProblem(problem.data?.detail ?? t('payment.proofNotAccepted'));
+              setPayBusy(false);
+              return;
+            }
+          }
+
           // The mode, not nothing. Without it the completion re-opened the payment with no
           // mode at all, which the server refuses for a non-member — "Say how she is paying"
           // — so a correct code was followed by a capture that would not close, and the next
           // tap reported the already-spent code as wrong.
           await finishCapture(payMode);
         }}
+        utr={payUtr}
+        onUtrChange={setPayUtr}
+        proofUri={payProof}
+        onProofCaptured={setPayProof}
         onBack={() => setStep('collectPayment')}
       />,
     );
@@ -1309,7 +1376,7 @@ export default function RootNavigator(): React.JSX.Element {
           setQueueOpen(false);
           setPayMode((job?.payload.mode as PaymentMode) ?? 'COD');
           setCodeSentTo(null);
-          setPayCode('');
+          clearPaymentDraft();
           setEvent({ id: capture.eventId, amount_due: capture.amount } as AIEvent);
           setFarmer({
             kind: capture.kind === 'member' ? 'member' : 'nonMember',

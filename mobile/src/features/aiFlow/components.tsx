@@ -21,8 +21,11 @@ import React, {
   useState,
 } from 'react';
 import {
+  Animated,
+  Easing,
   Image,
   KeyboardAvoidingView,
+  LayoutChangeEvent,
   Modal,
   Platform,
   Pressable,
@@ -43,6 +46,7 @@ import { useTranslation } from 'react-i18next';
 import { BrandMark } from '@/components/brand';
 import { useKeyboardOverlap } from '@/components/keyboard';
 import PullToRefresh from '@/components/pullToRefresh';
+import { useReducedMotion } from '@/components/reducedMotion';
 import { AI_FLOW_STEPS } from '@/config/env';
 import {
   colors,
@@ -76,6 +80,107 @@ function ProgressSegments({ step }: { step: number }): React.JSX.Element {
 
 /** The footer arrow, and the width the label is balanced against on the other side. */
 const ARROW_SIZE = 18;
+
+/** How long the indeterminate sweep takes to cross the track once. */
+const SWEEP_MS = 1100;
+/** How much of the track the sweeping segment covers. */
+const SWEEP_SHARE = 0.4;
+
+/**
+ * A bar for work that is under way, with a line saying what the work is.
+ *
+ * `fraction` is the real one or nothing at all. Where the handset can count what it is
+ * sending, the bar fills by that count; where it cannot, a segment sweeps instead of a bar
+ * creeping to a percentage nobody measured. A Mait learns very quickly whether a number on
+ * this screen can be trusted, and one invented figure spends that for every other number in
+ * the app.
+ */
+export function FlowProgress({
+  label,
+  fraction,
+  testID,
+}: {
+  label: string;
+  /** 0–1, or null where the size of the job is not known. */
+  fraction: number | null;
+  testID?: string;
+}): React.JSX.Element {
+  const reduced = useReducedMotion();
+  const [width, setWidth] = useState(0);
+  const sweep = useRef(new Animated.Value(0)).current;
+
+  const known = fraction != null;
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    setWidth(event.nativeEvent.layout.width);
+  }, []);
+
+  useEffect(() => {
+    // Nothing to sweep across yet, a real figure to draw instead, or a handset that has been
+    // asked to keep still — in which case the track shows a dimmed full bar, which says "under
+    // way, length unknown" without moving.
+    if (known || reduced || width === 0) {
+      return undefined;
+    }
+    sweep.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(sweep, {
+        toValue: 1,
+        duration: SWEEP_MS,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [known, reduced, sweep, width]);
+
+  const clamped = Math.max(0, Math.min(1, fraction ?? 0));
+
+  return (
+    <View style={styles.progress} testID={testID}>
+      <Text style={styles.progressLabel} numberOfLines={1}>
+        {label}
+      </Text>
+
+      <View
+        style={styles.progressTrack}
+        onLayout={onLayout}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={label}
+        // Announced as a percentage only when there is one. An indeterminate bar that reports
+        // `now: 0` reads out as "0 percent", which is a stall, not an unknown.
+        accessibilityValue={known ? { min: 0, max: 100, now: Math.round(clamped * 100) } : {}}
+      >
+        {known ? (
+          <View
+            style={[styles.progressFill, { width: `${clamped * 100}%` }]}
+            testID={testID ? `${testID}-fill` : undefined}
+          />
+        ) : reduced ? (
+          <View style={[styles.progressFill, styles.progressFillWaiting]} />
+        ) : (
+          <Animated.View
+            style={[
+              styles.progressFill,
+              {
+                width: width * SWEEP_SHARE,
+                transform: [
+                  {
+                    translateX: sweep.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-width * SWEEP_SHARE, width],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+        )}
+      </View>
+    </View>
+  );
+}
 
 // --------------------------------------------------------------------------------------
 // Keyboard
@@ -229,6 +334,15 @@ interface FlowScreenProps {
     onPress: () => void;
     disabled?: boolean;
     busy?: boolean;
+    /**
+     * What the button is waiting on, shown above it while `busy`.
+     *
+     * A step that moves on the moment it is tapped needs none of this. One that has to send
+     * something first does: the button greys out, nothing else changes, and a Mait with no
+     * signal cannot tell a slow upload from an app that has stopped responding — so they tap
+     * it again, or back out of a capture that was working.
+     */
+    progress?: { label: string; fraction: number | null };
     testID?: string;
   };
   /** A secondary route out of the step. A text link, never a second button. */
@@ -495,6 +609,17 @@ export function FlowScreen({
               >
                 <Text style={styles.linkLabel}>{link.label}</Text>
               </Pressable>
+            )}
+
+            {/* Above the button rather than inside it: the button says where the tap goes,
+                and this says why it has not gone yet. Rendered only while the work is
+                actually running, so a step at rest keeps the footer it always had. */}
+            {!!cta?.busy && !!cta.progress && (
+              <FlowProgress
+                label={cta.progress.label}
+                fraction={cta.progress.fraction}
+                testID={cta.testID ? `${cta.testID}-progress` : 'flow-progress'}
+              />
             )}
 
             {!!cta && (
@@ -1987,6 +2112,19 @@ const styles = StyleSheet.create({
   // Opaque, and it has to be: the body scrolls behind this bar, and a transparent footer
   // would show a list sliding through the button that sits on top of it.
   footer: { paddingTop: spacing[4], backgroundColor: colors.background },
+
+  progress: { gap: spacing[2], marginBottom: spacing[3] },
+  progressLabel: { ...typography.caption, color: colors.textMuted },
+  progressTrack: {
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+    overflow: 'hidden',
+  },
+  progressFill: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.primary },
+  // Length unknown and nothing moving, because the handset asked for stillness. Dimmed so it
+  // does not read as a job that has finished.
+  progressFillWaiting: { width: '100%', opacity: 0.4 },
   link: {
     minHeight: MIN_TOUCH_TARGET,
     alignItems: 'center',

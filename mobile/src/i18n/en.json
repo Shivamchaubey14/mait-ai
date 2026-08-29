@@ -251,7 +251,22 @@
     "doseCount_other": "{{count}} {{breed}} doses",
     "consumableCount_one": "{{count}} consumable",
     "consumableCount_other": "{{count}} consumables",
-    "usedTally": "{{doses}} · {{consumables}}"
+    "usedTally": "{{doses}} · {{consumables}}",
+    "pinFirstTitle": "The pin is being found first",
+    "pinFirstBody": "The camera opens once this phone knows where it is. A proof photo with no location cannot be tied to a village.",
+    "pinSearchingSubtitle": "Finding where you are.",
+    "pinNeededSubtitle": "The location is needed before the camera opens.",
+    "pinDeniedTitle": "This phone has not allowed location",
+    "pinDeniedBody": "Allow it to carry on. Every insemination is recorded against the place it happened, so the photo cannot be taken without it.",
+    "pinOffTitle": "Location is switched off on this phone",
+    "pinOffBody": "Switch location on in the phone's settings, then try again. Nothing else on this screen will work until it is on.",
+    "pinFailedTitle": "No position yet",
+    "pinFailedBody": "Step outside or away from the shed roof and try again. A fix under cover can take much longer, or never come.",
+    "tryForPin": "Look again",
+    "openSettings": "Open settings",
+    "sendingPhoto": "Sending the photo…",
+    "savingToSend": "Saving it to send later…",
+    "catchingUp": "Catching up — {{done}} of {{total}}…"
   },
   "unfinished": {
     "eyebrow": "Unfinished",

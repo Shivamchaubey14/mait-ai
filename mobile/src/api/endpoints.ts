@@ -229,6 +229,34 @@ export const maitaiApi = api.injectEndpoints({
       invalidatesTags: ['Payment', 'AIEvent'],
     }),
 
+    /**
+     * The UTR and the screenshot behind an online payment (SRS §6.5.4).
+     *
+     * **Not optional, and not a nicety.** An online payment is only verified once all three
+     * of the farmer's code, the UTR and the screenshot are on file — so without this call the
+     * payment stays pending, the completion is refused `payment-not-verified`, and the straw
+     * is never deducted. The capture then reappears in Unfinished with no clue why.
+     *
+     * Both together, never either: a UTR alone is a number a Mait could invent, and a
+     * screenshot alone is an image nobody can reconcile against a bank statement.
+     */
+    attachPaymentProof: builder.mutation<
+      Payment,
+      { eventId: number; utrNumber: string; screenshot: string }
+    >({
+      query: ({ eventId, utrNumber, screenshot }) => {
+        const form = new FormData();
+        form.append('utr_number', utrNumber);
+        form.append('screenshot', {
+          uri: screenshot,
+          name: 'payment-proof.jpg',
+          type: 'image/jpeg',
+        } as unknown as Blob);
+        return { url: `/payments/${eventId}/proof/`, method: 'POST', body: form };
+      },
+      invalidatesTags: ['Payment', 'AIEvent'],
+    }),
+
     createAnimal: builder.mutation<Animal, AnimalDraft>({
       query: body => ({ url: '/animals/', method: 'POST', body }),
       // The farmer's animal list hangs off their detail record, so that is what goes stale.
@@ -467,6 +495,7 @@ export const {
   useCreateAnimalMutation,
   useInitiatePaymentMutation,
   useVerifyPaymentOtpMutation,
+  useAttachPaymentProofMutation,
   useUploadAnimalPhotoMutation,
   useSendFarmerOtpMutation,
   useVerifyFarmerOtpMutation,

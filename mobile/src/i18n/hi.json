@@ -251,7 +251,22 @@
     "doseCount_other": "{{count}} {{breed}} डोज़",
     "consumableCount_one": "{{count}} सामान",
     "consumableCount_other": "{{count}} सामान",
-    "usedTally": "{{doses}} · {{consumables}}"
+    "usedTally": "{{doses}} · {{consumables}}",
+    "pinFirstTitle": "पहले लोकेशन लिया जा रहा है",
+    "pinFirstBody": "फोन को अपनी जगह पता चलते ही कैमरा खुलेगा। बिना लोकेशन वाली फोटो किसी गाँव से नहीं जुड़ सकती।",
+    "pinSearchingSubtitle": "आप कहाँ हैं, यह पता किया जा रहा है।",
+    "pinNeededSubtitle": "कैमरा खुलने से पहले लोकेशन ज़रूरी है।",
+    "pinDeniedTitle": "इस फोन ने लोकेशन की इजाज़त नहीं दी है",
+    "pinDeniedBody": "आगे बढ़ने के लिए इजाज़त दें। हर एआई उसी जगह के नाम दर्ज होती है जहाँ वह हुई, इसलिए इसके बिना फोटो नहीं ली जा सकती।",
+    "pinOffTitle": "इस फोन में लोकेशन बंद है",
+    "pinOffBody": "फोन की सेटिंग में लोकेशन चालू करके फिर कोशिश करें। जब तक यह बंद है, इस स्क्रीन पर कुछ नहीं चलेगा।",
+    "pinFailedTitle": "अभी तक लोकेशन नहीं मिला",
+    "pinFailedBody": "छत से बाहर खुली जगह पर जाकर फिर कोशिश करें। ढकी जगह पर लोकेशन मिलने में बहुत समय लग सकता है।",
+    "tryForPin": "फिर से देखें",
+    "openSettings": "सेटिंग खोलें",
+    "sendingPhoto": "फोटो भेजी जा रही है…",
+    "savingToSend": "बाद में भेजने के लिए सहेजा जा रहा है…",
+    "catchingUp": "बाकी भेजी जा रही है — {{total}} में से {{done}}…"
   },
   "unfinished": {
     "eyebrow": "अधूरे",

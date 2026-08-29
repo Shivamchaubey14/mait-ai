@@ -148,6 +148,12 @@ account holding either.
   `black` do run; CI covers mypy.
 - **Straw scanning is manual entry.** `expo-camera` is installed for the proof photo, so the
   barcode scanner is a small job, but it is not done.
+- **Step 6 will not open the camera until the handset has a fix**, and on an emulator with no
+  mocked location that looks exactly like a broken screen. It is not: a proof photo with no
+  coordinates cannot be tied to a village, so the viewfinder is not mounted until
+  `getCurrentPositionAsync` has answered. Four states, each with its own remedy — searching,
+  refused, location switched off for the whole handset, and no fix inside twenty seconds.
+  Set a location on the emulator, or test outdoors.
 - **The admin portal's Indents screen only has data if the app has raised one.** Same for
   payments columns everywhere — Phase 4.
 - **An admin can now approve, reject and issue indents from the portal**, because the GRN
