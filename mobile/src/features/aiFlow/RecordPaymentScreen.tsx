@@ -12,16 +12,20 @@
  * done is pretending a code was verified when it was not.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import type { AIEvent } from '@api/types';
 import { OTP_LENGTH } from '@/config/env';
+
+/** Short enough for any bank's reference, long enough that a stray keypress is not one. */
+const MIN_UTR_LENGTH = 6;
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
-import { FlowNotice, FlowScreen, LabelledField } from './components';
+import { CaptureTile, FlowLabel, FlowNotice, FlowScreen, LabelledField } from './components';
+import FlowCamera from './FlowCamera';
 
 interface Props {
   event: AIEvent;
@@ -37,6 +41,17 @@ interface Props {
   /** Verifies the code, or saves without it when there is no signal to send one. */
   onFinish: () => void;
   onBack: () => void;
+  /**
+   * The reference she read off her payment app, and the screen it was on.
+   *
+   * Online only, and required there. An online payment is verified only once the code, the
+   * UTR *and* the screenshot are all on file — without them the server refuses the completion
+   * and the straw is never deducted (SRS §6.5.4).
+   */
+  utr: string;
+  onUtrChange: (value: string) => void;
+  proofUri: string | null;
+  onProofCaptured: (uri: string) => void;
 }
 
 export default function RecordPaymentScreen({
@@ -51,9 +66,36 @@ export default function RecordPaymentScreen({
   busy = false,
   onFinish,
   onBack,
+  utr,
+  onUtrChange,
+  proofUri,
+  onProofCaptured,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
+  const [camera, setCamera] = useState(false);
   const amount = event.amount_due ? `₹ ${Math.round(Number(event.amount_due))}` : '';
+
+  const online = mode === 'ONLINE';
+  // Online needs three things, not one. Enforced on the button as well as by the server,
+  // because the server's refusal arrives after the Mait has walked away from the yard.
+  const proofReady = !online || (utr.trim().length >= MIN_UTR_LENGTH && !!proofUri);
+  const codeReady = !sentTo || code.trim().length >= OTP_LENGTH;
+
+  if (camera) {
+    return (
+      <FlowCamera
+        instruction={t('payment.frameTheReceipt')}
+        permissionBody={t('payment.receiptPhotoBody')}
+        guide="card"
+        testIDPrefix="payment-proof-camera"
+        onCaptured={uri => {
+          onProofCaptured(uri);
+          setCamera(false);
+        }}
+        onCancel={() => setCamera(false)}
+      />
+    );
+  }
 
   return (
     <FlowScreen
@@ -69,8 +111,9 @@ export default function RecordPaymentScreen({
         label: sentTo ? t('payment.saveAndFinish') : t('payment.saveAndFinishOffline'),
         onPress: onFinish,
         // With a code on the way, it has to be typed. With none, there is nothing to type and
-        // the button saves what there is.
-        disabled: !!sentTo && code.trim().length < OTP_LENGTH,
+        // the button saves what there is. Online adds the proof to that: a tap that cannot
+        // possibly succeed is worse than a disabled button, because it looks like it worked.
+        disabled: !codeReady || !proofReady,
         busy,
         testID: 'payment-save',
       }}
@@ -116,12 +159,48 @@ export default function RecordPaymentScreen({
         </View>
       )}
 
+      {/* Online only. She has just paid on her own phone: the reference and the screen it is
+          on are in front of the Mait at this exact moment and nowhere afterwards, which is
+          why they are asked for here rather than on a screen somebody comes back to. */}
+      {online && (
+        <View testID="payment-proof">
+          <LabelledField
+            label={t('payment.utrNumber')}
+            tone="info"
+            icon="receipt-outline"
+            hint={t('payment.utrHint')}
+            placeholder={t('payment.utrPlaceholder')}
+            value={utr}
+            onChangeText={text => onUtrChange(text.replace(/\s/g, '').slice(0, 40))}
+            autoCapitalize="characters"
+            maxLength={40}
+            testID="payment-utr"
+          />
+
+          <FlowLabel>{t('payment.paymentScreenshot')}</FlowLabel>
+          <CaptureTile
+            label={t('payment.screenshotLabel')}
+            hint={t('aiFlow.tapToPhotograph')}
+            uri={proofUri}
+            onPress={() => setCamera(true)}
+            testID="payment-proof-tile"
+          />
+          <Text style={styles.proofHint}>{t('payment.proofBothNeeded')}</Text>
+        </View>
+      )}
+
       {!!problem && <FlowNotice tone="error" title={problem} testID="payment-code-problem" />}
     </FlowScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  proofHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing[2],
+    marginBottom: spacing[4],
+  },
   taken: {
     flexDirection: 'row',
     alignItems: 'center',

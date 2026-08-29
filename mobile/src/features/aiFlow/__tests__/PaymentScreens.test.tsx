@@ -150,7 +150,7 @@ describe('C11 — recording what was taken', () => {
 
   afterEach(() => jest.resetAllMocks());
 
-  function renderScreen(sentTo: string | null, code = '') {
+  function renderScreen(sentTo: string | null, code = '', overrides = {}) {
     return renderWithStore(
       <RecordPaymentScreen
         event={NON_MEMBER_EVENT}
@@ -162,6 +162,11 @@ describe('C11 — recording what was taken', () => {
         onResend={jest.fn()}
         onFinish={onFinish}
         onBack={jest.fn()}
+        utr=""
+        onUtrChange={jest.fn()}
+        proofUri={null}
+        onProofCaptured={jest.fn()}
+        {...overrides}
       />,
     );
   }
@@ -244,5 +249,106 @@ describe('C12 — recorded', () => {
     fireEvent.press(screen.getByTestId('done-start-another'));
 
     expect(onStartAnother).toHaveBeenCalled();
+  });
+});
+
+describe('C11 — an online payment needs its proof', () => {
+  /**
+   * The bug this covers: the app asked for the farmer's code and nothing else, then called
+   * complete. The server holds an online payment at `pending` until the UTR and the
+   * screenshot are on file, so the completion was refused `payment-not-verified` — the straw
+   * was never deducted and the capture came back in Unfinished with nothing to explain it.
+   */
+  const onFinish = jest.fn();
+
+  afterEach(() => jest.resetAllMocks());
+
+  function online(overrides = {}) {
+    return renderWithStore(
+      <RecordPaymentScreen
+        event={NON_MEMBER_EVENT}
+        farmerName="KUMARI RITU"
+        mode="ONLINE"
+        sentTo="her number"
+        code="123456"
+        onCodeChange={jest.fn()}
+        onResend={jest.fn()}
+        onFinish={onFinish}
+        onBack={jest.fn()}
+        utr=""
+        onUtrChange={jest.fn()}
+        proofUri={null}
+        onProofCaptured={jest.fn()}
+        {...overrides}
+      />,
+    );
+  }
+
+  it('asks for the reference and the screenshot', () => {
+    online();
+
+    expect(screen.getByTestId('payment-proof')).toBeTruthy();
+    expect(screen.getByTestId('payment-utr')).toBeTruthy();
+    expect(screen.getByTestId('payment-proof-tile')).toBeTruthy();
+  });
+
+  it('will not finish on a correct code alone', () => {
+    // The tap that used to look like it worked.
+    online();
+
+    fireEvent.press(screen.getByTestId('payment-save'));
+
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+
+  it('will not finish on a reference with no screenshot', () => {
+    // A reference alone is a number a Mait could have invented.
+    online({ utr: '412345678901' });
+
+    fireEvent.press(screen.getByTestId('payment-save'));
+
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+
+  it('will not finish on a screenshot with no reference', () => {
+    // An image alone cannot be reconciled against a bank statement.
+    online({ proofUri: 'file:///proof.jpg' });
+
+    fireEvent.press(screen.getByTestId('payment-save'));
+
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+
+  it('finishes once both are in hand', () => {
+    online({ utr: '412345678901', proofUri: 'file:///proof.jpg' });
+
+    fireEvent.press(screen.getByTestId('payment-save'));
+
+    expect(onFinish).toHaveBeenCalled();
+  });
+
+  it('asks a cash payment for none of it', () => {
+    // Cash is settled by the code alone; there is no reference and nothing to photograph.
+    renderWithStore(
+      <RecordPaymentScreen
+        event={NON_MEMBER_EVENT}
+        farmerName="RADHA SINGH"
+        mode="COD"
+        sentTo="her number"
+        code="123456"
+        onCodeChange={jest.fn()}
+        onResend={jest.fn()}
+        onFinish={onFinish}
+        onBack={jest.fn()}
+        utr=""
+        onUtrChange={jest.fn()}
+        proofUri={null}
+        onProofCaptured={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('payment-proof')).toBeNull();
+    fireEvent.press(screen.getByTestId('payment-save'));
+    expect(onFinish).toHaveBeenCalled();
   });
 });
