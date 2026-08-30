@@ -199,3 +199,23 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* --- payment proof ---------------------------------------------------------------------
+   The screenshot behind an online payment, as a link rather than a thumbnail. A payment
+   screen is read for a reference and an amount, and neither is legible at the size a table
+   cell allows — the browser's own viewer opens it full size, which is the same reasoning the
+   Aadhaar wells above are built on. */
+.proof-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-primary-dark);
+  font-family: var(--font-heading);
+  font-size: var(--text-label);
+}
+
+.proof-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}

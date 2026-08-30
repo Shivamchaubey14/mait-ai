@@ -519,6 +519,34 @@ class AdminNonMemberListSerializer(serializers.ModelSerializer):
         return bool(obj.aadhar_back_url)
 
 
+class NonMemberPaymentSerializer(serializers.Serializer):
+    """
+    What she paid, and — where she paid online — what proves it.
+
+    A non-member pays her Mait directly, which is the whole reason this path is watched: there
+    is no milk payment to reconcile against and no SAP record of the transaction. For cash the
+    farmer's own authorisation code is the only evidence there is. For an online payment there
+    is more, and it is the evidence somebody actually checks: the UTR reconciles against a bank
+    statement, and the screenshot is what says the reference was not simply typed in.
+
+    Both travel together or neither is worth much — a reference with no screenshot is a number
+    a Mait could have invented, and a screenshot with no reference cannot be looked up.
+    """
+
+    ai_event = serializers.IntegerField(source="ai_event_id", read_only=True)
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    mode = serializers.CharField(read_only=True)
+    mode_display = serializers.CharField(source="get_mode_display", read_only=True)
+    status = serializers.CharField(read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    is_verified = serializers.BooleanField(read_only=True)
+    utr_number = serializers.CharField(read_only=True)
+    #: Readable here and nowhere else, for the same reason the card images are — the handset
+    #: is told a boolean. See the note on the detail view about the read being audit-logged.
+    payment_screenshot_url = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+
 class AdminNonMemberDetailSerializer(AdminNonMemberListSerializer):
     """
     One farmer, with everything the back office would open her record to settle.
@@ -533,6 +561,7 @@ class AdminNonMemberDetailSerializer(AdminNonMemberListSerializer):
     aadhar_front_url = serializers.CharField(read_only=True)
     aadhar_back_url = serializers.CharField(read_only=True)
     animals = AnimalSerializer(many=True, read_only=True)
+    payments = serializers.SerializerMethodField()
 
     class Meta(AdminNonMemberListSerializer.Meta):
         fields = [
@@ -540,8 +569,26 @@ class AdminNonMemberDetailSerializer(AdminNonMemberListSerializer):
             "aadhar_front_url",
             "aadhar_back_url",
             "animals",
+            "payments",
         ]
         read_only_fields = fields
+
+    def get_payments(self, obj) -> list:
+        """
+        Every payment she has made, newest first.
+
+        Read through the AI events rather than stored against her, because a payment belongs to
+        one insemination — the amount, the mode and the proof are facts about that visit, not
+        about the farmer.
+        """
+        from apps.payments.models import Payment
+
+        payments = (
+            Payment.objects.filter(ai_event__non_member=obj)
+            .select_related("ai_event")
+            .order_by("-created_at")
+        )
+        return NonMemberPaymentSerializer(payments, many=True).data
 
 
 class NonMemberPickerSerializer(serializers.ModelSerializer):

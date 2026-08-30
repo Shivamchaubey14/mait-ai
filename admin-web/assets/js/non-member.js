@@ -143,12 +143,114 @@
               ? '<span class="table__sub">' + ui.escapeHtml(record.registered_by_code) + '</span>'
               : '')
         ),
+        // Reported at registration, not measured — worded so nobody reads it as a meter
+        // reading. It sits with her details rather than in the tile row above because it is a
+        // detail of the household, not one of the four things a record is judged on.
+        Number(record.daily_yield_litres) > 0
+          ? fact(
+              'Milk a day',
+              ui.escapeHtml(ui.number(Number(record.daily_yield_litres)) + ' litres') +
+                '<span class="table__sub">As reported at registration</span>'
+            )
+          : fact('Milk a day', ui.escapeHtml('Not recorded'), true),
         fact('Registered', ui.escapeHtml(ui.dateTime(record.created_at))),
         record.consent_captured_at
           ? fact('Consent given', ui.escapeHtml(ui.dateTime(record.consent_captured_at)))
           : fact('Consent given', ui.pill('Not on record', 'warn')),
       ].join('')
     );
+  }
+
+  /**
+   * One payment, and whatever stands behind it.
+   *
+   * Cash is settled by the farmer's own authorisation code and leaves nothing to look at, so
+   * those rows say so rather than showing two empty cells — an em dash under "Reference" reads
+   * as a missing record, and for cash there was never anything to record.
+   *
+   * Online is the row somebody actually checks. The UTR is what reconciles against a bank
+   * statement and the screenshot is what says the reference was not simply typed in, so the
+   * two are shown together and neither is much use alone.
+   */
+  function paymentRow(payment) {
+    const online = payment.mode === 'ONLINE';
+    const shot = payment.payment_screenshot_url;
+
+    return (
+      '<tr>' +
+      '<td>' +
+      ui.escapeHtml(ui.dateTime(payment.created_at)) +
+      '<span class="table__sub">AI event ' +
+      ui.escapeHtml(String(payment.ai_event)) +
+      '</span>' +
+      '</td>' +
+      '<td class="table__num">' +
+      ui.escapeHtml(ui.money(payment.amount)) +
+      '</td>' +
+      '<td>' +
+      ui.escapeHtml(payment.mode_display || payment.mode) +
+      '</td>' +
+      '<td>' +
+      (online
+        ? payment.utr_number
+          ? '<span class="table__code">' + ui.escapeHtml(payment.utr_number) + '</span>'
+          : ui.pill('Not on file', 'bad')
+        : '<span class="table__sub">Cash — code only</span>') +
+      '</td>' +
+      '<td>' +
+      (online ? proofLink(shot) : '<span class="table__sub">Nothing to show</span>') +
+      '</td>' +
+      '<td>' +
+      (payment.is_verified
+        ? ui.pill(payment.status_display || 'Verified', 'good')
+        : ui.pill(payment.status_display || 'Pending', 'warn')) +
+      '</td>' +
+      '</tr>'
+    );
+  }
+
+  /**
+   * The screenshot, as a link rather than a thumbnail.
+   *
+   * Same reasoning as the Aadhaar wells above: a payment screen is read for a reference and an
+   * amount, and neither is legible at the size a table cell allows. The browser's own viewer
+   * opens it full size and costs no script on a page that renders PII.
+   */
+  function proofLink(url) {
+    if (!url) {
+      return ui.pill('Not on file', 'bad');
+    }
+    return (
+      '<a class="proof-link" target="_blank" rel="noopener noreferrer" href="' +
+      ui.escapeHtml(MaitAI.api.mediaUrl(url)) +
+      '" title="Open the payment screenshot at full size">' +
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4" /></svg>' +
+      'Screenshot</a>'
+    );
+  }
+
+  /**
+   * The panel, or nothing at all.
+   *
+   * A farmer with no payment yet is an ordinary state — she may have been registered and not
+   * yet served — and an empty table under a heading reads as a record with something missing.
+   */
+  function renderPayments(record) {
+    const payments = record.payments || [];
+    if (!payments.length) {
+      $('#payments-panel').prop('hidden', true);
+      return;
+    }
+
+    const online = payments.filter(function (row) {
+      return row.mode === 'ONLINE';
+    }).length;
+
+    $('#payments-panel').prop('hidden', false);
+    $('#payment-rows').html(payments.map(paymentRow).join(''));
+    $('#payments-count').text(payments.length + (online ? ' · ' + online + ' paid online' : ''));
   }
 
   function animalRow(animal) {
@@ -210,6 +312,36 @@
     $('#animals-value').text(ui.number(record.animal_count));
     $('#events-value').text(ui.number(record.ai_event_count));
     $('#animals-foot').text(record.animal_count ? 'On her record' : 'None registered yet');
+
+    renderHerd(record);
+  }
+
+  /**
+   * What she reported keeping, when she was asked.
+   *
+   * Zero is two different answers here and they must not be shown the same way: a farmer who
+   * told a Mait she keeps none, and a farmer registered before the question existed. The
+   * second is by far the commoner, and printing a bold 0 for it states as fact something
+   * nobody ever asked.
+   *
+   * The tile is toned only when there is something to compare — an unasked record is not a
+   * finding, and colouring it would put a judgement on a blank.
+   */
+  function renderHerd(record) {
+    const cows = record.cattle_cows || 0;
+    const buffaloes = record.cattle_buffaloes || 0;
+    const total = record.cattle_total || 0;
+    const litres = Number(record.daily_yield_litres || 0);
+
+    if (!total && !litres) {
+      $('#herd-value').html(ui.pill('Not asked', 'warn'));
+      $('#herd-foot').text('Registered before the question');
+      return;
+    }
+
+    $('#herd-tile').addClass('tile--info');
+    $('#herd-value').text(ui.number(total));
+    $('#herd-foot').text(ui.number(cows) + ' cow · ' + ui.number(buffaloes) + ' buffalo');
   }
 
   function load(id) {
@@ -226,6 +358,7 @@
         );
 
         renderTiles(record);
+        renderPayments(record);
         renderFacts(record);
         $('#masked-aadhaar').text(record.masked_aadhar || '—');
         renderFace('front', record.aadhar_front_url);

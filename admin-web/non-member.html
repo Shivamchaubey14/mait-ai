@@ -82,6 +82,30 @@
             <p class="tile__foot" id="animals-foot">On her record</p>
           </article>
 
+          <!-- What she reported keeping, immediately left of the animals actually on her
+               record. The gap between the two is the whole reason it is here: nine cattle
+               against one registered animal is eight inseminations nobody has asked her
+               about. -->
+          <article class="tile" id="herd-tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5" />
+                </svg>
+              </span>
+              Herd
+            </p>
+            <p class="tile__value" id="herd-value">—</p>
+            <p class="tile__foot" id="herd-foot"></p>
+          </article>
+
           <article class="tile tile--info">
             <p class="tile__label">
               <span class="tile__icon" aria-hidden="true">
@@ -201,6 +225,52 @@
                       <td class="table__empty" colspan="5">Loading…</td>
                     </tr>
                   </tbody>
+                </table>
+              </div>
+            </section>
+
+            <!-- What she paid, and what proves it. She pays her Mait directly, so there is no
+                 milk payment to reconcile against and no SAP record of the money — which is
+                 exactly why the evidence lives on her record rather than only in the ledger.
+                 Hidden until there is a payment to show; a farmer served but never charged
+                 would otherwise get an empty table implying something is missing. -->
+            <section
+              class="panel panel--flush panel--tinted"
+              id="payments-panel"
+              aria-labelledby="payments-title"
+              hidden
+            >
+              <div class="panel__head panel__head--flush">
+                <h2 class="panel__title" id="payments-title">
+                  <span class="panel__icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 6h18v12H3zM3 10h18M7 14h4" />
+                    </svg>
+                  </span>
+                  Payments
+                </h2>
+                <span class="panel__count" id="payments-count"></span>
+              </div>
+              <div class="table-wrap">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Taken</th>
+                      <th class="table__num" scope="col">Amount</th>
+                      <th scope="col">How</th>
+                      <th scope="col">Reference</th>
+                      <th scope="col">Proof</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="payment-rows"></tbody>
                 </table>
               </div>
             </section>
