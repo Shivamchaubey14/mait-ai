@@ -44,6 +44,7 @@
    justify 200KB of vendor script on a page that renders member PII — Chart.js earns its
    place when the trend and coverage views arrive, not here. */
 .chart {
+  position: relative; /* the hover readout is placed against this box */
   display: flex;
   align-items: flex-end;
   gap: var(--space-3);
@@ -58,6 +59,25 @@
   align-items: center;
   gap: var(--space-2);
   height: 100%;
+  border-radius: var(--radius-sm);
+  cursor: default;
+}
+
+/* The whole column is the hover target, so a day with one insemination is as easy to ask
+   about as the busiest one. The wash says which day is being read; it is behind the bars,
+   not on them, so the colours keep meaning what the legend says they mean. */
+.chart__col--active,
+.chart__col:focus-visible {
+  background: var(--ink-50);
+}
+
+.chart__col:focus {
+  outline: none;
+}
+
+.chart__col:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
 }
 
 .chart__bars {
@@ -66,11 +86,18 @@
   gap: 3px;
   width: 100%;
   height: 100%;
+  border-bottom: 1px solid var(--color-border);
 }
 
+/* No `min-height`: a day with nothing on it draws nothing, rather than a sliver of both
+   colours that reads as "one or two" from across a desk. The baseline above is what says the
+   day is empty rather than missing. */
 .chart__bar {
   flex: 1;
   border-radius: 3px 3px 0 0;
+}
+
+.chart__bar--drawn {
   min-height: 2px;
 }
 
@@ -85,6 +112,71 @@
 .chart__label {
   font-size: var(--text-caption);
   color: var(--color-text-muted);
+}
+
+/* --- hover readout ---------------------------------------------------------------------
+   Replaces the `title` attribute the bars used to carry: a second of delay, no styling, and
+   it only fired over the bar itself — so the quiet days, the ones actually worth asking
+   about, had no target to hit. */
+.chart__tip {
+  position: absolute;
+  z-index: 2;
+  min-width: 152px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--ink-800);
+  color: #fff;
+  box-shadow: var(--shadow-raised);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  pointer-events: none; /* never steal the hover it is describing */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+
+.chart__tip.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.chart__tip-day {
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chart__tip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.chart__tip-row::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.chart__tip-row.is-completed::before {
+  background: var(--color-success);
+}
+
+.chart__tip-row.is-pending::before {
+  background: var(--color-warning);
+}
+
+.chart__tip-name {
+  flex: 1;
+  color: var(--ink-100);
+}
+
+.chart__tip-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 /* --- exception cards -------------------------------------------------------------------- */

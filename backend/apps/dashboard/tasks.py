@@ -14,13 +14,13 @@ from apps.ai_events.models import AIEvent
 from apps.core.timeframe import end_of_day, local_day, start_of_day
 from apps.payments.models import Payment
 
-from .models import DailyAIAggregate, PlatformMilestone
+from .models import AGGREGATE_LOOKBACK_DAYS, DailyAIAggregate, PlatformMilestone
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(name="apps.dashboard.tasks.aggregate_daily_ai_counts")
-def aggregate_daily_ai_counts(lookback_days: int = 2) -> int:
+def aggregate_daily_ai_counts(lookback_days: int = AGGREGATE_LOOKBACK_DAYS) -> int:
     """
     Rebuild the daily aggregate slices for the recent window.
 
@@ -29,7 +29,9 @@ def aggregate_daily_ai_counts(lookback_days: int = 2) -> int:
     hours late and land on yesterday's date, and an incremental counter would miss it.
 
     ``lookback_days`` bounds the work. Backfilling further is a management command, not a
-    scheduled job.
+    scheduled job. It is also the promise the dashboards read: everything inside this
+    window is still being rewritten, so `trends` counts those days live rather than trust
+    a slice this job may be about to change (`AGGREGATE_LOOKBACK_DAYS`).
     """
     since = timezone.localdate() - timedelta(days=lookback_days)
 

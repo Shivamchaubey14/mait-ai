@@ -31,7 +31,7 @@ from apps.payments.models import OTPLog, Payment
 from apps.pregnancy.models import PregnancyCheck
 from apps.pregnancy.oversight import rates_by_mait
 
-from .models import DailyAIAggregate, PlatformMilestone
+from .models import AGGREGATE_LOOKBACK_DAYS, DailyAIAggregate, PlatformMilestone
 
 MAX_EXCEPTION_ROWS = 3
 
@@ -350,7 +350,11 @@ def _exceptions() -> dict:
     description=(
         "Completed and pending-payment counts per day, for the trend chart (SRS §6.7.3).\n\n"
         "Every day in the window is returned, including the empty ones. A chart that skips "
-        "quiet days silently compresses time and makes a bad week look normal."
+        "quiet days silently compresses time and makes a bad week look normal.\n\n"
+        "The last few days are counted from the events themselves rather than from the "
+        "aggregate tables, because the hourly job is still rewriting them; older days come "
+        "off the aggregate. So the recent end of this series always agrees with "
+        "`/dashboard/summary/`, however long ago the job last ran."
     ),
     parameters=[
         OpenApiParameter("days", description="Window size, up to 120. Default 30.", type=int),
@@ -369,34 +373,48 @@ def trends(request):
     end = timezone.localdate()
     start = end - timedelta(days=days - 1)
 
-    completed = DailyAIAggregate.objects.filter(date__gte=start, date__lte=end)
     district = request.query_params.get("district_code")
+
+    # The recent tail is read live, and only the days before it come off the aggregate.
+    #
+    # The aggregate is authoritative for a day only once the hourly job has stopped rewriting
+    # it, and that job rewrites the last `AGGREGATE_LOOKBACK_DAYS` days wholesale — an event
+    # captured offline can arrive hours late and land on one of them. So every day inside that
+    # window is either missing (no run since midnight), an hour behind, or about to change.
+    #
+    # Only today used to be overlaid, which fixed half of one contradiction and left the other
+    # half on screen: `summary` counts today *and yesterday* live for the "on yesterday" delta
+    # above this chart, so the tile would report a rise over a yesterday the chart was drawing
+    # as a flat line. On the no-Docker dev path, where no worker runs at all, that flat line
+    # was every day since somebody last ran `rebuild_ai_aggregates` by hand.
+    #
+    # It costs the tail, not the window: settled days stay on the aggregate, which is what it
+    # is for, and the tail is bounded by the job's own look-back rather than by this view's.
+    # `summary` bounds its own counts the same way against the same §7 target.
+    live_from = max(start, end - timedelta(days=AGGREGATE_LOOKBACK_DAYS))
+
+    settled = DailyAIAggregate.objects.filter(date__gte=start, date__lt=live_from)
     if district:
-        completed = completed.filter(district_code=district)
+        settled = settled.filter(district_code=district)
 
     by_day = {
-        row["date"]: row["total"]
-        for row in completed.values("date").annotate(total=Sum("ai_count"))
+        row["date"]: row["total"] for row in settled.values("date").annotate(total=Sum("ai_count"))
     }
 
-    # Today is read live, overriding whatever the aggregate holds for it.
-    #
-    # The aggregate is written hourly, so today's slice is missing until the first run after
-    # midnight and stale by up to an hour after that. The "AI events today" tile directly
-    # above this chart is already counted live (see `summary`), so reading the chart from the
-    # aggregate alone put two numbers that contradict each other on one screen — the tile
-    # saying one event today, the chart drawing a flat line — and the chart was the wrong one.
-    #
-    # This costs one day of rows, not the window: settled days stay on the aggregate, which is
-    # what it is for. `summary` bounds its own counts the same way against the same §7 target.
-    today_completed = AIEvent.objects.filter(
+    # Bucketed here rather than by TruncDate, which compiles to a CONVERT_TZ that is NULL on a
+    # MySQL without timezone tables — it would drop every row silently rather than raise (see
+    # `apps.core.timeframe`). A few days of events, so the rows fit in memory by construction.
+    live_qs = AIEvent.objects.filter(
         status=AIEvent.Status.COMPLETED,
-        completed_at__gte=start_of_day(end),
+        completed_at__gte=start_of_day(live_from),
         completed_at__lt=end_of_day(end),
     )
     if district:
-        today_completed = today_completed.filter(mpp__district_code=district)
-    by_day[end] = today_completed.count()
+        live_qs = live_qs.filter(mpp__district_code=district)
+
+    for completed_at in live_qs.values_list("completed_at", flat=True):
+        day = local_day(completed_at)
+        by_day[day] = by_day.get(day, 0) + 1
 
     # Pending payments are read live: they are by definition not yet aggregated, and the
     # number is small. Small enough that the day each one falls on is worked out here rather

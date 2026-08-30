@@ -16,6 +16,15 @@ from django.db import models
 
 from apps.core.models import TimeStampedModel
 
+#: How many days back the hourly job rewrites wholesale.
+#:
+#: Days inside this window are still moving: an event captured offline can arrive hours late
+#: and land on one of them, so the job recomputes them rather than trusting what it wrote
+#: last hour. Which means the aggregate is authoritative only for days *older* than this —
+#: readers that have to be current count the tail live instead, and import this so there is
+#: one definition of where "settled" begins (see `apps.dashboard.views.trends`).
+AGGREGATE_LOOKBACK_DAYS = 2
+
 
 class DailyAIAggregate(TimeStampedModel):
     """
