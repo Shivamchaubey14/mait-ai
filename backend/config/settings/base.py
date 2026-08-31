@@ -9,6 +9,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -61,6 +62,18 @@ LOCAL_APPS = [
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+
+# The portal sends this on every request (admin-web/assets/js/api.js), and the mobile client
+# has always sent it too. It is meaningless to this API and everything to a tunnel in front of
+# it: without it, ngrok's free tier answers anything browser-shaped with an HTML interstitial
+# that arrives at the client as a JSON parse failure.
+#
+# It has to be allowed explicitly. A header outside the default list turns every cross-origin
+# call into a preflight the browser then refuses — which is not a visible failure anywhere, it
+# is simply every screen reporting that the server could not be reached. That is exactly what
+# happened on the two-origin development path, where the portal is served on :8080 and this API
+# on :8000; behind nginx or a tunnel the two share an origin and no preflight is involved.
+CORS_ALLOW_HEADERS = (*default_headers, "ngrok-skip-browser-warning")
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
