@@ -4,8 +4,8 @@
 # Core framework
 # 5.1+ is required for CheckConstraint(condition=); the old check= spelling is removed in
 # Django 6. Staying on the 5.2 LTS line, which is what the SRS specifies.
-Django==5.2.16
-djangorestframework==3.17.1
+Django==6.1
+djangorestframework==3.18.0
 django-environ==0.14.0
 django-cors-headers==4.9.0
 django-filter==26.1
@@ -50,7 +50,7 @@ whitenoise==6.12.0
 
 # Observability
 sentry-sdk==2.66.1
-django-prometheus==2.4.1
+django-prometheus==2.5.0
 
 # Utilities
 python-dateutil==2.9.0.post0
