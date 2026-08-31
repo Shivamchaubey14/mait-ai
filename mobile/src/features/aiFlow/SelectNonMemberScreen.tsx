@@ -17,9 +17,12 @@
  * that is the ordinary state of a registration whose capture never finished, and it is what a
  * Mait is usually looking for.
  *
- * The way out is the dashed card at the end, not a link in the footer. A Mait at an MPP nobody
- * has registered anybody at yet arrives to an empty list, and on that screen a footer link is
- * the one thing they will not find.
+ * The way out — registering somebody genuinely new — is a dashed card directly under the
+ * search field, not a link in the footer and no longer the card that closed the list. A footer
+ * link is the one thing a Mait will not find on an empty screen; a card at the bottom is the
+ * one thing they cannot reach on a full one. Forty registrations at an MPP put it forty cards
+ * down, so the Mait who had just scrolled the roster to establish she was not on it had to
+ * scroll it again to do anything about that.
  */
 
 import React, { useState } from 'react';
@@ -111,6 +114,25 @@ export default function SelectNonMemberScreen({
       {isError && <FlowNotice tone="error" title={t('errors.generic')} testID="non-member-error" />}
       {isLoading && <FlowNotice tone="info" title={t('common.loading')} />}
 
+      {/* Directly under the search field, above the roster.
+
+          It used to close the list, which read well on paper — a place for a record after the
+          records — and worked badly in a yard. An MPP with forty registrations put it forty
+          cards down, so the Mait standing in front of a woman who is not on the list had to
+          scroll the whole roster to reach the one thing that helps, having already scrolled it
+          once to establish she was not there.
+
+          Here it costs one card of the list's space and is the first thing under the search.
+          That is the right trade: a Mait who can see the roster is scanning it and does not
+          need this, and a Mait who cannot find her needs nothing else. It stays put while a
+          search filters, because "she is not in here" is exactly the moment it is wanted. */}
+      <AddCard
+        title={t('aiFlow.registerNewNonMember')}
+        subtitle={t('aiFlow.registerNewNonMemberBody')}
+        onPress={onAddNew}
+        testID="non-member-add-card"
+      />
+
       {!isLoading && !isError && farmers.length === 0 && (
         <FlowNotice
           tone="info"
@@ -142,16 +164,6 @@ export default function SelectNonMemberScreen({
           testID={`non-member-${farmer.id}`}
         />
       ))}
-
-      {/* Ends the list, the way it ends the animal list: a place for a record rather than
-          another record. Present even while a search is filtering, because "she is not in
-          here" is exactly the moment a Mait needs it. */}
-      <AddCard
-        title={t('aiFlow.registerNewNonMember')}
-        subtitle={t('aiFlow.registerNewNonMemberBody')}
-        onPress={onAddNew}
-        testID="non-member-add-card"
-      />
 
       <FlowSpacer />
     </FlowScreen>
