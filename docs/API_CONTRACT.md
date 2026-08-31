@@ -161,6 +161,7 @@ the rows that actually carry figures rather than the whole roster.
 | GET | `/non-members/{id}/` | Non-member detail | JWT |
 | GET | `/admin/non-members/` | Every Mait's field registrations, for the back office | Admin |
 | GET | `/admin/non-members/{id}/` | One of them, with her animals and her card images | Admin |
+| GET | `/admin/non-members/export/` | The same list as an .xlsx workbook, with full Aadhaar | Admin |
 | POST | `/farmers/otp/send/` | Send a verification code to a farmer, before the capture proceeds | Mait |
 | POST | `/farmers/otp/verify/` | Check the code she read out | Mait |
 
@@ -210,6 +211,29 @@ route is the whole population, filterable by MPP and by `no_card=true`, the queu
 registrations with nothing to check the number against. Row counts (`animal_count`,
 `ai_event_count`) are annotated in SQL, so a page of fifty costs one query rather than a
 hundred.
+
+**`/admin/non-members/export/` is that list as a file**, and it takes the same filters — it
+runs them through the same `filter_queryset`, so there is one definition of what the screen is
+showing rather than two that drift. `limit` and `offset` are ignored: they are how the table
+pages, and honouring them would hand back the twenty-five rows that happened to be on screen —
+a file that looks complete and is not.
+
+An **.xlsx rather than the CSV the reports exports produce**, because these columns are full of
+things Excel eats on the way in from a CSV: a twelve-digit Aadhaar becomes `1.23457E+11`, a
+mobile becomes `9.19876E+11`, and an MPP code loses the leading zero off `001302`, naming a
+collection point that does not exist. Every code cell is written as text — a number that
+arrives silently rounded is worse than one that never arrived, because it is the number
+somebody is about to verify a farmer against.
+
+**This export carries full Aadhaar and mobile numbers**, and is the one place in the platform
+that does. It is a deliberate exception to the rule the AI-event and Pregnancy exports keep.
+Those answer questions about the work, where a masked number costs nothing; this one is read
+*against the card* to confirm that the woman a Mait charged in cash is who the row says she is,
+and a masked number cannot be checked against anything. It is held in place by the same gate as
+the detail screen — Admin, Non-members section — which already returns the card images, so the
+number was readable to exactly these people before this file existed. Every export is
+audit-logged as `pii_access` with the filters used, and the workbook's first row states what it
+holds so whoever opens it knows how it has to be handled.
 
 Its **detail is the only endpoint that returns the card image URLs**, and the read is written
 to the audit log as `pii_access` against the operator's account — the same promise the Members

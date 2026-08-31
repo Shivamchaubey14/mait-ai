@@ -20,6 +20,24 @@
             </p>
           </div>
           <div class="topbar__actions">
+            <!-- Ink, like the export on AI events, Reports and Pregnancy. Green is reserved
+                 for the one action that owns a screen, and taking a copy of a list away is
+                 not what this screen is for — it is what somebody does on the way out. -->
+            <button class="btn btn--dark" id="export" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+              </svg>
+              <span id="export-label">Export Excel</span>
+            </button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
         </header>

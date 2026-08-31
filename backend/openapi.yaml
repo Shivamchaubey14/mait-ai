@@ -378,6 +378,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminNonMemberDetail'
           description: ''
+  /api/v1/admin/non-members/export/:
+    get:
+      operationId: admin_non_members_export_retrieve
+      description: |-
+        The same rows the list returns, as an .xlsx — the whole filtered set, not the page. `search`, `mpp__mpp_code`, `created_by_mait`, `relation`, `no_card` and `ordering` all apply, so the file matches the screen it was taken from.
+
+        **Carries full Aadhaar and mobile numbers**, unlike the AI-event and Pregnancy exports, which mask them. This file is what a farmer is verified *against* — an operator reads the row beside her card — and a masked number cannot be checked against anything. The same people can already read the number off the card images on the detail endpoint, so this opens no new door; every export is audit-logged against the admin who ran it, with the filters they used, and the workbook's first row says what it holds.
+      summary: Export the non-member roster as a workbook
+      parameters:
+      - in: query
+        name: no_card
+        schema:
+          type: boolean
+        description: '`true` exports only the farmers missing a face of their Aadhaar.'
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/admin/pregnancy/:
     get:
       operationId: admin_pregnancy_retrieve
@@ -2090,6 +2116,8 @@ paths:
         Completed and pending-payment counts per day, for the trend chart (SRS §6.7.3).
 
         Every day in the window is returned, including the empty ones. A chart that skips quiet days silently compresses time and makes a bad week look normal.
+
+        The last few days are counted from the events themselves rather than from the aggregate tables, because the hourly job is still rewriting them; older days come off the aggregate. So the recent end of this series always agrees with `/dashboard/summary/`, however long ago the job last ran.
       summary: AI events per day
       parameters:
       - in: query
@@ -4013,6 +4041,23 @@ components:
           type: integer
           readOnly: true
           default: 0
+        cattle_cows:
+          type: integer
+          readOnly: true
+          description: Cows she keeps, as reported at registration.
+        cattle_buffaloes:
+          type: integer
+          readOnly: true
+          description: Buffaloes she keeps, as reported at registration.
+        cattle_total:
+          type: integer
+          readOnly: true
+        daily_yield_litres:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Litres of milk a day across the herd, as reported at registration.
         consent_captured_at:
           type: string
           format: date-time
@@ -4034,6 +4079,16 @@ components:
           items:
             $ref: '#/components/schemas/Animal'
           readOnly: true
+        payments:
+          type: array
+          items: {}
+          description: |-
+            Every payment she has made, newest first.
+
+            Read through the AI events rather than stored against her, because a payment belongs to
+            one insemination — the amount, the mode and the proof are facts about that visit, not
+            about the farmer.
+          readOnly: true
       required:
       - aadhar_back_captured
       - aadhar_back_url
@@ -4043,8 +4098,12 @@ components:
       - ai_event_count
       - animal_count
       - animals
+      - cattle_buffaloes
+      - cattle_cows
+      - cattle_total
       - consent_captured_at
       - created_at
+      - daily_yield_litres
       - father_husband_name
       - id
       - masked_aadhar
@@ -4053,6 +4112,7 @@ components:
       - mpp_code
       - mpp_name
       - name
+      - payments
       - registered_by
       - registered_by_code
       - relation
@@ -4132,6 +4192,23 @@ components:
           type: integer
           readOnly: true
           default: 0
+        cattle_cows:
+          type: integer
+          readOnly: true
+          description: Cows she keeps, as reported at registration.
+        cattle_buffaloes:
+          type: integer
+          readOnly: true
+          description: Buffaloes she keeps, as reported at registration.
+        cattle_total:
+          type: integer
+          readOnly: true
+        daily_yield_litres:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Litres of milk a day across the herd, as reported at registration.
         consent_captured_at:
           type: string
           format: date-time
@@ -4148,8 +4225,12 @@ components:
       - address
       - ai_event_count
       - animal_count
+      - cattle_buffaloes
+      - cattle_cows
+      - cattle_total
       - consent_captured_at
       - created_at
+      - daily_yield_litres
       - father_husband_name
       - id
       - masked_aadhar
@@ -4824,6 +4905,11 @@ components:
         success_rows:
           type: integer
           readOnly: true
+        skipped_rows:
+          type: integer
+          readOnly: true
+          description: Rows whose record already existed and was therefore left untouched.
+            A master upload inserts; it never overwrites (SRS §6.1.4).
         failed_rows:
           type: integer
           readOnly: true
@@ -4863,6 +4949,7 @@ components:
       - id
       - processed_rows
       - progress_percent
+      - skipped_rows
       - started_at
       - status
       - status_display
@@ -5706,6 +5793,21 @@ components:
         aadhar_back_captured:
           type: boolean
           readOnly: true
+        cattle_cows:
+          type: integer
+          maximum: 500
+          minimum: 0
+        cattle_buffaloes:
+          type: integer
+          maximum: 500
+          minimum: 0
+        cattle_total:
+          type: integer
+          readOnly: true
+        daily_yield_litres:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
         mpp:
           type: integer
           description: Nearest/served MPP.
@@ -5725,6 +5827,7 @@ components:
       required:
       - aadhar_back_captured
       - aadhar_front_captured
+      - cattle_total
       - consent_captured_at
       - created_at
       - created_by_mait
@@ -5776,6 +5879,21 @@ components:
         aadhar_back_captured:
           type: boolean
           readOnly: true
+        cattle_cows:
+          type: integer
+          maximum: 500
+          minimum: 0
+        cattle_buffaloes:
+          type: integer
+          maximum: 500
+          minimum: 0
+        cattle_total:
+          type: integer
+          readOnly: true
+        daily_yield_litres:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
         mpp:
           type: integer
           description: Nearest/served MPP.
@@ -5801,6 +5919,7 @@ components:
       - aadhar_back_captured
       - aadhar_front_captured
       - animals
+      - cattle_total
       - consent_captured_at
       - created_at
       - created_by_mait
@@ -5914,6 +6033,18 @@ components:
           type: boolean
           writeOnly: true
           default: false
+        cattle_cows:
+          type: integer
+          maximum: 500
+          minimum: 0
+        cattle_buffaloes:
+          type: integer
+          maximum: 500
+          minimum: 0
+        daily_yield_litres:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
         mpp:
           type: integer
           description: Nearest/served MPP.

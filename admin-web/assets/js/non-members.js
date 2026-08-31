@@ -164,6 +164,50 @@
   }
 
   /**
+   * Take the roster away as a workbook.
+   *
+   * The same filters the table is showing, so the file is the screen — an operator who has
+   * narrowed to one MPP, or to the rows with no card, gets that and not the whole population.
+   *
+   * **`limit` and `offset` are dropped on the way out.** They are how this table pages, not
+   * part of the query, and passing them through would hand back the twenty-five rows that
+   * happened to be on screen — a file that looks complete, is not, and says nothing about it.
+   *
+   * A date in the filename rather than a bare `non-members.xlsx`, because these get mailed
+   * around and compared, and two downloads a week apart should not be the same file to the
+   * person holding both.
+   *
+   * The label carries the wait. An xlsx is a zip and cannot be sent until it is finished
+   * building, so the button sits there doing nothing visible for a second or two on a real
+   * roster; unlabelled, that reads as a click that missed.
+   */
+  function exportWorkbook() {
+    MaitAI.shell.clearAlert();
+
+    const params = query();
+    delete params.limit;
+    delete params.offset;
+    const search = $.param(params);
+    const stamp = new Date().toISOString().slice(0, 10);
+
+    $('#export').prop('disabled', true);
+    $('#export-label').text('Preparing…');
+
+    MaitAI.api
+      .download(
+        '/admin/non-members/export/' + (search ? '?' + search : ''),
+        'non-members-' + stamp + '.xlsx'
+      )
+      .catch(function () {
+        MaitAI.shell.alert('The export could not be produced. Try again in a moment.');
+      })
+      .finally(function () {
+        $('#export').prop('disabled', false);
+        $('#export-label').text('Export Excel');
+      });
+  }
+
+  /**
    * The tiles summarise the page, and say so.
    *
    * Only `count` is a true total — the rest are counted from the rows in hand, because the API
@@ -284,5 +328,7 @@
       $(this).toggleClass('is-active', state.noCard).attr('aria-pressed', String(state.noCard));
       load();
     });
+
+    $('#export').on('click', exportWorkbook);
   });
 })(window.MaitAI, jQuery);

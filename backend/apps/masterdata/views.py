@@ -32,6 +32,8 @@ from apps.payments.models import OTPLog
 from apps.payments.services import issue_otp, verify_otp
 
 from . import columns as cols
+from .exports import COLUMNS as export_columns
+from .exports import non_member_workbook_response
 from .models import MPP, DataUploadLog, Member, NonMember
 from .serializers import (
     AdminNonMemberDetailSerializer,
@@ -780,6 +782,50 @@ class AdminNonMemberViewSet(
         if str(self.request.query_params.get("no_card", "")).lower() in ("true", "1"):
             queryset = queryset.filter(Q(aadhar_front_url="") | Q(aadhar_back_url=""))
         return queryset
+
+    @extend_schema(
+        summary="Export the non-member roster as a workbook",
+        description=(
+            "The same rows the list returns, as an .xlsx — the whole filtered set, not the "
+            "page. `search`, `mpp__mpp_code`, `created_by_mait`, `relation`, `no_card` and "
+            "`ordering` all apply, so the file matches the screen it was taken from.\n\n"
+            "**Carries full Aadhaar and mobile numbers**, unlike the AI-event and Pregnancy "
+            "exports, which mask them. This file is what a farmer is verified *against* — an "
+            "operator reads the row beside her card — and a masked number cannot be checked "
+            "against anything. The same people can already read the number off the card "
+            "images on the detail endpoint, so this opens no new door; every export is "
+            "audit-logged against the admin who ran it, with the filters they used, and the "
+            "workbook's first row says what it holds."
+        ),
+        parameters=[
+            OpenApiParameter(
+                "no_card",
+                description="`true` exports only the farmers missing a face of their Aadhaar.",
+                required=False,
+                type=bool,
+            ),
+        ],
+        responses={200: bytes},
+    )
+    @action(detail=False, methods=["get"])
+    def export(self, request):
+        # Through `filter_queryset`, not a fresh query, so there is exactly one definition of
+        # what this screen is showing. An export that built its own filters is one that drifts
+        # from the list the first time either side is touched.
+        queryset = self.filter_queryset(self.get_queryset())
+
+        record_audit(
+            action=AuditLog.Action.PII_ACCESS,
+            entity_type="report",
+            entity_id="non_members_export",
+            request=request,
+            meta={
+                "filters": dict(request.query_params.items()),
+                "columns": [title for title, _width, _text in export_columns],
+            },
+        )
+
+        return non_member_workbook_response(queryset)
 
     @extend_schema(
         summary="One non-member, with her card and her animals",
