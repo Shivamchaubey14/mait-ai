@@ -1175,3 +1175,177 @@ a.btn:hover {
     margin-bottom: 0;
   }
 }
+
+/* --- lightbox ------------------------------------------------------------------------------
+ * The photo viewer (assets/js/lightbox.js), shared by every screen that shows a photograph.
+ *
+ * Lived in event.css while only the AI event screen opened one. Moved here when the
+ * non-member record started opening Aadhaar cards and payment screens, because a viewer whose
+ * behaviour is shared and whose appearance is copied is one that drifts on whichever page
+ * somebody forgets.
+ *
+ * Black, not Ink. The surround should read as absence and let the photograph be the only lit
+ * thing on the screen — this is evidence being examined, and the page's own colours around it
+ * would be something else for the eye to judge it against. */
+.lightbox {
+  /* Sized by the picture, bounded by the window — not a fixed box the picture is poured into.
+     `position: relative` because the controls are laid over it. */
+  position: relative;
+  width: fit-content;
+  max-width: 94vw;
+  max-height: 92vh;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: #000;
+  overflow: hidden;
+}
+
+.lightbox::backdrop {
+  background: rgb(12 21 27 / 72%);
+}
+
+/* The scroll port. Fitted, it is exactly the picture and never scrolls; zoomed, the image
+   inside it goes to natural size and this is what pans. */
+.lightbox__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 94vw;
+  max-height: calc(92vh - 52px);
+  overflow: hidden;
+}
+
+/* Waiting for the picture. An `<img>` with nothing decoded measures zero, so without a floor
+   the dialog opens as a sliver of caption and snaps to full size a second later — these are
+   handset photographs at several megabytes and that wait is always visible. Sized in `min()`
+   so it is a floor on a large screen and not a box wider than a small one. */
+.lightbox__stage.is-loading {
+  min-width: min(60vw, 520px);
+  min-height: min(50vh, 360px);
+}
+
+.lightbox__stage.is-loading::after {
+  content: 'Loading the photograph…';
+  color: var(--ink-200);
+  font-size: var(--text-caption);
+}
+
+/* Sized by the picture, the same lesson as the card: `width: 100%` made the element's box
+   landscape around a portrait photograph, so `object-fit` letterboxed it inside black bars
+   that were wider than the picture. Bounded on both axes instead, and the box is the photo.
+
+   `contain` stays as a backstop. It should never have anything to do now, but a viewer that
+   cropped to fill would be making the same cut the card already made — which is the one thing
+   opening the photo has to undo. */
+.lightbox__image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 94vw;
+  max-height: calc(92vh - 52px);
+  object-fit: contain;
+  cursor: zoom-in;
+}
+
+/* Zoomed: the image drops its ceiling and the stage becomes the window onto it. The stage
+   keeps its own max sizes, so the dialog does not grow to the size of a handset photograph. */
+.lightbox--zoomed .lightbox__stage {
+  overflow: auto;
+  /* Or a picture narrower than the stage sits against the left edge once it can scroll. */
+  align-items: safe center;
+  justify-content: safe center;
+  cursor: grab;
+  /* The pan is driven by pointer events; letting the browser also scroll on touch fights it. */
+  touch-action: none;
+}
+
+.lightbox--zoomed .lightbox__stage.is-panning {
+  cursor: grabbing;
+}
+
+.lightbox--zoomed .lightbox__image {
+  max-width: none;
+  max-height: none;
+  cursor: inherit;
+  /* A drag on an image is a drag-and-drop to the browser unless it is told otherwise. */
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* The line that qualifies the picture: which photograph this is, where it sits in the set,
+   and what a click will do. Kept with the picture rather than above it, because it is read
+   after the photograph and not before. */
+.lightbox__caption {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  justify-content: center;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--ink-200);
+  font-size: var(--text-caption);
+  text-align: center;
+}
+
+.lightbox__count,
+.lightbox__hint {
+  color: var(--ink-300, #8b9ba5);
+}
+
+.lightbox__hint:empty,
+.lightbox__count:empty {
+  display: none;
+}
+
+.lightbox__close,
+.lightbox__step {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: var(--color-surface);
+  background: rgb(255 255 255 / 16%);
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.lightbox__close {
+  top: var(--space-3);
+  right: var(--space-3);
+  /* Above the stage, which scrolls under it when zoomed. */
+  z-index: 1;
+}
+
+/* Vertically centred on the picture rather than the dialog, so they do not drift down over
+   the caption on a wide, short photograph. */
+.lightbox__step {
+  top: calc((92vh - 52px) / 2);
+  z-index: 1;
+  transform: translateY(-50%);
+}
+
+.lightbox__step--prev {
+  left: var(--space-3);
+}
+
+.lightbox__step--next {
+  right: var(--space-3);
+}
+
+.lightbox__close:hover,
+.lightbox__close:focus-visible,
+.lightbox__step:hover,
+.lightbox__step:focus-visible {
+  background: rgb(255 255 255 / 28%);
+}
+
+.lightbox__close svg,
+.lightbox__step svg {
+  width: 20px;
+  height: 20px;
+}

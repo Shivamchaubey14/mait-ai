@@ -65,13 +65,22 @@
 }
 
 /* The link fills the well so the whole photograph is the target, not a corner of it. */
+/* A `<button>` since the photo opens in place rather than navigating (assets/js/lightbox.js),
+   so the browser's own control styling has to be undone: a button brings a border, a grey
+   face, its own font and centred padding, none of which belong on a photograph. */
 .card-shot__open {
   display: flex;
   width: 100%;
   height: 100%;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
   border-radius: var(--radius-sm);
+  cursor: zoom-in;
 }
 
 .card-shot__open:focus-visible {
@@ -205,13 +214,23 @@
    screen is read for a reference and an amount, and neither is legible at the size a table
    cell allows — the browser's own viewer opens it full size, which is the same reasoning the
    Aadhaar wells above are built on. */
+/* Also a button now, and for the same reason. It sits in a table cell where a stray border or
+   background would draw a box around one column's worth of rows. */
 .proof-link {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  padding: 0;
   color: var(--color-primary-dark);
   font-family: var(--font-heading);
   font-size: var(--text-label);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.proof-link:hover {
+  text-decoration: underline;
 }
 
 .proof-link:focus-visible {

@@ -17,6 +17,11 @@
   const ui = MaitAI.ui;
   const shell = MaitAI.shell;
 
+  //: The record on screen. Held because the photo viewer is opened from a click that happens
+  //: long after the render that drew the well, and it needs the *other* photographs — the back
+  //: of the card, the rest of her screenshots — not just the one that was clicked.
+  const state = { record: null };
+
   /** Every face of the card, or the ones that are missing, as one sentence. */
   function cardState(record) {
     const front = !!record.aadhar_front_captured;
@@ -60,18 +65,17 @@
       .removeClass('card-shot__frame--empty')
       .empty()
       .append(
-        // A link, not a lightbox. The panel's whole job is checking twelve digits against a
-        // photograph, and the well is a third of a screen wide — too small to read a number
-        // off. The browser's own image viewer opens it at full size, handles zoom, and costs
-        // no script on a page that renders PII (README forbids third-party script here).
-        $('<a>')
+        // Opens in place, not in a tab. This was a plain link to the file, and the browser's
+        // own viewer did the job — but it did it on a blank page with none of the record
+        // beside it, and checking a number off a card means looking at the card and the digits
+        // together. The viewer is `assets/js/lightbox.js`: it holds both faces, so the card can
+        // be turned over, and it zooms, which is what the well is too small for.
+        //
+        // A button, not an anchor with its href removed. There is no document to navigate to,
+        // and an anchor that goes nowhere is one a screen reader still announces as a link.
+        $('<button>')
           .addClass('card-shot__open')
-          .attr({
-            href: href,
-            target: '_blank',
-            rel: 'noopener noreferrer',
-            title: 'Open ' + label.toLowerCase() + ' at full size',
-          })
+          .attr({ type: 'button', title: 'Open ' + label.toLowerCase() + ' at full size' })
           .append(
             $('<img>').addClass('card-shot__image').attr({
               src: href,
@@ -85,7 +89,42 @@
               decoding: 'async',
             })
           )
+          .on('click', function () {
+            const faces = cardFaces();
+            MaitAI.lightbox.open(
+              faces,
+              faces.findIndex(function (face) {
+                return face.which === which;
+              })
+            );
+          })
       );
+  }
+
+  /**
+   * The faces of the card that are actually on file, in the order they are read.
+   *
+   * Built from the record at click time rather than captured when the well was drawn, so a
+   * viewer opened from the front still offers the back — and a record that has only one face
+   * opens as a single photograph with no next arrow, rather than a pair with a hole in it.
+   */
+  function cardFaces() {
+    const record = state.record || {};
+    return [
+      { which: 'front', url: record.aadhar_front_url, label: 'Front of the Aadhaar card' },
+      { which: 'back', url: record.aadhar_back_url, label: 'Back of the Aadhaar card' },
+    ]
+      .filter(function (face) {
+        return !!face.url;
+      })
+      .map(function (face) {
+        return {
+          which: face.which,
+          src: MaitAI.api.mediaUrl(face.url),
+          alt: face.label,
+          caption: face.label,
+        };
+      });
   }
 
   function fact(label, value, absent) {
@@ -210,25 +249,56 @@
   }
 
   /**
-   * The screenshot, as a link rather than a thumbnail.
+   * The screenshot, as a control rather than a thumbnail.
    *
-   * Same reasoning as the Aadhaar wells above: a payment screen is read for a reference and an
-   * amount, and neither is legible at the size a table cell allows. The browser's own viewer
-   * opens it full size and costs no script on a page that renders PII.
+   * A payment screen is read for a reference and an amount, and neither is legible at the size
+   * a table cell allows — so this stays a word and an icon rather than a picture. What changed
+   * is where it goes: the viewer opens over the record instead of on a blank tab, because the
+   * thing being checked is whether the UTR in the row matches the one in the photograph, and
+   * that is two facts that have to be on the same screen.
+   *
+   * `data-proof` carries the URL rather than an `href`: the row is built as a string and the
+   * click is delegated from the table, so the handler needs to know which screenshot was hit
+   * without a document to navigate to.
    */
   function proofLink(url) {
     if (!url) {
       return ui.pill('Not on file', 'bad');
     }
     return (
-      '<a class="proof-link" target="_blank" rel="noopener noreferrer" href="' +
+      '<button class="proof-link" type="button" data-proof="' +
       ui.escapeHtml(MaitAI.api.mediaUrl(url)) +
       '" title="Open the payment screenshot at full size">' +
       '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" ' +
       'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
       '<path d="M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4" /></svg>' +
-      'Screenshot</a>'
+      'Screenshot</button>'
     );
+  }
+
+  /**
+   * Every payment screenshot on her record, in the order the table shows them.
+   *
+   * A set rather than one photograph, for the same reason the card is: somebody reconciling
+   * her payments against a statement is working down a list, and closing the viewer between
+   * each one is the part that makes it tedious.
+   */
+  function proofShots() {
+    return ((state.record && state.record.payments) || [])
+      .filter(function (payment) {
+        return !!payment.payment_screenshot_url;
+      })
+      .map(function (payment) {
+        return {
+          src: MaitAI.api.mediaUrl(payment.payment_screenshot_url),
+          alt: 'Payment screenshot',
+          caption:
+            ui.money(payment.amount) +
+            ' · ' +
+            ui.dateTime(payment.created_at) +
+            (payment.utr_number ? ' · UTR ' + payment.utr_number : ''),
+        };
+      });
   }
 
   /**
@@ -348,6 +418,7 @@
     MaitAI.api
       .nonMember(id)
       .done(function (record) {
+        state.record = record;
         document.title = record.name + ' · Mait AI Admin';
         $('#farmer-name').text(record.name || 'Non-member');
         $('#farmer-meta').text(
@@ -387,6 +458,20 @@
       return;
     }
     shell.mount();
+
+    // Delegated from the table, because the rows are replaced wholesale whenever the record
+    // loads and a handler bound to a button would go with the row it was bound to. The set
+    // handed to the viewer is every screenshot she has, opened at the one that was clicked.
+    $('#payment-rows').on('click', '[data-proof]', function () {
+      const src = $(this).data('proof');
+      const shots = proofShots();
+      MaitAI.lightbox.open(
+        shots,
+        shots.findIndex(function (shot) {
+          return shot.src === src;
+        })
+      );
+    });
 
     const id = shell.param('id');
     if (!id) {
