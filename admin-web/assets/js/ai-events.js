@@ -218,7 +218,7 @@
   function showSample() {
     $('#events').addClass('events--sample');
     $('#events-note').html('<span class="events__badge">Sample — no events recorded yet</span>');
-    $('#rows').html(SAMPLE.map(sampleRow).join(''));
+    $('#rows').removeAttr('aria-busy').html(SAMPLE.map(sampleRow).join(''));
   }
 
   function query() {

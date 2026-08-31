@@ -1349,3 +1349,152 @@ a.btn:hover {
   width: 20px;
   height: 20px;
 }
+
+/* --- skeleton -------------------------------------------------------------------------------
+ * The shape of what is coming, while it comes.
+ *
+ * The same idea the app already uses (`mobile/src/components/states.tsx`): a spinner says
+ * "wait", a skeleton says "wait, and here is the shape of what is coming". On the portal that
+ * matters for a different reason than on a handset — these tables are the page, and a screen
+ * that is a title over a line of grey text for two seconds reads as a screen with nothing on
+ * it. A dozen of them in a row reads as a portal that is broken.
+ *
+ * **In the markup, not painted by script.** The skeleton is static HTML in the page, so it is
+ * on screen at first paint — before jQuery has parsed, before a token has been read, before
+ * the request has left. A skeleton that waits for JavaScript to draw it arrives at the moment
+ * it stops being needed.
+ *
+ * **Bars are pseudo-elements on empty cells**, which is what keeps this affordable: a page
+ * carries `<td></td>` and no more, and the column structure it already has does the layout. It
+ * also keeps the bars out of the accessibility tree entirely — there is nothing to read out.
+ * The rows carry `aria-hidden` and the body carries `aria-busy`, which is the part that is
+ * announced.
+ *
+ * Proportions come from the app so the two products look related: a wide bar over a thin one
+ * in the identity column, reading as a name over its code, and one bar everywhere else. */
+.skeleton-row td {
+  /* Matches the real row's height, so the table does not jump when the data lands. */
+  height: 44px;
+  vertical-align: middle;
+}
+
+.skeleton-row td::before {
+  content: '';
+  display: block;
+  height: 10px;
+  width: 62%;
+  background: var(--color-background);
+  border-radius: var(--radius-pill);
+}
+
+/* The identity column is a name over a code in the real table, so it is two bars here — the
+   detail thinner and shorter than the thing it qualifies, exactly as the app draws it. */
+.skeleton-row td:first-child::after {
+  content: '';
+  display: block;
+  height: 8px;
+  width: 38%;
+  margin-top: var(--space-2);
+  background: var(--color-background);
+  border-radius: var(--radius-pill);
+}
+
+/* Unequal widths down the row, so a table of these reads as content rather than as a bar
+   chart. Nothing depends on which column gets which — it only has to stop being a grid. */
+.skeleton-row td:nth-child(2)::before {
+  width: 48%;
+}
+
+.skeleton-row td:nth-child(3)::before {
+  width: 66%;
+}
+
+.skeleton-row td:nth-child(4)::before {
+  width: 40%;
+}
+
+.skeleton-row td:nth-child(5)::before {
+  width: 58%;
+}
+
+.skeleton-row td:nth-child(6)::before {
+  width: 44%;
+}
+
+.skeleton-row td:nth-child(7)::before {
+  width: 60%;
+}
+
+/* Right-aligned columns hold numbers, and a number bar hanging off the left edge of one is
+   the thing that makes a skeleton table look misassembled. */
+.skeleton-row td.table__num::before {
+  margin-left: auto;
+  width: 32%;
+  /* A narrow count column — `AI`, `Animals` — is only a few characters wide, and 32% of that
+     is a dot. A floor keeps it reading as a number that has not arrived. */
+  min-width: 28px;
+}
+
+/* Rows fade back as they go down, so the block reads as a list running off the bottom of the
+   screen rather than as six identical placeholders. */
+.skeleton-row:nth-child(2) {
+  opacity: 0.82;
+}
+
+.skeleton-row:nth-child(3) {
+  opacity: 0.64;
+}
+
+.skeleton-row:nth-child(4) {
+  opacity: 0.46;
+}
+
+.skeleton-row:nth-child(5) {
+  opacity: 0.28;
+}
+
+/* A slow pulse over the whole block. The app's skeleton is static, which is right on a screen
+   held at arm's length for a second; a browser tab can sit here for much longer on a bad
+   connection, and something that never changes reads as content that has finished loading and
+   come back empty. Slow and shallow enough to be read as breathing rather than as blinking. */
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-row td::before,
+  .skeleton-row td::after {
+    animation: skeleton-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+/* --- tiles, while they are still a question ------------------------------------------------
+ * A stat tile's figure is one number and the page has four of them. Held as em dashes they
+ * read as four measurements that came back empty, which is a worse lie than saying nothing. */
+/* `:empty`, not a class, so no screen has to remember to take it off. A tile's figure ships
+   empty in the markup and every one of them is filled by script; the moment the number is
+   written the selector stops matching and the bar is gone, with no JavaScript aware that any
+   of this happened. Held as em dashes instead, four tiles read as four measurements that came
+   back empty, which is a worse lie than saying nothing. */
+.tile__value:empty {
+  /* The figure's own height, so nothing reflows when the number arrives. */
+  min-height: 34px;
+}
+
+.tile__value:empty::before {
+  content: '';
+  display: block;
+  width: 3.5ch;
+  height: 26px;
+  margin-top: var(--space-1);
+  background: var(--color-background);
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tile__value:empty::before {
+    animation: skeleton-pulse 1.6s ease-in-out infinite;
+  }
+}

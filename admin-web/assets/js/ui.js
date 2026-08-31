@@ -152,8 +152,14 @@ window.MaitAI = window.MaitAI || {};
      *
      * An empty tbody reads as a portal that failed to load rather than a filter that matched
      * nothing, and the two need very different reactions from the operator.
+     *
+     * Clears `aria-busy` on the way. Every table ships with skeleton rows in its markup so
+     * something is on screen at first paint (portal.css, `--- skeleton ---`); those rows are
+     * `aria-hidden` and the body is marked busy, and this is the one place that knows the
+     * wait is over — whether it ended in rows or in nothing.
      */
     rows: function ($tbody, items, rowFn, emptyMessage, columns) {
+      $tbody.removeAttr('aria-busy');
       if (!items || !items.length) {
         $tbody.html(
           '<tr><td class="table__empty" colspan="' +

@@ -319,7 +319,7 @@
     }).length;
 
     $('#payments-panel').prop('hidden', false);
-    $('#payment-rows').html(payments.map(paymentRow).join(''));
+    $('#payment-rows').removeAttr('aria-busy').html(payments.map(paymentRow).join(''));
     $('#payments-count').text(payments.length + (online ? ' · ' + online + ' paid online' : ''));
   }
 

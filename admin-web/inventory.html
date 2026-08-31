@@ -41,7 +41,7 @@
               ></span>
               Straws with Maits
             </p>
-            <p class="tile__value" id="total">—</p>
+            <p class="tile__value" id="total"></p>
             <p class="tile__foot">Held in the field right now</p>
           </article>
           <article class="tile tile--warn">
@@ -59,7 +59,7 @@
               ></span>
               Running low
             </p>
-            <p class="tile__value tile__value--warn" id="low">—</p>
+            <p class="tile__value tile__value--warn" id="low"></p>
             <p class="tile__foot" id="low-foot">Need an indent soon</p>
           </article>
           <article class="tile tile--bad">
@@ -77,7 +77,7 @@
               ></span>
               At zero
             </p>
-            <p class="tile__value tile__value--bad" id="zero">—</p>
+            <p class="tile__value tile__value--bad" id="zero"></p>
             <!-- Not a warning. A Mait at zero records nothing at all. -->
             <p class="tile__foot tile__foot--bad">Cannot record any event</p>
           </article>
@@ -96,7 +96,7 @@
               ></span>
               Breeds held
             </p>
-            <p class="tile__value" id="breeds">—</p>
+            <p class="tile__value" id="breeds"></p>
             <p class="tile__foot">Across the whole field</p>
           </article>
         </section>
@@ -166,9 +166,36 @@
                   <th scope="col">Status</th>
                 </tr>
               </thead>
-              <tbody id="rows">
-                <tr>
-                  <td class="table__empty" colspan="4">Loading…</td>
+              <tbody id="rows" aria-busy="true">
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td></td>
                 </tr>
               </tbody>
             </table>

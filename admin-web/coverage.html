@@ -74,7 +74,7 @@
               </span>
               Members served
             </p>
-            <p class="tile__value" id="served">—</p>
+            <p class="tile__value" id="served"></p>
             <p class="tile__foot" id="served-foot"></p>
           </article>
           <article class="tile tile--good">
@@ -93,7 +93,7 @@
               </span>
               Coverage
             </p>
-            <p class="tile__value" id="coverage">—</p>
+            <p class="tile__value" id="coverage"></p>
             <p class="tile__foot">Across every active MPP</p>
           </article>
           <article class="tile tile--good">
@@ -112,7 +112,7 @@
               </span>
               MPPs above 40%
             </p>
-            <p class="tile__value" id="above">—</p>
+            <p class="tile__value" id="above"></p>
             <p class="tile__foot" id="above-foot"></p>
           </article>
           <article class="tile tile--bad">
@@ -131,7 +131,7 @@
               </span>
               MPPs at zero
             </p>
-            <p class="tile__value tile__value--bad" id="zero">—</p>
+            <p class="tile__value tile__value--bad" id="zero"></p>
             <p class="tile__foot tile__foot--bad">No Mait, no login, or no visit</p>
           </article>
         </section>
@@ -152,9 +152,41 @@
                   <th scope="col">Coverage</th>
                 </tr>
               </thead>
-              <tbody id="rows">
-                <tr>
-                  <td class="table__empty" colspan="5">Loading…</td>
+              <tbody id="rows" aria-busy="true">
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
                 </tr>
               </tbody>
             </table>

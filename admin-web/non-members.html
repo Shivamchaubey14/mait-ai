@@ -78,7 +78,7 @@
               </span>
               Registered
             </p>
-            <p class="tile__value" id="total-value">—</p>
+            <p class="tile__value" id="total-value"></p>
             <p class="tile__foot">Across every MPP</p>
           </article>
 
@@ -98,7 +98,7 @@
               </span>
               Card missing
             </p>
-            <p class="tile__value" id="no-card-value">—</p>
+            <p class="tile__value" id="no-card-value"></p>
             <p class="tile__foot tile__foot--bad" id="no-card-foot">Nothing to check against</p>
           </article>
 
@@ -118,7 +118,7 @@
               </span>
               No consent on record
             </p>
-            <p class="tile__value" id="no-consent-value">—</p>
+            <p class="tile__value" id="no-consent-value"></p>
             <p class="tile__foot">Registered before it was captured</p>
           </article>
 
@@ -138,7 +138,7 @@
               </span>
               Inseminations
             </p>
-            <p class="tile__value" id="events-value">—</p>
+            <p class="tile__value" id="events-value"></p>
             <p class="tile__foot">Served on this page</p>
           </article>
         </section>
@@ -180,9 +180,66 @@
                   <th scope="col">Registered</th>
                 </tr>
               </thead>
-              <tbody id="rows">
-                <tr>
-                  <td class="table__empty" colspan="10">Loading…</td>
+              <tbody id="rows" aria-busy="true">
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
                 </tr>
               </tbody>
             </table>

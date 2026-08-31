@@ -82,7 +82,7 @@
               ></span>
               Conception rate
             </p>
-            <p class="tile__value" id="rate">—</p>
+            <p class="tile__value" id="rate"></p>
             <p class="tile__foot" id="rate-foot">Of inseminations with an answer</p>
           </article>
           <article class="tile tile--warn">
@@ -100,7 +100,7 @@
               ></span>
               Overdue
             </p>
-            <p class="tile__value tile__value--warn" id="overdue">—</p>
+            <p class="tile__value tile__value--warn" id="overdue"></p>
             <!-- Yellow, not red. A check nobody walked is waiting work, not blocked work —
                  the same rule the Exceptions screen states out loud. -->
             <p class="tile__foot" id="overdue-foot">Nobody has walked these</p>
@@ -120,7 +120,7 @@
               ></span>
               Due this week
             </p>
-            <p class="tile__value" id="due">—</p>
+            <p class="tile__value" id="due"></p>
             <!-- Says so out loud, because the app's own list means the same thing by the
                  phrase and two surfaces using one word for two populations is how a Mait and
                  an admin end up arguing about which number is wrong. -->
@@ -141,7 +141,7 @@
               ></span>
               Recorded
             </p>
-            <p class="tile__value" id="recorded">—</p>
+            <p class="tile__value" id="recorded"></p>
             <p class="tile__foot" id="recorded-foot">Visits on the record</p>
           </article>
         </section>
@@ -240,9 +240,51 @@
                   <th class="col-round" scope="col">Round</th>
                 </tr>
               </thead>
-              <tbody id="rows">
-                <tr>
-                  <td class="table__empty" colspan="7">Loading…</td>
+              <tbody id="rows" aria-busy="true">
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
                 </tr>
               </tbody>
             </table>
