@@ -42,6 +42,16 @@ class Command(BaseCommand):
             default="",
             help="Comma-separated product codes. Defaults to the whole catalogue.",
         )
+        parser.add_argument(
+            "--qty",
+            type=int,
+            default=None,
+            help=(
+                "Override the per-product default, for consumables only. Equipment is "
+                "always issued at its catalogue quantity — a Mait carries one AI gun, and "
+                "a hundred of them is not a bigger test, it is a wrong one."
+            ),
+        )
 
     def handle(self, *args, **options):
         code = options["mait"]
@@ -58,8 +68,13 @@ class Command(BaseCommand):
         if not products.exists():
             raise CommandError("No matching products. Has the catalogue migration run?")
 
+        override = options["qty"]
         for product in products:
             qty = DEFAULT_QUANTITIES.get(product.code, 1)
+            # Equipment keeps its catalogue quantity whatever was asked for: these are the
+            # things a Mait owns one of, and the stock screen reads a pile of them as a bug.
+            if override is not None and product.category == Consumable.Category.CONSUMABLE:
+                qty = override
             credit_stock(
                 mait=mait,
                 product_type=ProductType.CONSUMABLE,
