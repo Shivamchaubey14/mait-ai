@@ -22,9 +22,21 @@ import i18n from '@/i18n';
 import { formatRange, isoDate } from '@/components/dateRange';
 import { jsonResponse, renderWithStore } from '@/test-utils';
 
+/**
+ * The clock these tests run against.
+ *
+ * Pinned, because every date here is picked relative to "today" and the calendar only draws
+ * the current month. Left on the real clock the suite passed for twenty-odd days a month and
+ * then failed on the first few, when `daysBack(6)` lands in a month the grid is not showing —
+ * which is exactly how it broke, on the 1st, with nothing having changed.
+ *
+ * Mid-month so that a week either side of it stays inside the same grid.
+ */
+const TODAY = new Date('2026-08-14T09:00:00.000Z');
+
 /** A day the calendar will actually offer — the grid refuses anything after today. */
 function daysBack(days: number): Date {
-  const d = new Date();
+  const d = new Date(TODAY);
   d.setDate(d.getDate() - days);
   return d;
 }
@@ -50,7 +62,7 @@ const BREEDS = [
 ];
 
 function at(hour: number, daysAgo = 0): string {
-  const d = new Date();
+  const d = new Date(TODAY);
   d.setDate(d.getDate() - daysAgo);
   d.setHours(hour, 42, 0, 0);
   return d.toISOString();
@@ -111,11 +123,18 @@ describe('AiEventsScreen', () => {
   const onOpen = jest.fn();
 
   beforeEach(async () => {
+    // The screen reads the clock to build the calendar and to label "today", so it has to see
+    // the same date the fixtures were built from.
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+    jest.setSystemTime(TODAY);
     global.fetch = jest.fn() as jest.Mock;
     await clearQueue();
   });
 
-  afterEach(() => jest.resetAllMocks());
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.resetAllMocks();
+  });
 
   it('names what is missing on a capture the server has and that stopped short', async () => {
     mockApi([
