@@ -107,6 +107,43 @@ python manage.py seed_supplies --mait 5500000054
 Both go through `credit_stock`, so the ledger stays summable to the balance —
 `/api/v1/mait/inventory/check/` should always answer `consistent: true`.
 
+### Handing a build to a room of testers
+
+`DEV_FIXED_OTP_NUMBERS` carries a `*` in development, so **every** number gets `123456`, not
+only the demo one. That is what makes it possible to put a build on somebody's own handset
+without wiring up an SMS gateway.
+
+A field login normally has to trace back to a real Sahayak — `MaitActivationSerializer`
+refuses a number with no vendor code behind it, which is what stops an account existing for
+somebody the dairy has no record of. Testers are not in any SAP export, so `seed_test_maits`
+breaks that rule in one marked place:
+
+```powershell
+python manage.py seed_test_maits --numbers 9454143347:Radha,7310673523 --mpps 3
+python manage.py seed_test_maits --file testers.txt          # 9876543210:Name, one per line
+```
+
+It mints vendor codes with the **`559000` prefix**, outside every range the real roster uses,
+so the Maits screen says at a glance which rows were invented — and a real Mait-master upload
+will not recognise them. It refuses to run at all unless the fixed OTP is configured, which
+production refuses to boot with. MPPs come only from the unassigned pool, so seeding a tester
+never takes a collection point off a Mait who is already covering it.
+
+Then stock them. Spread the straws across breeds, or every tester whose farmer brings out a
+cow hits a refusal at step 4 that looks like a bug in the breed picker:
+
+```powershell
+python manage.py seed_straws   --mait 5590000001 --count 100 --breeds MURRAH,JAFRABADI,HF,JERSEY,GIR
+python manage.py seed_supplies --mait 5590000001 --qty 100
+```
+
+`--qty` applies to consumables only. Equipment stays at its catalogue quantity, because a Mait
+carries one AI gun and a hundred of them on the stock screen reads as a bug rather than as a
+bigger test.
+
+Clearing them out afterwards means deleting the `Mait` rows with that prefix, their `User`
+rows, and setting `mait_id` back to null on the MPPs they held.
+
 The OTP throttle is 5 sends/hour in `base.py` and loosened to 100/hour in `dev.py` only.
 Hitting the production limit while testing surfaces as a generic error, which cost an hour
 once.
