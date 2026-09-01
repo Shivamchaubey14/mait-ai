@@ -272,7 +272,7 @@ def _rows(response):
     body = b"".join(response.streaming_content).decode()
     lines = [line for line in body.splitlines() if line]
     header = lines[0].split(",")
-    return header, [dict(zip(header, line.split(","))) for line in lines[1:]]
+    return header, [dict(zip(header, line.split(","), strict=False)) for line in lines[1:]]
 
 
 def test_the_report_says_who_agreed_and_who_refused(admin_client, insemination):

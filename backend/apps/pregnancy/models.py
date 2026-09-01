@@ -129,7 +129,10 @@ class PregnancyRate(TimeStampedModel):
         db_table = "pregnancy_rate"
 
     def __str__(self) -> str:
-        return f"{self.get_service_display()}: member {self.member_rate}, other {self.non_member_rate}"
+        return (
+            f"{self.get_service_display()}: "
+            f"member {self.member_rate}, other {self.non_member_rate}"
+        )
 
     def for_owner(self, owner_type: str):
         """The rate this owner pays, or `None` where nobody has set one."""
