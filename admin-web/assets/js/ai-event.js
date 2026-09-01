@@ -284,28 +284,17 @@
    * ear tag at preview size is not something anybody should be asked to identify. So the card
    * opens.
    *
+   * The viewer itself is `assets/js/lightbox.js`, shared with the non-member record. This
+   * screen used to carry its own copy of the dialog, its markup and the backdrop hit-testing,
+   * which is a lot of fiddly behaviour to keep identical in two places by hand — and the
+   * moment a second screen wanted it, they had already started to differ.
+   *
    * Delegated from the frame rather than bound to the image, because the image is replaced
    * whenever the event reloads and a handler bound to the old element would go with it.
    */
   function bindLightbox(src, alt, caption) {
-    const dialog = document.getElementById('lightbox');
-    if (!dialog) {
-      return;
-    }
-
-    // Built here rather than sitting in the markup: an `<img>` with no `src` is invalid, and
-    // one with a placeholder is a request for a file that does not exist on every page load.
-    $('#lightbox-figure')
-      .empty()
-      .append($('<img>').addClass('lightbox__image').attr({ src: src, alt: alt }));
-    $('#lightbox-caption').text(caption);
-
     const open = function () {
-      // `showModal`, not `show`: it is what puts the page behind it inert and gives Escape
-      // its meaning. Guarded because a dialog already open throws on a second call.
-      if (!dialog.open) {
-        dialog.showModal();
-      }
+      MaitAI.lightbox.open([{ src: src, alt: alt, caption: caption }], 0);
     };
 
     $('#proof-frame')
@@ -316,31 +305,6 @@
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           open();
-        }
-      });
-
-    $('#lightbox-close')
-      .off('click.lightbox')
-      .on('click.lightbox', function () {
-        dialog.close();
-      });
-
-    /**
-     * Clicking the dark area closes it.
-     *
-     * A click on a dialog's backdrop is dispatched to the dialog element itself — there is no
-     * node to bind to — so this asks where the click landed rather than what it hit. Testing
-     * `e.target === dialog` would work for the backdrop but would also fire on the dialog's
-     * own padding, and it cannot tell the two apart; the pointer's position can.
-     */
-    $(dialog)
-      .off('click.lightbox')
-      .on('click.lightbox', function (e) {
-        const r = dialog.getBoundingClientRect();
-        const outside =
-          e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
-        if (outside) {
-          dialog.close();
         }
       });
   }
