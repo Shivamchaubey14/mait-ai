@@ -1,8 +1,8 @@
 ﻿/**
- * Step 1 of the AI capture flow â€” choose the MPP (SRS Â§6.3 step 1, M4).
+ * Step 1 of the AI capture flow — choose the MPP (SRS §6.3 step 1, M4).
  *
  * The list is whatever the server returns, which is already restricted to this Mait's
- * assigned MPPs (SRS Â§6.2.3). The app sends no "which Mait am I" filter, because a filter
+ * assigned MPPs (SRS §6.2.3). The app sends no "which Mait am I" filter, because a filter
  * the client supplies is a filter the client can omit.
  *
  * A Mait covering a single MPP is the common case, so that one is selected outright rather

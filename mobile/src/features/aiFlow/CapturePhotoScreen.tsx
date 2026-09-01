@@ -1,5 +1,5 @@
 ﻿/**
- * Step 5 of the AI capture flow â€” the proof photo (SRS §6.3 step 5, M9).
+ * Step 5 of the AI capture flow — the proof photo (SRS §6.3 step 5, M9).
  *
  * The camera is the way this step is meant to be answered, and it is what the screen opens
  * on: a photo taken here, now, with the pin and the clock attached, is the only kind that

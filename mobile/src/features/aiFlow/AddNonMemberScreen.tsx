@@ -1,8 +1,8 @@
 ﻿/**
- * Step 2b â€” register a Non-Member in the field (SRS §6.3 step 2, §7 Compliance, M6).
+ * Step 2b — register a Non-Member in the field (SRS §6.3 step 2, §7 Compliance, M6).
  *
  * The mobile number is mandatory and validated here as well as server-side. Unlike members,
- * whose numbers come from SAP, this one is being typed by the Mait â€” and it is the only
+ * whose numbers come from SAP, this one is being typed by the Mait — and it is the only
  * channel for the payment authorisation OTP, so a wrong digit means the code goes to a
  * stranger and the event can never be completed.
  *
