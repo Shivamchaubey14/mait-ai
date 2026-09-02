@@ -567,6 +567,28 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
+     * A month's Mait payout, as the screen previews it.
+     *
+     * `month` is `YYYY-MM` and may be omitted, which answers for the month just gone — this
+     * report is run to pay people for a month that has finished.
+     *
+     * Account numbers and PANs come back masked. The workbook behind `Download` carries them
+     * whole, because it is a payment instruction and a masked account cannot be paid into.
+     */
+    maitPayment: function (query) {
+      return request({ path: '/reports/mait-payment/', query: query });
+    },
+
+    /** The commission, retainer and straw rate the payout is computed from. */
+    payoutScheme: function () {
+      return request({ path: '/reports/mait-payment/scheme/' });
+    },
+
+    savePayoutScheme: function (body) {
+      return request({ path: '/reports/mait-payment/scheme/', method: 'PATCH', body: body });
+    },
+
+    /**
      * The catalogue a Mait can ask for, straws aside.
      *
      * It is what names an indent: a request raised against a product that is not here reads

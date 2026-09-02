@@ -48,6 +48,10 @@ window.MaitAI = window.MaitAI || {};
     pregnancy: 'M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M9.5 14.5l2 2 3.5-4',
     exceptions: 'M12 3 2 20h20zM12 9v5M12 17.5v.5',
     reports: 'M6 3h9l5 5v13H6zM14 3v6h6M9 14h7M9 18h7',
+    /* A banknote with a rupee on it. Reports is a document glyph and this is not another
+       document: it is the one screen in the portal where the output is money leaving the
+       dairy, and it has to be impossible to confuse with the export beside it. */
+    'mait-payment': 'M2 6h20v12H2zM6.5 9.5h5.5M6.5 12h5.5M11 9.5c0 2.2-1.5 2.5-4.5 2.5l4.5 3.5',
     users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M2 20a7 7 0 0 1 14 0M18 8v6M15 11h6',
 
     /* Not sidebar sections: the filter bar's magnifier and the four notice tones. */
@@ -89,6 +93,12 @@ window.MaitAI = window.MaitAI || {};
     { key: 'pregnancy', label: 'Pregnancy', href: 'pregnancy.html' },
     { key: 'exceptions', label: 'Exceptions', href: 'exceptions.html', badge: true },
     { key: 'reports', label: 'Reports', href: 'reports.html' },
+    // Directly under Reports, because it is one: the month's payout, previewed and taken
+    // away as the workbook the office already reads. Its own section rather than a corner
+    // of that one, because the file leaves the building with bank account numbers on it
+    // and the account allowed to produce it is not automatically the account allowed to
+    // pull an AI-event export.
+    { key: 'mait-payment', label: 'Mait payment', href: 'mait-payment.html' },
     { key: 'users', label: 'Users & roles', href: 'users.html' },
   ];
 
