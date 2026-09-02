@@ -11,12 +11,26 @@ So the codes are **minted, and marked**. Everything created here carries the `55
 which is outside every range the real roster uses, so a glance at the Maits screen says which
 rows were made up. A real Mait-master upload will not recognise them.
 
+**Their bank details are minted too, and marked the same way.** A tester's inseminations are
+real — they are performed on a handset against real straws — so they reach the Mait payment
+report as real rows, and a row with no account number is one the report cannot finish: it
+reads as a Mait the dairy is unable to pay rather than as a test account. So each gets a
+PAN, an account number and an IFSC that are correctly *shaped* and unmistakably invented, all
+three built from the vendor code and all three carrying `TEST`. Nothing here is a real
+person's banking detail, and no bank would accept any of it.
+
 Development only, and it says so twice: the command refuses to run unless the fixed-OTP
 setting is on, and `config/settings/production.py` refuses to boot at all if that setting is
 set. There is no arrangement in which this runs against production data.
 
     python manage.py seed_test_maits --numbers 9454143347,7310673523
     python manage.py seed_test_maits --file numbers.txt --mpps 3
+
+`--backfill-bank` fills in the minted bank details of any test account still missing them and
+creates nothing, which is how testers handed a build before this existed become payable rows on
+the report. An ordinary seeding run does it too:
+
+    python manage.py seed_test_maits --backfill-bank
 """
 
 from __future__ import annotations
@@ -32,6 +46,33 @@ from apps.masterdata.models import MPP, Mait
 
 CODE_PREFIX = "559000"
 
+#: The bank of nowhere. A real IFSC is four letters, a zero, then six characters identifying a
+#: branch; this is the right shape and no such bank exists, so a payment file built from these
+#: rows fails at the bank rather than reaching somebody's account by accident.
+TEST_IFSC = "TEST0000001"
+
+
+def minted_bank_details(vendor_code: str) -> dict:
+    """
+    Minted account, IFSC and PAN for one test account, derived from its vendor code.
+
+    Not named `test_...`, deliberately: pytest collects anything by that name out of any
+    module it imports, and this would have been run as a test with `vendor_code` treated as a
+    fixture it could not find.
+
+    Derived rather than random so the same tester gets the same details every run — a report
+    downloaded twice a week apart should not appear to have changed somebody's bank account.
+    All three carry `TEST` and the shapes are real: a PAN is five letters, four digits and a
+    letter, and the report writes every one of these cells as text, so a leading zero or a
+    long account number has to survive the round trip the same way a real one would.
+    """
+    tail = vendor_code[-4:].rjust(4, "0")
+    return {
+        "bank_account_no": f"TEST{vendor_code}",
+        "ifsc_code": TEST_IFSC,
+        "pan_no": f"TESTM{tail}T",
+    }
+
 
 class Command(BaseCommand):
     help = "Create Mait logins for a list of mobile numbers (development data only)."
@@ -46,6 +87,15 @@ class Command(BaseCommand):
             "--file",
             default="",
             help="A file of the same, one per line. Combined with --numbers if both are given.",
+        )
+        parser.add_argument(
+            "--backfill-bank",
+            action="store_true",
+            help=(
+                "Fill in minted bank details for test accounts that predate them, and nothing "
+                "else. The one way to run this command without numbers — it is how testers "
+                "already carrying a build become payable rows on the Mait payment report."
+            ),
         )
         parser.add_argument(
             "--mpps",
@@ -73,7 +123,10 @@ class Command(BaseCommand):
                 continue
             mobile, _, name = line.partition(":")
             out.append((mobile.strip(), name.strip()))
-        if not out:
+        # Still an error rather than a silent no-op — a command that quietly does nothing is
+        # how somebody concludes the testers were created when they were not. The one way to
+        # run without numbers is to ask for the backfill explicitly.
+        if not out and not options["backfill_bank"]:
             raise CommandError("Give me some numbers — use --numbers or --file.")
         return out
 
@@ -112,6 +165,7 @@ class Command(BaseCommand):
                     # already in use by another Mait.
                     mobile_no="",
                     is_active=True,
+                    **minted_bank_details(code),
                 )
                 serializer = MaitActivationSerializer(
                     data={"sahayak_vendor_code": code, "mobile_no": mobile}
@@ -132,7 +186,31 @@ class Command(BaseCommand):
 
             made.append((mait.name, mobile, code, user.username, codes))
 
-        self.report(made, skipped)
+        # Run on an ordinary seeding pass too, not only when asked for: the accounts that need
+        # it are the ones already handed out, and somebody adding a fifteenth tester should not
+        # have to know there is a second command to run for the other fourteen.
+        self.report(made, skipped, self.backfill_bank_details())
+
+    def backfill_bank_details(self) -> list[str]:
+        """
+        Give minted bank details to any test account that predates them.
+
+        Only ever touches the `559000` range and only ever fills a blank: an account that
+        already has details, real or minted, is left exactly as it is. That second rule is
+        what makes it safe to run on every pass — inventing banking details for a Mait the
+        dairy has a real record of is the one thing this must never do.
+        """
+        filled = []
+        for mait in Mait.objects.filter(sahayak_vendor_code__startswith=CODE_PREFIX):
+            if mait.bank_account_no and mait.ifsc_code and mait.pan_no:
+                continue
+            details = minted_bank_details(mait.sahayak_vendor_code)
+            for field, value in details.items():
+                if not getattr(mait, field):
+                    setattr(mait, field, value)
+            mait.save(update_fields=list(details))
+            filled.append(f"{mait.name} [{mait.sahayak_vendor_code}]")
+        return filled
 
     def next_code(self, taken: set[str]) -> str:
         n = 1
@@ -143,7 +221,7 @@ class Command(BaseCommand):
                 return code
             n += 1
 
-    def report(self, made, skipped) -> None:
+    def report(self, made, skipped, filled) -> None:
         if made:
             self.stdout.write("")
             self.stdout.write(
@@ -156,9 +234,12 @@ class Command(BaseCommand):
             )
         for mobile, code in skipped:
             self.stdout.write(self.style.WARNING(f"skipped {mobile} — already on {code}"))
+        for who in filled:
+            self.stdout.write(f"filled in test bank details for {who}")
         self.stdout.write(
             self.style.SUCCESS(
-                f"\n{len(made)} login(s) created, {len(skipped)} skipped. "
+                f"\n{len(made)} login(s) created, {len(skipped)} skipped, "
+                f"{len(filled)} given test bank details. "
                 f"They sign in with the fixed OTP {settings.DEV_FIXED_OTP_CODE}."
             )
         )

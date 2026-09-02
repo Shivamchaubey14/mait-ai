@@ -8,7 +8,10 @@ guard that stops it running anywhere OTP is real, the prefix that marks what it 
 fact that it goes through the real activation rather than writing a User row itself.
 
 The MPP case is the one with teeth. A seeder that grabbed any collection point would quietly
-take one — and every member at it — off a Mait who was already covering it.
+take one — and every member at it — off a Mait who was already covering it. The bank details
+are the second: a tester's inseminations are real and reach the Mait payment report as real
+rows, so the accounts need details to be payable — and inventing them for a Mait the dairy has
+an actual record of is the one thing that must never happen.
 """
 
 from __future__ import annotations
@@ -18,6 +21,10 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 
 from apps.accounts.models import Role, User
+from apps.masterdata.management.commands.seed_test_maits import (
+    TEST_IFSC,
+    minted_bank_details,
+)
 from apps.masterdata.models import Mait
 from conftest import MPPFactory
 
@@ -145,3 +152,85 @@ def test_numbers_can_come_from_a_file(db, tmp_path):
     assert Mait.objects.get(mobile_no="9000000001").name == "Radha"
     assert Mait.objects.filter(mobile_no="9000000002").exists()
     assert User.objects.filter(mobile_no="9000000002").exists()
+
+
+# --------------------------------------------------------------------------------------
+# The minted bank details
+# --------------------------------------------------------------------------------------
+class TestTheBankDetailsItMints:
+    """
+    Shaped like the real thing, and unmistakably not it.
+
+    The payment report writes these into a workbook somebody may hand to a bank, so the shape
+    has to be right — a malformed PAN would be caught by whatever reads the file rather than
+    by anybody here — and every one of them says TEST so no row can be taken for a real payee.
+    """
+
+    def test_details_are_the_right_shape_and_obviously_invented(self):
+        details = minted_bank_details("5590000007")
+
+        # Five letters, four digits, a letter.
+        assert details["pan_no"] == "TESTM0007T"
+        assert len(details["pan_no"]) == 10
+        # Four letters, a zero, six more — the shape a bank parses, naming a bank that is not
+        # one, so a payment built from these fails at the bank rather than reaching an account.
+        assert details["ifsc_code"] == TEST_IFSC
+        assert len(TEST_IFSC) == 11 and TEST_IFSC[4] == "0"
+        assert all("TEST" in value for value in details.values())
+
+    def test_the_same_tester_gets_the_same_details_every_run(self):
+        """A report downloaded twice must not appear to have changed somebody's account."""
+        assert minted_bank_details("5590000003") == minted_bank_details("5590000003")
+        assert minted_bank_details("5590000003") != minted_bank_details("5590000004")
+
+    def test_a_new_account_arrives_with_them(self):
+        call_command("seed_test_maits", numbers="9000000055", mpps=0, verbosity=0)
+
+        mait = Mait.objects.get(mobile_no="9000000055")
+        assert mait.bank_account_no == f"TEST{mait.sahayak_vendor_code}"
+        assert mait.ifsc_code == TEST_IFSC
+
+    def test_backfill_reaches_testers_that_predate_them(self):
+        tester = Mait.objects.create(
+            sahayak_vendor_code="5590000042", name="Tester", mobile_no="9000000042"
+        )
+
+        call_command("seed_test_maits", backfill_bank=True, verbosity=0)
+
+        tester.refresh_from_db()
+        assert tester.bank_account_no == "TEST5590000042"
+        assert tester.pan_no == "TESTM0042T"
+
+    def test_it_never_touches_a_mait_the_dairy_has_a_record_of(self):
+        """
+        The `559000` range only.
+
+        A real Sahayak with no bank details on file is a gap for the back office to fill from
+        the SAP master. Filling it with something invented would put a fabricated account
+        number into a payment file and give nobody any reason to doubt it.
+        """
+        real = Mait.objects.create(
+            sahayak_vendor_code="9900000042", name="Real Mait", mobile_no="9000000043"
+        )
+
+        call_command("seed_test_maits", backfill_bank=True, verbosity=0)
+
+        real.refresh_from_db()
+        assert real.bank_account_no == ""
+        assert real.pan_no == ""
+
+    def test_it_never_overwrites_details_already_on_file(self):
+        mait = Mait.objects.create(
+            sahayak_vendor_code="5590000043",
+            name="Already banked",
+            mobile_no="9000000044",
+            bank_account_no="12345678901",
+            ifsc_code="SBIN0012497",
+            pan_no="FNFPS6713H",
+        )
+
+        call_command("seed_test_maits", backfill_bank=True, verbosity=0)
+
+        mait.refresh_from_db()
+        assert mait.bank_account_no == "12345678901"
+        assert mait.ifsc_code == "SBIN0012497"
