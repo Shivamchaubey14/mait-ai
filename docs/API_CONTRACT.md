@@ -385,6 +385,9 @@ say which bundle it came out of. Validate then answers `reason: "breed_required"
 | GET | `/dashboard/mpp-coverage/` | Members served vs. total per MPP for a window (`?days=`, default 30, max 365) | Admin |
 | GET | `/reports/export/` | CSV/Excel export of AI events / payments (query-filtered) | Admin |
 | GET | `/reports/pregnancy/` | CSV of every pregnancy check: who agreed, who refused, who has not been visited (§9.11) | Admin |
+| GET | `/reports/mait-payment/` | A month's Mait payout, one row per Mait, for the preview on W18 (`?month=YYYY-MM`, default this month) | Admin |
+| GET | `/reports/mait-payment/export/` | The same month as the two-tab workbook the office reads | Admin |
+| GET / PATCH | `/reports/mait-payment/scheme/` | The commission, retainer and straw rate the payout is computed from | Admin |
 
 `/dashboard/summary/` and `/dashboard/trends/` answer for the same days, and are counted so
 that they cannot disagree. The aggregate tables these screens exist for are rewritten by an
@@ -470,6 +473,60 @@ which is the only honest measure of that phase.
 the no-Docker development path the portal is on :8080 and the API on :8000, and without that
 the browser hides the length: the file still downloads and the percentage just never appears,
 with nothing saying why.
+
+### The Mait payment report
+
+Not the same direction of money as the rest of this contract. Everywhere else a *farmer* pays
+for a service; this is the dairy settling with the *technician* who performed them — a
+commission on each insemination, a monthly retainer once the round is big enough to be somebody's
+job, less the cost of the straws and consumables issued over the month, paid into a bank account.
+
+**Three figures, counted three different ways, deliberately not reconciled.**
+
+| Figure | Counted from | Why not the others |
+| --- | --- | --- |
+| `ai_performed` | Completed AI events, by `completed_at` | An unfinished capture has no verified payment behind it and can still be cancelled. Paying on it pays for work that gets undone. |
+| `quantities` | Inventory ledger **issues** in the month, net of returns | Issued, not consumed: the dairy recovers the cost of a flask when it hands it over. A Mait issued 71 straws who performed 67 inseminations is carrying four into next month, not missing four. |
+| `deductions` (workbook tab 2; not shown on W18) | Completed events whose payment mode is `DEDUCT`, grouped by the plant of the **MPP where the work happened** | Finance settles milk payments by collection point, so a Mait posted at one centre who works an MPP under the next one puts the deduction on the neighbour's page. Cash and online payments are already settled and including them would ask finance to recover the same money twice. |
+
+Reading the first two as though they should agree is the mistake this report invites, which is
+why they are named apart rather than summed into one "materials" figure.
+
+**Nothing is stored.** A month keeps moving after it ends — a capture arrives late, an event is
+cancelled, a straw issue is corrected — so the report is recomputed on every read and the month
+it names is the only state. A month already paid is settled by the workbook that was downloaded
+and audit-logged at the time, not by a frozen row.
+
+`?month=YYYY-MM`, **defaulting to the current month**. A payment *run* is for a month that has
+finished, but the screen is opened far more often to watch a month accumulate — whether today's
+captures landed, whether a tester's account is producing rows at all — so it opens on the month
+in progress and says so. `in_progress` on the response is what keeps that honest: a running
+total is never presented in the same voice as a settled one.
+
+**The workbook carries full bank account numbers, IFSC codes and PANs.** It is the second place
+in the platform that carries unmasked personal data, after the non-member roster (§ above), and
+for the same shape of reason: this file *is* the payment instruction and a masked account cannot
+be paid into. The preview masks the account and the PAN, because a screen is read over a
+shoulder and a file is not. Held in place by the same three things: Admin only and behind the
+**Mait payment** section — its own section rather than a corner of Reports, since the account
+allowed to move money is not automatically the account allowed to pull an AI-event export —
+and every download audit-logged as `pii_access` with the month it covered. The disclosure sits
+in the **workbook's document properties**, not in a banner row: the first thing anybody does
+with this file is sort or filter it, and a stray row above the headings makes Excel guess the
+wrong header row every time. Row 1 is the column names, as it is on the office's own sheet.
+
+An **.xlsx rather than a CSV**, for the reason the non-member export gives: a fifteen-digit
+account number arrives from a CSV as `7.52210E+14` and a vendor code loses its leading zeros.
+Every identifier cell is written as text. Two tabs, matching the sheet the office already reads
+— the payment sheet with its rate legend at the foot, and the per-MCC AI deduction tab.
+
+`/reports/mait-payment/scheme/` is the four figures the payout is computed from: commission per
+AI, the monthly fixed amount, the number of inseminations that earns it, and what a straw is
+recovered at. Editable from W18, because these are the terms of a field agent's engagement and
+change by negotiation rather than by deploy. **Consumable rates are not here** — they live on
+`Consumable.rate` and are maintained on Products, so a glove costs one thing across the whole
+platform. Changing a scheme figure changes every month the report is asked for, past ones
+included; that is deliberate, so a correction reaches the months it was wrong for.
 
 ## 9.10 Admin — users
 

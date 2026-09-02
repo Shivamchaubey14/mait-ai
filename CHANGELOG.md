@@ -9,6 +9,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Mait payment (W18)** — the month's payout for the field technicians, previewed in the portal
+  and downloaded as the two-tab workbook the office already keeps by hand. Commission per
+  insemination and a monthly retainer, less the straws and consumables issued off the inventory
+  ledger, with the per-MCC milk-payment deduction count on its own tab. Rates are editable from
+  the screen rather than fixed in the build. The one export in the platform besides the
+  non-member roster that carries unmasked bank details — it is a payment instruction — behind
+  its own portal section and audit-logged as `pii_access` with the month it covered.
 - Monorepo scaffold covering the three SRS workstreams: backend (Django 5 + DRF), mobile
   (React Native + TypeScript) and admin web (HTML/CSS/JS + jQuery).
 - Django project skeleton with per-environment settings, domain apps, and models for the full
