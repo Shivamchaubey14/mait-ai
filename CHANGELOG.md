@@ -9,6 +9,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The non-member export carries each farmer's **last known position** — latitude, longitude,
+  whether the fix came from the handset or from a chosen photograph's EXIF, and the day it was
+  taken. Taken from the GPS pin on her most recent insemination, because a non-member holds no
+  coordinates of her own and the MPP column cannot say which household. Blank where there is no
+  fix, never 0, 0.
 - **Mait payment (W18)** — the month's payout for the field technicians, previewed in the portal
   and downloaded as the two-tab workbook the office already keeps by hand. Commission per
   insemination and a monthly retainer, less the straws and consumables issued off the inventory

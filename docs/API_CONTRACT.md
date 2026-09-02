@@ -218,6 +218,20 @@ showing rather than two that drift. `limit` and `offset` are ignored: they are h
 pages, and honouring them would hand back the twenty-five rows that happened to be on screen —
 a file that looks complete and is not.
 
+**It carries her last known position.** `Latitude` / `Longitude`, with `Position from` and
+`Position taken` beside them. A non-member holds no coordinates of her own — she is a name, a
+number and a card, typed in a yard — so these come from the GPS pin on the most recent AI event
+captured at her animal, annotated by `with_last_known_position`. Worth exporting because the MPP
+column cannot answer the question it gets asked: an MPP is a village-level pool covering a
+scatter of households, and "which MPP" has never said where to drive.
+
+Three things keep the column honest. `Position from` distinguishes **Handset** — where the phone
+was standing — from **Photograph**, which is whatever EXIF a chosen image carried and can be
+another district or another year; the two are never collapsed. `Position taken` is the day, so a
+fix from four months ago is visibly one. And a farmer with no fix gets **blank cells, never
+zeros**: 0, 0 is a point in the Gulf of Guinea, and a column of them would put every unlocated
+farmer on the same island.
+
 An **.xlsx rather than the CSV the reports exports produce**, because these columns are full of
 things Excel eats on the way in from a CSV: a twelve-digit Aadhaar becomes `1.23457E+11`, a
 mobile becomes `9.19876E+11`, and an MPP code loses the leading zero off `001302`, naming a

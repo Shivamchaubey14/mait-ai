@@ -263,3 +263,141 @@ class TestExcelDoesNotEatIt:
 
         assert sheet.freeze_panes == "A3"
         assert sheet.auto_filter.ref is not None
+
+
+class TestWhereSheIs:
+    """
+    The position columns, and the three ways they can lie.
+
+    A `NonMember` holds no coordinates of her own — she is a name, a number and a card, typed
+    in a yard — so the only record of where she is, is the pin on an AI event captured at her
+    animal. That makes the column useful and also makes it something to be careful with: it
+    can be stale, it can come from a photograph taken anywhere, and it can be absent.
+    """
+
+    def a_fix(self, non_member, mait, mpp, lat, lng, *, when, source="device"):
+        """One completed insemination at her animal, with a GPS pin on it."""
+        import uuid
+
+        from apps.ai_events.models import AIEvent
+        from apps.animals.models import Animal, AnimalType
+        from apps.inventory.models import SemenBatch
+
+        animal = Animal.objects.create(
+            owner_type=Animal.OwnerType.NON_MEMBER,
+            non_member=non_member,
+            animal_type=AnimalType.COW,
+            breed="GIR",
+        )
+        straw = SemenBatch.objects.create(
+            unique_straw_no=uuid.uuid4().hex[:20], breed="GIR", is_consumed=True
+        )
+        return AIEvent.objects.create(
+            client_uuid=uuid.uuid4(),
+            mait=mait,
+            mpp=mpp,
+            owner_type=AIEvent.OwnerType.NON_MEMBER,
+            non_member=non_member,
+            animal=animal,
+            semen_batch=straw,
+            straw_unique_no=straw.unique_straw_no,
+            status=AIEvent.Status.COMPLETED,
+            gps_lat=lat,
+            gps_lng=lng,
+            gps_source=source,
+            performed_at=when,
+            completed_at=when,
+        )
+
+    def test_the_fix_from_her_own_insemination_reaches_the_file(
+        self, api_client, admin_user, registered, mait, mpp
+    ):
+        from django.utils import timezone
+
+        her = registered("Radha Singh", "9876543210", "111122223333")
+        self.a_fix(her, mait, mpp, "25.9113176", "82.4823914", when=timezone.now())
+
+        row = rows_of(sheet_of(auth(api_client, admin_user).get(EXPORT)))[0]
+
+        assert row["Latitude"] == pytest.approx(25.9113176)
+        assert row["Longitude"] == pytest.approx(82.4823914)
+        assert row["Position from"] == "Handset"
+
+    def test_the_newest_fix_wins(self, api_client, admin_user, registered, mait, mpp):
+        """
+        A farmer moves and her herd moves with her, so the latest visit is the one worth
+        driving to. Ordered by when the insemination happened rather than by row id — events
+        sync from handsets that were offline, so the last row written is not the last visit
+        made.
+        """
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        her = registered("Radha Singh", "9876543210", "111122223333")
+        now = timezone.now()
+        # Written second, performed first: the offline-sync case.
+        self.a_fix(her, mait, mpp, "26.1513092", "81.8189077", when=now)
+        self.a_fix(her, mait, mpp, "11.1111111", "72.2222222", when=now - timedelta(days=90))
+
+        row = rows_of(sheet_of(auth(api_client, admin_user).get(EXPORT)))[0]
+
+        assert row["Latitude"] == pytest.approx(26.1513092)
+
+    def test_a_pin_off_a_photograph_says_so(self, api_client, admin_user, registered, mait, mpp):
+        """
+        A device fix is where the handset was standing. A photograph's is whatever EXIF the
+        chosen image carried — possibly another district, possibly last year. Presenting the
+        second as the first is how a farmer gets mapped to a place nobody ever visited.
+        """
+        from django.utils import timezone
+
+        her = registered("Radha Singh", "9876543210", "111122223333")
+        self.a_fix(her, mait, mpp, "25.9", "82.4", when=timezone.now(), source="photo")
+
+        row = rows_of(sheet_of(auth(api_client, admin_user).get(EXPORT)))[0]
+
+        assert row["Position from"] == "Photograph"
+
+    def test_a_farmer_with_no_fix_is_blank_and_not_a_zero(self, api_client, admin_user, registered):
+        """
+        0, 0 is a point in the Gulf of Guinea. A column of them would put every unlocated
+        farmer on the same island, which is a plausible answer where an obviously missing one
+        was wanted.
+        """
+        registered("Radha Singh", "9876543210", "111122223333")
+
+        row = rows_of(sheet_of(auth(api_client, admin_user).get(EXPORT)))[0]
+
+        assert row["Latitude"] in (None, "")
+        assert row["Longitude"] in (None, "")
+        assert row["Position from"] in (None, "")
+        assert row["Position taken"] in (None, "")
+
+    def test_the_coordinate_keeps_its_precision(
+        self, api_client, admin_user, registered, mait, mpp
+    ):
+        """
+        Seven decimal places, the precision the column stores. Excel's general format rounds
+        to about five, which is a different place by a metre — no distance at all on a map, and
+        enough that a coordinate copied out and pasted back no longer matches its own record.
+        """
+        from django.utils import timezone
+
+        her = registered("Radha Singh", "9876543210", "111122223333")
+        self.a_fix(her, mait, mpp, "25.9113176", "82.4823914", when=timezone.now())
+
+        sheet = sheet_of(auth(api_client, admin_user).get(EXPORT))
+        column = headers(sheet).index("Latitude") + 1
+        assert sheet.cell(row=3, column=column).number_format == "0.0000000"
+
+    def test_the_card_tint_still_finds_the_right_columns(self, api_client, admin_user, registered):
+        """
+        The rows the file is opened to work through are tinted, and which cells decide that is
+        looked up by column name. Inserting the position columns in front of them used to move
+        the two this reads, silently tinting whichever rows happened to land there.
+        """
+        registered("No consent", "9876543212", "777788889999", consent=False)
+
+        sheet = sheet_of(auth(api_client, admin_user).get(EXPORT))
+        assert sheet.cell(row=3, column=1).fill.fgColor.rgb.endswith("FDECEC")

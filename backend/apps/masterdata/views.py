@@ -33,7 +33,7 @@ from apps.payments.services import issue_otp, verify_otp
 
 from . import columns as cols
 from .exports import COLUMNS as export_columns
-from .exports import non_member_workbook_response
+from .exports import non_member_workbook_response, with_last_known_position
 from .models import MPP, DataUploadLog, Member, NonMember
 from .serializers import (
     AdminNonMemberDetailSerializer,
@@ -812,7 +812,11 @@ class AdminNonMemberViewSet(
         # Through `filter_queryset`, not a fresh query, so there is exactly one definition of
         # what this screen is showing. An export that built its own filters is one that drifts
         # from the list the first time either side is touched.
-        queryset = self.filter_queryset(self.get_queryset())
+        #
+        # The position columns are annotated here rather than in `get_queryset`, because only
+        # the file has them: the list screen shows no coordinates, and four correlated
+        # subqueries on every page of fifty would be paid for nothing.
+        queryset = with_last_known_position(self.filter_queryset(self.get_queryset()))
 
         record_audit(
             action=AuditLog.Action.PII_ACCESS,
