@@ -1,0 +1,351 @@
+/**
+ * Mait payment (W18).
+ *
+ * A payout sheet is nineteen columns wide and there is no screen that fits it. Everything
+ * below is one decision followed through: **let it be wide, and make it readable while it
+ * is.** Shrinking the columns to fit produces a table nobody can check a bank transfer
+ * against, and dropping columns produces a preview that disagrees with the file it came from
+ * — which is the one thing a preview must never do.
+ *
+ * So the sheet scrolls sideways with the three identity columns pinned, the money is grouped
+ * by vertical rules rather than by a header row of nineteen equal words, and the two things
+ * that are read *about* the sheet — the rates it was built from and the deduction tab — sit
+ * beside it in an aside where they stay in view while it is scrolled.
+ */
+
+@import url('forms.css');
+
+/* --- layout ---------------------------------------------------------------------------
+   The sheet takes what it can get; the aside is a fixed reading column. `minmax(0, 1fr)` on
+   the main cell rather than `1fr`: a grid track sized by its content refuses to be narrower
+   than the widest thing in it, and a nineteen-column table inside a plain `1fr` pushes the
+   whole page sideways instead of scrolling inside its own box. */
+.payout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+@media (max-width: 1200px) {
+  .payout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.payout__main {
+  display: flex;
+  min-width: 0;
+}
+
+.payout__main > .panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+/* The two columns end level, and it is the **rate card** that decides where.
+
+   `height: 0` is the whole trick. An auto-sized grid row takes its height from the tallest
+   item in it, and the sheet is a hundred Maits tall — left to itself it would set the row and
+   leave the rate card floating at the top of a column of white. Contributing zero height takes
+   the sheet out of that calculation, so the row is the rate card's height; `min-height: 100%`
+   then fills it back in, and the table scrolls inside whatever that came to.
+
+   **Only where there are two columns.** Stacked, the row holds nothing but the sheet, so a
+   sheet contributing zero height gives a row of zero height and a `min-height: 100%` of
+   nothing — the panel collapsed to two pixels, which is what a browser check caught. Below
+   the breakpoint the sheet sizes itself again and `max-height` on the scroll box is what
+   keeps it reasonable. */
+@media (min-width: 1201px) {
+  .payout__main {
+    height: 0;
+    min-height: 100%;
+  }
+}
+
+/* One card in the aside now — the deduction tab moved into the workbook, where the desk that
+   settles milk payments actually reads it. */
+.card {
+  margin-bottom: 0;
+}
+
+/* --- the sheet ------------------------------------------------------------------------- */
+/* Banded like the table head below it, the same as the Reports preview — a white-on-white
+   panel head above a tinted table head reads as two different tables. */
+.payout__head {
+  padding: var(--space-4);
+  padding-bottom: var(--space-4);
+  background: var(--ink-50);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 0;
+}
+
+.payout__icon {
+  color: var(--color-primary-dark);
+  background: var(--color-surface);
+}
+
+/* The sideways scroll lives here rather than on the page. `.table-wrap` already sets
+   `overflow-x`; this is what stops the box growing to the table's width instead of scrolling
+   inside it.
+
+   `flex: 1` with `min-height: 0` is what makes it take the height the column was given rather
+   than the height its own rows want — without the `min-height`, a flex item refuses to shrink
+   below its content and the table pushes the panel open again.
+
+   The `max-height` is only reached where the two columns are stacked, below 1200px, and where
+   there is no aside to take a height from. */
+.payout__scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: 68vh;
+  overflow: auto;
+}
+
+@media (min-width: 1201px) {
+  .payout__scroll {
+    max-height: none;
+  }
+}
+
+.payout__table {
+  /* Columns sized to their content, not stretched to the panel. A nineteen-column table set
+     to `width: 100%` on a narrow viewport crushes every column to fit and then scrolls
+     nothing — the numbers wrap and the sheet becomes unreadable at exactly the moment the
+     scroll was supposed to save it. */
+  width: auto;
+  min-width: 100%;
+  font-variant-numeric: tabular-nums;
+
+  /* `separate`, overriding the portal's shared `collapse`. Not cosmetic: a browser will not
+     honour `position: sticky` on a table cell inside a collapsed table — the cell has no box
+     of its own to stick — so the frozen header and the pinned identity columns both silently
+     did nothing until this line existed. `border-spacing: 0` keeps the grid looking exactly
+     as it does on every other table in the portal; the cells' own bottom borders draw the
+     rules, as they already did. */
+  border-collapse: separate;
+  border-spacing: 0;
+
+  /* Where the pinned columns stop. Written by the script once the table has been laid out
+     and the two columns in front have real widths — see `pinColumns` in mait-payment.js.
+     Guessing them in the stylesheet puts the third column on top of the second at whatever
+     zoom or font-size the numbers happen not to have been measured at. */
+  --pin-2: 44px;
+  --pin-3: 164px;
+}
+
+.payout__table td,
+.payout__table th {
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+}
+
+/* The head stays put down a long roster. Two sticky axes meet in the top-left corner, which
+   is what the raised z-index on the pinned header cells below is for. */
+.payout__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--ink-50);
+  /* The head keeps its rule under `separate`, where a collapsed table would have shared one
+     with the first row. */
+  box-shadow: inset 0 -1px 0 var(--color-border);
+}
+
+/* --- pinned identity columns ------------------------------------------------------------
+   Serial, MCC and Mait. Once the money columns are in view the name has scrolled off, and a
+   row of figures with no name on it is a row nobody can act on. Where each one stops is
+   measured after layout rather than written here — see `--pin-2` above. */
+.payout__pin {
+  position: sticky;
+  z-index: 1;
+  background: var(--color-surface);
+}
+
+.payout__table thead .payout__pin {
+  z-index: 3;
+  background: var(--ink-50);
+}
+
+.payout__pin--1 {
+  left: 0;
+}
+
+.payout__pin--2 {
+  left: var(--pin-2);
+}
+
+.payout__pin--3 {
+  left: var(--pin-3);
+  /* The last pinned column carries the edge, so the join between what is frozen and what is
+     scrolling is visible rather than a place where two sets of numbers appear to collide. */
+  box-shadow: 1px 0 0 var(--color-border);
+}
+
+/* A tinted row's own colour has to survive being pinned, or the first three cells of a row
+   flagged for review come back white and the flag is lost exactly where the name is. */
+.payout__table tbody tr.is-blocked .payout__pin {
+  background: var(--color-error-wash);
+}
+
+.payout__table tbody tr:hover .payout__pin {
+  background: var(--ink-50);
+}
+
+.payout__table tbody tr:hover {
+  background: var(--ink-50);
+}
+
+/* --- grouping the money -----------------------------------------------------------------
+   Three subtotals down the row — what was earned, what is left after the recovery, and what
+   is paid — and a rule before each says the columns after it are a new question. Cheaper to
+   read than a second header row, and it survives the horizontal scroll. */
+.payout__rule {
+  border-left: 1px solid var(--color-border);
+}
+
+.payout__net {
+  border-left: 1px solid var(--color-border);
+  background: var(--color-primary-wash);
+}
+
+.payout__table thead .payout__net {
+  background: var(--green-100);
+}
+
+/* The one figure on the row that leaves the building. */
+.payout__table td.payout__net {
+  font-weight: 700;
+  color: var(--color-primary-dark);
+}
+
+/* Below zero: more was issued than earned. Not an error — a Mait restocked at the end of a
+   quiet month is exactly this — but it must not be read as a payment. */
+.payout__table td.payout__net.is-negative {
+  color: var(--color-error);
+  background: var(--color-error-wash);
+}
+
+.payout__code {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A quantity of nothing, kept quiet. Most of this sheet is zeros — four material columns
+   across a hundred Maits — and full-strength zeros make the handful of real numbers hard to
+   find. Muted, not hidden: a blank cell reads as missing data, which is a different claim. */
+.payout__zero {
+  color: var(--color-text-disabled);
+}
+
+/* --- totals ------------------------------------------------------------------------------
+   A real `tfoot`, sticky to the bottom of the scroll box, so the month's total is on screen
+   whichever part of the roster is being read. */
+.payout__table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: var(--space-3);
+  font-weight: 700;
+  color: var(--color-ink);
+  background: var(--green-100);
+  border-top: 1px solid var(--green-300);
+  white-space: nowrap;
+}
+
+.payout__table tfoot .payout__pin {
+  z-index: 3;
+  background: var(--green-100);
+}
+
+/* --- rate card ---------------------------------------------------------------------------
+   The legend from the foot of the office's own sheet, editable. */
+.card__form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.card__save {
+  justify-self: start;
+}
+
+/* A rupee sign inside the box rather than in the label, so the four money fields read as
+   money at a glance and the label is free to say what the money is for. */
+.money-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.money-input__mark {
+  position: absolute;
+  left: var(--space-3);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.money-input .input {
+  padding-left: var(--space-6);
+}
+
+.card__split {
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--green-200);
+}
+
+.card__subtitle {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.rates {
+  margin-bottom: var(--space-2);
+  list-style: none;
+}
+
+.rates li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  font-size: var(--text-body);
+}
+
+.rates dfn {
+  font-style: normal;
+  color: var(--color-text);
+}
+
+.rates b {
+  font-family: var(--font-heading);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+
+/* Zero is "nobody has priced it", not "free" — the same distinction `Consumable.rate`
+   documents, said in colour so it is visible from across the card. */
+.rates b.is-unpriced {
+  color: var(--color-error);
+}
+
+.card__note {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+}
+
+.link {
+  color: var(--color-primary-dark);
+  font-weight: 600;
+}

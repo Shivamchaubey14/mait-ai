@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mait payment · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <!-- mait-payment.css pulls in forms.css, which imports portal.css. -->
+    <link rel="stylesheet" href="assets/css/mait-payment.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="mait-payment">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Mait payment</h1>
+            <p class="topbar__meta">What the month owes each Mait, and what comes back out of it</p>
+          </div>
+          <div class="topbar__actions">
+            <!-- A select rather than a month input: controls.js upgrades selects and date
+                 fields, and the browser's own month picker is neither. The list is built in
+                 script from the months this platform has records for. -->
+            <select class="select" id="month" aria-label="Month"></select>
+            <button class="btn btn--dark" id="export" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+              </svg>
+              <!-- Its own element so "Preparing…" can replace the words without taking the
+                   glyph beside them with it. -->
+              <span id="export-label">Download workbook</span>
+            </button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- The four figures the month comes down to, read left to right: what was done, what
+             that earns, what is recovered against it, and what is actually paid. Tinted in
+             that order of consequence — the net is the number that leaves the building. -->
+        <section class="tiles" aria-label="Month summary">
+          <article class="tile tile--info">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M8 3h8v4H8zM5 7h14v14H5zM9 12h6M9 16h4" />
+                </svg>
+              </span>
+              AI performed
+            </p>
+            <p class="tile__value" data-kpi="ai"></p>
+            <p class="tile__foot" data-kpi="ai-foot"></p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M9 8.5h6M9 11.5h6M14 8.5c0 2.6-1.8 3-5 3l5 4.5"
+                  />
+                </svg>
+              </span>
+              Earned
+            </p>
+            <p class="tile__value" data-kpi="gross"></p>
+            <p class="tile__foot" data-kpi="gross-foot"></p>
+          </article>
+          <article class="tile tile--warn">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10" />
+                </svg>
+              </span>
+              Recovered
+            </p>
+            <p class="tile__value" data-kpi="deduction"></p>
+            <p class="tile__foot" data-kpi="deduction-foot"></p>
+          </article>
+          <article class="tile tile--good">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M2 6h20v12H2zM6.5 9.5h5.5M6.5 12h5.5M11 9.5c0 2.2-1.5 2.5-4.5 2.5l4.5 3.5"
+                  />
+                </svg>
+              </span>
+              Net payable
+            </p>
+            <p class="tile__value" data-kpi="net"></p>
+            <p class="tile__foot" data-kpi="net-foot"></p>
+          </article>
+        </section>
+
+        <div class="payout">
+          <div class="payout__main">
+            <section class="panel panel--flush" id="sheet" aria-labelledby="sheet-title">
+              <div class="panel__head payout__head">
+                <h2 class="panel__title" id="sheet-title">
+                  <span class="panel__icon payout__icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 4h18v16H3zM3 9h18M9 9v11M15 9v11" />
+                    </svg>
+                  </span>
+                  Payment sheet
+                </h2>
+                <span class="panel__count" id="sheet-count">—</span>
+              </div>
+
+              <!-- Nineteen columns will not fit any screen, and shrinking them to make them
+                   fit is how a payout sheet becomes unreadable. It scrolls sideways inside its
+                   own box, with the three identity columns pinned so a row can still be told
+                   apart once the money columns are in view. -->
+              <div class="table-wrap payout__scroll">
+                <table class="table payout__table">
+                  <thead>
+                    <tr>
+                      <th class="payout__pin payout__pin--1" scope="col">#</th>
+                      <th class="payout__pin payout__pin--2" scope="col">MCC</th>
+                      <th class="payout__pin payout__pin--3" scope="col">Mait</th>
+                      <th class="table__num" scope="col">AI</th>
+                      <th class="table__num" scope="col">Commission</th>
+                      <th class="table__num" scope="col">Fixed</th>
+                      <th class="table__num payout__rule" scope="col">Total</th>
+                      <th class="table__num" scope="col">Semen</th>
+                      <th class="table__num" scope="col">LN2</th>
+                      <th class="table__num" scope="col">Sheath</th>
+                      <th class="table__num" scope="col">Gloves</th>
+                      <th class="table__num" scope="col">Deduction</th>
+                      <th class="table__num payout__rule" scope="col">After deduction</th>
+                      <th class="table__num" scope="col">Tagging</th>
+                      <th class="table__num payout__net" scope="col">Net payable</th>
+                      <th scope="col">Account</th>
+                      <th scope="col">IFSC</th>
+                      <th scope="col">PAN</th>
+                      <th scope="col">Vendor</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rows" aria-busy="true">
+                    <tr class="skeleton-row" aria-hidden="true">
+                      <td></td>
+                      <td></td>
+                      <td></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td class="table__num"></td>
+                      <td></td>
+                      <td></td>
+                      <td></td>
+                      <td></td>
+                    </tr>
+                  </tbody>
+                  <!-- A real `tfoot`, so the total stays with the table when it is scrolled
+                       sideways and is announced as a summary rather than as a last row. -->
+                  <tfoot id="totals" hidden></tfoot>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <aside class="payout__aside" aria-label="Rate card">
+            <!-- The legend at the foot of the office's own sheet, except that these are the
+                 figures the rows above were actually built from rather than a note somebody
+                 remembered to update. Editable here because they are the terms of somebody's
+                 engagement, not a constant in a build. -->
+            <section class="panel panel--tinted panel--good card" aria-labelledby="rate-title">
+              <div class="panel__head">
+                <h2 class="panel__title" id="rate-title">
+                  <span class="panel__icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20.6 13.4 12 22l-9-9V3h10zM7.5 7.5h.01" />
+                    </svg>
+                  </span>
+                  Rate card
+                </h2>
+                <span class="panel__count" id="rate-state">—</span>
+              </div>
+
+              <form id="rate-form" class="card__form" novalidate>
+                <div class="field">
+                  <label class="field__label" for="commission">Commission per AI</label>
+                  <div class="money-input">
+                    <span class="money-input__mark" aria-hidden="true">₹</span>
+                    <input
+                      class="input field__control"
+                      id="commission"
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputmode="numeric"
+                    />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="field__label" for="fixed">Monthly fixed amount</label>
+                  <div class="money-input">
+                    <span class="money-input__mark" aria-hidden="true">₹</span>
+                    <input
+                      class="input field__control"
+                      id="fixed"
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputmode="numeric"
+                    />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="field__label" for="threshold">Earned at</label>
+                  <input
+                    class="input field__control"
+                    id="threshold"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputmode="numeric"
+                  />
+                  <p class="field__hint">
+                    Inseminations in the month. A Mait on exactly this number earns it; zero
+                    switches the fixed amount off entirely.
+                  </p>
+                </div>
+
+                <div class="field">
+                  <label class="field__label" for="straw-rate">Semen, per straw</label>
+                  <div class="money-input">
+                    <span class="money-input__mark" aria-hidden="true">₹</span>
+                    <input
+                      class="input field__control"
+                      id="straw-rate"
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputmode="numeric"
+                    />
+                  </div>
+                </div>
+
+                <button class="btn btn--primary card__save" id="save-rates" type="submit">
+                  Save rates
+                </button>
+                <p class="field__hint" id="rate-hint">
+                  Changing a rate rebuilds every month, this one included.
+                </p>
+              </form>
+
+              <!-- Read-only, and deliberately so. A glove has one price across the platform
+                   and it is set where the catalogue is. -->
+              <div class="card__split">
+                <p class="card__subtitle">Materials, per piece</p>
+                <ul class="rates" id="material-rates"></ul>
+                <p class="field__hint">
+                  Maintained on <a class="link" href="products.html">Products</a>, so a glove costs
+                  the same here as it does on an indent.
+                </p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/controls.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/mait-payment.js"></script>
+  </body>
+</html>
