@@ -169,3 +169,85 @@ class OTPLog(models.Model):
 
     def matches(self, code: str) -> bool:
         return self.otp_code_hash == self.hash_code(code, self.mobile_no)
+
+
+class MaitPayoutScheme(TimeStampedModel):
+    """
+    What the dairy pays a Mait for a month's work, and what it takes back out of it.
+
+    Not the same direction of money as everything else in this app. `Payment` is a farmer
+    paying for one insemination; this is the dairy settling with the technician who performed
+    them all — a commission on each, a monthly retainer once the round is big enough to be
+    somebody's job, less the cost of the straws and consumables issued to them over the month.
+
+    **One row, like `PregnancyRate`.** A `TextChoices` key rather than a singleton boolean, so
+    a second payable service is a row instead of a schema change.
+
+    **Kept out of the build on purpose.** The commission and the retainer are the terms of a
+    field agent's engagement; they change by negotiation, not by deploy, and a constant here
+    would mean the office asking an engineer to change somebody's pay.
+
+    The consumable side of the recovery is *not* held here — it is `Consumable.rate`, already
+    maintained on the Products screen. Two places naming the price of a glove is one place
+    where the report and the indent disagree about what a glove costs. Only the straw rate
+    lives here, because a straw is a `SemenBatch` and carries no price of its own.
+    """
+
+    class Scheme(models.TextChoices):
+        AI = "ai", "Artificial insemination"
+
+    scheme = models.CharField(max_length=20, choices=Scheme.choices, default=Scheme.AI, unique=True)
+    commission_per_ai = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Paid to the Mait for one completed insemination, in rupees.",
+    )
+    monthly_fixed_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text=(
+            "A flat monthly amount on top of the commission, paid only to a Mait who "
+            "reached `fixed_min_ai` inseminations in the month. Zero switches it off."
+        ),
+    )
+    fixed_min_ai = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Inseminations needed in the month to earn `monthly_fixed_amount`. The test is "
+            "'at least this many' — a Mait on exactly the threshold earns it."
+        ),
+    )
+    straw_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text=(
+            "Recovered from the payout for each semen straw issued to the Mait during the "
+            "month, in rupees. Consumables are recovered at `Consumable.rate` instead — the "
+            "Products screen owns those."
+        ),
+    )
+
+    class Meta:
+        db_table = "mait_payout_scheme"
+
+    def __str__(self) -> str:
+        return (
+            f"{self.get_scheme_display()}: ₹{self.commission_per_ai}/AI, "
+            f"₹{self.monthly_fixed_amount} above {self.fixed_min_ai}"
+        )
+
+    @classmethod
+    def current(cls) -> MaitPayoutScheme:
+        """
+        The scheme in force, created empty if the row has somehow gone.
+
+        Every figure defaults to zero rather than to the terms that happened to be current
+        when this was written. A payout report is read as a bank instruction, and a number
+        invented by a fallback is the worst possible thing for it to carry — a zero is
+        visibly wrong and gets fixed, a plausible 220 gets paid.
+        """
+        scheme, _ = cls.objects.get_or_create(scheme=cls.Scheme.AI)
+        return scheme
