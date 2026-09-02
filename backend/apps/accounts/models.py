@@ -59,6 +59,11 @@ class PortalSection(models.TextChoices):
     PREGNANCY = "pregnancy", "Pregnancy"
     EXCEPTIONS = "exceptions", "Exceptions"
     REPORTS = "reports", "Reports"
+    # Its own section rather than a corner of Reports. Reports answers questions about the
+    # work and carries no personal data; this one is a payment instruction, it leaves the
+    # building with bank account numbers on it, and the account allowed to produce it is not
+    # automatically the account allowed to pull an AI-event export.
+    MAIT_PAYMENT = "mait-payment", "Mait payment"
     USERS = "users", "Users & roles"
 
 
