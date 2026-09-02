@@ -3334,6 +3334,114 @@ paths:
                 type: string
                 format: binary
           description: ''
+  /api/v1/reports/mait-payment/:
+    get:
+      operationId: reports_mait_payment_retrieve
+      description: |-
+        One row per Mait: inseminations completed, the commission and retainer they earn, the straws and consumables issued to them recovered at catalogue rates, and what is left to pay.
+
+        `?month=YYYY-MM`, defaulting to the current month. `in_progress` says whether the month is still accumulating, so a running total is never read as a settled one.
+
+        **Counted three different ways on purpose.** Inseminations are *completed* events, by `completed_at`. Materials are what was *issued* in the month off the inventory ledger, net of returns — not what was consumed, because the dairy recovers the cost of a flask when it hands it over. `deductions` is a third figure again: the inseminations finance recovers from members' milk payments, counted at the MCC where the work happened rather than where the Mait is posted.
+
+        Account numbers and PANs are masked here. The workbook at `/reports/mait-payment/export/` carries them in full, because it is a payment instruction.
+      summary: Mait payment report for a month
+      parameters:
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: YYYY-MM
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/reports/mait-payment/export/:
+    get:
+      operationId: reports_mait_payment_export_retrieve
+      description: |-
+        The same month as the preview, in the two-tab shape the office already reads: the payment sheet with its rate legend, and the per-MCC AI deduction tab.
+
+        **This file carries full bank account numbers, IFSC codes and PANs**, and is the second place in the platform that carries unmasked personal data — the first being the non-member roster. It is a payment instruction and a masked account cannot be paid into. Admin only, behind the Mait payment section, and every export is audit-logged as `pii_access` with the month it covered. The workbook's first row states what it holds, so whoever opens it later knows how it has to be handled.
+      summary: Export the Mait payment report as a workbook
+      parameters:
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: YYYY-MM
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/reports/mait-payment/scheme/:
+    get:
+      operationId: reports_mait_payment_scheme_retrieve
+      description: |-
+        The commission per insemination, the monthly retainer and the number of inseminations that earns it, and what a straw is recovered at.
+
+        Changing these changes every month the report is asked for, past ones included — the report is computed on read and nothing is frozen. That is deliberate: a correction to a rate should reach the months it was wrong for. A month already paid is settled by the workbook that was downloaded and audit-logged at the time.
+
+        Consumable rates are not here. They live on `Consumable.rate` and are maintained on the Products screen, so a glove costs one thing across the whole platform.
+      summary: Read or change the Mait payout scheme
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutScheme'
+          description: ''
+    patch:
+      operationId: reports_mait_payment_scheme_partial_update
+      description: |-
+        The commission per insemination, the monthly retainer and the number of inseminations that earns it, and what a straw is recovered at.
+
+        Changing these changes every month the report is asked for, past ones included — the report is computed on read and nothing is frozen. That is deliberate: a correction to a rate should reach the months it was wrong for. A month already paid is settled by the workbook that was downloaded and audit-logged at the time.
+
+        Consumable rates are not here. They live on `Consumable.rate` and are maintained on the Products screen, so a glove costs one thing across the whole platform.
+      summary: Read or change the Mait payout scheme
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPayoutSchemeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPayoutSchemeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPayoutSchemeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutScheme'
+          description: ''
   /api/v1/reports/pregnancy/:
     get:
       operationId: reports_pregnancy_retrieve
@@ -6671,6 +6779,44 @@ components:
         back:
           type: string
           format: binary
+    PatchedPayoutSchemeRequest:
+      type: object
+      description: |-
+        The four figures the payout is computed from, editable from the report's own screen.
+
+        Not a constant in a build, for the reason `payments.pricing` gives about the insemination
+        rate: these are the terms of a field agent's engagement and they change by negotiation.
+        A dairy that renegotiates should not have to ask an engineer to change somebody's pay.
+
+        The consumable rates are deliberately absent — they belong to `Consumable.rate` and are
+        maintained on Products, so there is one place per price.
+      properties:
+        commission_per_ai:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Paid to the Mait for one completed insemination, in rupees.
+        monthly_fixed_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: A flat monthly amount on top of the commission, paid only to
+            a Mait who reached `fixed_min_ai` inseminations in the month. Zero switches
+            it off.
+        fixed_min_ai:
+          type: integer
+          maximum: 65535
+          minimum: 0
+          description: Inseminations needed in the month to earn `monthly_fixed_amount`.
+            The test is 'at least this many' — a Mait on exactly the threshold earns
+            it.
+        straw_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Recovered from the payout for each semen straw issued to the
+            Mait during the month, in rupees. Consumables are recovered at `Consumable.rate`
+            instead — the Products screen owns those.
     PatchedPregnancyRateRequest:
       type: object
       description: |-
@@ -6838,6 +6984,44 @@ components:
       - mode_display
       - status
       - status_display
+    PayoutScheme:
+      type: object
+      description: |-
+        The four figures the payout is computed from, editable from the report's own screen.
+
+        Not a constant in a build, for the reason `payments.pricing` gives about the insemination
+        rate: these are the terms of a field agent's engagement and they change by negotiation.
+        A dairy that renegotiates should not have to ask an engineer to change somebody's pay.
+
+        The consumable rates are deliberately absent — they belong to `Consumable.rate` and are
+        maintained on Products, so there is one place per price.
+      properties:
+        commission_per_ai:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Paid to the Mait for one completed insemination, in rupees.
+        monthly_fixed_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: A flat monthly amount on top of the commission, paid only to
+            a Mait who reached `fixed_min_ai` inseminations in the month. Zero switches
+            it off.
+        fixed_min_ai:
+          type: integer
+          maximum: 65535
+          minimum: 0
+          description: Inseminations needed in the month to earn `monthly_fixed_amount`.
+            The test is 'at least this many' — a Mait on exactly the threshold earns
+            it.
+        straw_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Recovered from the payout for each semen straw issued to the
+            Mait during the month, in rupees. Consumables are recovered at `Consumable.rate`
+            instead — the Products screen owns those.
     PhotoSourceEnum:
       enum:
       - camera
@@ -6864,6 +7048,7 @@ components:
       - pregnancy
       - exceptions
       - reports
+      - mait-payment
       - users
       type: string
       description: |-
@@ -6883,6 +7068,7 @@ components:
         * `pregnancy` - Pregnancy
         * `exceptions` - Exceptions
         * `reports` - Reports
+        * `mait-payment` - Mait payment
         * `users` - Users & roles
     PregnancyCheck:
       type: object
