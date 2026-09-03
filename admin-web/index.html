@@ -174,6 +174,10 @@
         <!-- SRS §6.7.6. Yellow is waiting, red is blocked work — the same rule the app uses,
              and the same rule Exceptions states out loud. The glyph names the queue; the wash
              says how urgent it is. -->
+        <!-- Each card's Open button raises the queue behind it as a dialog over this
+             page. Triage is a scan of all six, and a link that navigates away to
+             answer one of them costs the operator the other five and a click back.
+             One dialog serves them all — queue-modal.js. -->
         <section class="exceptions" aria-label="Needs attention">
           <article class="panel panel--warning panel--linked">
             <div class="panel__head">
@@ -193,11 +197,13 @@
                 Pending payments
               </h2>
               <span class="panel__count" data-count="pending-payments">—</span>
-              <a
+              <button
                 class="panel__link"
+                type="button"
+                data-queue="pending-payments"
                 data-link="pending-payments"
-                href="ai-events.html?status=payment_pending"
-                aria-label="Open the pending payments queue in AI events"
+                aria-haspopup="dialog"
+                aria-label="Open the pending payments"
               >
                 Open
                 <svg
@@ -211,7 +217,7 @@
                 >
                   <path d="M9 6l6 6-6 6" />
                 </svg>
-              </a>
+              </button>
             </div>
             <div data-rows="pending-payments"></div>
           </article>
@@ -234,16 +240,10 @@
                 Failed OTPs
               </h2>
               <span class="panel__count" data-count="failed-otps">—</span>
-              <!-- Opens the queue over this page rather than navigating to it. The card
-                   can only mask a number and count it; the dialog says who is stuck, what
-                   they were trying to do, which of the four things went wrong and what it is
-                   holding up. In place because triage is a scan of six queues, and a link
-                   that takes an operator off the screen to answer one of them costs them the
-                   other five and a click back. -->
               <button
                 class="panel__link"
                 type="button"
-                data-otp-modal
+                data-queue="failed-otps"
                 data-link="failed-otps"
                 aria-haspopup="dialog"
                 aria-label="Open the failed OTP queue"
@@ -283,11 +283,13 @@
                 Low stock
               </h2>
               <span class="panel__count" data-count="low-stock">—</span>
-              <a
+              <button
                 class="panel__link"
+                type="button"
+                data-queue="low-stock"
                 data-link="low-stock"
-                href="inventory.html"
-                aria-label="Open inventory, lowest stock first"
+                aria-haspopup="dialog"
+                aria-label="Open the low stock queue"
               >
                 Open
                 <svg
@@ -301,7 +303,7 @@
                 >
                   <path d="M9 6l6 6-6 6" />
                 </svg>
-              </a>
+              </button>
             </div>
             <div data-rows="low-stock"></div>
           </article>
@@ -325,11 +327,13 @@
               Stale indents
             </h2>
             <span class="panel__count" data-count="stale-indents">—</span>
-            <a
+            <button
               class="panel__link"
+              type="button"
+              data-queue="stale-indents"
               data-link="stale-indents"
-              href="indents.html?stale=1"
-              aria-label="Open the indents waiting longest"
+              aria-haspopup="dialog"
+              aria-label="Open the stale indents"
             >
               Open
               <svg
@@ -343,7 +347,7 @@
               >
                 <path d="M9 6l6 6-6 6" />
               </svg>
-            </a>
+            </button>
           </div>
           <div data-rows="stale-indents"></div>
         </section>
@@ -368,11 +372,13 @@
               Overdue checks
             </h2>
             <span class="panel__count" data-count="overdue-checks">—</span>
-            <a
+            <button
               class="panel__link"
+              type="button"
+              data-queue="overdue-checks"
               data-link="overdue-checks"
-              href="pregnancy.html"
-              aria-label="Open pregnancy diagnosis, most overdue first"
+              aria-haspopup="dialog"
+              aria-label="Open the overdue checks"
             >
               Open
               <svg
@@ -386,7 +392,7 @@
               >
                 <path d="M9 6l6 6-6 6" />
               </svg>
-            </a>
+            </button>
           </div>
           <div data-rows="overdue-checks"></div>
         </section>
@@ -416,11 +422,13 @@
               Owners who declined
             </h2>
             <span class="panel__count" data-count="declined-checks">—</span>
-            <a
+            <button
               class="panel__link"
+              type="button"
+              data-queue="declined-checks"
               data-link="declined-checks"
-              href="pregnancy.html"
-              aria-label="Open pregnancy diagnosis"
+              aria-haspopup="dialog"
+              aria-label="Open the refused checks"
             >
               Open
               <svg
@@ -434,7 +442,7 @@
               >
                 <path d="M9 6l6 6-6 6" />
               </svg>
-            </a>
+            </button>
           </div>
           <div data-rows="declined-checks"></div>
         </section>
@@ -449,7 +457,7 @@
     <script src="assets/js/api.js"></script>
     <script src="assets/js/ui.js"></script>
     <script src="assets/js/controls.js"></script>
-    <script src="assets/js/otp-modal.js"></script>
+    <script src="assets/js/queue-modal.js"></script>
     <script src="assets/js/shell.js"></script>
     <script src="assets/js/dashboard.js"></script>
   </body>

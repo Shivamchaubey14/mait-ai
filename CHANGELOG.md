@@ -9,13 +9,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Failed OTPs (W16b)** — the Exceptions card's Open link now opens the queue in a dialog over
-  the page instead of navigating to an unrelated roster. One row per code that did not get
-  somebody through, naming who they are, what they were trying to do, what it is holding up, and
-  which of four things went wrong: attempts used up, never entered (an SMS that did not arrive),
-  ran out of time, or simply replaced by a newer code — which is not a failure at all and was
-  previously indistinguishable from an undelivered message. The dashboard's copy of the card
-  opens the same dialog.
+- **Every Exceptions queue opens in place (W16b)** — each card's Open button raises the queue
+  behind it as a dialog over the page instead of navigating away, on both Exceptions and the
+  dashboard. One dialog serves all six because the API answers them in one row shape. Each row
+  names who or what it is about, what state it is in, and — the point of it — **which of several
+  causes** put it there, because the cause decides who gets rung: a payment waiting on a
+  farmer's authorisation and one waiting on a Mait's screenshot are the same row on the card and
+  two different phone calls. Filter chips are those causes, each carrying the count it will
+  show.
 - The non-member export carries each farmer's **last known position** — latitude, longitude,
   whether the fix came from the handset or from a chosen photograph's EXIF, and the day it was
   taken. Taken from the GPS pin on her most recent insemination, because a non-member holds no

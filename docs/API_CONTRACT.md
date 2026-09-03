@@ -398,6 +398,7 @@ say which bundle it came out of. Validate then answers `reason: "breed_required"
 | GET | `/dashboard/mait-performance/` | Per-Mait AI count & collections for a period | Admin |
 | GET | `/dashboard/mpp-coverage/` | Members served vs. total per MPP for a window (`?days=`, default 30, max 365) | Admin |
 | GET | `/admin/otp-failures/` | Who is stuck at an OTP and why — the detail behind the Exceptions card (§9.9) | Admin |
+| GET | `/admin/exceptions/{queue}/` | The detail behind any other Exceptions card, in one shared row shape (§9.9) | Admin |
 | GET | `/reports/export/` | CSV/Excel export of AI events / payments (query-filtered) | Admin |
 | GET | `/reports/pregnancy/` | CSV of every pregnancy check: who agreed, who refused, who has not been visited (§9.11) | Admin |
 | GET | `/reports/mait-payment/` | A month's Mait payout, one row per Mait, for the preview on W18 (`?month=YYYY-MM`, default this month) | Admin |
@@ -585,6 +586,56 @@ says so rather than coming back blank.
 Mobile numbers come back in full, as on every other admin endpoint. The screen exists to be
 acted on and acting on it means ringing the number; the card's masked prefix is what made it
 useless.
+
+### The detail behind an Exceptions card
+
+A card carries a count and three sampled lines. That is right for a card and it answers almost
+nothing — `Approved, not issued — 4 older than 3 days` names a number without saying which
+four, whose they are or what they asked for. `/admin/exceptions/{queue}/` is the rest of it,
+for `pending-payments`, `low-stock`, `stale-indents`, `overdue-checks` and `declined-checks`.
+Failed OTPs keeps its own endpoint because deciding *why* a code failed needs the attempt
+count, the expiry and the clock read together; it answers in the same shape, so one dialog
+reads either.
+
+**One definition per queue.** The predicates in `dashboard.exception_details` are what
+`/dashboard/summary/` counts and what this lists. A card and its detail each writing their own
+filter is how a card comes to say four above a dialog showing eleven — the bug `stale_indent_q`
+was extracted to prevent between the card and the Indents screen, one level down.
+
+**One row shape**, so the portal has one dialog rather than six:
+
+| Field | |
+| --- | --- |
+| `title` / `subtitle` | who or what, and the identifier under it |
+| `detail` | the kind of thing — a payment mode, `25 × Gloves` |
+| `state` | `{label, tone}` — the pill |
+| `metric` | the one figure: an amount, an age, a count |
+| `when` | ISO instant, or `""` |
+| `guidance` | what to do about it, in a sentence |
+| `facts` | `[{label, value, href}]` — the expanded panel |
+| `link` | where to go to act on it, or `null` |
+
+The columns mean different things from queue to queue — a payment's metric is an amount, an
+indent's is an age — and that is fine: an operator reads them in the same places every time.
+
+**`guidance` is a column, not decoration.** Each queue has several causes wearing one status
+and the cause decides who gets rung. A pending payment waiting on a farmer's authorisation and
+one waiting on a Mait's screenshot are the same row on the card and two different calls; an
+indent awaiting approval is this office's problem, approved-and-not-issued is the depot's, and
+a failed push never left this platform.
+
+`buckets` names the causes present, each with the count it would show, and every row carries
+the one it is in. `?filter=<bucket>` narrows to it — applied after the rows are built rather
+than in SQL, because a cause is worked out from several columns read together and reproducing
+that as a queryset would be a second definition to keep in step with the first.
+
+A **bucket count is what clicking will yield**, not what the current response holds. On the OTP
+queue that distinction is load-bearing: the default excludes codes nobody typed into, so
+counting the response would report zero `never_attempted` and zero `superseded` every time —
+and a chip showing zero is a chip the portal hides, which would have made the two most useful
+outcomes unreachable.
+
+`?days=` applies only where the queue declares `windowed` — Failed OTPs and refused checks.
 
 ## 9.10 Admin — users
 

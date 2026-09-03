@@ -228,6 +228,43 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/admin/exceptions/{queue}/:
+    get:
+      operationId: admin_exceptions_retrieve
+      description: |-
+        One row per thing needing a human, in a shape shared by every queue so the portal has one dialog rather than six: `title`, `subtitle`, `detail`, `state`, `metric`, `when`, `guidance`, `facts` and `link`.
+
+        `queue` is one of `pending-payments`, `low-stock`, `stale-indents`, `overdue-checks`, `declined-checks`. Failed OTPs has its own endpoint — `/admin/otp-failures/` — because deciding *why* a code failed needs the attempt count, the expiry and the clock read together, which is more than a row builder.
+
+        **The predicates are shared with `/dashboard/summary/`**, so a card cannot say four above a dialog showing eleven.
+
+        `buckets` names the causes present in the queue, for the dialog's filter chips; each row carries the one it is in. They are causes rather than statuses: a payment waiting on a farmer's authorisation and one waiting on a Mait's screenshot are the same status and two different phone calls.
+
+        `?days=` applies only where the queue declares `windowed`.
+      summary: The detail behind one Exceptions card
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: Window, where the queue has one
+      - in: path
+        name: queue
+        schema:
+          type: string
+        required: true
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/admin/inventory/:
     get:
       operationId: admin_inventory_retrieve

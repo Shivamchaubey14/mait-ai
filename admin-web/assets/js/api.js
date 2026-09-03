@@ -579,6 +579,18 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
+     * The detail behind one Exceptions card.
+     *
+     * `queue` is `pending-payments`, `low-stock`, `stale-indents`, `overdue-checks` or
+     * `declined-checks`. Failed OTPs has its own endpoint — see `otpFailures` — because
+     * deciding *why* a code failed needs more than a row builder; both answer in the same
+     * row shape, so one dialog reads either.
+     */
+    exceptionQueue: function (queue, query) {
+      return request({ path: '/admin/exceptions/' + queue + '/', query: query });
+    },
+
+    /**
      * A month's Mait payout, as the screen previews it.
      *
      * `month` is `YYYY-MM` and may be omitted, which answers for the month just gone — this

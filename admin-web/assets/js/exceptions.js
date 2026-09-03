@@ -149,8 +149,8 @@
       return;
     }
     MaitAI.shell.mount();
-    // The Failed OTPs card opens its queue over this page.
-    MaitAI.otpModal.mount();
+    // Every card opens its own queue over this page.
+    MaitAI.queueModal.mount();
     load();
     $('#refresh').on('click', load);
 

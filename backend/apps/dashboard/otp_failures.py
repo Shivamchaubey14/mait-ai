@@ -244,7 +244,7 @@ def _blocking(entry: OTPLog) -> dict | None:
 def describe(entry: OTPLog, by_mobile: dict, now, superseded=None) -> dict:
     """One failed OTP, with everything a person needs to act on it."""
     outcome, label = _outcome(entry, now, superseded or set())
-    return {
+    row = {
         "id": entry.id,
         # In full. Mobile numbers are not masked on admin endpoints anywhere in this platform —
         # the Maits roster and the member list both return them — and this screen exists to be
@@ -268,11 +268,111 @@ def describe(entry: OTPLog, by_mobile: dict, now, superseded=None) -> dict:
         "who": _who(entry, by_mobile),
         "blocking": _blocking(entry),
     }
+    # The shape every other exception queue answers in, alongside this one's own fields, so
+    # the portal has one dialog rather than two that drift. `exception_details` documents it.
+    row.update(_as_common_row(entry, row))
+    return row
+
+
+#: The tone each outcome is drawn in. `superseded` is green because it is not a fault at all.
+TONE = {
+    EXHAUSTED: "bad",
+    NEVER_ATTEMPTED: "warn",
+    EXPIRED: None,
+    SUPERSEDED: "good",
+    OPEN: "info",
+}
+
+#: What the dialog's filter chips offer, in the order they read.
+BUCKETS = [
+    (EXHAUSTED, "Attempts used up", "bad"),
+    (NEVER_ATTEMPTED, "Never entered", "warn"),
+    (EXPIRED, "Ran out of time", None),
+    (SUPERSEDED, "Replaced", "good"),
+    (OPEN, "Still open", "info"),
+]
+
+#: The two that only exist among codes nobody typed into. Picking either has to widen the
+#: query, or the chip answers empty and looks broken.
+NEEDS_UNATTEMPTED = (NEVER_ATTEMPTED, SUPERSEDED)
+
+
+def _valid_for(seconds: int) -> str:
+    """Seconds as something a person reads."""
+    if seconds < 60:
+        return f"{seconds} s"
+    minutes, rest = divmod(seconds, 60)
+    return f"{minutes} min" + (f" {rest} s" if rest else "")
+
+
+def _as_common_row(entry: OTPLog, row: dict) -> dict:
+    blocking = row["blocking"]
+    return {
+        "bucket": row["outcome"],
+        "title": row["who"]["name"],
+        "subtitle": row["who"]["detail"] or row["mobile_no"],
+        "detail": row["purpose_display"],
+        "state": {"label": row["outcome_display"], "tone": TONE.get(row["outcome"])},
+        "metric": f"{row['attempt_count']} of {row['max_attempts']}",
+        "when": row["sent_at"],
+        "facts": [
+            {"label": "Number", "value": row["mobile_no"], "href": None},
+            {"label": "Sent", "value": row["sent_at"], "href": None},
+            {"label": "Expired", "value": row["expires_at"], "href": None},
+            {"label": "Valid for", "value": _valid_for(row["valid_for_seconds"]), "href": None},
+            {
+                "label": "Attempts",
+                "value": f"{row['attempt_count']} of {row['max_attempts']}",
+                "href": None,
+            },
+            {"label": "Sent via", "value": row["sent_via"], "href": None},
+            {"label": "Gateway reference", "value": row["gateway_message_id"], "href": None},
+        ],
+        "link": (
+            {
+                "href": f"ai-event.html?id={blocking['ai_event_id']}",
+                "label": (
+                    f"AI event {blocking['ai_event_id']} · "
+                    f"₹{float(blocking['amount']):,.0f} {blocking['mode']}"
+                ),
+            }
+            if blocking
+            else None
+        ),
+    }
 
 
 # --------------------------------------------------------------------------------------
 # The endpoint
 # --------------------------------------------------------------------------------------
+def outcome_tally(days: int) -> dict:
+    """
+    How many codes each chip would show, counted over the widest set.
+
+    Deliberately not counted over the rows being returned. The queue excludes codes nobody
+    typed into by default — that is the Exceptions card's definition and the two have to agree
+    — so counting the response would report zero `never_attempted` and zero `superseded` every
+    time, and a chip showing zero is a chip a screen quite reasonably hides. The two outcomes
+    that matter most would have been unreachable.
+
+    A chip's number is what clicking it will yield, which means asking the wider question here
+    regardless of what was asked for. Cheap: only the outcome is needed, so this skips the
+    owner lookups and the row building entirely.
+    """
+    entries = list(
+        failed_otp_queue(days=days, include_unattempted=True).order_by("-created_at", "-id")[
+            :MAX_ROWS
+        ]
+    )
+    now = timezone.now()
+    replaced = superseded_ids(entries)
+    tally = {key: 0 for key in (EXHAUSTED, NEVER_ATTEMPTED, EXPIRED, SUPERSEDED, OPEN)}
+    for entry in entries:
+        outcome, _label = _outcome(entry, now, replaced)
+        tally[outcome] += 1
+    return tally
+
+
 @extend_schema(
     tags=["dashboard"],
     summary="Who is stuck at an OTP, and why",
@@ -325,6 +425,14 @@ def otp_failures(request):
         days = WINDOW_DAYS
     unattempted = str(params.get("include_unattempted", "")).lower() in ("1", "true", "yes")
 
+    # `filter` is what the portal sends to every exception queue; `outcome` is this endpoint's
+    # own older name for the same thing and still works. Picking one of the two buckets that
+    # only exist among untouched codes widens the query on its own — a chip that answers empty
+    # because the caller forgot a second parameter is a chip that looks broken.
+    chosen = params.get("filter") or params.get("outcome") or ""
+    if chosen in NEEDS_UNATTEMPTED:
+        unattempted = True
+
     queryset = failed_otp_queue(days=days, include_unattempted=unattempted).select_related(
         "payment__ai_event__mpp",
         "payment__ai_event__member",
@@ -344,14 +452,10 @@ def otp_failures(request):
     # Filtered after describing rather than in SQL. `outcome` is not a column — it is decided
     # from the attempt count, the expiry and the clock together, and reproducing that as a
     # queryset would be a second definition of it to keep in step with the first.
-    wanted = params.get("outcome")
-    if wanted:
-        rows = [row for row in rows if row["outcome"] == wanted]
+    if chosen:
+        rows = [row for row in rows if row["outcome"] == chosen]
 
-    # Counted before paging, so the tally describes the queue rather than the page.
-    tally = {key: 0 for key in (EXHAUSTED, NEVER_ATTEMPTED, EXPIRED, SUPERSEDED, OPEN)}
-    for row in rows:
-        tally[row["outcome"]] += 1
+    tally = outcome_tally(days)
 
     try:
         limit = max(1, min(MAX_ROWS, int(params.get("limit", 25))))
@@ -361,6 +465,18 @@ def otp_failures(request):
 
     return Response(
         {
+            # Named the way every other exception queue names itself, so one dialog serves
+            # all six.
+            "queue": "failed-otps",
+            "title": "Failed OTPs",
+            "subtitle": "Who is stuck, and which of the four things went wrong",
+            "buckets": [
+                {"key": key, "label": label, "tone": tone, "count": tally.get(key, 0)}
+                for key, label, tone in BUCKETS
+            ],
+            "windowed": True,
+            "filter": chosen,
+            "shown": len(rows),
             "count": len(rows),
             "window_days": days,
             "include_unattempted": unattempted,

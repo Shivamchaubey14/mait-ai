@@ -24,13 +24,19 @@ from apps.accounts.models import PortalSection
 from apps.ai_events.models import AIEvent
 from apps.core.permissions import IsAdmin, in_section
 from apps.core.timeframe import end_of_day, local_day, start_of_day
-from apps.indents.models import STALE_AFTER_DAYS, IndentRequest, stale_indent_q
-from apps.inventory.models import MaitInventory, ProductType
+from apps.indents.models import STALE_AFTER_DAYS, IndentRequest
 from apps.masterdata.models import Mait
 from apps.payments.models import Payment
 from apps.pregnancy.models import PregnancyCheck
 from apps.pregnancy.oversight import rates_by_mait
 
+from .exception_details import (
+    declined_checks,
+    low_stock_maits,
+    overdue_checks,
+    pending_payments,
+    stale_indents,
+)
 from .models import AGGREGATE_LOOKBACK_DAYS, DailyAIAggregate, PlatformMilestone
 from .otp_failures import failed_otp_queue
 
@@ -161,7 +167,10 @@ def _exceptions() -> dict:
     Each returns a bounded sample alongside the full count — the count is what tells an admin
     how bad it is, and the sample is what tells them where to start.
     """
-    pending = Payment.objects.filter(status=Payment.Status.PENDING).select_related("ai_event__mpp")
+    # Every queue below goes through `exception_details`, which is also what the dialog
+    # behind each card lists. A card and its detail writing their own filter is how a card
+    # comes to say four above a screen showing eleven.
+    pending = pending_payments().select_related("ai_event__mpp")
     pending_rows = [
         {
             "label": f"{p.ai_event.mpp.mpp_name} · ₹{p.amount}",
@@ -183,12 +192,7 @@ def _exceptions() -> dict:
         for row in failed[:MAX_EXCEPTION_ROWS]
     ]
 
-    low = (
-        MaitInventory.objects.filter(product_type=ProductType.STRAW)
-        .values("mait_id", "mait__name")
-        .annotate(total=Sum("qty_available"))
-        .filter(total__lte=settings.LOW_STOCK_THRESHOLD)
-    )
+    low = low_stock_maits()
     low_list = list(low)
     at_zero = sum(1 for row in low_list if (row["total"] or 0) == 0)
     low_rows = []
@@ -209,10 +213,7 @@ def _exceptions() -> dict:
             }
         )
 
-    # `stale_indent_q` rather than a cutoff spelled out here: this queue links to the Indents
-    # screen filtered by the same query, and when the two were written separately the count
-    # and the screen disagreed — four stale indents opened onto an empty table.
-    stale = IndentRequest.objects.filter(stale_indent_q())
+    stale = stale_indents()
     approved_not_issued = stale.filter(status=IndentRequest.Status.APPROVED).count()
     awaiting = stale.filter(status=IndentRequest.Status.REQUESTED).count()
     never_pushed = stale.filter(sync_status=IndentRequest.SyncStatus.FAILED).count()
@@ -249,7 +250,7 @@ def _exceptions() -> dict:
     # round is a conception rate computed over the visits that happened to be convenient. So
     # overdue checks are a queue like any other, sampled by the Mait carrying the most of
     # them — which is the call to make, not the individual animal.
-    overdue = PregnancyCheck.objects.filter(outcome="", due_on__lt=timezone.localdate())
+    overdue = overdue_checks()
     overdue_by_mait = overdue.values("mait_id", "mait__name").annotate(n=Count("id")).order_by("-n")
     by_mait = overdue_by_mait[:MAX_EXCEPTION_ROWS]
     overdue_rows = [
@@ -269,10 +270,7 @@ def _exceptions() -> dict:
     # same village doing it repeatedly is, and it is an awareness conversation with that
     # collection point rather than anything the Mait can fix on their own round. Windowed to
     # the last thirty days for the same reason the tile is — see `_pregnancy`.
-    declined = PregnancyCheck.objects.filter(
-        outcome=PregnancyCheck.Outcome.DECLINED,
-        checked_at__gte=timezone.now() - timedelta(days=DECLINE_WINDOW_DAYS),
-    )
+    declined = declined_checks()
     declined_by_mpp = (
         declined.values("ai_event__mpp__mpp_name").annotate(n=Count("id")).order_by("-n")
     )

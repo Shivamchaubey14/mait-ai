@@ -234,14 +234,15 @@
   box-shadow: var(--shadow-card);
 }
 
-/* --- the failed OTP queue, opened in place -------------------------------------------------
-   The detail behind one of the exception cards above, over the page rather than instead of it.
+/* --- an exception queue, opened in place -------------------------------------------------
+   The detail behind any of the exception cards above, over the page rather than instead of it.
    Triage is a scan of six queues, and a link that takes an operator off the screen to answer
-   one of them costs them the other five and a click back.
+   one of them costs them the other five and a click back. One dialog serves all six, because
+   the API answers them all in one row shape.
 
    A `<dialog>`, the same as the photo viewer, so focus trapping, Escape and inert-behind all
    come from the browser. Everything below is the look of it. */
-.otp {
+.queue {
   width: min(1080px, 94vw);
   max-height: 88vh;
   padding: 0;
@@ -260,17 +261,17 @@
    `close()` and every way of dismissing it silently did nothing. The lightbox sidesteps this
    by putting its flex on an inner element; this needs it on the dialog, so it is stated for
    the open state only. Caught in a browser; no linter would have said a word. */
-.otp[open] {
+.queue[open] {
   /* The bar and chips stay put; only the list scrolls. */
   display: flex;
   flex-direction: column;
 }
 
-.otp::backdrop {
+.queue::backdrop {
   background: rgb(12 21 27 / 55%);
 }
 
-.otp__bar {
+.queue__bar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -279,24 +280,24 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-.otp__title {
+.queue__title {
   font-family: var(--font-heading);
   font-size: var(--text-h2);
   font-weight: 700;
   color: var(--color-ink);
 }
 
-.otp__sub {
+.queue__sub {
   font-size: var(--text-caption);
   color: var(--color-text-muted);
 }
 
 /* The window select is pushed to the right, beside the close button. */
-.otp__window {
+.queue__window {
   margin-left: auto;
 }
 
-.otp__close {
+.queue__close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -310,61 +311,61 @@
   cursor: pointer;
 }
 
-.otp__close:hover,
-.otp__close:focus-visible {
+.queue__close:hover,
+.queue__close:focus-visible {
   color: var(--color-ink);
   border-color: var(--ink-200);
 }
 
-.otp__close svg {
+.queue__close svg {
   width: 17px;
   height: 17px;
 }
 
 /* People first, because that is the number somebody acts on: one number failing eleven times
    is eleven rows and one phone call. */
-.otp__tally {
+.queue__tally {
   padding: var(--space-3) var(--space-5) 0;
   font-size: var(--text-caption);
   color: var(--color-text-muted);
 }
 
-.otp__chips {
+.queue__chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-5);
 }
 
-.otp__list {
+.queue__list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 0 var(--space-5) var(--space-5);
 }
 
-.otp__empty {
+.queue__empty {
   padding: var(--space-7);
   text-align: center;
   color: var(--color-text-muted);
 }
 
 /* --- one code ------------------------------------------------------------------------------ */
-.otp__entry {
+.queue__entry {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
   overflow: hidden;
 }
 
-.otp__entry.is-open {
+.queue__entry.is-open {
   border-color: var(--ink-200);
 }
 
 /* The whole summary is the control, so it is a real button — Enter and Space come free and
    there is no keyboard handling to get wrong. The grid is what keeps seven columns of very
    different lengths lined up down the list. */
-.otp__summary {
+.queue__summary {
   display: grid;
   grid-template-columns: 16px minmax(0, 2fr) 8.5rem minmax(0, 1.6fr) 10rem 4rem 6.5rem;
   align-items: center;
@@ -378,65 +379,65 @@
   cursor: pointer;
 }
 
-.otp__summary:hover {
+.queue__summary:hover {
   background: var(--ink-50);
 }
 
-.otp__entry.is-open .otp__summary {
+.queue__entry.is-open .queue__summary {
   background: var(--ink-50);
 }
 
 @media (max-width: 900px) {
   /* Stacked rather than squeezed. Seven columns crushed to fit is seven columns nobody can
      read, and the phone number is the thing being scanned for. */
-  .otp__summary {
+  .queue__summary {
     grid-template-columns: 16px 1fr;
   }
 
-  .otp__summary > *:nth-child(n + 3) {
+  .queue__summary > *:nth-child(n + 3) {
     grid-column: 2;
   }
 }
 
-.otp__chevron svg {
+.queue__chevron svg {
   width: 16px;
   height: 16px;
   color: var(--color-text-muted);
   transition: transform 120ms ease;
 }
 
-.otp__entry.is-open .otp__chevron svg {
+.queue__entry.is-open .queue__chevron svg {
   transform: rotate(90deg);
   color: var(--color-ink);
 }
 
 /* Tabular figures so a column of mobile numbers lines up — what an operator is scanning for
    is a number they half-remember. */
-.otp__number,
-.otp__tries,
-.otp__when {
+.queue__number,
+.queue__tries,
+.queue__when {
   font-family: var(--font-heading);
   font-variant-numeric: tabular-nums;
   color: var(--color-ink);
 }
 
-.otp__purpose,
-.otp__when {
+.queue__purpose,
+.queue__when {
   font-size: var(--text-caption);
   color: var(--color-text-muted);
 }
 
-.otp__tries {
+.queue__tries {
   text-align: right;
 }
 
-.otp__tries small {
+.queue__tries small {
   font-family: var(--font-body);
   color: var(--color-text-muted);
 }
 
 /* --- what went wrong ----------------------------------------------------------------------- */
-.otp__detail {
+.queue__detail {
   display: grid;
   grid-template-columns: 2fr 3fr;
   gap: var(--space-5);
@@ -446,7 +447,7 @@
 }
 
 @media (max-width: 900px) {
-  .otp__detail {
+  .queue__detail {
     grid-template-columns: 1fr;
     gap: var(--space-4);
   }
@@ -455,7 +456,7 @@
 /* What to do about it, in a sentence, tinted by how much of a problem it is. A replaced code
    is green because it is not a fault at all, and an operator who has to read four lines to
    learn that will stop reading them. */
-.otp__advice {
+.queue__advice {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   border-left: 3px solid var(--color-border);
@@ -463,22 +464,22 @@
   font-size: var(--text-body);
 }
 
-.otp__advice--bad {
+.queue__advice--bad {
   border-left-color: var(--color-error);
   background: var(--color-error-wash);
 }
 
-.otp__advice--warn {
+.queue__advice--warn {
   border-left-color: var(--color-warning);
   background: var(--color-secondary-wash);
 }
 
-.otp__advice--good {
+.queue__advice--good {
   border-left-color: var(--color-primary);
   background: var(--color-primary-wash);
 }
 
-.otp__advice--info {
+.queue__advice--info {
   border-left-color: var(--color-info);
   background: var(--color-info-wash);
 }
@@ -487,23 +488,23 @@
    are the *pairs*: laid out as bare `dt`/`dd` children each takes a cell of its own, so every
    label lands beside the previous label's value and the panel says "Expired" against the time
    the code was sent. */
-.otp__facts {
+.queue__facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: var(--space-3) var(--space-5);
   margin: 0;
 }
 
-.otp__fact {
+.queue__fact {
   min-width: 0;
 }
 
-.otp__facts dt {
+.queue__facts dt {
   font-size: var(--text-caption);
   color: var(--color-text-muted);
 }
 
-.otp__facts dd {
+.queue__facts dd {
   margin: 0;
   font-size: var(--text-body);
   color: var(--color-ink);
@@ -512,17 +513,17 @@
 
 /* A fact nobody recorded says so in muted type rather than in the same weight as one that
    was — the rule the non-member detail screen already follows. */
-.otp__facts dd.is-missing {
+.queue__facts dd.is-missing {
   color: var(--color-text-muted);
 }
 
-.otp__link {
+.queue__link {
   color: var(--color-primary-dark);
   font-weight: 600;
 }
 
-.otp__link:hover,
-.otp__link:focus-visible {
+.queue__link:hover,
+.queue__link:focus-visible {
   text-decoration: underline;
 }
 
