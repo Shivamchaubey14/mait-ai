@@ -395,7 +395,7 @@ say which bundle it came out of. Validate then answers `reason: "breed_required"
 | --- | --- | --- | --- |
 | GET | `/dashboard/summary/` | AI counts today/week/month/lifetime + all-time highs | Admin |
 | GET | `/dashboard/trends/` | Daily/monthly AI trend series, filterable | Admin |
-| GET | `/dashboard/mait-performance/` | Per-Mait AI count & collections for a period | Admin |
+| GET | `/dashboard/mait-performance/` | Per-Mait AI count & collections over a date range, ranked | Admin |
 | GET | `/dashboard/mpp-coverage/` | Members served vs. total per MPP for a window (`?days=`, default 30, max 365) | Admin |
 | GET | `/admin/otp-failures/` | Who is stuck at an OTP and why — the detail behind the Exceptions card (§9.9) | Admin |
 | GET | `/admin/exceptions/{queue}/` | The detail behind any other Exceptions card, in one shared row shape (§9.9) | Admin |
@@ -636,6 +636,32 @@ and a chip showing zero is a chip the portal hides, which would have made the tw
 outcomes unreachable.
 
 `?days=` applies only where the queue declares `windowed` — Failed OTPs and refused checks.
+
+### The leaderboard's range
+
+`?date_from=` and `?date_to=` are inclusive local days. `?days=N` is the older form and still
+works, meaning the last N days ending today; neither given means the last thirty.
+
+Everything is clamped rather than refused — a leaderboard is a thing somebody scrubs a date
+picker across, and half-typed dates arrive constantly. A range typed backwards is swapped,
+because that is what was meant and answering nothing would look like a fortnight in which
+nobody worked. A range running past today stops at today. The span is capped at a year.
+
+**The recent tail is counted live and only the older days come off the aggregate**, the same
+split `/dashboard/trends/` makes: the hourly job rewrites the last `AGGREGATE_LOOKBACK_DAYS`
+days wholesale, so a day inside that window is missing, an hour behind, or about to change.
+
+The tail is anchored to **today**, not to the end of the range. `trends` always ends today so
+the two are the same thing there; here they are not, and taking the tail from `end` silently
+dropped the last two days of every historical range — a board for August, asked for in
+September, lost the 30th and the 31st to a live query that found nothing because those days had
+long settled.
+
+`results` is ranked by `ai_count`, highest first, with the vendor code settling ties so an
+unchanged board reads the same twice. `count` is everybody who worked in the range and
+`results` is the top `MAX_LEADERBOARD_ROWS` of them, so a truncated board can say what it left
+out. `totals` is summed over everybody rather than over the rows returned — a total that
+quietly stopped at the two-hundredth Mait would be a smaller number presented in the same words.
 
 ## 9.10 Admin — users
 

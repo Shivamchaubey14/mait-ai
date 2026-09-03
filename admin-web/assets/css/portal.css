@@ -379,6 +379,16 @@ a.btn:hover {
   min-width: 200px;
 }
 
+/* A word in front of a control in the filter bar — "From", "To". Only where the control
+   cannot say what it is on its own: a search box carries a placeholder and a chip carries its
+   own state, but two date fields side by side are indistinguishable without them, and an
+   `aria-label` alone leaves a sighted operator guessing which way round they are. */
+.filters__label {
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
 /* The magnifier is a sibling laid over the input, not a background image: a background image
    would mean an SVG with a colour spelled out in this file, and the palette lives in
    tokens.css. shell.js builds the wrapper, so no page has to remember it. */

@@ -455,5 +455,32 @@ window.MaitAI = window.MaitAI || {};
         wired = true;
       }
     },
+
+    /**
+     * Repaint a control the page has just written to from script.
+     *
+     * Both replacements do listen for `change` on the native element, which covers a form
+     * reset and a screen that means "the user chose this". It does not cover a screen writing
+     * a value *back* — the leaderboard echoes the range the API actually answered for into
+     * its two date fields — because firing `change` there re-enters the page's own change
+     * handler, which reloads, which writes the value back again.
+     *
+     * So this is the explicit repaint, which is what `commit` above already prefers for the
+     * same reason: the visible half of a control should not depend on event plumbing it does
+     * not need.
+     */
+    sync: function (target) {
+      $(target).each(function () {
+        const $pick = $(this).closest('.pick');
+        if (!$pick.length) {
+          return;
+        }
+        if ($pick.hasClass('pick--date')) {
+          syncDate($pick);
+        } else {
+          syncSelect($pick);
+        }
+      });
+    },
   };
 })(window.MaitAI, jQuery);

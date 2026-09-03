@@ -9,6 +9,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The leaderboard takes a date range (W14)** — two date fields beside the presets, so "who is
+  working" can be asked about the month somebody is closing rather than only a rolling window,
+  with four tiles saying what the range holds. Ranked by AI count as before, now with ties
+  settled so an unchanged board reads the same twice. The recent days are counted live and only
+  the settled ones come off the aggregate — previously only *today* was, leaving yesterday read
+  off a table the hourly job was still writing.
 - **Every Exceptions queue opens in place (W16b)** — each card's Open button raises the queue
   behind it as a dialog over the page instead of navigating away, on both Exceptions and the
   dashboard. One dialog serves all six because the API answers them in one row shape. Each row

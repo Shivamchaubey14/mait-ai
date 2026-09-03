@@ -11,7 +11,8 @@ wrong right now, and a stale answer there is worse than a slightly slower one.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.db.models import Count, Q, Sum
@@ -51,6 +52,10 @@ MAX_TREND_DAYS = 120
 # nobody reads three thousand rows, and the summary is what the tiles are for.
 MAX_COVERAGE_ROWS = 100
 MAX_COVERAGE_DAYS = 365
+
+#: The furthest back the leaderboard will look. A year of a ranked board is already more
+#: than anybody reads; past that it is a report, not a screen.
+MAX_LEADERBOARD_DAYS = 365
 
 
 def _completed_between(start, end=None):
@@ -441,29 +446,113 @@ def trends(request):
     return Response({"days": days, "district_code": district, "results": results})
 
 
+def _leaderboard_range(request) -> tuple[date, date]:
+    """
+    The days the board covers, as inclusive local dates.
+
+    Three ways of asking, in order of precedence. An explicit `date_from`/`date_to` wins; then
+    `days`, the older form, meaning the last N days ending today; then the default of thirty.
+
+    Everything is clamped rather than refused. A leaderboard is a thing somebody scrubs a date
+    picker across, and half-typed dates arrive constantly — answering for the nearest sensible
+    window is better than a 400 that empties the screen mid-keystroke. The one thing not
+    clamped away is the order: a range typed backwards is swapped, because that is what was
+    meant, and returning nothing would look like a fortnight in which nobody worked.
+    """
+    params = request.query_params
+    today = timezone.localdate()
+
+    start = _parse_day(params.get("date_from"))
+    end = _parse_day(params.get("date_to"))
+
+    if start is None and end is None:
+        try:
+            days = int(params.get("days", 30))
+        except (TypeError, ValueError):
+            days = 30
+        days = min(MAX_LEADERBOARD_DAYS, max(1, days))
+        return today - timedelta(days=days - 1), today
+
+    if start is None:
+        start = end - timedelta(days=29)
+    if end is None:
+        end = min(today, start + timedelta(days=29))
+    if start > end:
+        start, end = end, start
+
+    # Never past today: a range running into next week reads as a quiet fortnight rather than
+    # as a question nobody can answer.
+    end = min(end, today)
+    start = min(start, end)
+    if (end - start).days + 1 > MAX_LEADERBOARD_DAYS:
+        start = end - timedelta(days=MAX_LEADERBOARD_DAYS - 1)
+    return start, end
+
+
+def _parse_day(value):
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+#: The board is ranked, so it is bounded. Two hundred is past the point where anybody reads
+#: down a ranking and well past the roster of working Maits; the response says how many there
+#: were, so a truncated board can say so rather than look like the whole answer.
+MAX_LEADERBOARD_ROWS = 200
+
+
 @extend_schema(
     tags=["dashboard"],
     summary="Per-Mait performance",
-    description="AI count and collections per Mait for a period (SRS §6.7.4).",
+    description=(
+        "AI count and collections per Mait over a date range, ranked by count (SRS §6.7.4).\n\n"
+        "`?date_from=` and `?date_to=` are inclusive local days. `?days=N` is the older form "
+        "and still works, meaning the last N days ending today. Neither given means the last "
+        "30 days.\n\n"
+        "**The recent tail is counted live and only the older days come off the aggregate**, "
+        "the same split `/dashboard/trends/` makes and for the same reason: the hourly job "
+        "rewrites the last `AGGREGATE_LOOKBACK_DAYS` days wholesale, so a day inside that "
+        "window is either missing, an hour behind, or about to change. This used to overlay "
+        "only today, which left yesterday reading off a table that was still being written — "
+        "and on a deployment with no worker running, every day since somebody last ran "
+        "`rebuild_ai_aggregates` by hand.\n\n"
+        "`count` is how many Maits worked in the range; `results` is the top "
+        "`MAX_LEADERBOARD_ROWS` of them."
+    ),
+    parameters=[
+        OpenApiParameter("date_from", description="YYYY-MM-DD, inclusive", type=str),
+        OpenApiParameter("date_to", description="YYYY-MM-DD, inclusive", type=str),
+        OpenApiParameter("days", description="Last N days ending today", type=int),
+    ],
     responses={200: dict},
 )
 @api_view(["GET"])
 @permission_classes([IsAdmin, in_section(PortalSection.LEADERBOARD)])
 def mait_performance(request):
-    try:
-        days = min(MAX_TREND_DAYS, max(1, int(request.query_params.get("days", 30))))
-    except (TypeError, ValueError):
-        days = 30
-    today = timezone.localdate()
-    start = today - timedelta(days=days - 1)
+    start, end = _leaderboard_range(request)
 
-    # Settled days only. Today is added live below, the way `trends` and `summary` do it: the
-    # aggregate is written hourly, so today's slice is absent until the first run after
-    # midnight and up to an hour behind after that. Read from the aggregate alone, a Mait who
-    # had worked all morning showed yesterday's total — and a leaderboard that does not move
-    # when somebody works is one they stop believing.
+    # The recent tail is read live and only the days before it come off the aggregate.
+    #
+    # `trends` sets this out at length and the reasoning is identical: the aggregate is
+    # authoritative for a day only once the hourly job has stopped rewriting it, and that job
+    # rewrites the last `AGGREGATE_LOOKBACK_DAYS` days wholesale. Overlaying only *today* —
+    # which is what this did — fixed the visible half and left yesterday reading off a table
+    # still being written.
+    #
+    # **The tail is anchored to today, not to the end of the range.** `trends` always ends
+    # today so the two are the same thing there; here they are not, and taking the tail from
+    # `end` silently dropped the last two days of every historical range — a board for August,
+    # asked for in September, lost the 30th and the 31st to a live query that found nothing
+    # because those days are long settled.
+    today = timezone.localdate()
+    live_from = max(start, today - timedelta(days=AGGREGATE_LOOKBACK_DAYS))
+    # Half-open, and never past the end of the range: a range wholly inside the settled days
+    # reads entirely off the aggregate, which is what it is for.
+    settled_until = min(end + timedelta(days=1), live_from)
+
     settled = (
-        DailyAIAggregate.objects.filter(date__gte=start, date__lt=today)
+        DailyAIAggregate.objects.filter(date__gte=start, date__lt=settled_until)
         .values("mait_id", "mait__name", "mait__sahayak_vendor_code")
         .annotate(
             ai_count=Sum("ai_count"),
@@ -503,16 +592,21 @@ def mait_performance(request):
     # Bounded by instants rather than by `completed_at__date`, which compiles to a CONVERT_TZ
     # that is NULL on a MySQL without timezone tables loaded — the failure `apps.core.timeframe`
     # exists to prevent, and one that would silently drop every row rather than raise.
-    today_events = (
+    # Only where the range actually reaches into the unsettled window. A range that ended a
+    # month ago has no live part, and running the query anyway would be a table scan returning
+    # nothing.
+    live_events = (
         AIEvent.objects.filter(
             status=AIEvent.Status.COMPLETED,
-            completed_at__gte=start_of_day(today),
-            completed_at__lt=end_of_day(today),
+            completed_at__gte=start_of_day(live_from),
+            completed_at__lt=end_of_day(end),
         )
         .values("mait_id", "mait__name", "mait__sahayak_vendor_code")
         .annotate(n=Count("id"))
+        if end >= live_from
+        else []
     )
-    for row in today_events:
+    for row in live_events:
         slot(row["mait_id"], row["mait__name"], row["mait__sahayak_vendor_code"])["ai_count"] += (
             row["n"]
         )
@@ -520,11 +614,11 @@ def mait_performance(request):
     # The same split the aggregate keeps, computed the same way as `_money_for_slice`: only
     # verified payments count, because an unconfirmed one is money nobody has yet agreed
     # changed hands.
-    today_money = (
+    live_money = (
         Payment.objects.filter(
             status=Payment.Status.VERIFIED,
-            ai_event__completed_at__gte=start_of_day(today),
-            ai_event__completed_at__lt=end_of_day(today),
+            ai_event__completed_at__gte=start_of_day(live_from),
+            ai_event__completed_at__lt=end_of_day(end),
         )
         .values("ai_event__mait_id")
         .annotate(
@@ -532,8 +626,10 @@ def mait_performance(request):
             cod=Sum("amount", filter=Q(mode=Payment.Mode.COD)),
             online=Sum("amount", filter=Q(mode=Payment.Mode.ONLINE)),
         )
+        if end >= live_from
+        else []
     )
-    for row in today_money:
+    for row in live_money:
         entry = totals.get(row["ai_event__mait_id"])
         # No entry means a verified payment against an event this window does not hold, which
         # the join above makes impossible. Skipped rather than invented: a name is not
@@ -545,13 +641,29 @@ def mait_performance(request):
         entry["cod"] += row["cod"] or 0
         entry["online"] += row["online"] or 0
 
-    # Ordered here rather than in SQL, because today's live counts are only merged in now and
-    # a Mait who did twenty this morning has to be able to reach the top of the board.
-    ranked = sorted(totals.values(), key=lambda e: e["ai_count"], reverse=True)[:50]
+    # Ordered here rather than in SQL, because the live tail is only merged in now and a Mait
+    # who did twenty this morning has to be able to reach the top of the board. The vendor code
+    # settles ties, so two Maits on the same count do not swap places between two loads of
+    # unchanged data.
+    ranked = sorted(totals.values(), key=lambda e: (-e["ai_count"], e["sahayak_vendor_code"] or ""))
 
     return Response(
         {
-            "days": days,
+            "date_from": start.isoformat(),
+            "date_to": end.isoformat(),
+            "days": (end - start).days + 1,
+            # Everyone who worked in the range, so a truncated board can say what it left out
+            # rather than presenting the top two hundred as the whole roster.
+            "count": len(ranked),
+            # Summed over everybody, not over the rows returned. The screen states what the
+            # range holds, and a total that quietly stopped at the two-hundredth Mait would
+            # be a smaller number presented in the same words.
+            "totals": {
+                "ai_count": sum(e["ai_count"] for e in ranked),
+                "amount_collected": str(sum((e["collected"] for e in ranked), Decimal("0"))),
+                "cod_amount": str(sum((e["cod"] for e in ranked), Decimal("0"))),
+                "online_amount": str(sum((e["online"] for e in ranked), Decimal("0"))),
+            },
             "results": [
                 {
                     "mait_id": e["mait_id"],
@@ -562,7 +674,7 @@ def mait_performance(request):
                     "cod_amount": str(e["cod"]),
                     "online_amount": str(e["online"]),
                 }
-                for e in ranked
+                for e in ranked[:MAX_LEADERBOARD_ROWS]
             ],
         }
     )

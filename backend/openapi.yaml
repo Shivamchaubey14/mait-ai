@@ -2141,8 +2141,31 @@ paths:
   /api/v1/dashboard/mait-performance/:
     get:
       operationId: dashboard_mait_performance_retrieve
-      description: AI count and collections per Mait for a period (SRS §6.7.4).
+      description: |-
+        AI count and collections per Mait over a date range, ranked by count (SRS §6.7.4).
+
+        `?date_from=` and `?date_to=` are inclusive local days. `?days=N` is the older form and still works, meaning the last N days ending today. Neither given means the last 30 days.
+
+        **The recent tail is counted live and only the older days come off the aggregate**, the same split `/dashboard/trends/` makes and for the same reason: the hourly job rewrites the last `AGGREGATE_LOOKBACK_DAYS` days wholesale, so a day inside that window is either missing, an hour behind, or about to change. This used to overlay only today, which left yesterday reading off a table that was still being written — and on a deployment with no worker running, every day since somebody last ran `rebuild_ai_aggregates` by hand.
+
+        `count` is how many Maits worked in the range; `results` is the top `MAX_LEADERBOARD_ROWS` of them.
       summary: Per-Mait performance
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: YYYY-MM-DD, inclusive
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: YYYY-MM-DD, inclusive
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: Last N days ending today
       tags:
       - dashboard
       security:
