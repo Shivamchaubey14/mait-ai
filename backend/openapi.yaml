@@ -404,6 +404,62 @@ paths:
                 type: string
                 format: binary
           description: ''
+  /api/v1/admin/otp-failures/:
+    get:
+      operationId: admin_otp_failures_retrieve
+      description: |-
+        The detail behind the Exceptions card's Failed OTPs queue: one row per code that did not get somebody through, with who they are, what they were trying to do, why it failed and what it is holding up.
+
+        **Three different failures, named apart** in `outcome`, because they need three different responses. `attempts_exhausted` — the code arrived and the wrong one was entered. `never_attempted` — sent and never typed into at all, which is usually an SMS that did not arrive and is a gateway problem rather than a person's. `expired` — ran out of time part-way through. `superseded` — **not a failure**: they asked for another code and this one was retired to make way for it, which is all a resend does. `open` — still inside its window and may yet succeed.
+
+        `?days=` defaults to 1, matching the card, and is capped at 30. `?include_unattempted=true` widens the queue to codes nobody ever typed into; they are excluded by default because the card excludes them, and the two must agree.
+
+        `?outcome=` filters to one of the four. `?purpose=` filters to `login`, `farmer_verify`, `payment_online` or `payment_cod`.
+
+        Mobile numbers come back in full, as they do on every other admin endpoint — this screen exists to be acted on, and acting on it usually means ringing the number.
+      summary: Who is stuck at an OTP, and why
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: 1–30, default 1
+      - in: query
+        name: include_unattempted
+        schema:
+          type: boolean
+        description: Include codes nobody ever entered. Default false.
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: outcome
+        schema:
+          type: string
+        description: attempts_exhausted / never_attempted / expired / superseded /
+          open
+      - in: query
+        name: purpose
+        schema:
+          type: string
+        description: OTPLog purpose
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/admin/pregnancy/:
     get:
       operationId: admin_pregnancy_retrieve

@@ -27,11 +27,12 @@ from apps.core.timeframe import end_of_day, local_day, start_of_day
 from apps.indents.models import STALE_AFTER_DAYS, IndentRequest, stale_indent_q
 from apps.inventory.models import MaitInventory, ProductType
 from apps.masterdata.models import Mait
-from apps.payments.models import OTPLog, Payment
+from apps.payments.models import Payment
 from apps.pregnancy.models import PregnancyCheck
 from apps.pregnancy.oversight import rates_by_mait
 
 from .models import AGGREGATE_LOOKBACK_DAYS, DailyAIAggregate, PlatformMilestone
+from .otp_failures import failed_otp_queue
 
 MAX_EXCEPTION_ROWS = 3
 
@@ -170,13 +171,9 @@ def _exceptions() -> dict:
         for p in pending.order_by("created_at")[:MAX_EXCEPTION_ROWS]
     ]
 
-    since = timezone.now() - timedelta(days=1)
-    failed = (
-        OTPLog.objects.filter(is_verified=False, attempt_count__gte=1, created_at__gte=since)
-        .values("mobile_no")
-        .annotate(n=Count("id"))
-        .order_by("-n")
-    )
+    # The queue's definition lives in `otp_failures`, so the count on this card and the rows
+    # on the screen behind it cannot drift apart.
+    failed = failed_otp_queue().values("mobile_no").annotate(n=Count("id")).order_by("-n")
     failed_rows = [
         {
             "label": f"{row['mobile_no'][:6]}••••",
@@ -518,9 +515,9 @@ def mait_performance(request):
         .annotate(n=Count("id"))
     )
     for row in today_events:
-        slot(row["mait_id"], row["mait__name"], row["mait__sahayak_vendor_code"])[
-            "ai_count"
-        ] += row["n"]
+        slot(row["mait_id"], row["mait__name"], row["mait__sahayak_vendor_code"])["ai_count"] += (
+            row["n"]
+        )
 
     # The same split the aggregate keeps, computed the same way as `_money_for_slice`: only
     # verified payments count, because an unconfirmed one is money nobody has yet agreed

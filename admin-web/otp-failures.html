@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Failed OTPs · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/otp-failures.css" />
+  </head>
+
+  <body>
+    <!-- Exceptions, not a section of its own. This is the detail behind one of that screen's
+         cards — the same relationship upload-errors.html has to SAP upload — so it is reached
+         from there, gated with it, and highlights it in the sidebar. -->
+    <div class="shell" data-page="exceptions">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Failed OTPs</h1>
+            <p class="topbar__meta">Who is stuck, and which of the four things went wrong</p>
+          </div>
+          <div class="topbar__actions">
+            <!-- Back to the card this came from, the same way upload-errors.html returns to
+                 SAP upload. -->
+            <a class="btn" href="exceptions.html">← Exceptions</a>
+            <select class="select" id="window" aria-label="How far back">
+              <option value="1">Today</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+            </select>
+            <button class="btn" id="refresh" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5" />
+              </svg>
+              Refresh
+            </button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- People first, because that is the number somebody acts on. One number failing
+             eleven times is eleven rows and one phone call, and a screen that leads with the
+             row count says a bad afternoon looks like a crisis. -->
+        <section class="tiles" aria-label="Summary">
+          <article class="tile tile--info">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M5 21a7 7 0 0 1 14 0" />
+                </svg>
+              </span>
+              People stuck
+            </p>
+            <p class="tile__value" data-kpi="people"></p>
+            <p class="tile__foot" data-kpi="people-foot"></p>
+          </article>
+          <article class="tile tile--bad">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M9 9l6 6M15 9l-6 6" />
+                </svg>
+              </span>
+              Attempts used up
+            </p>
+            <p class="tile__value" data-kpi="exhausted"></p>
+            <p class="tile__foot">Wrong code entered until locked out</p>
+          </article>
+          <!-- The one that is usually not the person's fault, and the reason this screen was
+               worth building: it is invisible on the Exceptions card. -->
+          <article class="tile tile--warn">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 5h16v14H4zM4 7l8 6 8-6" />
+                </svg>
+              </span>
+              Never entered
+            </p>
+            <p class="tile__value" data-kpi="never"></p>
+            <p class="tile__foot">Likely an SMS that did not arrive</p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7.5V12l3.5 2" />
+                </svg>
+              </span>
+              Ran out of time
+            </p>
+            <p class="tile__value" data-kpi="expired"></p>
+            <p class="tile__foot">Started, not finished in five minutes</p>
+          </article>
+        </section>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search by name or number"
+            aria-label="Search by name or number"
+          />
+          <button class="chip is-active" data-outcome="" type="button" aria-pressed="true">
+            All
+          </button>
+          <button
+            class="chip chip--bad"
+            data-outcome="attempts_exhausted"
+            type="button"
+            aria-pressed="false"
+          >
+            Attempts used up
+          </button>
+          <button
+            class="chip chip--warn"
+            data-outcome="never_attempted"
+            type="button"
+            aria-pressed="false"
+          >
+            Never entered
+          </button>
+          <button class="chip" data-outcome="expired" type="button" aria-pressed="false">
+            Ran out of time
+          </button>
+          <!-- Kept out of the default view and reachable in one click. A replaced code is not
+               a failure at all — it is what asking for a second code does to the first — and
+               on a busy day they outnumber the real ones two to one. -->
+          <button class="chip" data-outcome="superseded" type="button" aria-pressed="false">
+            Replaced
+          </button>
+          <button class="chip" data-outcome="open" type="button" aria-pressed="false">
+            Still open
+          </button>
+        </section>
+
+        <section class="panel panel--flush" aria-labelledby="queue-title">
+          <div class="panel__head otp__head">
+            <h2 class="panel__title" id="queue-title">
+              <span class="panel__icon otp__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 4h16v12H8l-4 4zM10 8l4 4M14 8l-4 4" />
+                </svg>
+              </span>
+              Codes that did not get anybody through
+            </h2>
+            <span class="panel__count" id="queue-count">—</span>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table otp__table">
+              <thead>
+                <tr>
+                  <th scope="col">Who</th>
+                  <th scope="col">Number</th>
+                  <th scope="col">For</th>
+                  <th scope="col">What happened</th>
+                  <th class="table__num" scope="col">Attempts</th>
+                  <th scope="col">Sent</th>
+                  <th scope="col">Holding up</th>
+                </tr>
+              </thead>
+              <tbody id="rows" aria-busy="true">
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td class="table__num"></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/controls.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/otp-failures.js"></script>
+  </body>
+</html>

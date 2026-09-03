@@ -567,6 +567,18 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
+     * The detail behind the Exceptions card's Failed OTPs queue.
+     *
+     * `days` defaults to 1 on the API, matching the card. `outcome` narrows to one of
+     * `attempts_exhausted` / `never_attempted` / `expired` / `superseded` / `open`, and the
+     * last two of those only exist among codes nobody typed into — pass
+     * `include_unattempted` with them or the answer is empty.
+     */
+    otpFailures: function (query) {
+      return request({ path: '/admin/otp-failures/', query: query });
+    },
+
+    /**
      * A month's Mait payout, as the screen previews it.
      *
      * `month` is `YYYY-MM` and may be omitted, which answers for the month just gone — this

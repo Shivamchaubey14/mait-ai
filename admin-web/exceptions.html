@@ -101,14 +101,18 @@
                 Failed OTPs
               </h2>
               <span class="panel__count" data-count="failed-otps">—</span>
-              <!-- The numbers are masked here and a Mait who cannot get past the OTP is most
-                   often one who never activated, so this lands on that roster — where the
-                   mobile column is what the masked prefix is matched against. -->
+              <!-- The card can only mask a number and count it. This lands on the queue
+                   itself, where each code says who it belongs to, what they were trying to
+                   do, which of the four things went wrong and what it is holding up. It used
+                   to land on the roster of Maits who had never activated, on the reasoning
+                   that a Mait failing an OTP is usually one who never got in — often true,
+                   and no help at all when the person stuck is a farmer authorising a
+                   payment, who is not on that roster. -->
               <a
                 class="panel__link"
                 data-link="failed-otps"
-                href="maits.html?filter=not-activated"
-                aria-label="Open the Maits who have not activated"
+                href="otp-failures.html"
+                aria-label="Open the failed OTP queue"
               >
                 Open
                 <svg

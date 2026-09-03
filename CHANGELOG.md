@@ -9,6 +9,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Failed OTPs (W16b)** — the Exceptions card's Open link lands on the queue itself instead of
+  on an unrelated roster. One row per code that did not get somebody through, naming who they
+  are, what they were trying to do, what it is holding up, and which of four things went wrong:
+  attempts used up, never entered (an SMS that did not arrive), ran out of time, or simply
+  replaced by a newer code — which is not a failure at all and was previously indistinguishable
+  from an undelivered message.
 - The non-member export carries each farmer's **last known position** — latitude, longitude,
   whether the fix came from the handset or from a chosen photograph's EXIF, and the day it was
   taken. Taken from the GPS pin on her most recent insemination, because a non-member holds no

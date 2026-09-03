@@ -397,6 +397,7 @@ say which bundle it came out of. Validate then answers `reason: "breed_required"
 | GET | `/dashboard/trends/` | Daily/monthly AI trend series, filterable | Admin |
 | GET | `/dashboard/mait-performance/` | Per-Mait AI count & collections for a period | Admin |
 | GET | `/dashboard/mpp-coverage/` | Members served vs. total per MPP for a window (`?days=`, default 30, max 365) | Admin |
+| GET | `/admin/otp-failures/` | Who is stuck at an OTP and why — the detail behind the Exceptions card (§9.9) | Admin |
 | GET | `/reports/export/` | CSV/Excel export of AI events / payments (query-filtered) | Admin |
 | GET | `/reports/pregnancy/` | CSV of every pregnancy check: who agreed, who refused, who has not been visited (§9.11) | Admin |
 | GET | `/reports/mait-payment/` | A month's Mait payout, one row per Mait, for the preview on W18 (`?month=YYYY-MM`, default this month) | Admin |
@@ -541,6 +542,48 @@ change by negotiation rather than by deploy. **Consumable rates are not here** �
 `Consumable.rate` and are maintained on Products, so a glove costs one thing across the whole
 platform. Changing a scheme figure changes every month the report is asked for, past ones
 included; that is deliberate, so a correction reaches the months it was wrong for.
+
+### Failed OTPs
+
+The Exceptions card can mask a number and count it. This is the queue behind it: one row per
+code that did not get somebody through, with who they are, what they were trying to do, why it
+failed and what it is holding up.
+
+**One definition of the queue.** `dashboard.otp_failures.failed_otp_queue` is what the card
+counts and what this lists, so a card saying three cannot sit above a screen showing eleven.
+
+**Four outcomes, and they are not cosmetic** — each sends somebody somewhere different:
+
+| `outcome` | What it means | What to do |
+| --- | --- | --- |
+| `attempts_exhausted` | The code arrived and the wrong one was entered until the counter ran out | Ring them; they need a fresh code |
+| `never_attempted` | Sent, and nothing was ever typed into it | Check the SMS gateway before the person |
+| `expired` | Started, not finished inside the five minutes | A fresh code is normally enough |
+| `superseded` | **Not a failure.** Asking for a second code expires the first, and this is the first | Nothing |
+| `open` | Still inside its window and may yet succeed | Nothing yet |
+
+`superseded` earns its own value because without it the resend path poisons `never_attempted`,
+which is the one that sends an admin to debug the gateway — on the development database half
+the unattempted rows are ordinary resends. It is decided by two conditions together: the code
+died before its full life (only the resend in `payments.services` does that) **and** a later
+code exists for the same number and purpose.
+
+`?days=` defaults to 1, matching the card, capped at 30. `?include_unattempted=true` widens the
+queue to codes nobody typed into — off by default because the card excludes them and the two
+must agree; `never_attempted` and `superseded` only exist inside it. `?outcome=` and `?purpose=`
+narrow further. `outcome` is filtered after the rows are described rather than in SQL: it is not
+a column, it is decided from the attempt count, the expiry and the clock together, and writing
+it as a queryset would be a second definition to keep in step with the first.
+
+Whose OTP it is comes through the **payment** where there is one, because that is a foreign key
+and therefore an answer — two people share a phone often enough that the number cannot say which
+of them was standing there. Login and farmer-verification codes have nothing else, so those are
+matched against the Mait, Member and Non-member rosters by number, and a number on none of them
+says so rather than coming back blank.
+
+Mobile numbers come back in full, as on every other admin endpoint. The screen exists to be
+acted on and acting on it means ringing the number; the card's masked prefix is what made it
+useless.
 
 ## 9.10 Admin — users
 

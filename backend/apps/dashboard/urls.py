@@ -12,6 +12,7 @@ from django.urls import path
 
 from apps.payments.reports import mait_payment, mait_payment_export, payout_scheme
 
+from .otp_failures import otp_failures
 from .reports import export_csv, export_pregnancy_csv
 from .views import activation_readiness, mait_performance, mpp_coverage, summary, trends
 
@@ -23,6 +24,9 @@ urlpatterns = [
     path("dashboard/mait-performance/", mait_performance, name="mait-performance"),
     path("dashboard/mpp-coverage/", mpp_coverage, name="mpp-coverage"),
     path("dashboard/activation-readiness/", activation_readiness, name="activation-readiness"),
+    # The detail behind the Exceptions card's Failed OTPs queue — who is stuck, and
+    # which of the three quite different failures it was.
+    path("admin/otp-failures/", otp_failures, name="otp-failures"),
     path("reports/export/", export_csv, name="reports-export"),
     # A second export rather than a mode of the first: it is one row per *check*, not per
     # event, and the column an admin opens it for — who agreed to the visit — has no
