@@ -121,20 +121,26 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
-     * A queue card's "Open" link, on or off.
+     * A queue card's "Open" control, on or off.
      *
-     * Both the dashboard and Exceptions render the same four cards, so the rule that decides
-     * whether one is clickable lives once. An empty queue has nothing to open, and a link that
-     * lands on a filtered list of nothing teaches an operator that the link is a dead end —
-     * after which they stop using it on the day the queue is not empty. The count is still
-     * shown either way: zero is an answer.
+     * Both the dashboard and Exceptions render the same six cards, so the rule that decides
+     * whether one is usable lives once.
+     *
+     * **A control that opens a dialog stays.** The rule below was written for links: an empty
+     * queue has nothing to navigate to, and a link landing on a filtered list of nothing
+     * teaches an operator it is a dead end. That reasoning inverts once the control opens the
+     * queue *in place*, because the dialog is where the window is chosen — hiding it at zero
+     * locked the operator out of the only control that would have shown them the fourteen
+     * failures sitting just outside the card's week. The dialog says plainly that nothing is
+     * waiting in this window, which is a better answer than a card with no way in.
+     *
+     * The count is shown either way: zero is an answer.
      */
     queueLink: function (name, count) {
-      const open = (count || 0) > 0;
-      $('[data-link="' + name + '"]')
-        .prop('hidden', !open)
-        .closest('.panel')
-        .toggleClass('panel--linked', open);
+      const $control = $('[data-link="' + name + '"]');
+      const opensInPlace = $control.is('[data-queue]');
+      const open = opensInPlace || (count || 0) > 0;
+      $control.prop('hidden', !open).closest('.panel').toggleClass('panel--linked', open);
     },
 
     /** Identity cell: the name, with its code beneath in muted type. */

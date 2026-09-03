@@ -9,6 +9,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Failed OTPs queue counts a week, not a day**, and every exception card can be opened
+  even when its own window is quiet. Between them those two made a queue holding fourteen
+  failures read as empty: the card threw away anything older than midnight, and a zero count hid
+  the Open control — which is where the window is chosen.
 - **The leaderboard takes a date range (W14)** — two date fields beside the presets, so "who is
   working" can be asked about the month somebody is closing rather than only a rolling window,
   with four tiles saying what the range holds. Ranked by AI count as before, now with ties

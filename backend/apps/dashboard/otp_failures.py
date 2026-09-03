@@ -40,10 +40,19 @@ from apps.core.permissions import IsAdmin, in_section
 from apps.masterdata.models import Mait, Member, NonMember
 from apps.payments.models import OTPLog
 
-#: How far back the Exceptions card looks. A working signal rather than a lifetime total: an
-#: OTP somebody failed three weeks ago is history, and a queue that never empties is one people
-#: stop reading.
-WINDOW_DAYS = 1
+#: How far back the Exceptions card looks.
+#:
+#: A working signal rather than a lifetime total — an OTP somebody failed three weeks ago is
+#: history, and a queue that never empties is one people stop reading. But this was one day,
+#: which is far too short for the thing it is about: somebody stuck at six in the evening is
+#: still stuck at nine the next morning, and the queue had thrown their row away overnight. An
+#: office arriving to a card reading zero, over a database holding fourteen failures, quite
+#: reasonably concluded the screen was broken.
+#:
+#: A week is the working signal. It survives a weekend, which is exactly when a Mait gets stuck
+#: and nobody is at a desk, and it still empties — the refused-checks queue uses thirty for the
+#: same kind of reason.
+WINDOW_DAYS = 7
 
 #: The furthest back the detail screen will look. Triage sometimes needs last week — "this
 #: started on Friday" — but not last quarter.

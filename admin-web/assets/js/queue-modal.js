@@ -40,16 +40,17 @@ window.MaitAI = window.MaitAI || {};
   /**
    * Which queues are windowed, and what the select offers.
    *
-   * The API says whether a queue has a window; this says what the choices are. Failed OTPs
-   * opens on today because that is what its card counted, and the refusals queue on thirty
-   * days for the same reason — in both cases the number somebody just read on the card is the
-   * number of rows they should get.
+   * The API says whether a queue has a window and which one it opened on; this only says
+   * what the choices are, and `renderWindow` selects whichever the response came back with.
+   * That is what keeps the dialog showing the number somebody just read on the card — rather
+   * than this file holding a second opinion about the default and the two drifting.
    */
   const WINDOWS = {
     'failed-otps': [
       [1, 'Today'],
       [7, 'Last 7 days'],
       [30, 'Last 30 days'],
+      [90, 'Last 90 days'],
     ],
     'declined-checks': [
       [30, 'Last 30 days'],

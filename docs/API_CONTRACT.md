@@ -570,7 +570,7 @@ the unattempted rows are ordinary resends. It is decided by two conditions toget
 died before its full life (only the resend in `payments.services` does that) **and** a later
 code exists for the same number and purpose.
 
-`?days=` defaults to 1, matching the card, capped at 30. `?include_unattempted=true` widens the
+`?days=` defaults to **7**, matching the card, capped at 30. A week rather than a day because somebody stuck at six on Friday evening is still stuck on Monday morning — a one-day window threw their row away overnight, and an office arriving to a card reading zero over a database holding fourteen failures reasonably concluded the screen was broken. `?include_unattempted=true` widens the
 queue to codes nobody typed into — off by default because the card excludes them and the two
 must agree; `never_attempted` and `superseded` only exist inside it. `?outcome=` and `?purpose=`
 narrow further. `outcome` is filtered after the rows are described rather than in SQL: it is not

@@ -98,15 +98,33 @@ def test_a_verified_code_is_not_a_failure(admin_client):
     assert admin_client.get(URL).data["count"] == 0
 
 
-def test_the_window_is_a_day_and_can_be_widened(admin_client):
-    an_otp(sent_minutes_ago=30)
-    an_otp(sent_minutes_ago=60 * 24 * 3)
+def test_the_default_window_survives_a_weekend(admin_client):
+    """
+    A week, not a day.
 
-    assert admin_client.get(URL).data["count"] == 1
-    assert admin_client.get(URL, {"days": 7}).data["count"] == 2
-    # Capped rather than refused: a nonsense window answers for the widest sensible one.
+    Somebody stuck at six on Friday evening is still stuck on Monday morning, and a one-day
+    window had thrown their row away overnight — an office arriving to a card reading zero,
+    over a database holding fourteen failures, reasonably concluded the screen was broken.
+    """
+    an_otp(mobile="9876500001", sent_minutes_ago=30)
+    an_otp(mobile="9876500002", sent_minutes_ago=60 * 24 * 3)
+
+    assert admin_client.get(URL).data["window_days"] == 7
+    assert admin_client.get(URL).data["count"] == 2
+
+
+def test_the_window_still_ends(admin_client):
+    """A queue that never empties is one people stop reading."""
+    an_otp(mobile="9876500003", sent_minutes_ago=60 * 24 * 20)
+
+    assert admin_client.get(URL).data["count"] == 0
+    assert admin_client.get(URL, {"days": 30}).data["count"] == 1
+
+
+def test_a_nonsense_window_answers_for_something_sensible(admin_client):
+    """Capped rather than refused, so a stray parameter never empties the screen."""
     assert admin_client.get(URL, {"days": 9000}).data["window_days"] == 30
-    assert admin_client.get(URL, {"days": "yesterday"}).data["window_days"] == 1
+    assert admin_client.get(URL, {"days": "yesterday"}).data["window_days"] == 7
 
 
 # --------------------------------------------------------------------------------------

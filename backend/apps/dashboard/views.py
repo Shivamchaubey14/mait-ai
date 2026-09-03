@@ -39,6 +39,7 @@ from .exception_details import (
     stale_indents,
 )
 from .models import AGGREGATE_LOOKBACK_DAYS, DailyAIAggregate, PlatformMilestone
+from .otp_failures import WINDOW_DAYS as OTP_WINDOW_DAYS
 from .otp_failures import failed_otp_queue
 
 MAX_EXCEPTION_ROWS = 3
@@ -191,7 +192,9 @@ def _exceptions() -> dict:
     failed_rows = [
         {
             "label": f"{row['mobile_no'][:6]}••••",
-            "meta": f"{row['n']} failure(s) today",
+            # The window, not "today". It said today when the queue was a day long, and a
+            # sample line that names the wrong period is worse than one that names none.
+            "meta": f"{row['n']} failure(s) in {OTP_WINDOW_DAYS} days",
             "severity": "error",
         }
         for row in failed[:MAX_EXCEPTION_ROWS]
