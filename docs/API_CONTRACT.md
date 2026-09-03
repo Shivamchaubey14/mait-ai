@@ -547,7 +547,8 @@ included; that is deliberate, so a correction reaches the months it was wrong fo
 
 The Exceptions card can mask a number and count it. This is the queue behind it: one row per
 code that did not get somebody through, with who they are, what they were trying to do, why it
-failed and what it is holding up.
+failed and what it is holding up. The portal opens it as a dialog over the card rather than as
+a screen of its own, so the other five queues stay on the page.
 
 **One definition of the queue.** `dashboard.otp_failures.failed_otp_queue` is what the card
 counts and what this lists, so a card saying three cannot sit above a screen showing eleven.

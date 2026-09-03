@@ -318,6 +318,8 @@
       return;
     }
     MaitAI.shell.mount();
+    // The Failed OTPs card opens its queue over this page.
+    MaitAI.otpModal.mount();
 
     $('#today-date').text(
       new Date().toLocaleDateString('en-IN', {

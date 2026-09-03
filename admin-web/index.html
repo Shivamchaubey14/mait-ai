@@ -234,11 +234,19 @@
                 Failed OTPs
               </h2>
               <span class="panel__count" data-count="failed-otps">—</span>
-              <a
+              <!-- Opens the queue over this page rather than navigating to it. The card
+                   can only mask a number and count it; the dialog says who is stuck, what
+                   they were trying to do, which of the four things went wrong and what it is
+                   holding up. In place because triage is a scan of six queues, and a link
+                   that takes an operator off the screen to answer one of them costs them the
+                   other five and a click back. -->
+              <button
                 class="panel__link"
+                type="button"
+                data-otp-modal
                 data-link="failed-otps"
-                href="maits.html?filter=not-activated"
-                aria-label="Open the Maits who have not activated"
+                aria-haspopup="dialog"
+                aria-label="Open the failed OTP queue"
               >
                 Open
                 <svg
@@ -252,7 +260,7 @@
                 >
                   <path d="M9 6l6 6-6 6" />
                 </svg>
-              </a>
+              </button>
             </div>
             <div data-rows="failed-otps"></div>
           </article>
@@ -441,6 +449,7 @@
     <script src="assets/js/api.js"></script>
     <script src="assets/js/ui.js"></script>
     <script src="assets/js/controls.js"></script>
+    <script src="assets/js/otp-modal.js"></script>
     <script src="assets/js/shell.js"></script>
     <script src="assets/js/dashboard.js"></script>
   </body>
