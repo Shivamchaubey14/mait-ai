@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Audit log · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/logs.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="logs">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Audit log</h1>
+            <p class="topbar__meta">
+              Who did what, when, and from where. Append-only — nothing here can be edited or
+              removed.
+            </p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn" id="clear" type="button" hidden>Clear filters</button>
+            <button class="btn" id="refresh" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5" />
+              </svg>
+              Refresh
+            </button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- The last thirty days, not the lifetime. An append-only table's total only ever
+             grows, so a tile counting it says the same thing every month. Personal data gets
+             a tile of its own because it is the obligation this trail exists to meet, not
+             one activity among several. -->
+        <section class="tiles" aria-label="Summary">
+          <article class="tile tile--info">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M6 3h9l5 5v13H6zM14 3v6h6M9 13h7M9 17h5" />
+                </svg>
+              </span>
+              Entries
+            </p>
+            <p class="tile__value" data-kpi="total"></p>
+            <p class="tile__foot" data-kpi="total-foot"></p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7.5V12l3.5 2" />
+                </svg>
+              </span>
+              Today
+            </p>
+            <p class="tile__value" data-kpi="today"></p>
+            <p class="tile__foot">Recorded since midnight</p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M3 20a6 6 0 0 1 12 0M17 11a3 3 0 1 0 0-6M21 20a6 6 0 0 0-4-5.6"
+                  />
+                </svg>
+              </span>
+              People
+            </p>
+            <p class="tile__value" data-kpi="people"></p>
+            <p class="tile__foot">Accounts that did something</p>
+          </article>
+          <article class="tile tile--bad">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3l8 4v5c0 5-3.4 8.3-8 9.5-4.6-1.2-8-4.5-8-9.5V7zM9 12l2 2 4-4" />
+                </svg>
+              </span>
+              Personal data read
+            </p>
+            <p class="tile__value" data-kpi="pii"></p>
+            <p class="tile__foot">Aadhaar opened, or an export taken</p>
+          </article>
+        </section>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search a record, a person, an IP or a request id"
+            aria-label="Search a record, a person, an IP or a request id"
+          />
+          <select class="select" id="entity" aria-label="Record type">
+            <option value="">All record types</option>
+          </select>
+          <label class="filters__label" for="date-from">From</label>
+          <input class="input" id="date-from" type="date" />
+          <label class="filters__label" for="date-to">To</label>
+          <input class="input" id="date-to" type="date" />
+        </section>
+
+        <!-- Built from the trail rather than from a list in this file: an action nobody has
+             ever performed is a chip that answers empty, and one this file has not heard of
+             would be invisible. Each carries the count it will show. -->
+        <section class="filters log__actions" id="actions" aria-label="Filter by action"></section>
+
+        <section class="panel panel--flush" aria-labelledby="trail-title">
+          <div class="panel__head log__head">
+            <h2 class="panel__title" id="trail-title">
+              <span class="panel__icon log__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3l8 4v5c0 5-3.4 8.3-8 9.5-4.6-1.2-8-4.5-8-9.5V7z" />
+                </svg>
+              </span>
+              The trail
+            </h2>
+            <span class="panel__count" id="count">—</span>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table log__table">
+              <thead>
+                <tr>
+                  <th scope="col">When</th>
+                  <th scope="col">Who</th>
+                  <th scope="col">What happened</th>
+                  <th scope="col">Record</th>
+                  <th scope="col">From</th>
+                </tr>
+              </thead>
+              <tbody id="rows" aria-busy="true">
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pager" id="pager"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/controls.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/logs.js"></script>
+  </body>
+</html>

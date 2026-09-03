@@ -65,6 +65,10 @@ class PortalSection(models.TextChoices):
     # automatically the account allowed to pull an AI-event export.
     MAIT_PAYMENT = "mait-payment", "Mait payment"
     USERS = "users", "Users & roles"
+    # Last, and beside Users & roles rather than among the operational screens: it is the
+    # record of who did what, including who read a farmer's identity document, and the desk
+    # that administers accounts is the one that answers for it.
+    LOGS = "logs", "Audit log"
 
 
 class UserManager(BaseUserManager):

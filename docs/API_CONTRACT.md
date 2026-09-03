@@ -663,6 +663,39 @@ unchanged board reads the same twice. `count` is everybody who worked in the ran
 out. `totals` is summed over everybody rather than over the rows returned — a total that
 quietly stopped at the two-hundredth Mait would be a smaller number presented in the same words.
 
+### The audit trail
+
+`GET /admin/audit/` — every consequential action, newest first. The table has existed since the
+first commit with 36 call sites writing to it and nothing but a Django admin page to read it
+through; SRS §7 asks for auditability and §16 for a record of who reads personal data, and a
+table nobody can open satisfies an auditor on paper and nobody in practice.
+
+**Each row arrives as a sentence.** `summary` is built from the action, the record and whichever
+metadata key holds the outcome — `state_change` on an `ai_event` with `to: completed` reads
+*"Completed AI event 64"*. `changes` is a real before/after where the call site recorded one;
+`facts` is the rest of the metadata, labelled, with the keys the sentence already used dropped
+so a detail panel adds information rather than repeating the line above it.
+
+**`pii_access` is never folded into a generic read.** It is the obligation this trail exists to
+meet, counted on its own in `summary` and drawn as the only red action.
+
+`facets` lists the actions and record types present with the count each would show. Each facet
+is counted against every filter **except its own** — off the fully filtered set, choosing an
+action leaves that action as the only chip on screen and no way back to the others.
+
+`summary` covers the last 30 days rather than all time: on an append-only table a lifetime total
+only ever grows, and a tile that says the same thing every month is not a signal. It counts
+*people*, not rows — one person doing forty things is one person to ask about it.
+
+Filter with `action`, `entity_type`, `actor` (username), `date_from`, `date_to` and `search`,
+which matches a record id, a record type, a person, a request id or an IP. `limit` defaults to
+50 and is capped at 200.
+
+**Read-only.** There is no write path here and none to the table outside `record_audit`; the
+endpoint answers 405 to everything but `GET`. Gated on the `logs` section, which is granted with
+`users` and not with the rest of the portal: who may read the record of who opened a farmer's
+identity document is the same question as who may administer accounts.
+
 ## 9.10 Admin — users
 
 | Method | Endpoint | Description | Auth |

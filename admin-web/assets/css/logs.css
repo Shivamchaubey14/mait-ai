@@ -1,0 +1,282 @@
+/**
+ * Audit log (W19).
+ *
+ * A trail is read in two quite different ways and the screen has to serve both. Somebody
+ * scanning for a person scans the Who column; somebody asking what happened to a record reads
+ * the sentence in the middle. So the row leads with a time, a face and a line of English, and
+ * everything a schema would have shown — the metadata, the diff, the request id — is folded
+ * away until a row is opened.
+ *
+ * Nothing here is a new component. The tiles, table, pills, chips and pager are the portal's
+ * own; what this file adds is the actor disc, the sentence column and the panel underneath.
+ */
+
+@import url('portal.css');
+
+/* --- the action chips ---------------------------------------------------------------------
+   A second filter bar under the first, because the two are different questions: the top bar
+   narrows *what records*, this narrows *what happened to them*. Run together they read as one
+   long row of controls with no grammar. */
+.log__actions {
+  padding: var(--space-2) var(--space-3);
+}
+
+.log__actions .chip small {
+  margin-left: var(--space-1);
+  font-family: var(--font-heading);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.log__actions .chip.is-active small {
+  color: inherit;
+  opacity: 0.75;
+}
+
+/* --- the table ---------------------------------------------------------------------------- */
+.log__head {
+  padding: var(--space-4);
+  background: var(--ink-50);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 0;
+}
+
+.log__icon {
+  color: var(--color-ink);
+  background: var(--color-surface);
+}
+
+.log__table td {
+  vertical-align: top;
+}
+
+/* A row that has something folded under it is a control; one that does not is a fact. Only
+   the first gets a cursor, so nothing invites a click that does nothing. */
+.log__row.is-openable {
+  cursor: pointer;
+}
+
+.log__row.is-openable:hover,
+.log__row.is-open {
+  background: var(--ink-50);
+}
+
+.log__row:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: -2px;
+}
+
+.log__when {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- who ----------------------------------------------------------------------------------
+   A trail is scanned down this column looking for one person, and a column of names all in
+   one weight has to be read word by word. The disc gives the eye something to match on before
+   it reads anything. */
+.log__actor {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.log__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+}
+
+/* Not another colour for another kind of person: a scheduled job is the *absence* of one, and
+   grey is what says so. */
+.log__avatar--system {
+  color: var(--color-text-muted);
+  background: var(--ink-50);
+}
+
+/* --- what happened ------------------------------------------------------------------------
+   The pill and the sentence on one line, with the chevron in a fixed gutter so the sentences
+   start at one x down the column and can be read as a list. */
+.log__what > span:last-child {
+  display: inline;
+}
+
+.log__what {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 22rem;
+}
+
+.log__summary {
+  color: var(--color-ink);
+}
+
+.log__chevron {
+  display: inline-flex;
+  width: 14px;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  color: var(--color-text-muted);
+  transition: transform 120ms ease;
+}
+
+.log__chevron svg {
+  width: 14px;
+  height: 14px;
+}
+
+.log__row.is-open .log__chevron {
+  transform: rotate(90deg);
+  color: var(--color-ink);
+}
+
+/* Rows with nothing folded under them still leave the gutter, so the sentences stay aligned
+   with the ones that do. */
+.log__chevron--none {
+  visibility: hidden;
+}
+
+.log__record {
+  white-space: nowrap;
+}
+
+.log__code {
+  font-family: var(--font-heading);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* --- the panel underneath ------------------------------------------------------------------
+   Opened in place rather than in a dialog: a trail is worked down, and a modal between rows
+   turns twenty readings into forty clicks. */
+.log__detail > td {
+  padding: 0;
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.log__panel {
+  padding: var(--space-4) var(--space-5);
+}
+
+/* A real before/after, where the call site recorded one — struck through on the left the way
+   a diff reads anywhere else. Most entries have none: the trail is mostly facts, not edits. */
+.log__changes {
+  margin-bottom: var(--space-4);
+}
+
+.log__change {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-2) 0;
+  border-bottom: 1px dashed var(--color-border);
+  font-size: var(--text-body);
+}
+
+.log__change:last-child {
+  border-bottom: 0;
+}
+
+.log__field {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.log__from {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  overflow-wrap: anywhere;
+}
+
+.log__arrow {
+  color: var(--color-text-disabled);
+}
+
+.log__to {
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  /* Stacked rather than squeezed: four columns crushed into a phone width is a diff nobody
+     can read, and the arrow means nothing once the two sides are above each other. */
+  .log__change {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .log__arrow {
+    display: none;
+  }
+}
+
+/* The metadata, labelled. The same definition-list shape the other detail panels use, with
+   each pair as one grid item — bare `dt`/`dd` children each take a cell of their own, which
+   puts every label beside the previous label's value. */
+.log__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+
+.log__fact {
+  min-width: 0;
+}
+
+.log__facts dt {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.log__facts dd {
+  margin: 0;
+  font-size: var(--text-body);
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* --- the request id ------------------------------------------------------------------------
+   The thread that ties one act together. Two entries sharing it happened in the same request,
+   which is how a state change and the payment behind it are shown to be one thing rather than
+   two — so it is a control, not a caption. */
+.log__trace {
+  padding-top: var(--space-3);
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.log__trace-id {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  cursor: pointer;
+}
+
+.log__trace-id:hover,
+.log__trace-id:focus-visible {
+  text-decoration: underline;
+}

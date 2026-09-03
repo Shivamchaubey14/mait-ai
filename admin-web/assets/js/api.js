@@ -579,6 +579,20 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
+     * The audit trail, newest first.
+     *
+     * Every row arrives with a one-line `summary` already built — "Completed AI event 64" —
+     * plus `changes` where the call site recorded a before/after and `facts` for the rest of
+     * the metadata. `facets` says which actions and record types the filtered trail actually
+     * holds, so the screen's filters are built from the data rather than from a list here.
+     *
+     * Read-only. There is no write path to the trail outside `record_audit` on the server.
+     */
+    auditTrail: function (query) {
+      return request({ path: '/admin/audit/', query: query });
+    },
+
+    /**
      * The detail behind one Exceptions card.
      *
      * `queue` is `pending-payments`, `low-stock`, `stale-indents`, `overdue-checks` or

@@ -6,6 +6,74 @@ info:
     Producer Company. Serves the Mait mobile app, the admin web portal and the Indent
     Easy integration.
 paths:
+  /api/v1/admin/audit/:
+    get:
+      operationId: admin_audit_retrieve
+      description: |-
+        Every consequential action, newest first, as sentences rather than raw rows.
+
+        `summary` is what happened in the last 30 days — a working signal, since an append-only table's lifetime total only ever grows. `facets` lists the actions and record types actually present with their counts, so the screen's filters are built from the data rather than from a list that drifts from it.
+
+        Each row carries a one-line `summary` built from the action, the record and whichever metadata key holds the outcome; `changes` is a real before/after diff where the call site recorded one, and `facts` is the rest of the metadata, labelled. The two are kept apart because they are not the same thing.
+
+        **`pii_access` is the action this exists for** — who opened a farmer's Aadhaar card, who took a workbook of bank details out of the building (SRS §16). It is never folded into a generic read.
+
+        Filter with `action`, `entity_type`, `actor` (username), `date_from`, `date_to` and `search`, which matches a record id, a record type, a person, a request id or an IP.
+
+        Read-only. There is no write path to this endpoint and none to the table behind it outside `record_audit` — an audit trail that can be edited is not one.
+      summary: Read the audit trail
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+        description: One of the AuditLog actions
+      - in: query
+        name: actor
+        schema:
+          type: string
+        description: Username
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: YYYY-MM-DD, inclusive
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: YYYY-MM-DD, inclusive
+      - in: query
+        name: entity_type
+        schema:
+          type: string
+        description: Record type
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Default 50, max 200
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Record, person, request id or IP
+      tags:
+      - core
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/admin/breeds/:
     get:
       operationId: admin_breeds_list
@@ -7166,6 +7234,7 @@ components:
       - reports
       - mait-payment
       - users
+      - logs
       type: string
       description: |-
         * `dashboard` - Dashboard
@@ -7186,6 +7255,7 @@ components:
         * `reports` - Reports
         * `mait-payment` - Mait payment
         * `users` - Users & roles
+        * `logs` - Audit log
     PregnancyCheck:
       type: object
       properties:

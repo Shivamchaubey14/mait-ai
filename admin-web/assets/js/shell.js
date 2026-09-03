@@ -53,6 +53,10 @@ window.MaitAI = window.MaitAI || {};
        dairy, and it has to be impossible to confuse with the export beside it. */
     'mait-payment': 'M2 6h20v12H2zM6.5 9.5h5.5M6.5 12h5.5M11 9.5c0 2.2-1.5 2.5-4.5 2.5l4.5 3.5',
     users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M2 20a7 7 0 0 1 14 0M18 8v6M15 11h6',
+    /* A shield with a tick. Not a document glyph — Reports and Mait payment already own
+       that shape, and this is not another thing to read: it is the record that says what
+       everybody did, including who opened a farmer's identity card. */
+    logs: 'M12 3l8 4v5c0 5-3.4 8.3-8 9.5-4.6-1.2-8-4.5-8-9.5V7zM9 12l2 2 4-4',
 
     /* Not sidebar sections: the filter bar's magnifier and the four notice tones. */
     search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4.3-4.3',
@@ -100,6 +104,10 @@ window.MaitAI = window.MaitAI || {};
     // pull an AI-event export.
     { key: 'mait-payment', label: 'Mait payment', href: 'mait-payment.html' },
     { key: 'users', label: 'Users & roles', href: 'users.html' },
+    // Last, and directly under Users & roles: the trail records who read a farmer's
+    // Aadhaar card and who took a workbook of bank details away, and the desk that
+    // administers accounts is the one that answers for it.
+    { key: 'logs', label: 'Audit log', href: 'logs.html' },
   ];
 
   /* `className` is optional — a notice's glyph is sized by its container, not by a class. */

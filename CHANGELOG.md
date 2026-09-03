@@ -9,6 +9,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Audit log (W19)** — the trail this platform has written since its first commit, readable at
+  last. Each row is a sentence rather than a schema dump; opening one shows the metadata
+  labelled, a before/after diff where there is one, and the request id, which finds everything
+  else recorded in the same request. Personal-data reads get a tile, a chip and the only red
+  pill on the screen — who opened a farmer's Aadhaar card, who took a workbook of bank details
+  away. Read-only, behind its own portal section.
 - **The Failed OTPs queue counts a week, not a day**, and every exception card can be opened
   even when its own window is quiet. Between them those two made a queue holding fourteen
   failures read as empty: the card threw away anything older than midnight, and a zero count hid
