@@ -593,6 +593,25 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
+     * The trail as a workbook, narrowed by the same filters the screen is showing.
+     *
+     * Goes through `download` rather than `request` for the reason every export here does:
+     * it streams a file and it needs the bearer token. What is different about this one is
+     * that fetching it *writes to the thing being fetched* — taking the trail away is itself
+     * a personal-data read, and the server records it as one before it builds the file.
+     */
+    auditTrailExport: function (query, onProgress) {
+      const search = $.param(query || {});
+      // `MaitAI.api.download`, not a bare `download`: these are properties of one object
+      // literal, not functions in this closure's scope.
+      return MaitAI.api.download(
+        '/admin/audit/export/' + (search ? '?' + search : ''),
+        'audit-trail-' + new Date().toISOString().slice(0, 10) + '.xlsx',
+        onProgress
+      );
+    },
+
+    /**
      * The detail behind one Exceptions card.
      *
      * `queue` is `pending-payments`, `low-stock`, `stale-indents`, `overdue-checks` or

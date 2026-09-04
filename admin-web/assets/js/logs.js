@@ -303,6 +303,65 @@
       });
   }
 
+  /**
+   * Take the trail away as a workbook.
+   *
+   * **The filters go, the paging does not.** `limit` and `offset` are how this table pages,
+   * not part of the question being asked, and passing them would hand back the fifty rows
+   * that happened to be on screen — a file that looks complete, is not, and says nothing
+   * about it. The server has its own ceiling for the genuinely enormous case and the file
+   * says on its cover when that ceiling bit.
+   *
+   * **The button says what it is doing, because this wait is real.** An xlsx is a zip: it
+   * cannot be valid until its central directory is written, so the server has to finish
+   * building before it can send a byte, and on a wide date range that is most of the wait.
+   * `api.download` reports that as its own phase, so a button reading "Preparing…" and then
+   * counting up is telling the truth about two different things rather than sitting at zero
+   * looking broken.
+   *
+   * Worth knowing while reading this: fetching the file appends to the thing being fetched.
+   * The server records the export as a personal-data read before building, so the trail
+   * reloaded after a download is one row longer — which is the point of a trail, not a bug.
+   */
+  function exportWorkbook() {
+    shell.clearAlert();
+
+    const query = filters();
+    delete query.limit;
+    delete query.offset;
+
+    const $label = $('#export-label');
+    $('#export').prop('disabled', true);
+
+    MaitAI.api
+      .auditTrailExport(query, function (update) {
+        if (update.phase === 'preparing') {
+          $label.text('Preparing…');
+        } else if (update.phase === 'receiving') {
+          // No percentage where the server sent no `Content-Length`. Guessing a total and
+          // then revising it is what makes a counter run to the end and jump back.
+          $label.text(
+            update.fraction === null
+              ? 'Downloading…'
+              : 'Downloading… ' + Math.round(update.fraction * 100) + '%'
+          );
+        }
+      })
+      .then(function () {
+        // Reloaded rather than left alone: the export just wrote a row to the trail, and a
+        // screen still showing the state from before it is a screen that disagrees with the
+        // file the operator is holding.
+        load();
+      })
+      .catch(function () {
+        shell.alert('The workbook could not be produced. Try a narrower date range.');
+      })
+      .finally(function () {
+        $('#export').prop('disabled', false);
+        $label.text('Export workbook');
+      });
+  }
+
   /** Any filter change starts from the first page — page four of the old result is nothing. */
   function refilter() {
     state.offset = 0;
@@ -332,6 +391,7 @@
     load();
 
     $('#refresh').on('click', load);
+    $('#export').on('click', exportWorkbook);
 
     $('#clear').on('click', function () {
       state.action = '';

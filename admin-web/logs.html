@@ -22,6 +22,26 @@
           </div>
           <div class="topbar__actions">
             <button class="btn" id="clear" type="button" hidden>Clear filters</button>
+            <!-- The workbook, not a CSV. What an auditor is handed has to say who took it,
+                 when and with which filters, and a file that carries its own provenance needs
+                 a sheet to say it on. `logs.js` explains the rest. -->
+            <button class="btn btn--dark" id="export" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
+              </svg>
+              <!-- Its own element so "Preparing..." can replace the words without taking the
+                   glyph beside them with it. -->
+              <span id="export-label">Export workbook</span>
+            </button>
             <button class="btn" id="refresh" type="button">
               <svg
                 class="btn__icon"
