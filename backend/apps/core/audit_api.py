@@ -311,7 +311,7 @@ def _parse_day(value):
         return None
 
 
-def _filtered(params, *, skip: str = ""):
+def filtered(params, *, skip: str = ""):
     """
     The trail, narrowed. Every filter is optional and none of them is trusted to be sane.
 
@@ -320,6 +320,11 @@ def _filtered(params, *, skip: str = ""):
     and the only chip left is "Signed in", with no way back to the others. Each facet is
     therefore counted against everything *except* itself, which is what makes its number an
     answer to "what would I get if I clicked this" rather than "what am I looking at".
+
+    Public because the workbook export narrows through this same function. An export that
+    built its own filters is one that drifts from the screen it was taken from the first time
+    either side is touched, and a file that quietly disagrees with the screen an auditor was
+    shown is worse than no file at all.
     """
     queryset = AuditLog.objects.select_related("actor").order_by("-created_at", "-id")
 
@@ -396,7 +401,7 @@ def _filtered(params, *, skip: str = ""):
 @permission_classes([IsAdmin, in_section(PortalSection.LOGS)])
 def audit_trail(request):
     params = request.query_params
-    queryset = _filtered(params)
+    queryset = filtered(params)
 
     try:
         limit = max(1, min(MAX_LIMIT, int(params.get("limit", DEFAULT_LIMIT))))
@@ -415,10 +420,10 @@ def audit_trail(request):
             "offset": offset,
             "results": [serialise(entry) for entry in page],
             "summary": _summary(),
-            # Each facet counted against every filter but its own — see `_filtered`.
+            # Each facet counted against every filter but its own — see `filtered`.
             "facets": {
-                "actions": _action_facets(_filtered(params, skip="action")),
-                "entity_types": _entity_facets(_filtered(params, skip="entity_type")),
+                "actions": _action_facets(filtered(params, skip="action")),
+                "entity_types": _entity_facets(filtered(params, skip="entity_type")),
             },
         }
     )
