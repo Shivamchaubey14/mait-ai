@@ -74,6 +74,61 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/admin/audit/export/:
+    get:
+      operationId: admin_audit_export_retrieve
+      description: |-
+        The trail as an xlsx an auditor can be handed, narrowed by the same filters the screen uses — `search`, `action`, `entity_type`, `actor`, `date_from`, `date_to`. `limit` and `offset` are not read: this is the query, not the page of it somebody happened to be looking at.
+
+        Four sheets. **About this export** carries the provenance — who took it, when, with which filters, and the request id of the entry this export wrote to the trail on its way out, so the file can be tied back to the running system. **Audit trail** is the rows. **Personal data** repeats the `pii_access` rows on their own, because SRS §16 asks for a record of who read personal data and "filter for it" is not an answer. **Who did what** counts the file by person.
+
+        Capped at 50,000 entries, oldest dropped first; when the cap bites the cover sheet says so in red rather than handing back a short file that looks complete.
+
+        **Taking this file is itself a `pii_access` entry** in the trail, with the filters it ran. A record of who reads the record is the whole point of the record.
+      summary: Take the audit trail away as a workbook
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+        description: One of the AuditLog actions
+      - in: query
+        name: actor
+        schema:
+          type: string
+        description: Username
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: YYYY-MM-DD, inclusive
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: YYYY-MM-DD, inclusive
+      - in: query
+        name: entity_type
+        schema:
+          type: string
+        description: Record type
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Record, person, request id or IP
+      tags:
+      - core
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/admin/breeds/:
     get:
       operationId: admin_breeds_list
