@@ -116,7 +116,7 @@
       '<td>' +
       actor(entry.actor) +
       '</td>' +
-      '<td class="log__what">' +
+      '<td class="log__what"><div class="log__what-line">' +
       (openable
         ? '<span class="log__chevron" aria-hidden="true">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
@@ -128,7 +128,7 @@
       ' <span class="log__summary">' +
       ui.escapeHtml(entry.summary) +
       '</span></span>' +
-      '</td>' +
+      '</div></td>' +
       '<td class="log__record">' +
       ui.escapeHtml(entry.entity_label) +
       '<span class="table__sub">' +

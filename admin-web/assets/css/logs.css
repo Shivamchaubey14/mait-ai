@@ -106,16 +106,22 @@
 
 /* --- what happened ------------------------------------------------------------------------
    The pill and the sentence on one line, with the chevron in a fixed gutter so the sentences
-   start at one x down the column and can be read as a list. */
-.log__what > span:last-child {
-  display: inline;
+   start at one x down the column and can be read as a list.
+
+   Centred against the row, not pinned to its top. Every other column here is a two-line stack
+   — a time over how long ago, a name over a role, a record over its id — so a single line held
+   at the top of that height reads as though it had floated up out of its own row. The flex box
+   sits on a wrapper rather than on the cell because a `td` that is itself a flex container
+   stops being a table cell, and `vertical-align` stops meaning anything to it. */
+.log__table .log__what {
+  vertical-align: middle;
+  min-width: 22rem;
 }
 
-.log__what {
+.log__what-line {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  min-width: 22rem;
 }
 
 .log__summary {
@@ -150,6 +156,11 @@
 
 .log__record {
   white-space: nowrap;
+}
+
+/* One line again, and centred for the same reason as the sentence beside it. */
+.log__table .log__code {
+  vertical-align: middle;
 }
 
 .log__code {
