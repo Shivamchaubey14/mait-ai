@@ -197,29 +197,78 @@
     $chart.find('.chart__col--active').removeClass('chart__col--active');
   }
 
+  /** The two series a column stacks, in legend order. One list, so the two paths agree. */
+  function bars(day) {
+    return [
+      { value: day.completed || 0, className: 'chart__bar--completed' },
+      { value: day.pending || 0, className: 'chart__bar--pending' },
+    ];
+  }
+
   /**
-   * Grouped bars, drawn in CSS.
+   * The tallest day in the range, which every bar is drawn as a fraction of.
    *
-   * Heights are a percentage of the tallest day rather than an absolute scale, so a quiet
-   * week still reads as a shape instead of a flat line at the bottom of the panel.
+   * A percentage of the peak rather than an absolute scale, so a quiet week still reads as a
+   * shape instead of a flat line along the bottom of the panel. Never zero: a range with
+   * nothing in it would otherwise divide by it.
    */
-  function renderChart(series) {
-    const $chart = $('#chart').empty();
-
-    if (!series.length) {
-      $chart.append(
-        $('<p class="empty-state"></p>').text('No AI events recorded in this period yet.')
-      );
-      return;
-    }
-
-    const peak = Math.max(
+  function peakOf(series) {
+    return Math.max(
       1,
       ...series.map(function (d) {
         return (d.completed || 0) + (d.pending || 0);
       })
     );
+  }
 
+  /**
+   * Which days the chart currently holds — the labels, not the values.
+   *
+   * It is what decides whether the next response can be moved into the columns already on
+   * screen or has to replace them. Ninety days answering with ninety of the same days is a
+   * refresh; ninety answering with seven is a different question having been asked.
+   */
+  let drawnDays = '';
+
+  function seriesKey(series) {
+    return series
+      .map(function (day) {
+        return day.label;
+      })
+      .join('|');
+  }
+
+  /**
+   * Grouped bars, drawn in CSS.
+   *
+   * Two paths, and which one runs is the whole of what makes this screen live. The same days
+   * coming back with new numbers are *moved*; a different set of days is drawn from scratch.
+   */
+  function renderChart(series) {
+    const $chart = $('#chart');
+
+    if (!series.length) {
+      drawnDays = '';
+      $chart
+        .empty()
+        .append($('<p class="empty-state"></p>').text('No AI events recorded in this period yet.'));
+      return;
+    }
+
+    const key = seriesKey(series);
+    if (key === drawnDays && $chart.children('.chart__col').length === series.length) {
+      updateChart($chart, series);
+      return;
+    }
+
+    drawnDays = key;
+    buildChart($chart, series);
+  }
+
+  function buildChart($chart, series) {
+    $chart.empty();
+
+    const peak = peakOf(series);
     const $tip = $('<div class="chart__tip" role="status" aria-live="polite"></div>');
 
     // The sweep left to right, divided over however many days the range holds — see
@@ -229,22 +278,28 @@
     series.forEach(function (day, index) {
       const $bars = $('<div class="chart__bars"></div>');
 
-      // A zero draws no bar at all. `min-height` gave every empty day a sliver of both
-      // colours, which reads as "one or two" from across a desk — the one number a dashboard
-      // must never round up.
-      [
-        { value: day.completed || 0, className: 'chart__bar--completed' },
-        { value: day.pending || 0, className: 'chart__bar--pending' },
-      ].forEach(function (bar) {
-        const $bar = $('<div class="chart__bar"></div>').addClass(bar.className);
+      // A zero draws no bar at all — `chart__bar--drawn` is what holds the 2px baseline
+      // open, and it is withheld here. `min-height` on every bar gave each empty day a
+      // sliver of both colours, which reads as "one or two" from across a desk: the one
+      // number a dashboard must never round up.
+      //
+      // The height is still set, as `0%` rather than left unstated, because this bar may
+      // have to grow out of it on a later refresh — and a transition from an unset height
+      // has no start to travel from.
+      bars(day).forEach(function (bar) {
+        const $bar = $('<div class="chart__bar"></div>')
+          .addClass(bar.className)
+          .css('height', (bar.value / peak) * 100 + '%')
+          // The delay this bar waits before growing, in milliseconds, read by the rule in
+          // dashboard.css. A unitless number because `calc()` cannot multiply a bare
+          // custom property by a duration without one.
+          .css('--i', Math.round(index * step));
         if (bar.value > 0) {
-          $bar
-            .css('height', (bar.value / peak) * 100 + '%')
-            // The delay this bar waits before growing, in milliseconds, read by the rule in
-            // dashboard.css. A unitless number because `calc()` cannot multiply a bare
-            // custom property by a duration without one.
-            .css('--i', Math.round(index * step))
-            .addClass('chart__bar--drawn');
+          // `--sweep` is the entrance and `--drawn` is the state. They are separate classes
+          // so that a bar appearing during a live refresh does not replay the entrance of a
+          // chart that arrived a quarter of an hour ago: it grows from the height it had,
+          // which is the change being shown, rather than from nothing.
+          $bar.addClass('chart__bar--drawn chart__bar--sweep');
         }
         $bars.append($bar);
       });
@@ -273,6 +328,52 @@
       .on('mouseleave.charttip focusout.charttip', '.chart__col', function () {
         hideTip($chart, $tip);
       });
+  }
+
+  /**
+   * The same days, with new numbers.
+   *
+   * This is why the chart is not simply re-rendered on every beat. Rebuilding would throw the
+   * columns away and put identical ones back, and three things go with them: the entrance
+   * sweep replays across a chart somebody is already reading, keyboard focus resting on a
+   * column is dropped on the floor, and an open readout vanishes from under the pointer.
+   *
+   * Moving the heights instead lets the transition in dashboard.css carry each bar from where
+   * it was to where it now is — which is the update being *shown* rather than merely applied.
+   * A day that gained four events is a bar that visibly rises by them.
+   */
+  function updateChart($chart, series) {
+    const peak = peakOf(series);
+    const $cols = $chart.children('.chart__col');
+    const $active = $chart.children('.chart__col--active');
+
+    series.forEach(function (day, index) {
+      const $col = $cols.eq(index);
+      const $bars = $col.find('.chart__bar');
+
+      bars(day).forEach(function (bar, position) {
+        $bars
+          .eq(position)
+          // Dropped as it empties, so a day that has gone back to nothing stops holding its
+          // baseline sliver open and reads as the zero it now is.
+          .toggleClass('chart__bar--drawn', bar.value > 0)
+          .css('height', (bar.value / peak) * 100 + '%');
+      });
+
+      // The reading the column answers with, kept in step with the bars above it — the
+      // tooltip, the accessible name and the tip's position all come from here.
+      $col
+        .attr('aria-label', daySummary(day))
+        .data('day', day)
+        .data('stack', ((day.completed || 0) + (day.pending || 0)) / peak);
+    });
+
+    // A readout that was open is describing a day whose numbers have just moved, above a
+    // stack that is now a different height. Re-shown rather than left alone: a tooltip still
+    // saying 41 over a column that reads 44 is worse than having no tooltip at all.
+    if ($active.length) {
+      showTip($chart, $chart.children('.chart__tip'), $active, $active.data('day'));
+    }
   }
 
   function renderException(key, payload) {

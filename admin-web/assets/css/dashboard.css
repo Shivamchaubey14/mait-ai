@@ -663,8 +663,15 @@ button.panel__link {
   /* `--i` is set per column in `dashboard.js`, which is also where the per-column delay is
      worked out: the sweep has to cover a fixed budget whether the range is seven days or
      ninety, and a fixed stagger would leave the last of ninety columns arriving four seconds
-     after the first. */
-  .chart__bar--drawn {
+     after the first.
+
+     `--sweep`, not `--drawn`. The two used to be one class, and separating them is what lets
+     the chart update itself in place: `--drawn` is the state of having a value and is added
+     and removed as days fill and empty, while `--sweep` is the entrance and is only ever put
+     on a bar built from scratch. Sharing one class meant a single event arriving at 11:04 —
+     one day going from nothing to one — replayed the whole chart's entrance animation on a
+     panel somebody was reading. */
+  .chart__bar--sweep {
     transform-origin: bottom;
     animation: grow-up var(--motion-slow) var(--ease-out) backwards;
     animation-delay: calc(var(--i, 0) * 1ms);
@@ -681,6 +688,27 @@ button.panel__link {
 
 .chart__bar {
   transition: filter var(--motion-fast) var(--ease-out);
+}
+
+/* The live update, and the reason the chart is patched rather than re-rendered: a day that
+   gains four events is a bar that visibly rises by them. Growing to the new height is the
+   only part of this screen where the *movement itself* carries the information — a bar that
+   simply appears at its new height has already finished saying what it came to say.
+
+   The whole chart moves at once here, not in sequence. The entrance sweep is an order to read
+   the days in; an update is one fact — this is what changed while you were looking — and
+   staggering it would imply ninety separate events.
+
+   Heights are set on both bars whether or not they have a value, including as `0%`, so this
+   always has a start to travel from (see `buildChart`). A rescale counts too: one busy day
+   lifts the peak and every other bar settles down to meet it, which is the chart telling the
+   truth about its own scale rather than quietly redrawing it. */
+@media (prefers-reduced-motion: no-preference) {
+  .chart__bar {
+    transition:
+      filter var(--motion-fast) var(--ease-out),
+      height var(--motion-slow) var(--ease-out);
+  }
 }
 
 .chart__col--active .chart__bar,
