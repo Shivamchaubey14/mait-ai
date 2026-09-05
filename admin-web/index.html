@@ -15,8 +15,16 @@
         <header class="topbar">
           <div>
             <h1 class="topbar__title">Dashboard</h1>
+            <!-- The indicator is a button, not a caption. A screen that refreshes itself has
+                 to say when it last managed to — an operator otherwise cannot tell a quiet
+                 morning from a dashboard that stopped fetching an hour ago — and the person
+                 who reads that line is the person who wants it fetched again now. -->
             <p class="topbar__meta">
-              <span id="today-date">—</span> · <span id="scope">all districts</span>
+              <span id="today-date">—</span> · <span id="scope">all districts</span> ·
+              <button class="live" id="live" type="button" data-state="paused" title="Refresh now">
+                <span class="live__dot" aria-hidden="true"></span>
+                <span class="live__text">Loading…</span>
+              </button>
             </p>
           </div>
           <div class="topbar__actions">

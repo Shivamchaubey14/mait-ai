@@ -360,6 +360,12 @@
   /* How many beats in a row may be missed before the page says so in a banner. */
   const QUIET_MISSES = 2;
 
+  /** What the indicator is currently showing, so its "how long ago" can keep ageing. */
+  const indicator = { name: 'paused', lastOk: null };
+
+  /** How often the indicator re-reads its own age. Text only; nothing is fetched. */
+  const AGE_MS = 15000;
+
   let queueBound = false;
 
   /**
@@ -383,6 +389,59 @@
       });
     }
     return dialog.open;
+  }
+
+  /** How long ago, in the words somebody would actually use for it. */
+  function since(date) {
+    if (!date) {
+      return 'not yet';
+    }
+    const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+    if (seconds < 45) {
+      return 'just now';
+    }
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) {
+      return minutes === 1 ? 'a minute ago' : minutes + ' minutes ago';
+    }
+    // Past an hour the exact figure has stopped being the point. Something is wrong — a beat
+    // is thirty seconds — and "over an hour ago" is the sentence that says so.
+    return 'over an hour ago';
+  }
+
+  /**
+   * The indicator, in the topbar beside the date.
+   *
+   * A screen that changes on its own has to say that it does, and say when it last managed
+   * it. Without this line an operator has no way to tell a quiet morning from a dashboard
+   * that stopped fetching an hour ago — and the second one is a screen actively misleading
+   * somebody, because every figure on it still looks perfectly current.
+   */
+  function paintIndicator(name, info) {
+    indicator.name = name;
+    if (info && Object.prototype.hasOwnProperty.call(info, 'lastOk')) {
+      indicator.lastOk = info.lastOk;
+    }
+
+    const $live = $('#live');
+    if (!$live.length) {
+      return;
+    }
+
+    let text;
+    if (name === 'offline') {
+      text = 'Offline';
+    } else if (name === 'stale') {
+      text = 'Reconnecting…';
+    } else if (name === 'updating') {
+      text = indicator.lastOk ? 'Updating…' : 'Loading…';
+    } else if (name === 'paused') {
+      text = 'Paused';
+    } else {
+      text = 'Live · ' + since(indicator.lastOk);
+    }
+
+    $live.attr('data-state', name).find('.live__text').text(text);
   }
 
   /**
@@ -433,7 +492,7 @@
       },
       held: queueOpen,
       onFail: reportMiss,
-      onState: function (name) {
+      onState: function (name, info) {
         if (name === 'live') {
           loaded = true;
           // Whatever the last failure put on screen is no longer true. Cleared on the way
@@ -441,6 +500,7 @@
           // has since succeeded is an alert that teaches people to close alerts unread.
           MaitAI.shell.clearAlert();
         }
+        paintIndicator(name, info);
       },
     });
 
@@ -448,6 +508,19 @@
     // it. One path means there is no window in which the page has data the loop thinks it has
     // not fetched, and the first failure is reported by the same code as every later one.
     loop.start().refresh();
+
+    // The figures age whether or not anything is fetched, so the line that says how old they
+    // are has to be rewritten as they do. Text only, and skipped in a background tab, where
+    // there is nobody to read it and the beat is stopped anyway.
+    window.setInterval(function () {
+      if (!document.hidden && indicator.name === 'live') {
+        paintIndicator('live');
+      }
+    }, AGE_MS);
+
+    $('#live').on('click', function () {
+      loop.refresh();
+    });
 
     $('#range').on('change', function () {
       // Through the loop rather than a bare `load`, so the beat restarts from this moment.

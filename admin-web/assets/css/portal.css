@@ -180,6 +180,94 @@ a:hover {
   gap: var(--space-3);
 }
 
+/* --- live indicator -----------------------------------------------------------------------
+   On a screen that re-reads itself, this is the only thing on the page that can tell an
+   operator the figures are current. Everything else looks exactly the same whether it was
+   fetched four seconds or four hours ago, which is precisely the danger: a dashboard that
+   quietly stopped polling is more misleading than one that never started.
+
+   Sized and coloured as part of the meta line it sits in, not as a control — it is a sentence
+   about the page that happens to be clickable. The dot carries the state, the words carry the
+   detail, and neither is alone in saying it: `data-state` never decides meaning by colour on
+   its own, because the text beside it always spells the same state out. */
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  margin-left: -2px;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  vertical-align: baseline;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.live:hover {
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.live:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.live__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-text-disabled);
+  /* Between the two states it moves through most, so a beat landing is a colour easing in
+     rather than a light switch being thrown. */
+  transition: background var(--motion-base) var(--ease-out);
+}
+
+.live[data-state='live'] .live__dot {
+  background: var(--color-success);
+}
+
+.live[data-state='updating'] .live__dot,
+.live[data-state='stale'] .live__dot {
+  background: var(--color-warning);
+}
+
+.live[data-state='offline'] .live__dot {
+  background: var(--color-error);
+}
+
+/* The one piece of motion on this portal that runs continuously, and it earns it: a still
+   green dot says "it was live when this page loaded", which is the claim being made either
+   way. A slow pulse is the difference between a status and a heartbeat.
+
+   Only while live. A dot that goes on breathing through an outage is a screen insisting it is
+   fine, and the amber is doing the opposite work. */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .live[data-state='live'] .live__dot,
+  .live[data-state='updating'] .live__dot {
+    animation: live-pulse 2.4s var(--ease-in-out) infinite;
+  }
+
+  .live[data-state='updating'] .live__dot {
+    animation-duration: 0.9s;
+  }
+}
+
 /* --- controls ---------------------------------------------------------------------------- */
 .btn {
   display: inline-flex;
