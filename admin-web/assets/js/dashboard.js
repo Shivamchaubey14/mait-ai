@@ -6,6 +6,13 @@
  *
  * Every number renders through the same path whether it is 418,772 or zero. A dashboard that
  * only looks right once there is data is a dashboard nobody trusts on day one.
+ *
+ * **It keeps itself current.** This screen is left open — on the operations desk all morning,
+ * and at the plant on a wall — while the work it describes is happening on handsets in the
+ * field. So it re-reads itself every half minute and moves what changed: the figures turn to
+ * their new values and the bars grow to their new heights, in place, with no reload and
+ * nothing lost from under the operator's pointer. live.js runs the loop; everything below
+ * decides what a change looks like.
  */
 
 (function ($, MaitAI) {
@@ -37,6 +44,24 @@
 
   function sweepStep(columns) {
     return Math.min(SWEEP_MAX_STEP, SWEEP_MS / Math.max(1, columns - 1));
+  }
+
+  /**
+   * A figure, moved to its value the way a clock moves to a time.
+   *
+   * `MaitAI.ui.roll` does the work and its own docstring says why. What belongs here is
+   * why the tiles are handed an already-formatted string rather than a number: these five
+   * do not all hold the same kind of figure — four are counts and one is a percentage to
+   * one decimal — and null is an em dash on every one of them rather than a zero.
+   *
+   * It moves only what changed, which is the whole reason it can be called on every beat.
+   * The range control reloads the summary along with the trend, so without that a look at
+   * a different fortnight would set every figure on the screen going, announcing a change
+   * that had not happened. A dashboard that cries wolf about its own numbers is one people
+   * stop reading.
+   */
+  function roll(selector, text) {
+    MaitAI.ui.roll($('[data-kpi="' + selector + '"]'), text);
   }
 
   function delta(percent, comparedTo) {
@@ -73,19 +98,19 @@
   // Rendering
   // ------------------------------------------------------------------------------------
   function renderSummary(data) {
-    $('[data-kpi="today"]').text(count(data.today));
+    roll('today', count(data.today));
     setFoot('today-foot', delta(data.today_delta_percent, 'on yesterday'));
 
-    $('[data-kpi="week"]').text(count(data.this_week));
+    roll('week', count(data.this_week));
     setFoot('week-foot', data.week_target ? 'Target ' + count(data.week_target) : '');
 
-    $('[data-kpi="month"]').text(count(data.this_month));
+    roll('month', count(data.this_month));
     setFoot(
       'month-foot',
       data.highest_month ? 'All-time high ' + count(data.highest_month.value) : ''
     );
 
-    $('[data-kpi="lifetime"]').text(count(data.lifetime));
+    roll('lifetime', count(data.lifetime));
     setFoot('lifetime-foot', data.since ? 'Since ' + data.since : '');
 
     renderRate(data.pregnancy || {});
@@ -103,7 +128,9 @@
     const percent = pregnancy.conception_rate;
     const known = typeof percent === 'number';
 
-    $('[data-kpi="rate"]').text(known ? percent.toFixed(1) + '%' : '—');
+    // Rolled like the others, but formatted here: this one is a percentage to one decimal,
+    // and an unknown rate still has to come out as an em dash rather than as a zero.
+    roll('rate', known ? percent.toFixed(1) + '%' : '—');
     setFoot(
       'rate-foot',
       known
@@ -380,7 +407,10 @@
   const shownRows = {};
 
   function renderException(key, payload) {
-    $('[data-count="' + key + '"]').text(count(payload.count));
+    // Rolled like the tiles. This is the number most likely to change while somebody is
+    // actually looking at the screen — a payment verified in the field is a card that ticks
+    // down — and one that snaps from 12 to 11 between two glances is a change nobody saw.
+    MaitAI.ui.roll($('[data-count="' + key + '"]'), count(payload.count));
     MaitAI.ui.queueLink(key, payload.count);
 
     // Rows are rebuilt only when they are actually different. Unconditionally emptying and
@@ -619,8 +649,10 @@
     });
 
     // The first load goes through the loop as well, rather than being a separate call before
-    // it. One path means there is no window in which the page has data the loop thinks it has
-    // not fetched, and the first failure is reported by the same code as every later one.
+    // it. One path means the indicator is honest from the first frame — "Loading…", then the
+    // time it landed — that the first failure is reported by the same code as every later
+    // one, and that there is no window where the page has data the loop thinks it has not
+    // fetched.
     loop.start().refresh();
 
     // The figures age whether or not anything is fetched, so the line that says how old they

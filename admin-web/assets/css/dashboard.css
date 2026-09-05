@@ -550,9 +550,13 @@ button.panel__link {
    **The bars grow out of their baseline**, because the growing *is* the quantity — a bar that
    appears at full height has already finished saying what it came to say.
 
+   **The figures turn on reels**, and only the digits that actually changed, so a number that
+   moves on its own while somebody is reading it is seen to move. portal.css draws them; all
+   this file has to do is keep out of their way.
+
    **Nothing moves that a person has to wait for.** The whole entrance is over inside three
-   quarters of a second, and none of it gates a click: every control is live from the first
-   frame, mid-animation.
+   quarters of a second, a figure finishes turning in under half of one, and none of it gates
+   a click: every control is live from the first frame, mid-animation.
 
    **`backwards`, never `both`.** A `both` fill leaves the animation's end state applied
    forever, and an end state of `transform: none` silently outranks the hover lift on the
@@ -575,11 +579,6 @@ button.panel__link {
   }
 }
 
-/* Scoped to the dashboard, and this is not tidiness. `exceptions.html` loads this same
-   stylesheet for the same card grid, but its cards sit at the top of the page with no tiles
-   above them — the cross-group delays below would leave that screen waiting a quarter of a
-   second for a row that does not exist there. The component polish further down stays
-   unscoped, because a hover and a tooltip mean the same thing on any screen that has one. */
 /* Out of the baseline, not into place. `scaleY` rather than `height` for two reasons: it is
    composited rather than laid out, and — the one that actually matters — the column keeps its
    final geometry from the first frame, so the hover readout that measures the stack can be
@@ -594,6 +593,11 @@ button.panel__link {
   }
 }
 
+/* Scoped to the dashboard, and this is not tidiness. `exceptions.html` loads this same
+   stylesheet for the same card grid, but its cards sit at the top of the page with no tiles
+   above them — the cross-group delays below would leave that screen waiting a quarter of a
+   second for a row that does not exist there. The component polish further down stays
+   unscoped, because a hover and a tooltip mean the same thing on any screen that has one. */
 @media (prefers-reduced-motion: no-preference) {
   /* Reading order: the five figures, then the shape they came from, then what needs doing
      about it. Written as `nth-child` rather than carried in the markup because the order is
@@ -727,6 +731,21 @@ button.panel__link {
 
 .chart__tip.is-visible {
   transform: none;
+}
+
+/* The figures themselves are reels — see `--- rolling figures ---` in portal.css, and
+   `MaitAI.ui.roll` for why a number on this screen moves at all. Nothing is needed here to
+   make that work; what is needed is that it not be fought.
+
+   There used to be a lift on the whole figure to say it had changed. It has gone: the digits
+   now say it themselves, far more precisely than a moving tile could, and a card that lifts
+   while its digits are turning is two pieces of motion competing to make the same point.
+
+   Tabular figures stay, so that the fixed slots between the reels — the thousands commas, the
+   decimal point — sit where a number's punctuation sits at any width. */
+.tile__value,
+[data-page='dashboard'] .panel__count {
+  font-variant-numeric: tabular-nums;
 }
 
 /* The exception rows, arriving under the count that summarises them. Written on the rows
