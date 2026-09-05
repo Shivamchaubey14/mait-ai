@@ -164,6 +164,15 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* A digit turning on its reel, which is a different job from anything above.
+     `--ease-out` is deliberately front-loaded — three quarters of the distance in the first
+     quarter of the time — because a thing arriving should feel like it was already on its
+     way. A digit is not arriving from anywhere: it is a column being turned, and turned
+     through most of its travel in the first eighty milliseconds is a digit that has snapped,
+     which is precisely what a figure updating on its own must not look like. So this one
+     leaves unhurriedly, spends its middle actually travelling, and settles. */
+  --ease-reel: cubic-bezier(0.45, 0.05, 0.15, 1);
+
   /* --- Layout ------------------------------------------------------------------------ */
   --sidebar-width: 248px;
   --topbar-height: 60px;

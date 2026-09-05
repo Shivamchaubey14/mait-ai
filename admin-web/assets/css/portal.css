@@ -180,6 +180,85 @@ a:hover {
   gap: var(--space-3);
 }
 
+/* --- rolling figures ----------------------------------------------------------------------
+   A number that changes while somebody is watching it, shown the way a clock shows one. Built
+   by `MaitAI.ui.roll`; see that function for why a figure moves at all.
+
+   Each column is a window one digit tall with nought-to-nine stacked behind it, and moving is
+   sliding the stack. Only the digits that actually changed move, which is what makes it read
+   as a clock rather than as an effect: on a dashboard re-reading itself every thirty seconds,
+   the units column turns and the rest sits still, exactly as the seconds column of a clock
+   does the work its hour column does not.
+
+   **No width is set on a column.** It is `inline-block` around a stack containing all ten
+   digits, so it shrinks to fit the widest of them — in whatever font, at whatever size, with
+   or without the font having tabular figures at all. A `1ch` column would have been a guess
+   about the typeface that is wrong the day somebody changes it. */
+.odo {
+  /* One line box tall, matching `--leading-tight`, so a figure that becomes a reel keeps the
+     height it had as text and no tile changes size the moment its number arrives. */
+  --odo-h: 1.25em;
+
+  display: inline-flex;
+  align-items: flex-start;
+}
+
+.odo__digit {
+  display: inline-block;
+  height: var(--odo-h);
+  overflow: hidden;
+
+  /* The same guarantee `overflow` already gives, stated as a promise the element makes about
+     itself — which is what lets the browser skip painting the ten cells hanging outside the
+     window entirely, rather than painting them and then clipping. Ten per column, on a dozen
+     columns, every frame of a roll.
+
+     (Capturing a roll in a headless browser shows those cells painted over the tile's label.
+     That is the screenshot path and not what anybody sees: hit-testing at the same point
+     lands on the label, and a reel built and offset without ever animating renders clipped.
+     This declaration does not change either — it is here for the paint cost, not for that.) */
+  contain: paint;
+
+  /* The digit is centred in a column as wide as the widest of them, which is what stops a
+     one looking as though it has drifted left of the eight above it. */
+  text-align: center;
+}
+
+.odo__reel {
+  display: block;
+  transform: translateY(calc(var(--p, 0) * var(--odo-h) * -1));
+  transition: transform var(--motion-slow) var(--ease-reel);
+  transition-delay: calc(var(--k, 0) * 1ms);
+}
+
+/* Used for the two moments a reel has to move without being seen to: the snap back to the top
+   after a carry has run forward onto the duplicate nought, and the jump onto that duplicate
+   before a carry runs backwards. */
+.odo__reel--still {
+  transition: none;
+}
+
+.odo__cell {
+  display: block;
+  height: var(--odo-h);
+  line-height: var(--odo-h);
+}
+
+/* Commas, decimal points and the em dash a figure shows before it has one. They sit between
+   the columns and never move — a thousands separator that slid into place with the digits
+   would be motion that means nothing. */
+.odo__sep {
+  display: block;
+  height: var(--odo-h);
+  line-height: var(--odo-h);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .odo__reel {
+    transition: none;
+  }
+}
+
 /* --- live indicator -----------------------------------------------------------------------
    On a screen that re-reads itself, this is the only thing on the page that can tell an
    operator the figures are current. Everything else looks exactly the same whether it was
