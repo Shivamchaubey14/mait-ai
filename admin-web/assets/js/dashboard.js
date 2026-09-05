@@ -347,6 +347,60 @@
     );
   }
 
+  // ------------------------------------------------------------------------------------
+  // Staying current
+  // ------------------------------------------------------------------------------------
+  /** The loop, once the page has mounted. Held here so the whole file can ask it to refetch. */
+  let loop = null;
+
+  /* Whether anything has ever landed. Until it has, a failure is the screen rather than a
+     gap in it, and it is said out loud. */
+  let loaded = false;
+
+  /* How many beats in a row may be missed before the page says so in a banner. */
+  const QUIET_MISSES = 2;
+
+  let queueBound = false;
+
+  /**
+   * Whether a queue dialog is open over the page.
+   *
+   * The beat is held while one is. Rows behind a modal cannot be read, so refreshing them is
+   * churn nobody sees — and `showModal` makes the page behind it inert, which would leave a
+   * count animating in front of an operator who cannot reach it.
+   */
+  function queueOpen() {
+    const dialog = document.getElementById('queue-modal');
+    if (!dialog) {
+      return false;
+    }
+    if (!queueBound) {
+      queueBound = true;
+      // The dialog is built lazily, on first open, so this is the earliest the listener can
+      // be attached. Without it the screen would come back to figures as old as the dialog.
+      dialog.addEventListener('close', function () {
+        loop.refresh();
+      });
+    }
+    return dialog.open;
+  }
+
+  /**
+   * A beat that did not land.
+   *
+   * One missed beat is a laptop lid, a wifi hop or a deploy restarting gunicorn, and covering
+   * the dashboard in a red banner each time one happens is how a banner stops being read. The
+   * indicator has already gone amber, which is the honest amount to say about it.
+   *
+   * Two in a row is something worth interrupting for. So is the very first load, whatever the
+   * count — there are no figures behind the banner for the operator to go on looking at.
+   */
+  function reportMiss(problem, misses) {
+    if (!loaded || misses >= QUIET_MISSES) {
+      showError(problem);
+    }
+  }
+
   $(function () {
     // No session, no dashboard. Done before any request so the page does not flash a
     // half-rendered shell on the way to the login screen.
@@ -370,10 +424,36 @@
       window.location.replace('login.html');
     });
 
-    load(Number($('#range').val())).fail(showError);
+    loop = MaitAI.live.create({
+      // Read at the moment of the beat, not captured: the range control changes underneath
+      // this loop, and a closure over the value it held at mount would keep fetching the
+      // week an operator stopped looking at twenty minutes ago.
+      request: function () {
+        return load(Number($('#range').val()));
+      },
+      held: queueOpen,
+      onFail: reportMiss,
+      onState: function (name) {
+        if (name === 'live') {
+          loaded = true;
+          // Whatever the last failure put on screen is no longer true. Cleared on the way
+          // back rather than left for somebody to dismiss — an alert about a request that
+          // has since succeeded is an alert that teaches people to close alerts unread.
+          MaitAI.shell.clearAlert();
+        }
+      },
+    });
+
+    // The first load goes through the loop as well, rather than being a separate call before
+    // it. One path means there is no window in which the page has data the loop thinks it has
+    // not fetched, and the first failure is reported by the same code as every later one.
+    loop.start().refresh();
 
     $('#range').on('change', function () {
-      load(Number($(this).val())).fail(showError);
+      // Through the loop rather than a bare `load`, so the beat restarts from this moment.
+      // Otherwise a poll already due a second from now would repeat the same request and
+      // land a second answer on a chart that is still drawing the first.
+      loop.refresh();
     });
 
     $('#export').on('click', function () {
