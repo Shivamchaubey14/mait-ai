@@ -327,21 +327,24 @@
   // ------------------------------------------------------------------------------------
   // Load
   // ------------------------------------------------------------------------------------
+  /**
+   * One reading of the whole screen.
+   *
+   * Returns a promise over both requests rather than handling their failures itself: the
+   * loop above it needs to know whether the screen is current, and each half still renders
+   * on its own the moment it lands — a trends call that times out must not hold back five
+   * summary figures that arrived.
+   */
   function load(days) {
-    api
-      .dashboardSummary()
-      .done(function (data) {
+    return $.when(
+      api.dashboardSummary().done(function (data) {
         renderSummary(data);
         renderExceptions(data.exceptions || {});
-      })
-      .fail(showError);
-
-    api
-      .dashboardTrends({ granularity: 'daily', days: days })
-      .done(function (data) {
+      }),
+      api.dashboardTrends({ granularity: 'daily', days: days }).done(function (data) {
         renderChart(data.results || []);
       })
-      .fail(showError);
+    );
   }
 
   $(function () {
@@ -367,10 +370,10 @@
       window.location.replace('login.html');
     });
 
-    load(Number($('#range').val()));
+    load(Number($('#range').val())).fail(showError);
 
     $('#range').on('change', function () {
-      load(Number($(this).val()));
+      load(Number($(this).val())).fail(showError);
     });
 
     $('#export').on('click', function () {
