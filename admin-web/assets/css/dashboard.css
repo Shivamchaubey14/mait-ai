@@ -547,6 +547,9 @@ button.panel__link {
    **The cards arrive in reading order**, so the eye is led down the page instead of being
    handed a finished screenshot to search.
 
+   **The bars grow out of their baseline**, because the growing *is* the quantity — a bar that
+   appears at full height has already finished saying what it came to say.
+
    **Nothing moves that a person has to wait for.** The whole entrance is over inside three
    quarters of a second, and none of it gates a click: every control is live from the first
    frame, mid-animation.
@@ -577,6 +580,20 @@ button.panel__link {
    above them — the cross-group delays below would leave that screen waiting a quarter of a
    second for a row that does not exist there. The component polish further down stays
    unscoped, because a hover and a tooltip mean the same thing on any screen that has one. */
+/* Out of the baseline, not into place. `scaleY` rather than `height` for two reasons: it is
+   composited rather than laid out, and — the one that actually matters — the column keeps its
+   final geometry from the first frame, so the hover readout that measures the stack can be
+   opened halfway through the animation and still point at the right place. */
+@keyframes grow-up {
+  from {
+    transform: scaleY(0);
+  }
+
+  to {
+    transform: scaleY(1);
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   /* Reading order: the five figures, then the shape they came from, then what needs doing
      about it. Written as `nth-child` rather than carried in the markup because the order is
@@ -641,5 +658,15 @@ button.panel__link {
 
   [data-page='dashboard'] .exceptions ~ .panel ~ .panel ~ .panel {
     animation-delay: calc(var(--motion-stagger) * 11);
+  }
+
+  /* `--i` is set per column in `dashboard.js`, which is also where the per-column delay is
+     worked out: the sweep has to cover a fixed budget whether the range is seven days or
+     ninety, and a fixed stagger would leave the last of ninety columns arriving four seconds
+     after the first. */
+  .chart__bar--drawn {
+    transform-origin: bottom;
+    animation: grow-up var(--motion-slow) var(--ease-out) backwards;
+    animation-delay: calc(var(--i, 0) * 1ms);
   }
 }

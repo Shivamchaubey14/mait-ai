@@ -20,6 +20,25 @@
     return typeof value === 'number' ? value.toLocaleString('en-IN') : '—';
   }
 
+  // ------------------------------------------------------------------------------------
+  // Motion
+  // ------------------------------------------------------------------------------------
+  /**
+   * The sweep across the chart, as a whole.
+   *
+   * A fixed per-column stagger cannot work here: the range control offers seven days and
+   * ninety, and thirty milliseconds apiece would leave the last of ninety columns arriving
+   * nearly three seconds after the first — long enough that somebody starts reading a chart
+   * that is still drawing itself. So the budget is fixed and the columns divide it, with a
+   * ceiling so that a week does not feel languid for having only seven of them.
+   */
+  const SWEEP_MS = 320;
+  const SWEEP_MAX_STEP = 30;
+
+  function sweepStep(columns) {
+    return Math.min(SWEEP_MAX_STEP, SWEEP_MS / Math.max(1, columns - 1));
+  }
+
   function delta(percent, comparedTo) {
     if (typeof percent !== 'number') {
       return '';
@@ -203,7 +222,11 @@
 
     const $tip = $('<div class="chart__tip" role="status" aria-live="polite"></div>');
 
-    series.forEach(function (day) {
+    // The sweep left to right, divided over however many days the range holds — see
+    // `sweepStep`. Worked out once rather than per column.
+    const step = sweepStep(series.length);
+
+    series.forEach(function (day, index) {
       const $bars = $('<div class="chart__bars"></div>');
 
       // A zero draws no bar at all. `min-height` gave every empty day a sliver of both
@@ -215,7 +238,13 @@
       ].forEach(function (bar) {
         const $bar = $('<div class="chart__bar"></div>').addClass(bar.className);
         if (bar.value > 0) {
-          $bar.css('height', (bar.value / peak) * 100 + '%').addClass('chart__bar--drawn');
+          $bar
+            .css('height', (bar.value / peak) * 100 + '%')
+            // The delay this bar waits before growing, in milliseconds, read by the rule in
+            // dashboard.css. A unitless number because `calc()` cannot multiply a bare
+            // custom property by a duration without one.
+            .css('--i', Math.round(index * step))
+            .addClass('chart__bar--drawn');
         }
         $bars.append($bar);
       });
