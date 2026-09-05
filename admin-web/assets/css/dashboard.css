@@ -538,3 +538,108 @@ button.panel__link {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* --- motion -------------------------------------------------------------------------------
+   The dashboard is the one screen in this portal that is *looked at* rather than worked
+   through. Somebody opens it, reads five numbers and a shape, and either closes it or goes
+   somewhere specific. Everything below serves that ten seconds; none of it is decoration.
+
+   **The cards arrive in reading order**, so the eye is led down the page instead of being
+   handed a finished screenshot to search.
+
+   **Nothing moves that a person has to wait for.** The whole entrance is over inside three
+   quarters of a second, and none of it gates a click: every control is live from the first
+   frame, mid-animation.
+
+   **`backwards`, never `both`.** A `both` fill leaves the animation's end state applied
+   forever, and an end state of `transform: none` silently outranks the hover lift on the
+   linked tile — the animation would quietly break the affordance it just introduced.
+   `backwards` holds the *opening* frame through the delay, which is the only part needed,
+   and hands the element back to its own stylesheet the moment it finishes.
+
+   All of it is behind `prefers-reduced-motion`. Motion sickness and vestibular disorders are
+   not a preference about taste, and this screen is opened every morning. */
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Scoped to the dashboard, and this is not tidiness. `exceptions.html` loads this same
+   stylesheet for the same card grid, but its cards sit at the top of the page with no tiles
+   above them — the cross-group delays below would leave that screen waiting a quarter of a
+   second for a row that does not exist there. The component polish further down stays
+   unscoped, because a hover and a tooltip mean the same thing on any screen that has one. */
+@media (prefers-reduced-motion: no-preference) {
+  /* Reading order: the five figures, then the shape they came from, then what needs doing
+     about it. Written as `nth-child` rather than carried in the markup because the order is
+     the document's own — a card that moves in the HTML should take its place in the sequence
+     with it, and an index hardcoded in an attribute would not. */
+  [data-page='dashboard'] .tiles .tile {
+    animation: rise-in var(--motion-base) var(--ease-out) backwards;
+  }
+
+  [data-page='dashboard'] .tiles .tile:nth-child(2) {
+    animation-delay: var(--motion-stagger);
+  }
+
+  [data-page='dashboard'] .tiles .tile:nth-child(3) {
+    animation-delay: calc(var(--motion-stagger) * 2);
+  }
+
+  [data-page='dashboard'] .tiles .tile:nth-child(4) {
+    animation-delay: calc(var(--motion-stagger) * 3);
+  }
+
+  [data-page='dashboard'] .tiles .tile:nth-child(5) {
+    animation-delay: calc(var(--motion-stagger) * 4);
+  }
+
+  /* The chart, and then the queues. Four panels are direct children of the content column —
+     the trend chart, and the three full-width queues that sit *below* the exception grid — so
+     a single rule for `.content > .panel` gave the bottom three the chart's own delay and
+     landed them a fifth of a second before the cards above them. The page arrived out of
+     order, which is the one thing a staggered entrance must not do.
+
+     The sibling chain is what fixes it. `.exceptions ~ .panel` is every panel after the grid;
+     adding a link narrows to the ones after that, and the cascade leaves each with the last
+     delay that matched. It survives a card being added or moved in the markup, which a
+     positional `nth-child` on a column also holding a header and an alert region would
+     not. */
+  [data-page='dashboard'] .content > .panel {
+    animation: rise-in var(--motion-base) var(--ease-out) backwards;
+    animation-delay: calc(var(--motion-stagger) * 5);
+  }
+
+  [data-page='dashboard'] .exceptions .panel {
+    animation: rise-in var(--motion-base) var(--ease-out) backwards;
+    animation-delay: calc(var(--motion-stagger) * 6);
+  }
+
+  [data-page='dashboard'] .exceptions .panel:nth-child(2) {
+    animation-delay: calc(var(--motion-stagger) * 7);
+  }
+
+  [data-page='dashboard'] .exceptions .panel:nth-child(3) {
+    animation-delay: calc(var(--motion-stagger) * 8);
+  }
+
+  [data-page='dashboard'] .exceptions ~ .panel {
+    animation-delay: calc(var(--motion-stagger) * 9);
+  }
+
+  [data-page='dashboard'] .exceptions ~ .panel ~ .panel {
+    animation-delay: calc(var(--motion-stagger) * 10);
+  }
+
+  [data-page='dashboard'] .exceptions ~ .panel ~ .panel ~ .panel {
+    animation-delay: calc(var(--motion-stagger) * 11);
+  }
+}
