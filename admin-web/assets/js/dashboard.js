@@ -376,9 +376,22 @@
     }
   }
 
+  /* What each card is currently showing, so a beat that changed nothing leaves it alone. */
+  const shownRows = {};
+
   function renderException(key, payload) {
     $('[data-count="' + key + '"]').text(count(payload.count));
     MaitAI.ui.queueLink(key, payload.count);
+
+    // Rows are rebuilt only when they are actually different. Unconditionally emptying and
+    // re-appending would replay the row cascade on six cards twice a minute — motion that
+    // announces a change when nothing changed, which is how a screen teaches the people
+    // reading it to stop believing its movement.
+    const signature = JSON.stringify(payload.rows || []);
+    if (shownRows[key] === signature) {
+      return;
+    }
+    shownRows[key] = signature;
 
     const $rows = $('[data-rows="' + key + '"]').empty();
     if (!payload.rows || !payload.rows.length) {
