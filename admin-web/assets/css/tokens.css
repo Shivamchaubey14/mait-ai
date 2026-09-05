@@ -131,6 +131,39 @@
   --chart-5: var(--ink-300);
   --chart-alert: var(--yolk-500);
 
+  /* --- Motion ------------------------------------------------------------------------
+     Three durations, because a screen only makes three kinds of promise.
+
+     `fast` is the portal's existing state change — a hover, a chevron turning, a tooltip
+     appearing. It was already 120ms everywhere it was written by hand; naming it is what
+     stops the next hover being 100 and the one after 150.
+
+     `base` is something arriving that was not there before. It has to be long enough to be
+     read as movement rather than a jump, and short enough that nobody waits for it.
+
+     `slow` is reserved for a shape being drawn — a bar growing out of its baseline. Motion
+     that carries a *quantity* is the one case worth spending time on, because the growing is
+     the thing being understood, not decoration on top of it.
+
+     The easing curve matters more than the numbers. `--ease-out` leaves fast and settles,
+     which is how a thing that was already on its way behaves; a linear arrival reads as a
+     machine placing an object, and a symmetric ease reads as slow at both ends.
+
+     Not mirrored in `mobile/src/theme/tokens.ts`. React Native drives motion through
+     `Animated` in JavaScript rather than through style values, and its timings live at their
+     call sites (`mobile/src/components/pullToRefresh.tsx`) where the gesture defines them. A
+     duration token that nothing on that side can read would be a promise this file cannot
+     keep. */
+  --motion-fast: 120ms;
+  --motion-base: 240ms;
+  --motion-slow: 420ms;
+  /* Between siblings arriving in a row. Small on purpose: a stagger is meant to say "these
+     came in an order", not to make the last card wait for a queue. */
+  --motion-stagger: 40ms;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
   /* --- Layout ------------------------------------------------------------------------ */
   --sidebar-width: 248px;
   --topbar-height: 60px;
