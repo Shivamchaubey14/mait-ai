@@ -670,3 +670,33 @@ button.panel__link {
     animation-delay: calc(var(--i, 0) * 1ms);
   }
 }
+
+/* The hovered day's bars, a shade brighter. The wash behind the column already says which day
+   is being read; this is what stops the bars themselves looking inert while their own numbers
+   are being shown above them. A filter rather than a second set of colours, so the legend
+   keeps meaning exactly what it says. */
+.chart__col {
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.chart__bar {
+  transition: filter var(--motion-fast) var(--ease-out);
+}
+
+.chart__col--active .chart__bar,
+.chart__col:focus-visible .chart__bar {
+  filter: brightness(1.07);
+}
+
+/* The readout arrives from just under where it lands, rather than fading in on the spot. Four
+   pixels: enough to read as arriving, not enough to be a movement anybody notices. */
+.chart__tip {
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+  transform: translateY(4px);
+}
+
+.chart__tip.is-visible {
+  transform: none;
+}
