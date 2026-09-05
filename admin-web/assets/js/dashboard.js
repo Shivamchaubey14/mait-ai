@@ -285,8 +285,12 @@
       return;
     }
 
-    payload.rows.forEach(function (row) {
+    payload.rows.forEach(function (row, index) {
       $('<div class="exception__row"></div>')
+        // Down the card rather than all at once, at half the stagger the cards themselves
+        // use: these are inside something that has already arrived, and a second full-speed
+        // cascade within it competes with the one that brought the card in.
+        .css('--i', index * 30)
         .append($('<p class="exception__label"></p>').text(row.label))
         .append(
           $('<p class="exception__meta"></p>')
