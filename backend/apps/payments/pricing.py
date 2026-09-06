@@ -52,7 +52,5 @@ def pd_price_for(*, owner_type: str) -> Decimal | None:
     quoted apart because they settle in different worlds, and an unset rate is `None` rather
     than zero so it can never reach a farmer as "free".
     """
-    config = PregnancyRate.objects.filter(
-        service=PregnancyRate.Service.PREGNANCY_DIAGNOSIS
-    ).first()
+    config = PregnancyRate.objects.filter(service=PregnancyRate.Service.PREGNANCY_DIAGNOSIS).first()
     return config.for_owner(owner_type) if config else None

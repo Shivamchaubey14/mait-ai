@@ -243,9 +243,11 @@ def _pending_payment_rows(queryset):
                     fact("Farmer authorised", "Yes" if payment.member_otp_verified else "No"),
                     fact(
                         "Cash confirmed",
-                        ("Yes" if payment.cod_otp_verified else "No")
-                        if payment.mode == Payment.Mode.COD
-                        else "Not applicable",
+                        (
+                            ("Yes" if payment.cod_otp_verified else "No")
+                            if payment.mode == Payment.Mode.COD
+                            else "Not applicable"
+                        ),
                     ),
                     fact("UTR", payment.utr_number),
                     fact("Screenshot", "On file" if payment.payment_screenshot_url else ""),
@@ -286,13 +288,15 @@ def _low_stock_rows(queryset):
                 },
                 metric=f"{total} left",
                 guidance=(
-                    "Cannot record an insemination at all until they are restocked. Anything "
-                    "they do in the field today is work this platform will have no record of."
-                )
-                if zero
-                else (
-                    f"Under the {settings.LOW_STOCK_THRESHOLD}-straw threshold and will run "
-                    "out mid-round. Raise an indent before they do rather than after."
+                    (
+                        "Cannot record an insemination at all until they are restocked. Anything "
+                        "they do in the field today is work this platform will have no record of."
+                    )
+                    if zero
+                    else (
+                        f"Under the {settings.LOW_STOCK_THRESHOLD}-straw threshold and will run "
+                        "out mid-round. Raise an indent before they do rather than after."
+                    )
                 ),
                 facts=[
                     fact("Straws held", total),
@@ -484,15 +488,17 @@ def _declined_rows(queryset):
                 },
                 metric=f"{count} refused",
                 guidance=(
-                    "A refusal closes the check for good — nothing re-books it — so each one "
-                    "is an insemination that will never get an answer. Repeated in one "
-                    "village it is a conversation with that collection point, not something "
-                    "the Mait can fix on their round."
-                )
-                if count >= 3
-                else (
-                    "One or two refusals in a village is ordinary. Worth knowing rather than "
-                    "worth acting on — the check is closed either way and nothing re-books it."
+                    (
+                        "A refusal closes the check for good — nothing re-books it — so each one "
+                        "is an insemination that will never get an answer. Repeated in one "
+                        "village it is a conversation with that collection point, not something "
+                        "the Mait can fix on their round."
+                    )
+                    if count >= 3
+                    else (
+                        "One or two refusals in a village is ordinary. Worth knowing rather than "
+                        "worth acting on — the check is closed either way and nothing re-books it."
+                    )
                 ),
                 facts=[
                     fact("Refused", count),

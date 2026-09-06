@@ -610,9 +610,9 @@ def mait_performance(request):
         else []
     )
     for row in live_events:
-        slot(row["mait_id"], row["mait__name"], row["mait__sahayak_vendor_code"])["ai_count"] += (
-            row["n"]
-        )
+        slot(row["mait_id"], row["mait__name"], row["mait__sahayak_vendor_code"])[
+            "ai_count"
+        ] += row["n"]
 
     # The same split the aggregate keeps, computed the same way as `_money_for_slice`: only
     # verified payments count, because an unconfirmed one is money nobody has yet agreed

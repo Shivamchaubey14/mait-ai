@@ -70,9 +70,7 @@ class PregnancyCheckSerializer(serializers.ModelSerializer):
     # then works a round with no signal, and a figure the app derives itself is a figure that
     # can disagree with the one the server bills.
     price = serializers.SerializerMethodField()
-    amount_charged = serializers.DecimalField(
-        max_digits=10, decimal_places=2, read_only=True
-    )
+    amount_charged = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = PregnancyCheck

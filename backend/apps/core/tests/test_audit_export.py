@@ -261,9 +261,7 @@ def test_the_cover_describes_the_filters_in_words(audit_client):
 
     text = cover_text(
         workbook(
-            audit_client.get(
-                URL, {"action": AuditLog.Action.PII_ACCESS, "date_from": "2026-08-01"}
-            )
+            audit_client.get(URL, {"action": AuditLog.Action.PII_ACCESS, "date_from": "2026-08-01"})
         )
     )
 
