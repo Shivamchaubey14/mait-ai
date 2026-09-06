@@ -409,3 +409,120 @@ class DataUploadLog(TimeStampedModel):
         if not self.total_rows:
             return 0
         return min(100, round(self.processed_rows / self.total_rows * 100))
+
+
+class Zone(TimeStampedModel):
+    """
+    A group of chilling centres, and the unit an area manager answers for.
+
+    The dairy is run in zones — Bahraich, Pratapgarh — each covering several BMC/MCCs, and
+    that grouping exists nowhere in SAP. It is an operational structure the business decides
+    and changes, which is why it is maintained here rather than arriving with the masters:
+    an upload must never be able to move a chilling centre out of somebody's zone.
+
+    Zones sit *above* the SAP hierarchy rather than inside it. A zone is a set of plants, and
+    a plant already reaches everything else — its MPPs, their members, and every AI event
+    recorded at one — so no other table needs a zone column to be counted by zone.
+
+    Deliberately not the district. SAP's `district_code` is a revenue district and the zones
+    cross them: BALRAMPUR alone spans four. Grouping the dashboard by district would answer a
+    question of the government's rather than one of the dairy's.
+    """
+
+    code = models.CharField(
+        max_length=20,
+        unique=True,
+        db_index=True,
+        help_text="Short identifier, e.g. ZONE1. Set once — reports and saved links use it.",
+    )
+    name = models.CharField(max_length=100, db_index=True)
+    description = models.CharField(max_length=255, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        db_table = "zone"
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.name} [{self.code}]"
+
+    @property
+    def plant_codes(self) -> list[str]:
+        return list(self.plants.values_list("plant_code", flat=True))
+
+
+class ZonePlant(TimeStampedModel):
+    """
+    One BMC/MCC's membership of a zone.
+
+    A row per plant rather than a list on the zone, for one reason worth the extra table:
+    ``plant_code`` is unique here, so a chilling centre cannot end up in two zones. A JSON
+    list on ``Zone`` would have made that a rule somebody has to remember and a bug the day
+    they do not — and "which zone is NANPARA in" would have had two answers, with the
+    dashboard totals quietly double-counting it.
+
+    ``plant_code`` is not a foreign key because there is no plant table: SAP sends the plant
+    on every MPP row and the portal reads the distinct set (see ``plants_with_counts``). The
+    name is copied here so a zone still reads correctly before the first master upload, and
+    is refreshed from the MPP data whenever it is listed.
+    """
+
+    zone = models.ForeignKey(Zone, on_delete=models.CASCADE, related_name="plants")
+    plant_code = models.CharField(max_length=10, unique=True, db_index=True)
+    plant_name = models.CharField(max_length=100, blank=True)
+
+    class Meta:
+        db_table = "zone_plant"
+        ordering = ["plant_name"]
+
+    def __str__(self) -> str:
+        return f"{self.plant_name or self.plant_code} → {self.zone.name}"
+
+
+def plants_with_counts() -> list[dict]:
+    """
+    Every BMC/MCC the master data knows about, with its size and its zone.
+
+    The list the setup screen assigns from. There is no plant master to read, so the answer
+    is the distinct plants across the MPP table — which is also why an unassigned plant is
+    not an error state: a chilling centre appears here the moment SAP first mentions it, and
+    somebody has to put it in a zone afterwards.
+
+    The MPP and member counts are what make the screen usable. "NANPARA" means little on its
+    own; "NANPARA — 247 MPPs, 7,449 members" is enough to know whether it belongs in the zone
+    somebody is building.
+    """
+    from django.db.models import Count
+
+    mpps = {
+        row["plant_code"]: row["n"]
+        for row in MPP.objects.values("plant_code").annotate(n=Count("id"))
+    }
+    members = {
+        row["mpp__plant_code"]: row["n"]
+        for row in Member.objects.values("mpp__plant_code").annotate(n=Count("id"))
+    }
+    assigned = {row.plant_code: row for row in ZonePlant.objects.select_related("zone")}
+
+    rows = []
+    # `order_by()` clears the model's default ordering, and it is load-bearing rather than
+    # tidiness: Meta.ordering puts `mpp_name` into the SELECT, and a DISTINCT over
+    # (plant_code, plant_name, mpp_name) is distinct per *MPP* — which returned all 3,129 of
+    # them, each looking like a chilling centre of its own.
+    for entry in MPP.objects.order_by().values("plant_code", "plant_name").distinct():
+        code = entry["plant_code"]
+        if not code:
+            continue
+        held = assigned.get(code)
+        rows.append(
+            {
+                "plant_code": code,
+                "plant_name": entry["plant_name"] or code,
+                "mpp_count": mpps.get(code, 0),
+                "member_count": members.get(code, 0),
+                "zone_code": held.zone.code if held else "",
+                "zone_name": held.zone.name if held else "",
+            }
+        )
+    rows.sort(key=lambda row: row["plant_name"])
+    return rows
