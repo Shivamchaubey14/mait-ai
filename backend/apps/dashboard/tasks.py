@@ -41,14 +41,17 @@ def aggregate_daily_ai_counts(lookback_days: int = AGGREGATE_LOOKBACK_DAYS) -> i
     # a couple of days, so the rows fit in memory by construction (apps.core.timeframe).
     events = AIEvent.objects.filter(
         status=AIEvent.Status.COMPLETED, completed_at__gte=start_of_day(since)
-    ).values_list("completed_at", "mpp_id", "mait_id", "mpp__district_code", "member_id")
+    ).values_list(
+        "completed_at", "mpp_id", "mait_id", "mpp__district_code", "mpp__plant_code", "member_id"
+    )
 
     slices: dict[tuple, dict] = {}
-    for completed_at, mpp_id, mait_id, district_code, member_id in events.iterator():
+    for completed_at, mpp_id, mait_id, district_code, plant_code, member_id in events.iterator():
         slice_ = slices.setdefault(
             (local_day(completed_at), mpp_id, mait_id),
             {
                 "district_code": district_code or "",
+                "plant_code": plant_code or "",
                 "ai_count": 0,
                 "member_ai_count": 0,
                 "non_member_ai_count": 0,
@@ -71,6 +74,7 @@ def aggregate_daily_ai_counts(lookback_days: int = AGGREGATE_LOOKBACK_DAYS) -> i
                 mait_id=mait_id,
                 defaults={
                     "district_code": slice_["district_code"],
+                    "plant_code": slice_["plant_code"],
                     "ai_count": slice_["ai_count"],
                     "member_ai_count": slice_["member_ai_count"],
                     "non_member_ai_count": slice_["non_member_ai_count"],

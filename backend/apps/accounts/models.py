@@ -65,6 +65,11 @@ class PortalSection(models.TextChoices):
     # automatically the account allowed to pull an AI-event export.
     MAIT_PAYMENT = "mait-payment", "Mait payment"
     USERS = "users", "Users & roles"
+    # Beside Users & roles, and for the same reason: both hand out reach. That one says which
+    # screens an account opens, this one says how much of the network it sees through them —
+    # and an account that can edit zones can widen its own view, so it belongs behind the same
+    # desk rather than among the operational screens.
+    ZONES = "zones", "Zones"
     # Last, and beside Users & roles rather than among the operational screens: it is the
     # record of who did what, including who read a farmer's identity document, and the desk
     # that administers accounts is the one that answers for it.
@@ -127,6 +132,15 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
             "Super Admin reaches everything and a Mait has no portal."
         ),
     )
+    zones = models.ManyToManyField(
+        "masterdata.Zone",
+        blank=True,
+        related_name="users",
+        help_text=(
+            "Which zones this account sees. Empty means the whole network — the default, "
+            "and what every head-office account keeps."
+        ),
+    )
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     last_login_at = models.DateTimeField(null=True, blank=True)
@@ -166,6 +180,41 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
             return []
         held = set(self.portal_sections or [])
         return [section for section in PortalSection.values if section in held]
+
+    @property
+    def zone_scope(self) -> list[str] | None:
+        """
+        The plant codes this account may see, or ``None`` for the whole network.
+
+        ``None`` and ``[]`` are different answers and the distinction is the whole of this
+        property. ``None`` means unrestricted — no zone was assigned, which is every account
+        that exists today and every head-office account after this. ``[]`` means restricted to
+        nothing: a zone was assigned and it currently holds no chilling centres, so the honest
+        answer is an empty dashboard rather than the network total.
+
+        Reading them as the same thing is the one mistake here that fails open. It would hand
+        a zone manager whose zone is still being set up the figures for all nineteen plants,
+        and nothing on the screen would say so.
+
+        A Super Admin is never scoped, for the same reason they are never section-scoped: they
+        are the accounts that hand out zones, and one that could restrict its own view is one
+        bad save from nobody being able to see the network.
+        """
+        from apps.masterdata.models import ZonePlant
+
+        if self.role == Role.SUPER_ADMIN:
+            return None
+        zone_ids = list(self.zones.filter(is_active=True).values_list("id", flat=True))
+        if not zone_ids:
+            return None
+        return list(
+            ZonePlant.objects.filter(zone_id__in=zone_ids).values_list("plant_code", flat=True)
+        )
+
+    @property
+    def zone_names(self) -> list[str]:
+        """What the scope is called, for the line on screen that says so."""
+        return list(self.zones.filter(is_active=True).values_list("name", flat=True))
 
     def can_view_section(self, *sections: str) -> bool:
         """

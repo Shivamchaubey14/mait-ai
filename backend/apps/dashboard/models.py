@@ -48,6 +48,15 @@ class DailyAIAggregate(TimeStampedModel):
         db_index=True,
         help_text="Denormalised from the MPP so district filters avoid a join.",
     )
+    plant_code = models.CharField(
+        max_length=10,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "The BMC/MCC, denormalised from the MPP for the same reason as the district — "
+            "it is what a zone is a set of, so every zone-scoped read filters on it."
+        ),
+    )
 
     ai_count = models.PositiveIntegerField(default=0)
     member_ai_count = models.PositiveIntegerField(default=0)
@@ -68,6 +77,10 @@ class DailyAIAggregate(TimeStampedModel):
         indexes = [
             models.Index(fields=["date", "district_code"], name="agg_date_district_idx"),
             models.Index(fields=["mait", "date"], name="agg_mait_date_idx"),
+            # The zone dashboard's own read: a date range narrowed to a set of plants. Without
+            # it the leading column is the date and every zone pays for a scan of the whole
+            # network's day.
+            models.Index(fields=["date", "plant_code"], name="agg_date_plant_idx"),
         ]
 
     def __str__(self) -> str:
