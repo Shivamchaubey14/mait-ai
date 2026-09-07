@@ -99,6 +99,7 @@ class CurrentUserSerializer(serializers.ModelSerializer):
     sahayak_vendor_code = serializers.SerializerMethodField()
     assigned_mpp_codes = serializers.SerializerMethodField()
     portal_sections = serializers.SerializerMethodField()
+    zones = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -116,6 +117,7 @@ class CurrentUserSerializer(serializers.ModelSerializer):
             "sahayak_vendor_code",
             "assigned_mpp_codes",
             "portal_sections",
+            "zones",
         ]
         read_only_fields = fields
 
@@ -128,6 +130,17 @@ class CurrentUserSerializer(serializers.ModelSerializer):
         checks for itself, because a sidebar has no say over a URL typed into the bar.
         """
         return obj.allowed_sections
+
+    def get_zones(self, obj) -> dict:
+        """
+        How much of the network this account sees, for the line that says so on screen.
+
+        The portal draws a scope note under the page title on every screen it narrows. Sent
+        with the profile rather than fetched per screen because it is the same answer for all
+        of them, and a screen that had to ask separately is a screen that can forget to.
+        """
+        names = obj.zone_names
+        return {"scoped": bool(names), "names": names}
 
     def _mait(self, obj):
         return getattr(obj, "mait_profile", None)

@@ -123,11 +123,24 @@ class AdminUserViewSet(
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Nor their own zones, and for the sharper version of the same reason. Access decides
+        # which screens somebody opens; zones decide how much of the network they see through
+        # them — so an account that could edit its own would simply untick every zone and read
+        # the lot. Handing out reach is a thing done *to* an account by somebody else.
+        if "zones" in request.data and user.id == request.user.id:
+            return Response(
+                {"zones": ["You cannot change your own zones. Ask another administrator."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         before = {
             "is_active": user.is_active,
             "role": user.role,
             "mobile_no": user.mobile_no,
             "portal_sections": user.allowed_sections,
+            # Recorded alongside the sections for the same reason: both decide what this
+            # account can reach, and "their numbers changed last Tuesday" needs an answer.
+            "zones": sorted(user.zones.values_list("code", flat=True)),
         }
 
         serializer = AdminUserUpdateSerializer(user, data=request.data, partial=True)
@@ -146,6 +159,7 @@ class AdminUserViewSet(
                     "role": user.role,
                     "mobile_no": user.mobile_no,
                     "portal_sections": user.allowed_sections,
+                    "zones": sorted(user.zones.values_list("code", flat=True)),
                 },
                 # Never record whether a password was involved beyond the fact of it.
                 "password_reset": "password" in request.data,

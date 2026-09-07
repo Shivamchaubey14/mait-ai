@@ -42,6 +42,27 @@ def normalise_sections(sections) -> list[str]:
     return [section for section in PortalSection.values if section in held]
 
 
+def _zones_from_codes(codes) -> list:
+    """
+    Turn zone codes into zone rows, refusing any that does not exist.
+
+    Codes rather than ids across the wire, matching how sections travel: a code is stable,
+    readable in an audit entry, and survives the row being rebuilt. A code nobody recognises
+    is rejected by name rather than dropped — silently ignoring it would leave an operator
+    looking at a saved form that did not save what they typed.
+    """
+    from apps.masterdata.models import Zone
+
+    wanted = [code.strip().upper() for code in codes if code and code.strip()]
+    found = list(Zone.objects.filter(code__in=wanted))
+    missing = set(wanted) - {zone.code for zone in found}
+    if missing:
+        raise serializers.ValidationError(
+            "No zone has the code " + ", ".join(sorted(missing)) + "."
+        )
+    return found
+
+
 class AdminUserSerializer(serializers.ModelSerializer):
     """Read shape for the user list (SRS §9.10)."""
 
@@ -53,6 +74,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
     assigned_mpp_count = serializers.SerializerMethodField()
     portal_sections = serializers.SerializerMethodField()
     portal_section_total = serializers.SerializerMethodField()
+    zones = serializers.SerializerMethodField()
+    zone_names = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -72,6 +95,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
             "assigned_mpp_count",
             "portal_sections",
             "portal_section_total",
+            "zones",
+            "zone_names",
         ]
         read_only_fields = fields
 
@@ -92,6 +117,13 @@ class AdminUserSerializer(serializers.ModelSerializer):
         """The size of the catalogue, so "12 of 17" can be written without hardcoding 17."""
         return len(PortalSection.values)
 
+    def get_zones(self, obj) -> list[str]:
+        """The zone codes held. Empty is the whole network, which is most accounts."""
+        return list(obj.zones.values_list("code", flat=True))
+
+    def get_zone_names(self, obj) -> list[str]:
+        return list(obj.zones.values_list("name", flat=True))
+
 
 class AdminUserCreateSerializer(serializers.Serializer):
     """
@@ -110,6 +142,12 @@ class AdminUserCreateSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=[Role.ADMIN, Role.SUPER_ADMIN])
     password = serializers.CharField(write_only=True, min_length=10)
     portal_sections = portal_sections_field(required=False)
+    zones = serializers.ListField(
+        child=serializers.CharField(max_length=20), required=False, allow_empty=True
+    )
+
+    def validate_zones(self, value):
+        return _zones_from_codes(value)
 
     def validate_username(self, value: str) -> str:
         if User.objects.filter(username__iexact=value).exists():
@@ -138,12 +176,16 @@ class AdminUserCreateSerializer(serializers.Serializer):
     @transaction.atomic
     def create(self, validated_data):
         password = validated_data.pop("password")
-        return User.objects.create_user(
+        zones = validated_data.pop("zones", [])
+        user = User.objects.create_user(
             **validated_data,
             password=password,
             is_staff=validated_data["role"] == Role.SUPER_ADMIN,
             is_superuser=validated_data["role"] == Role.SUPER_ADMIN,
         )
+        if zones:
+            user.zones.set(zones)
+        return user
 
 
 class AdminUserUpdateSerializer(serializers.Serializer):
@@ -158,6 +200,24 @@ class AdminUserUpdateSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=Role.choices, required=False)
     password = serializers.CharField(write_only=True, required=False, min_length=10)
     portal_sections = portal_sections_field(required=False)
+    zones = serializers.ListField(
+        child=serializers.CharField(max_length=20), required=False, allow_empty=True
+    )
+
+    def validate_zones(self, value):
+        """
+        Only an office account can be narrowed to a zone.
+
+        A Super Admin is never scoped — `User.zone_scope` says why — and a Mait has no portal
+        to narrow: their scope is the MPPs they cover, which the assignment sheet already
+        decides. Storing zones on either would be a set of ticks that changes nothing.
+        """
+        if self.instance and self.instance.role != Role.ADMIN:
+            raise serializers.ValidationError(
+                "Only an Admin account can be limited to a zone. A Super Admin always sees "
+                "the whole network, and a Mait's scope is the MPPs assigned to them."
+            )
+        return _zones_from_codes(value)
 
     def validate_portal_sections(self, value):
         """
@@ -192,6 +252,11 @@ class AdminUserUpdateSerializer(serializers.Serializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         password = validated_data.pop("password", None)
+        # Popped before the loop below, which does `setattr`: a many-to-many cannot be
+        # assigned that way and Django raises rather than quietly ignoring it.
+        zones = validated_data.pop("zones", None)
+        if zones is not None:
+            instance.zones.set(zones)
         for field, value in validated_data.items():
             setattr(instance, field, value)
         if password:
