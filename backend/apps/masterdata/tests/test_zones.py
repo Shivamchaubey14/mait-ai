@@ -1,12 +1,16 @@
 """
-Setting zones up.
+Zones, and the scoping they cause.
 
-Ordinary CRUD, with one rule doing most of the work: a chilling centre belongs to exactly one
-zone. That is what makes this a partition rather than a set of independent lists, and it is
-enforced twice on purpose — uniquely in the database, so it cannot be wrong, and by name in
-the serializer, so the operator gets a sentence rather than a 500.
+Two halves, and the second is the one that matters. The first is ordinary CRUD: a zone holds
+chilling centres, one centre cannot be in two zones, a zone somebody depends on is not
+deleted out from under them. The second is a security boundary — an account given a zone must
+not be able to read another zone's members, events or exports, by any route including the
+ones nobody thought to hide.
 
-The scoping these zones cause is tested alongside the commit that applies it.
+The tests are written against the API rather than against the queryset helpers on purpose. A
+scope that holds in `apply_scope` and is never called from a view is a scope that does not
+exist, and that is precisely the failure mode: it fails *open*, silently, and looks correct
+in every unit test of the helper itself.
 """
 
 from __future__ import annotations
@@ -185,3 +189,215 @@ def test_only_an_account_holding_the_zones_section_may_set_them_up(network):
     outsider.portal_sections = [PortalSection.DASHBOARD]
     outsider.save()
     assert _as(outsider).get(f"{BASE}/admin/zones/").status_code == 403
+
+
+# --------------------------------------------------------------------------------------
+# What a zone account can see
+# --------------------------------------------------------------------------------------
+@pytest.fixture
+def zone_admin(db, bahraich_zone):
+    user = _admin(username="bahraich-manager", full_name="Bahraich Manager")
+    user.zones.set([bahraich_zone])
+    return user
+
+
+def test_an_unzoned_admin_still_sees_the_whole_network(network):
+    """The default, and what every account that exists today keeps."""
+    response = _as(_admin()).get(f"{BASE}/dashboard/summary/")
+    assert response.status_code == 200
+    assert response.data["lifetime"] == 2
+    assert response.data["scope"]["scoped"] is False
+
+
+def test_a_zone_admin_counts_only_their_own_zone(zone_admin):
+    response = _as(zone_admin).get(f"{BASE}/dashboard/summary/")
+    assert response.status_code == 200
+    assert response.data["lifetime"] == 1
+    assert response.data["scope"]["scoped"] is True
+    assert response.data["scope"]["zones"] == ["Bahraich Zone"]
+
+
+def test_the_all_time_highs_are_withheld_from_a_zone_account(zone_admin, network):
+    """
+    A network milestone under a zone figure reads as that zone's record. It is not.
+
+    Rather than compute a per-zone high nobody asked for, the footnote is simply absent.
+    """
+    from apps.dashboard.models import PlatformMilestone
+
+    PlatformMilestone.objects.create(
+        kind=PlatformMilestone.Kind.HIGHEST_DAY, value=32006, label="12 Mar 2026"
+    )
+    assert _as(zone_admin).get(f"{BASE}/dashboard/summary/").data["highest_day"] is None
+    assert _as(_admin()).get(f"{BASE}/dashboard/summary/").data["highest_day"]["value"] == 32006
+
+
+def test_the_trend_chart_is_scoped(zone_admin):
+    response = _as(zone_admin).get(f"{BASE}/dashboard/trends/?days=7")
+    assert response.status_code == 200
+    assert sum(row["completed"] for row in response.data["results"]) == 1
+    assert response.data["scope"]["scoped"] is True
+
+
+@pytest.mark.parametrize(
+    "path,count_at",
+    [
+        ("/ai-events/", "count"),
+        ("/members/", "count"),
+        ("/mpp/", "count"),
+    ],
+)
+def test_the_list_screens_are_scoped(zone_admin, path, count_at):
+    response = _as(zone_admin).get(f"{BASE}{path}")
+    assert response.status_code == 200
+    assert response.data[count_at] == 1, f"{path} leaked another zone"
+
+
+def test_a_row_from_another_zone_is_not_reachable_by_its_own_url(zone_admin, network):
+    """
+    The check that matters most, and the one a list-only filter would fail.
+
+    A scope enforced on the list and not on the detail is a scope an operator walks around by
+    reading an id off a report and typing it into the address bar.
+    """
+    other = network["pratapgarh"]["event"]
+    assert _as(zone_admin).get(f"{BASE}/ai-events/{other.id}/").status_code == 404
+
+    mine = network["bahraich"]["event"]
+    assert _as(zone_admin).get(f"{BASE}/ai-events/{mine.id}/").status_code == 200
+
+
+def test_the_export_carries_only_the_zone(zone_admin):
+    """An export is the easiest way around a screen's scope, so it is narrowed at the source."""
+    response = _as(zone_admin).get(f"{BASE}/reports/export/")
+    assert response.status_code == 200
+    body = b"".join(response.streaming_content).decode()
+    # Header plus exactly one event.
+    assert len([line for line in body.splitlines() if line.strip()]) == 2
+
+
+def test_the_exception_queues_are_deliberately_not_scoped(zone_admin, network):
+    """
+    The one thing a zone account still sees whole, and it is a decision rather than an
+    oversight: a payment stuck in Pratapgarh is somebody's job whoever is looking at it, and
+    a zone view that hid it would leave it for a colleague who never opens that screen.
+    """
+    response = _as(zone_admin).get(f"{BASE}/dashboard/summary/")
+    assert "exceptions" in response.data
+    assert response.data["scope"]["scoped"] is True
+
+
+def test_a_zone_holding_nothing_shows_nothing_rather_than_everything(db, network):
+    """
+    The failure that would matter most, and the reason `zone_scope` separates None from [].
+
+    A zone still being set up holds no chilling centres. Reading that as "no restriction"
+    would hand anyone assigned to it the whole network, and nothing on the screen would say so.
+    """
+    empty = Zone.objects.create(code="ZONE0", name="Not Set Up Yet")
+    user = _admin(username="new-manager")
+    user.zones.set([empty])
+
+    response = _as(user).get(f"{BASE}/dashboard/summary/")
+    assert response.data["lifetime"] == 0
+    assert response.data["scope"]["scoped"] is True
+
+
+def test_a_super_admin_is_never_scoped(db, bahraich_zone, network):
+    """They hand out zones; an account that could restrict its own view is one bad save from
+    nobody being able to see the network."""
+    boss = User.objects.create_superuser("boss", "a-long-enough-password", full_name="Boss")
+    boss.zones.set([bahraich_zone])
+    assert _as(boss).get(f"{BASE}/dashboard/summary/").data["lifetime"] == 2
+
+
+# --------------------------------------------------------------------------------------
+# The comparison panel
+# --------------------------------------------------------------------------------------
+def test_zones_are_ranked_with_what_is_in_no_zone_reported_separately(db, network, bahraich_zone):
+    """
+    A panel that quietly dropped the unassigned centres could not be reconciled against the
+    tile above it — the rows would add up to less than the network total for no stated reason.
+    """
+    from apps.dashboard.tasks import aggregate_daily_ai_counts
+
+    aggregate_daily_ai_counts()
+
+    response = _as(_admin()).get(f"{BASE}/dashboard/zones/?days=30")
+    assert response.status_code == 200
+    assert [row["name"] for row in response.data["results"]] == ["Bahraich Zone"]
+    assert response.data["results"][0]["events"] == 1
+    assert response.data["unassigned_events"] == 1
+    assert response.data["unassigned_plants"] == 1
+
+
+def test_a_zone_account_compares_only_its_own_zones(zone_admin, network, bahraich_zone):
+    """The panel is a comparison, not a way around the scope."""
+    from apps.dashboard.tasks import aggregate_daily_ai_counts
+
+    aggregate_daily_ai_counts()
+
+    response = _as(zone_admin).get(f"{BASE}/dashboard/zones/")
+    assert [row["name"] for row in response.data["results"]] == ["Bahraich Zone"]
+    assert response.data["unassigned_events"] == 0
+
+
+def test_the_aggregate_carries_the_plant_so_zone_reads_need_no_join(network):
+    """`plant_code` is denormalised for the zone dashboard; if the job stops writing it, every
+    zone figure silently becomes zero."""
+    from apps.dashboard.models import DailyAIAggregate
+    from apps.dashboard.tasks import aggregate_daily_ai_counts
+
+    aggregate_daily_ai_counts()
+    assert set(DailyAIAggregate.objects.values_list("plant_code", flat=True)) == {"2002", "2004"}
+
+
+def test_nobody_widens_their_own_view(bahraich_zone, network):
+    """
+    An account editing its own zones would simply untick them all and read the network.
+
+    The same rule portal access already follows, and the sharper case of it: sections decide
+    which screens somebody opens, zones decide how much they see through them.
+    """
+    manager = _admin(username="self-editor")
+    manager.zones.set([bahraich_zone])
+
+    response = _as(manager).patch(f"{BASE}/admin/users/{manager.id}/", {"zones": []}, format="json")
+    assert response.status_code == 400
+    assert "your own zones" in str(response.data)
+    assert manager.zones.count() == 1
+
+    # Somebody else may do it, which is the whole point of the refusal.
+    other = _as(_admin()).patch(f"{BASE}/admin/users/{manager.id}/", {"zones": []}, format="json")
+    assert other.status_code == 200, other.data
+    assert manager.zones.count() == 0
+
+
+def test_a_zone_change_is_recorded_in_the_trail(bahraich_zone, network):
+    """ "Their numbers changed last Tuesday" has to have an answer."""
+    from apps.core.models import AuditLog
+
+    target = _admin(username="moved-region")
+    _as(_admin()).patch(f"{BASE}/admin/users/{target.id}/", {"zones": ["ZONE1"]}, format="json")
+
+    entry = AuditLog.objects.filter(entity_type="user", entity_id=str(target.id)).first()
+    assert entry.meta_json["before"]["zones"] == []
+    assert entry.meta_json["after"]["zones"] == ["ZONE1"]
+
+
+def test_setting_a_zone_up_is_recorded_too(network):
+    from apps.core.models import AuditLog
+
+    client = _as(_admin())
+    created = client.post(
+        f"{BASE}/admin/zones/",
+        {"code": "ZONE7", "name": "Audited Zone", "plants": ["2002"]},
+        format="json",
+    )
+    client.patch(f"{BASE}/admin/zones/{created.data['id']}/", {"plants": ["2004"]}, format="json")
+
+    entries = list(AuditLog.objects.filter(entity_type="zone").order_by("created_at"))
+    assert [e.action for e in entries] == ["create", "update"]
+    # The membership change is recorded both ways round: a chilling centre quietly moving
+    # zone changes what several people's dashboards report.
+    assert entries[1].meta_json["plants"] == {"before": ["2002"], "after": ["2004"]}

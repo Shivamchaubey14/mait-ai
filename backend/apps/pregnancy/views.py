@@ -25,6 +25,7 @@ from rest_framework.response import Response
 from apps.accounts.models import PortalSection
 from apps.core.pagination import StandardLimitOffsetPagination
 from apps.core.permissions import IsAdmin, IsMait, in_section
+from apps.core.scoping import apply_scope, scope_of
 from apps.core.services import record_audit
 from apps.masterdata.models import Mait
 
@@ -291,11 +292,22 @@ def _mait_identity(mait) -> dict:
 @permission_classes([IsAdmin, in_section(PortalSection.PREGNANCY)])
 def pregnancy_oversight(request):
     today = timezone.localdate()
-    counts = counts_by_mait(today)
-    rates, overall = rates_by_mait()
+    # Both roll-ups take a queryset precisely so a caller can narrow what is counted; a zone
+    # account counts the checks on inseminations recorded at its own chilling centres.
+    checks = apply_scope(PregnancyCheck.objects.all(), request, "ai_event__mpp__plant_code")
+    counts = counts_by_mait(today, checks)
+    rates, overall = rates_by_mait(checks)
+
+    # And the roster narrows with it. A Mait covering only Pratapgarh has no checks in a
+    # Bahraich scope, and listing them at nought owed and nought done reads as a Mait who has
+    # stopped working rather than one this account cannot see.
+    roster = Mait.objects.filter(is_active=True).prefetch_related("mpps")
+    scope = scope_of(request)
+    if scope is not None:
+        roster = roster.filter(mpps__plant_code__in=scope).distinct()
 
     rows = []
-    for mait in Mait.objects.filter(is_active=True).prefetch_related("mpps"):
+    for mait in roster:
         rate = rates.get(mait.id, Rate())
         rows.append(
             {

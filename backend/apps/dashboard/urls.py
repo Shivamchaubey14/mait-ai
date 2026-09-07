@@ -10,6 +10,7 @@ request — CI fails on schema drift.
 
 from django.urls import path
 
+from apps.masterdata.zones import zone_performance
 from apps.payments.reports import mait_payment, mait_payment_export, payout_scheme
 
 from .exception_details import exception_detail
@@ -24,6 +25,10 @@ urlpatterns = [
     path("dashboard/trends/", trends, name="trends"),
     path("dashboard/mait-performance/", mait_performance, name="mait-performance"),
     path("dashboard/mpp-coverage/", mpp_coverage, name="mpp-coverage"),
+    # Zones ranked against each other, for the desk that reads all of them. Computed in
+    # `apps.masterdata`, where a zone is defined, but routed here with the rest of the
+    # dashboard — one file says what the dashboard surface is.
+    path("dashboard/zones/", zone_performance, name="zone-performance"),
     path("dashboard/activation-readiness/", activation_readiness, name="activation-readiness"),
     # The detail behind the Exceptions card's Failed OTPs queue — who is stuck, and
     # which of the three quite different failures it was.

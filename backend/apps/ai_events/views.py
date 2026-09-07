@@ -23,6 +23,7 @@ from apps.accounts.models import PortalSection, Role
 from apps.core.idempotency import idempotent
 from apps.core.models import AuditLog
 from apps.core.permissions import IsMait, in_section
+from apps.core.scoping import apply_scope
 from apps.core.services import record_audit
 from apps.core.timeframe import end_of_day, start_of_day
 
@@ -165,7 +166,12 @@ class AIEventViewSet(
 
         user = self.request.user
         if getattr(user, "role", None) in (Role.SUPER_ADMIN, Role.ADMIN):
-            return base
+            # An office account sees the whole network unless it has been given zones, in
+            # which case it sees the chilling centres those zones hold. Applied to the
+            # queryset rather than to the response, so the detail route, the count and any
+            # future export are narrowed by the same line — a scope enforced only on the list
+            # is one an operator walks around by opening a row.
+            return apply_scope(base, self.request)
 
         mait = getattr(user, "mait_profile", None)
         if mait is None:

@@ -27,6 +27,7 @@ from apps.animals.queries import animals_with_history
 from apps.core.dispatch import run_in_background
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin, IsAdminOrMaitReadOnly, IsMait, in_section
+from apps.core.scoping import apply_scope
 from apps.core.services import record_audit
 from apps.payments.models import OTPLog
 from apps.payments.services import issue_otp, verify_otp
@@ -427,6 +428,9 @@ class MPPViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
         mait = getattr(user, "mait_profile", None)
         if mait is not None and not user.is_admin:
             queryset = queryset.filter(mait=mait)
+        # And an office account to its zones. `plant_code` on the MPP itself, so this is the
+        # one model where the scope needs no join at all.
+        queryset = apply_scope(queryset, self.request, "plant_code")
         if self.action in ("retrieve", "list"):
             queryset = queryset.annotate(member_count=Count("members"))
         return queryset
@@ -529,7 +533,7 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
         mait = getattr(user, "mait_profile", None)
         if mait is not None and not user.is_admin:
             queryset = queryset.filter(mpp__mait=mait)
-        return queryset
+        return apply_scope(queryset, self.request, "mpp__plant_code")
 
     def get_serializer_class(self):
         return MemberDetailSerializer if self.action == "retrieve" else MemberListSerializer
@@ -744,7 +748,7 @@ class AdminNonMemberViewSet(
             # Only on detail: the list has no animals column, and prefetching for a page of
             # fifty would buy a second query for nothing.
             queryset = queryset.prefetch_related(animals_with_history())
-        return queryset
+        return apply_scope(queryset, self.request, "mpp__plant_code")
 
     def get_serializer_class(self):
         if self.action == "retrieve":

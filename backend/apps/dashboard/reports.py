@@ -28,6 +28,7 @@ from apps.ai_events.views import search_events
 from apps.core.fields import mask
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin, in_section
+from apps.core.scoping import apply_scope
 from apps.core.services import record_audit
 from apps.core.timeframe import end_of_day, local_day, start_of_day
 from apps.pregnancy.models import PregnancyCheck
@@ -119,9 +120,15 @@ def _parse_date(value):
 @api_view(["GET"])
 @permission_classes([IsAdmin, in_section(PortalSection.REPORTS, PortalSection.AI_EVENTS)])
 def export_csv(request):
-    queryset = AIEvent.objects.select_related(
-        "mpp", "mait", "member", "non_member", "animal", "payment"
-    ).order_by("id")
+    # Scoped before any filter the caller sent. An export is the easiest way to walk around a
+    # screen's scope — the rows leave the building as a file — so it is narrowed at the source
+    # rather than trusted to a query parameter.
+    queryset = apply_scope(
+        AIEvent.objects.select_related(
+            "mpp", "mait", "member", "non_member", "animal", "payment"
+        ).order_by("id"),
+        request,
+    )
 
     params = request.query_params
     date_from = _parse_date(params.get("date_from"))
@@ -310,15 +317,19 @@ def _pregnancy_rows(queryset, today):
 @api_view(["GET"])
 @permission_classes([IsAdmin, in_section(PortalSection.REPORTS, PortalSection.PREGNANCY)])
 def export_pregnancy_csv(request):
-    queryset = PregnancyCheck.objects.select_related(
-        "mait",
-        "ai_event",
-        "ai_event__mpp",
-        "ai_event__animal",
-        "ai_event__member",
-        "ai_event__non_member",
-        "ai_event__semen_batch",
-    ).order_by("due_on", "id")
+    queryset = apply_scope(
+        PregnancyCheck.objects.select_related(
+            "mait",
+            "ai_event",
+            "ai_event__mpp",
+            "ai_event__animal",
+            "ai_event__member",
+            "ai_event__non_member",
+            "ai_event__semen_batch",
+        ).order_by("due_on", "id"),
+        request,
+        "ai_event__mpp__plant_code",
+    )
 
     params = request.query_params
     date_from = _parse_date(params.get("date_from"))

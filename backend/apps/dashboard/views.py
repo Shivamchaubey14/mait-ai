@@ -24,6 +24,7 @@ from rest_framework.response import Response
 from apps.accounts.models import PortalSection
 from apps.ai_events.models import AIEvent
 from apps.core.permissions import IsAdmin, in_section
+from apps.core.scoping import apply_scope, scope_note, scope_of
 from apps.core.timeframe import end_of_day, local_day, start_of_day
 from apps.indents.models import STALE_AFTER_DAYS, IndentRequest
 from apps.masterdata.models import Mait
@@ -59,18 +60,26 @@ MAX_COVERAGE_DAYS = 365
 MAX_LEADERBOARD_DAYS = 365
 
 
-def _completed_between(start, end=None):
+def _completed_between(start, end=None, scope=None):
     """
     Completed events in a range of local days, `end` included.
 
+    `start` of None is every event there has ever been — what the lifetime tile counts.
+
     Compared against instants rather than `completed_at__date`, which returns nothing at all
     on a MySQL without timezone tables — see `apps.core.timeframe`.
+
+    `scope` is the plant codes this account may count, or None for the whole network. Passed
+    in rather than read from the request here, because every tile on the summary calls this
+    and one that forgot would report the network total beside four zone figures.
     """
-    qs = AIEvent.objects.filter(
-        status=AIEvent.Status.COMPLETED, completed_at__gte=start_of_day(start)
-    )
+    qs = AIEvent.objects.filter(status=AIEvent.Status.COMPLETED)
+    if start is not None:
+        qs = qs.filter(completed_at__gte=start_of_day(start))
     if end is not None:
         qs = qs.filter(completed_at__lt=end_of_day(end))
+    if scope is not None:
+        qs = qs.filter(mpp__plant_code__in=scope)
     return qs.count()
 
 
@@ -92,24 +101,29 @@ def summary(request):
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
 
-    today_count = _completed_between(today, today)
-    yesterday_count = _completed_between(today - timedelta(days=1), today - timedelta(days=1))
+    scope = scope_of(request)
+    today_count = _completed_between(today, today, scope)
+    yesterday_count = _completed_between(
+        today - timedelta(days=1), today - timedelta(days=1), scope
+    )
 
     # Same day last month, so a partial month is compared against a partial month.
     last_month_end = month_start - timedelta(days=1)
     last_month_start = last_month_end.replace(day=1)
     same_day_last_month = min(last_month_end, last_month_start + timedelta(days=today.day - 1))
 
-    milestones = {m.kind: m for m in PlatformMilestone.objects.all()}
+    # All-time highs are a whole-network fact, computed nightly over every plant, so they are
+    # withheld from a scoped account rather than shown. "All-time high 32,006" under a tile
+    # reading 412 invites exactly one reading — that this zone once did 32,006 — and it is
+    # wrong. The tiles simply lose their footnote.
+    milestones = {} if scope is not None else {m.kind: m for m in PlatformMilestone.objects.all()}
     highest_month = milestones.get(PlatformMilestone.Kind.HIGHEST_MONTH)
     highest_day = milestones.get(PlatformMilestone.Kind.HIGHEST_DAY)
 
-    first_event = (
-        AIEvent.objects.filter(status=AIEvent.Status.COMPLETED)
-        .order_by("completed_at")
-        .values_list("completed_at", flat=True)
-        .first()
-    )
+    first = AIEvent.objects.filter(status=AIEvent.Status.COMPLETED)
+    if scope is not None:
+        first = first.filter(mpp__plant_code__in=scope)
+    first_event = first.order_by("completed_at").values_list("completed_at", flat=True).first()
 
     delta_percent = None
     if yesterday_count:
@@ -119,10 +133,12 @@ def summary(request):
         {
             "today": today_count,
             "today_delta_percent": delta_percent,
-            "this_week": _completed_between(week_start, today),
-            "this_month": _completed_between(month_start, today),
-            "last_month_to_same_day": _completed_between(last_month_start, same_day_last_month),
-            "lifetime": AIEvent.objects.filter(status=AIEvent.Status.COMPLETED).count(),
+            "this_week": _completed_between(week_start, today, scope),
+            "this_month": _completed_between(month_start, today, scope),
+            "last_month_to_same_day": _completed_between(
+                last_month_start, same_day_last_month, scope
+            ),
+            "lifetime": _completed_between(None, None, scope),
             "since": first_event.strftime("%b %Y") if first_event else None,
             "highest_day": (
                 {"value": highest_day.value, "label": highest_day.label} if highest_day else None
@@ -132,18 +148,24 @@ def summary(request):
                 if highest_month
                 else None
             ),
+            # Deliberately *not* scoped, and the only thing on this response that is not.
+            # These are queues of things that are wrong right now and need a person: a
+            # payment stuck in Pratapgarh is somebody's job whoever is looking, and a zone
+            # view that hid it would leave it for a colleague who never opens that screen.
+            # The scope line under the page title says which figures were narrowed.
             "exceptions": _exceptions(),
+            "scope": scope_note(request),
             # Not from the aggregate tables, unlike everything above it: those know nothing
             # about pregnancy, and the alternative was a tile reading 0.0% until somebody
             # remembered to extend the nightly rebuild. It is one grouped query over a table
             # holding one row per insemination, and it is the number this platform is
             # ultimately judged on — worth the read (docs/API_CONTRACT.md §9.11).
-            "pregnancy": _pregnancy(),
+            "pregnancy": _pregnancy(request),
         }
     )
 
 
-def _pregnancy() -> dict:
+def _pregnancy(request) -> dict:
     """Conception rate, the round nobody is walking, and the yards that turned a Mait away.
 
     The same arithmetic the pregnancy oversight screen shows, from the same module, so the
@@ -154,11 +176,12 @@ def _pregnancy() -> dict:
     neither: it only ever goes up, so it stops meaning anything within a quarter of go-live.
     """
     today = timezone.localdate()
-    _, overall = rates_by_mait()
+    checks = apply_scope(PregnancyCheck.objects.all(), request, "ai_event__mpp__plant_code")
+    _, overall = rates_by_mait(checks)
     return {
         **overall.as_dict(),
-        "overdue": PregnancyCheck.objects.filter(outcome="", due_on__lt=today).count(),
-        "declined_30d": PregnancyCheck.objects.filter(
+        "overdue": checks.filter(outcome="", due_on__lt=today).count(),
+        "declined_30d": checks.filter(
             outcome=PregnancyCheck.Outcome.DECLINED,
             checked_at__gte=timezone.now() - timedelta(days=DECLINE_WINDOW_DAYS),
         ).count(),
@@ -377,6 +400,7 @@ def trends(request):
     start = end - timedelta(days=days - 1)
 
     district = request.query_params.get("district_code")
+    scope = scope_of(request)
 
     # The recent tail is read live, and only the days before it come off the aggregate.
     #
@@ -399,6 +423,10 @@ def trends(request):
     settled = DailyAIAggregate.objects.filter(date__gte=start, date__lt=live_from)
     if district:
         settled = settled.filter(district_code=district)
+    if scope is not None:
+        # The denormalised column, which is what it was added for: this is the one read on
+        # the dashboard that touches every settled day in the window.
+        settled = settled.filter(plant_code__in=scope)
 
     by_day = {
         row["date"]: row["total"] for row in settled.values("date").annotate(total=Sum("ai_count"))
@@ -414,6 +442,8 @@ def trends(request):
     )
     if district:
         live_qs = live_qs.filter(mpp__district_code=district)
+    if scope is not None:
+        live_qs = live_qs.filter(mpp__plant_code__in=scope)
 
     for completed_at in live_qs.values_list("completed_at", flat=True):
         day = local_day(completed_at)
@@ -427,6 +457,8 @@ def trends(request):
     )
     if district:
         pending_qs = pending_qs.filter(mpp__district_code=district)
+    if scope is not None:
+        pending_qs = pending_qs.filter(mpp__plant_code__in=scope)
 
     pending_by_day: dict = {}
     for created_at in pending_qs.values_list("created_at", flat=True):
@@ -446,7 +478,14 @@ def trends(request):
             }
         )
 
-    return Response({"days": days, "district_code": district, "results": results})
+    return Response(
+        {
+            "days": days,
+            "district_code": district,
+            "results": results,
+            "scope": scope_note(request),
+        }
+    )
 
 
 def _leaderboard_range(request) -> tuple[date, date]:
@@ -534,6 +573,7 @@ MAX_LEADERBOARD_ROWS = 200
 @permission_classes([IsAdmin, in_section(PortalSection.LEADERBOARD)])
 def mait_performance(request):
     start, end = _leaderboard_range(request)
+    scope = scope_of(request)
 
     # The recent tail is read live and only the days before it come off the aggregate.
     #
@@ -554,15 +594,14 @@ def mait_performance(request):
     # reads entirely off the aggregate, which is what it is for.
     settled_until = min(end + timedelta(days=1), live_from)
 
-    settled = (
-        DailyAIAggregate.objects.filter(date__gte=start, date__lt=settled_until)
-        .values("mait_id", "mait__name", "mait__sahayak_vendor_code")
-        .annotate(
-            ai_count=Sum("ai_count"),
-            collected=Sum("amount_collected"),
-            cod=Sum("cod_amount"),
-            online=Sum("online_amount"),
-        )
+    settled_rows = DailyAIAggregate.objects.filter(date__gte=start, date__lt=settled_until)
+    if scope is not None:
+        settled_rows = settled_rows.filter(plant_code__in=scope)
+    settled = settled_rows.values("mait_id", "mait__name", "mait__sahayak_vendor_code").annotate(
+        ai_count=Sum("ai_count"),
+        collected=Sum("amount_collected"),
+        cod=Sum("cod_amount"),
+        online=Sum("online_amount"),
     )
 
     totals: dict[int, dict] = {}
@@ -598,14 +637,15 @@ def mait_performance(request):
     # Only where the range actually reaches into the unsettled window. A range that ended a
     # month ago has no live part, and running the query anyway would be a table scan returning
     # nothing.
+    live_qs = AIEvent.objects.filter(
+        status=AIEvent.Status.COMPLETED,
+        completed_at__gte=start_of_day(live_from),
+        completed_at__lt=end_of_day(end),
+    )
+    if scope is not None:
+        live_qs = live_qs.filter(mpp__plant_code__in=scope)
     live_events = (
-        AIEvent.objects.filter(
-            status=AIEvent.Status.COMPLETED,
-            completed_at__gte=start_of_day(live_from),
-            completed_at__lt=end_of_day(end),
-        )
-        .values("mait_id", "mait__name", "mait__sahayak_vendor_code")
-        .annotate(n=Count("id"))
+        live_qs.values("mait_id", "mait__name", "mait__sahayak_vendor_code").annotate(n=Count("id"))
         if end >= live_from
         else []
     )
@@ -617,14 +657,15 @@ def mait_performance(request):
     # The same split the aggregate keeps, computed the same way as `_money_for_slice`: only
     # verified payments count, because an unconfirmed one is money nobody has yet agreed
     # changed hands.
+    money_qs = Payment.objects.filter(
+        status=Payment.Status.VERIFIED,
+        ai_event__completed_at__gte=start_of_day(live_from),
+        ai_event__completed_at__lt=end_of_day(end),
+    )
+    if scope is not None:
+        money_qs = money_qs.filter(ai_event__mpp__plant_code__in=scope)
     live_money = (
-        Payment.objects.filter(
-            status=Payment.Status.VERIFIED,
-            ai_event__completed_at__gte=start_of_day(live_from),
-            ai_event__completed_at__lt=end_of_day(end),
-        )
-        .values("ai_event__mait_id")
-        .annotate(
+        money_qs.values("ai_event__mait_id").annotate(
             total=Sum("amount"),
             cod=Sum("amount", filter=Q(mode=Payment.Mode.COD)),
             online=Sum("amount", filter=Q(mode=Payment.Mode.ONLINE)),
@@ -658,6 +699,7 @@ def mait_performance(request):
             # Everyone who worked in the range, so a truncated board can say what it left out
             # rather than presenting the top two hundred as the whole roster.
             "count": len(ranked),
+            "scope": scope_note(request),
             # Summed over everybody, not over the rows returned. The screen states what the
             # range holds, and a total that quietly stopped at the two-hundredth Mait would
             # be a smaller number presented in the same words.
@@ -728,9 +770,13 @@ def mpp_coverage(request):
     # This does group over ai_event, which the rest of this module avoids — but it groups by
     # MPP, and there are thousands of MPPs rather than millions. The window is what keeps it
     # off the whole table, and `aievent_completed_idx` is what serves the window.
+    scope = scope_of(request)
+    covered = MPP.objects.filter(is_active=True)
+    if scope is not None:
+        covered = covered.filter(plant_code__in=scope)
+
     ranked = (
-        MPP.objects.filter(is_active=True)
-        .annotate(
+        covered.annotate(
             total_members=Count("members", distinct=True),
             served=Count(
                 "ai_events__member",
@@ -779,6 +825,7 @@ def mpp_coverage(request):
                 "mpps_at_zero": sum(1 for r in network if not r.served),
             },
             "rows_shown": min(len(network), MAX_COVERAGE_ROWS),
+            "scope": scope_note(request),
             "results": [as_row(r) for r in network[:MAX_COVERAGE_ROWS]],
         }
     )
