@@ -20,7 +20,7 @@
                  morning from a dashboard that stopped fetching an hour ago — and the person
                  who reads that line is the person who wants it fetched again now. -->
             <p class="topbar__meta">
-              <span id="today-date">—</span> · <span id="scope">all districts</span> ·
+              <span id="today-date">—</span>
               <button class="live" id="live" type="button" data-state="paused" title="Refresh now">
                 <span class="live__dot" aria-hidden="true"></span>
                 <span class="live__text">Loading…</span>
@@ -177,6 +177,38 @@
             </p>
           </div>
           <div class="chart" id="chart"></div>
+        </section>
+
+        <!-- Where the work happened. Between the trend and the queues because that is the
+             order the questions come in: how many, then where, then what needs doing.
+
+             Hidden until the API answers with at least one zone — on a network that has not
+             been divided into zones yet this panel would be an empty box asking a question
+             nobody has set up an answer for. -->
+        <section class="panel" id="zone-panel" aria-labelledby="zone-title" hidden>
+          <div class="panel__head">
+            <h2 class="panel__title" id="zone-title">
+              <span class="panel__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
+                </svg>
+              </span>
+              AI events by zone
+            </h2>
+            <p class="legend"><span id="zone-total">—</span></p>
+          </div>
+          <div id="zone-rows"></div>
+          <!-- What is in no zone. Stated rather than dropped: until every chilling centre is
+               placed the rows above do not add up to the tile at the top of this page, and a
+               panel that quietly loses events is one nobody can reconcile. -->
+          <p class="field__hint" id="zone-unplaced" hidden></p>
         </section>
 
         <!-- SRS §6.7.6. Yellow is waiting, red is blocked work — the same rule the app uses,

@@ -179,6 +179,93 @@
   font-weight: 600;
 }
 
+/* --- zones, ranked --------------------------------------------------------------------------
+   The comparison head office reads. A bar per zone rather than a column of figures, because
+   the question is comparative — "which zone has gone quiet" is a shape, and nineteen numbers
+   in a list is arithmetic the reader has to do themselves.
+
+   Scaled against the busiest zone rather than against the total: shares of a network total
+   leave every zone but the leader as a sliver, which is the one thing this panel must not do
+   to the zones it exists to make visible. The percentage is stated beside the count for
+   anybody who does want the share. */
+.zone-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.4fr) minmax(80px, 3fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid rgb(37 61 78 / 8%);
+}
+
+.zone-row:first-child {
+  border-top: 0;
+}
+
+.zone-row__name {
+  font-weight: 600;
+  color: var(--color-ink);
+  min-width: 0;
+}
+
+/* What the zone actually covers. A zone name means nothing to somebody who does not already
+   know the region; the chilling centres in it are the whole of what it is. Truncated rather
+   than wrapped, so a zone of six centres does not make its row three lines tall. */
+.zone-row__plants {
+  display: block;
+  font-size: var(--text-caption);
+  font-weight: 400;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zone-row__bar {
+  display: block;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-background);
+  overflow: hidden;
+}
+
+.zone-row__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--chart-1);
+}
+
+.zone-row__value {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--color-ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.zone-row__share {
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* The bar grows out of nothing on arrival, for the same reason the chart's columns do: the
+   growing is the quantity. Staggered down the panel at the exception rows' pace, because it
+   arrives inside a card that is already on screen. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-page='dashboard'] .zone-row {
+    animation: rise-in var(--motion-base) var(--ease-out) backwards;
+    animation-delay: calc(var(--i, 0) * 1ms);
+  }
+
+  .zone-row__fill {
+    transition: width var(--motion-slow) var(--ease-out);
+  }
+}
+
 /* --- exception cards -------------------------------------------------------------------- */
 .exceptions {
   display: grid;

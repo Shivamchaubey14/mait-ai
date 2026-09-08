@@ -1571,6 +1571,234 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/admin/zones/:
+    get:
+      operationId: admin_zones_list
+      description: |-
+        Maintain the zones and what each one covers.
+
+        Behind the Zones section, which sits beside Users & roles: this decides how much of the
+        network an account sees, so it belongs to the desk that already decides which screens it
+        opens rather than to the operational screens.
+
+        Every write is audited. A zone quietly gaining a chilling centre changes what several
+        people's dashboards report, and "the numbers moved last Tuesday" needs an answer.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - zones
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Zone'
+          description: ''
+    post:
+      operationId: admin_zones_create
+      description: |-
+        Maintain the zones and what each one covers.
+
+        Behind the Zones section, which sits beside Users & roles: this decides how much of the
+        network an account sees, so it belongs to the desk that already decides which screens it
+        opens rather than to the operational screens.
+
+        Every write is audited. A zone quietly gaining a chilling centre changes what several
+        people's dashboards report, and "the numbers moved last Tuesday" needs an answer.
+      tags:
+      - zones
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZoneRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ZoneRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ZoneRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+          description: ''
+  /api/v1/admin/zones/{id}/:
+    get:
+      operationId: admin_zones_retrieve
+      description: |-
+        Maintain the zones and what each one covers.
+
+        Behind the Zones section, which sits beside Users & roles: this decides how much of the
+        network an account sees, so it belongs to the desk that already decides which screens it
+        opens rather than to the operational screens.
+
+        Every write is audited. A zone quietly gaining a chilling centre changes what several
+        people's dashboards report, and "the numbers moved last Tuesday" needs an answer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this zone.
+        required: true
+      tags:
+      - zones
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+          description: ''
+    put:
+      operationId: admin_zones_update
+      description: |-
+        Maintain the zones and what each one covers.
+
+        Behind the Zones section, which sits beside Users & roles: this decides how much of the
+        network an account sees, so it belongs to the desk that already decides which screens it
+        opens rather than to the operational screens.
+
+        Every write is audited. A zone quietly gaining a chilling centre changes what several
+        people's dashboards report, and "the numbers moved last Tuesday" needs an answer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this zone.
+        required: true
+      tags:
+      - zones
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZoneRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ZoneRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ZoneRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+          description: ''
+    patch:
+      operationId: admin_zones_partial_update
+      description: |-
+        Maintain the zones and what each one covers.
+
+        Behind the Zones section, which sits beside Users & roles: this decides how much of the
+        network an account sees, so it belongs to the desk that already decides which screens it
+        opens rather than to the operational screens.
+
+        Every write is audited. A zone quietly gaining a chilling centre changes what several
+        people's dashboards report, and "the numbers moved last Tuesday" needs an answer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this zone.
+        required: true
+      tags:
+      - zones
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedZoneRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedZoneRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedZoneRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+          description: ''
+    delete:
+      operationId: admin_zones_destroy
+      description: |-
+        Maintain the zones and what each one covers.
+
+        Behind the Zones section, which sits beside Users & roles: this decides how much of the
+        network an account sees, so it belongs to the desk that already decides which screens it
+        opens rather than to the operational screens.
+
+        Every write is audited. A zone quietly gaining a chilling centre changes what several
+        people's dashboards report, and "the numbers moved last Tuesday" needs an answer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this zone.
+        required: true
+      tags:
+      - zones
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/admin/zones/plants/:
+    get:
+      operationId: admin_zones_plants_retrieve
+      description: |-
+        Every BMC/MCC in the master data, with its size and the zone that holds it.
+
+        What the setup screen assigns from. It reports the unassigned ones too — they are the
+        point of the screen, not an error — and each carries its MPP and member counts so an
+        operator building a zone can tell a chilling centre of 250 MPPs from one of 39.
+      tags:
+      - zones
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+          description: ''
   /api/v1/ai-events/:
     get:
       operationId: ai_events_list
@@ -2381,6 +2609,21 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/dashboard/zones/:
+    get:
+      operationId: dashboard_zones_retrieve
+      description: |-
+        One row per zone for the period, so head office can read Bahraich against Pratapgarh. Reads the same pre-aggregated table as the trend chart.
+
+        An account that is itself scoped sees only its own zones here — the panel is a comparison, not a way around the scope.
+      summary: Zones, ranked by the work done in them
+      tags:
+      - zones
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/farmers/otp/send/:
     post:
       operationId: farmers_otp_send_create
@@ -4654,6 +4897,18 @@ components:
           description: The size of the catalogue, so "12 of 17" can be written without
             hardcoding 17.
           readOnly: true
+        zones:
+          type: array
+          items:
+            type: string
+          description: The zone codes held. Empty is the whole network, which is most
+            accounts.
+          readOnly: true
+        zone_names:
+          type: array
+          items:
+            type: string
+          readOnly: true
       required:
       - assigned_mpp_count
       - created_at
@@ -4670,6 +4925,8 @@ components:
       - role_display
       - sahayak_vendor_code
       - username
+      - zone_names
+      - zones
     AdminUserCreateRequest:
       type: object
       description: |-
@@ -4710,6 +4967,12 @@ components:
             $ref: '#/components/schemas/PortalSectionsEnum'
           description: Sidebar sections this account may open. The complete set, not
             an addition — anything missing from it is removed. Admins only.
+        zones:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 20
       required:
       - full_name
       - password
@@ -5194,6 +5457,16 @@ components:
             sections. It is a convenience, never the control: every endpoint behind a section
             checks for itself, because a sidebar has no say over a URL typed into the bar.
           readOnly: true
+        zones:
+          type: object
+          additionalProperties: {}
+          description: |-
+            How much of the network this account sees, for the line that says so on screen.
+
+            The portal draws a scope note under the page title on every screen it narrows. Sent
+            with the profile rather than fetched per screen because it is the same answer for all
+            of them, and a screen that had to ask separately is a screen that can forget to.
+          readOnly: true
       required:
       - assigned_mpp_codes
       - email
@@ -5208,6 +5481,7 @@ components:
       - role_display
       - sahayak_vendor_code
       - username
+      - zones
     DataUploadLog:
       type: object
       description: |-
@@ -6855,6 +7129,12 @@ components:
             $ref: '#/components/schemas/PortalSectionsEnum'
           description: Sidebar sections this account may open. The complete set, not
             an addition — anything missing from it is removed. Admins only.
+        zones:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 20
     PatchedAnimalPhotoRequest:
       type: object
       description: |-
@@ -7077,6 +7357,39 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
           description: What a non-member pays the Mait on the spot, in rupees. Zero
             means not priced, never free.
+    PatchedZoneRequest:
+      type: object
+      description: |-
+        A zone, with the chilling centres in it.
+
+        ``plants`` is the whole membership on both read and write — the set this zone holds, not
+        an addition to it. Sending three codes to a zone that had five removes the other two,
+        which is what makes the setup screen's tick-boxes mean what they appear to mean. A
+        partial update that could only ever add would leave an operator unticking a box, pressing
+        save, and watching nothing happen.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: Short identifier, e.g. ZONE1. Set once — reports and saved
+            links use it.
+          maxLength: 20
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+        plants:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 10
+          writeOnly: true
     Payment:
       type: object
       description: Read shape for one payment.
@@ -7289,6 +7602,7 @@ components:
       - reports
       - mait-payment
       - users
+      - zones
       - logs
       type: string
       description: |-
@@ -7310,6 +7624,7 @@ components:
         * `reports` - Reports
         * `mait-payment` - Mait payment
         * `users` - Users & roles
+        * `zones` - Zones
         * `logs` - Audit log
     PregnancyCheck:
       type: object
@@ -7732,6 +8047,96 @@ components:
         * `mait` - Mait / Vendor Master
         * `mpp` - MPP / Sahayak Master
         * `assignment` - Mait ↔ MPP assignment
+    Zone:
+      type: object
+      description: |-
+        A zone, with the chilling centres in it.
+
+        ``plants`` is the whole membership on both read and write — the set this zone holds, not
+        an addition to it. Sending three codes to a zone that had five removes the other two,
+        which is what makes the setup screen's tick-boxes mean what they appear to mean. A
+        partial update that could only ever add would leave an operator unticking a box, pressing
+        save, and watching nothing happen.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          description: Short identifier, e.g. ZONE1. Set once — reports and saved
+            links use it.
+          maxLength: 20
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+        plant_names:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        mpp_count:
+          type: integer
+          readOnly: true
+        member_count:
+          type: integer
+          readOnly: true
+        user_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - member_count
+      - mpp_count
+      - name
+      - plant_names
+      - user_count
+    ZoneRequest:
+      type: object
+      description: |-
+        A zone, with the chilling centres in it.
+
+        ``plants`` is the whole membership on both read and write — the set this zone holds, not
+        an addition to it. Sending three codes to a zone that had five removes the other two,
+        which is what makes the setup screen's tick-boxes mean what they appear to mean. A
+        partial update that could only ever add would leave an operator unticking a box, pressing
+        save, and watching nothing happen.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: Short identifier, e.g. ZONE1. Set once — reports and saved
+            links use it.
+          maxLength: 20
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+        plants:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 10
+          writeOnly: true
+      required:
+      - code
+      - name
   securitySchemes:
     jwtAuth:
       type: http

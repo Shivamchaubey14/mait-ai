@@ -445,6 +445,78 @@
     });
   }
 
+  /**
+   * Zones, ranked by the work done in them.
+   *
+   * The panel head office reads: Bahraich against Pratapgarh, over whatever range the control
+   * at the top is showing. A bar rather than a number alone, because the question this answers
+   * is comparative — "which zone is quiet" is a shape, and nineteen figures in a column is not.
+   *
+   * A zone that did nothing still appears. A zone missing from the panel reads as a zone that
+   * does not exist; a zone showing zero reads as a zone that did no work, and only one of
+   * those is ever true here.
+   */
+  function renderZones(data) {
+    const rows = data.results || [];
+    // Nothing to compare is not an empty panel, it is no panel. On a network nobody has
+    // divided into zones yet this would be a box asking a question that has no answer set up.
+    $('#zone-panel').prop('hidden', !rows.length);
+    if (!rows.length) {
+      return;
+    }
+
+    $('#zone-total').text(count(data.total) + ' events across ' + rows.length + ' zones');
+
+    const peak = Math.max(
+      1,
+      ...rows.map(function (zone) {
+        return zone.events || 0;
+      })
+    );
+
+    $('#zone-rows').html(
+      rows
+        .map(function (zone, index) {
+          return (
+            '<div class="zone-row" style="--i:' +
+            index * 30 +
+            '">' +
+            '<span class="zone-row__name">' +
+            MaitAI.shell.escapeHtml(zone.name) +
+            // The chilling centres in it, on the line beneath. A zone name means little to
+            // anybody who does not already know the region; the centres are what it is.
+            '<span class="zone-row__plants">' +
+            MaitAI.shell.escapeHtml((zone.plant_names || []).join(', ') || 'no BMC/MCC yet') +
+            '</span></span>' +
+            // Scaled against the busiest zone rather than against the total, so the quiet
+            // ones are still a readable length instead of a sliver against a leader.
+            '<span class="zone-row__bar"><span class="zone-row__fill" style="width:' +
+            ((zone.events || 0) / peak) * 100 +
+            '%"></span></span>' +
+            '<span class="zone-row__value">' +
+            count(zone.events) +
+            '<span class="zone-row__share">' +
+            (zone.share_percent || 0).toFixed(1) +
+            '%</span></span>' +
+            '</div>'
+          );
+        })
+        .join('')
+    );
+
+    const stray = data.unassigned_events || 0;
+    $('#zone-unplaced')
+      .prop('hidden', !stray)
+      .text(
+        stray
+          ? count(stray) +
+              ' more at ' +
+              count(data.unassigned_plants) +
+              ' BMC/MCC in no zone, so these rows do not add up to the total above.'
+          : ''
+      );
+  }
+
   const QUEUES = {
     'pending-payments': 'pending_payments',
     'failed-otps': 'failed_otps',
@@ -487,7 +559,11 @@
       }),
       api.dashboardTrends({ granularity: 'daily', days: days }).done(function (data) {
         renderChart(data.results || []);
-      })
+      }),
+      // Same beat as the rest, so the zone rows and the chart above them are always
+      // describing the same window — two reads on different clocks would let a range change
+      // land on one and not the other.
+      api.zonePerformance({ days: days }).done(renderZones)
     );
   }
 

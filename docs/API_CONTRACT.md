@@ -702,7 +702,7 @@ identity document is the same question as who may administer accounts.
 | --- | --- | --- | --- |
 | GET | `/admin/users/` | List platform users | Admin |
 | POST | `/admin/users/` | Create an Admin account | Admin |
-| PATCH | `/admin/users/{id}/` | Activate/deactivate, change role/MPP assignment | Admin |
+| PATCH | `/admin/users/{id}/` | Activate/deactivate, change role/MPP assignment, portal access or zones | Admin |
 | GET | `/admin/users/maits/` | The Sahayak roster, activated or not (filters: search, needs_mobile, activated, mpp) | Admin |
 | GET | `/admin/users/pending-maits/` | Sahayaks with no login yet | Admin |
 | POST | `/admin/users/activate-mait/` | Give a Sahayak a mobile number and a login | Admin |
@@ -728,6 +728,9 @@ the same string in the sidebar, in the page it opens and in the permission behin
   Users & roles back is the one that just gave it away.
 * `GET /admin/users/` and `GET /auth/me/` return the sections the account actually reaches,
   in sidebar order, so a Super Admin reads as holding all seventeen rather than none.
+* The same PATCH carries `zones`, which is the other half of reach: sections say which
+  screens an account opens, zones say how much of the network it sees through them. See
+  §9.12.
 
 Enforcement is on every endpoint behind a section, not on the sidebar: the portal is one
 static file per screen, and a shorter menu has nothing to say about a URL typed into the
@@ -740,6 +743,75 @@ name somebody. `mpp_codes` on that PATCH is the **complete set** the Mait covers
 out of it are unassigned. Every field is optional and absence means "leave alone", so a screen
 cannot wipe what it did not load. The assignment is what scopes a Mait's whole app, so this
 moves MPPs, their members and the permission to serve them between Maits.
+
+## 9.12 Zones
+
+| Method | Endpoint | Description | Auth |
+| --- | --- | --- | --- |
+| GET | `/admin/zones/` | The zones and the BMC/MCCs each covers | Admin · Zones |
+| POST | `/admin/zones/` | Create a zone | Admin · Zones |
+| PATCH | `/admin/zones/{id}/` | Rename a zone, or change what it covers | Admin · Zones |
+| DELETE | `/admin/zones/{id}/` | Remove a zone nobody is assigned to | Admin · Zones |
+| GET | `/admin/zones/plants/` | Every BMC/MCC in the master data, with its size and its zone | Admin · Zones |
+| GET | `/dashboard/zones/` | Zones ranked by the work done in them (`days`, default 30) | Admin · Dashboard |
+
+A **zone** is the dairy's own grouping of chilling centres — Bahraich, Pratapgarh — and it
+exists nowhere in SAP. It is an operational structure the business decides and changes, which
+is why it is maintained here rather than arriving with the masters: an upload must never move
+a chilling centre out of somebody's zone.
+
+There is no plant master to read. The BMC/MCC code and name arrive on every MPP row, so
+`/admin/zones/plants/` is the distinct set across them — nineteen today. A centre appears
+there the moment SAP first mentions it, and being in no zone is an ordinary state rather than
+an error.
+
+* `plants` is the **complete membership** on both read and write, not an addition. Sending
+  three codes to a zone that had five removes the other two.
+* A BMC/MCC belongs to **one** zone. `plant_code` is unique in the join table, so the
+  database enforces it; the serializer refuses the clash first and names the zone that
+  already holds it, because an IntegrityError reaches the operator as "something went wrong".
+* A code the master data does not have is refused rather than stored. They arrive with the
+  SAP upload; a code typed by hand will never match anything.
+* A zone with accounts assigned to it cannot be deleted — that would silently widen those
+  accounts to the whole network, which fails open in the one direction nobody reports.
+  Deactivate it instead.
+
+### What a zone scopes
+
+Assign zones to an account with `PATCH /admin/users/{id}/` and a `zones` list of codes — the
+complete set, like `portal_sections`. **An empty list means the whole network**, which is what
+every account holds today and what head office keeps.
+
+`User.zone_scope` is the single definition: `null` for unrestricted, otherwise the plant codes
+that account may see. `null` and `[]` are deliberately different answers — a zone that has
+been created but holds no chilling centres yet scopes its holders to *nothing*, and reading
+that as "no restriction" would hand them the whole network with nothing on screen saying so.
+
+A Super Admin is never scoped. They are the accounts that hand zones out, and one that could
+restrict its own view is one bad save from nobody being able to see the network. A Mait is
+never scoped either: their reach is the MPPs assigned to them, which the assignment sheet
+already decides.
+
+Scoped endpoints, all through `apps.core.scoping`: `/dashboard/summary/`,
+`/dashboard/trends/`, `/dashboard/mait-performance/`, `/dashboard/mpp-coverage/`,
+`/dashboard/zones/`, `/ai-events/` (list **and** detail), `/members/`, `/mpp/`,
+`/admin/non-members/`, `/admin/pregnancy/`, `/reports/export/` and `/reports/pregnancy/`.
+Every one returns a `scope` object — `{scoped, zones, plant_codes}` — so the screen can say
+out loud that its figures are not the network's. A narrowed figure that does not admit it is
+worse than no figure: somebody reads 412 inseminations and repeats it as the platform total.
+
+Two deliberate exceptions:
+
+* **The exception queues are not scoped.** A payment stuck in Pratapgarh is somebody's job
+  whoever is looking at it, and a zone view that hid it would leave it for a colleague who
+  never opens that screen.
+* **The all-time highs are withheld from a scoped account** rather than recomputed per zone.
+  "All-time high 32,006" under a tile reading 412 invites exactly one reading, and it is
+  wrong. The tiles simply lose their footnote.
+
+The detail routes are scoped through the same queryset as the list, not by a filter on the
+response. A scope enforced only on a list is one an operator walks around by reading an id off
+a report and typing it into the address bar.
 
 ## 9.11 Pregnancy diagnosis
 

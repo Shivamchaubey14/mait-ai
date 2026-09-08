@@ -111,9 +111,44 @@
     return chosen.length + ' of ' + catalogue.length;
   }
 
+  /**
+   * How much of the network this account sees.
+   *
+   * It said "All districts" for every office account, which stopped being true the day zones
+   * arrived — and it was the kind of untrue that nobody reports, because it is what the column
+   * always said. An Admin now shows the zones it holds, or the whole network when it holds
+   * none, which is still most accounts.
+   *
+   * A Super Admin is never scoped and says so rather than showing an empty list: they are the
+   * accounts that hand zones out.
+   */
   function scopeCell(user) {
-    if (user.role === 'super_admin' || user.role === 'admin') {
-      return 'All districts';
+    if (user.role === 'super_admin') {
+      return '<span class="table__sub">Whole network</span>';
+    }
+    if (user.role === 'admin') {
+      const names = user.zone_names || [];
+      const said = names.length
+        ? names
+            .map(function (name) {
+              return '<span class="chip chip--static">' + ui.escapeHtml(name) + '</span>';
+            })
+            .join(' ')
+        : '<span class="table__sub">Whole network</span>';
+      // The cell is the control, the same bargain the Pages column makes: clicking the thing
+      // you want to change is shorter than finding a second button for it, and the Action
+      // column is for what an admin does *to* an account rather than to a field of it.
+      if (user.id === meId()) {
+        return said;
+      }
+      return (
+        '<button class="pages-link" type="button" data-zones="' +
+        user.id +
+        '" title="Change which zones they see">' +
+        said +
+        glyph(ZONES) +
+        '</button>'
+      );
     }
     if (!user.assigned_mpp_count) {
       return '<span class="table__sub">No MPPs assigned</span>';
@@ -149,6 +184,7 @@
   const BLOCK = 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M5.6 5.6l12.8 12.8';
   const RESTORE = 'M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5';
   const PAGES = 'M3 3h7v7H3zM14 3h7v4h-7zM14 11h7v10h-7zM3 14h7v7H3z';
+  const ZONES = 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15';
 
   /**
    * How much of the portal this account sees.
@@ -490,13 +526,182 @@
       });
   }
 
+  /* --- the zone editor ---------------------------------------------------------------------
+   * A second small panel rather than another field on the access one. They answer different
+   * questions — which pages, versus how much of the network — and they are decided by
+   * different people on different days: access is set when an account is created, a zone when
+   * somebody moves region. Sharing a save would make one an accident of the other.
+   */
+  function zoneEditorMarkup() {
+    return [
+      '<section class="panel editor zone-scope" id="zone-panel" hidden ',
+      'aria-label="Zones this account sees">',
+
+      '<div class="editor__head">',
+      '<span class="editor__avatar" id="zx-initials" aria-hidden="true">—</span>',
+      '<div class="editor__who">',
+      '<h2 class="editor__name" id="zx-name">—</h2>',
+      '<p class="editor__code" id="zx-username">—</p>',
+      '</div>',
+      '<span id="zx-role"></span>',
+      '</div>',
+
+      '<div class="field field--iconed field--wide">',
+      '<span class="field__label">',
+      '<span class="field__icon field__icon--pages" aria-hidden="true">',
+      MaitAI.shell.icon('zones'),
+      '</span>Zones they see',
+      '<span class="field__count" id="zx-count">—</span></span>',
+
+      '<div class="access__quick">',
+      '<button class="btn" type="button" id="zx-none">Whole network</button>',
+      '</div>',
+
+      '<div class="access" id="zx-grid" role="group" aria-label="Zones"></div>',
+      '<p class="field__hint" id="zx-diff">—</p>',
+      '</div>',
+
+      '<div class="form-actions">',
+      '<button class="btn btn--primary" type="button" id="zx-save">Save zones</button>',
+      '<button class="btn" type="button" id="zx-cancel">Cancel</button>',
+      '<p class="field__hint" id="zx-status">—</p>',
+      '</div>',
+
+      '</section>',
+    ].join('');
+  }
+
+  function zoneItem(zone, isOn) {
+    return (
+      '<label class="access__item' +
+      (isOn ? ' is-on' : '') +
+      '">' +
+      '<input class="access__check" type="checkbox" value="' +
+      ui.escapeHtml(zone.code) +
+      '"' +
+      (isOn ? ' checked' : '') +
+      ' />' +
+      '<span class="access__mark" aria-hidden="true">' +
+      MaitAI.shell.icon('zones') +
+      '</span>' +
+      '<span class="access__name">' +
+      ui.escapeHtml(zone.name) +
+      // What the zone actually covers, on the line under its name. "Bahraich Zone" means
+      // nothing to somebody who does not already know the region; the four chilling centres
+      // in it are the whole of what the tick decides.
+      '<span class="access__meta">' +
+      ((zone.plant_names || []).length
+        ? ui.escapeHtml(zone.plant_names.join(', '))
+        : 'no BMC/MCC yet') +
+      '</span>' +
+      '</span>' +
+      '<span class="access__state" aria-hidden="true"></span>' +
+      '</label>'
+    );
+  }
+
+  function renderZoneDiff() {
+    const chosen = state.zonesChosen;
+    $('#zx-count').text(chosen.length ? chosen.length + ' zone(s)' : 'None — whole network');
+    // Ticking nothing is a real and common setting rather than an unfinished form: it is what
+    // every head-office account holds. Said out loud, because an empty grid otherwise reads as
+    // a decision nobody has made yet.
+    $('#zx-diff').text(
+      chosen.length
+        ? 'They will see only these zones — on the dashboard, the AI events list, members, ' +
+            'the leaderboard and every export.'
+        : 'No zone ticked means the whole network, which is what most accounts hold.'
+    );
+  }
+
+  function openZoneEditor(user) {
+    state.zoning = user;
+    state.zonesChosen = (user.zones || []).slice();
+    // One panel at a time. Two open over the same table, both headed by the same person, are
+    // two saves an operator can mistake for one.
+    closeEditor();
+
+    $('#zx-initials').text(initials(user.full_name));
+    $('#zx-name').text(user.full_name || user.username);
+    $('#zx-username').text(user.username);
+    $('#zx-role').html(rolePill(user));
+    $('#zx-status').text('—');
+
+    $('#zx-grid').html(
+      state.zones.length
+        ? state.zones
+            .map(function (zone) {
+              return zoneItem(zone, state.zonesChosen.indexOf(zone.code) >= 0);
+            })
+            .join('')
+        : '<p class="empty-state">No zones have been set up yet. ' +
+            'Create them on the Zones screen first.</p>'
+    );
+    renderZoneDiff();
+
+    $('#zone-panel').prop('hidden', false);
+    $('#zone-panel')[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function closeZoneEditor() {
+    state.zoning = null;
+    $('#zone-panel').prop('hidden', true);
+  }
+
+  function saveZoneEditor() {
+    if (!state.zoning) {
+      return;
+    }
+    const id = state.zoning.id;
+    $('#zx-save').prop('disabled', true);
+    $('#zx-status').text('Saving…');
+
+    MaitAI.api
+      .updateUser(id, { zones: state.zonesChosen })
+      .done(function (user) {
+        closeZoneEditor();
+        if (user && user.id) {
+          replaceRow(user);
+        } else {
+          load();
+        }
+      })
+      .fail(function (problem) {
+        $('#zx-status').text('');
+        MaitAI.shell.alert(MaitAI.api.problemToLines(problem).join(' · '));
+      })
+      .always(function () {
+        $('#zx-save').prop('disabled', false);
+      });
+  }
+
+  /** The zones an account can be given. Loaded once; the grid is drawn from it per row. */
+  function loadZones() {
+    MaitAI.api
+      .zones()
+      .done(function (page) {
+        state.zones = (page.results || page || []).filter(function (zone) {
+          // An inactive zone scopes nothing, so offering it would be a tick that does nothing.
+          return zone.is_active;
+        });
+      })
+      .fail(function () {
+        // Not an alert. This screen's job is accounts and roles; zones are one column of it,
+        // and a red banner over a working table because a secondary list failed would be the
+        // loudest thing on screen for the least important reason. The editor says so itself
+        // if somebody opens it.
+        state.zones = [];
+      });
+  }
+
   $(function () {
     if (!MaitAI.shell.requireSession()) {
       return;
     }
     MaitAI.shell.mount();
     loadCatalogue();
-    $('#access-editor').html(editorMarkup());
+    loadZones();
+    $('#access-editor').html(editorMarkup() + zoneEditorMarkup());
     $('#new-access').html(accessGrid(allKeys()));
     $('#new-access-count').text(countLabel(allKeys()));
     load();
@@ -583,6 +788,41 @@
 
     $('#ax-cancel').on('click', closeEditor);
     $('#ax-save').on('click', saveEditor);
+
+    /* --- the row's zone editor ------------------------------------------------------------ */
+    $('#rows').on('click', '[data-zones]', function () {
+      const id = String($(this).data('zones'));
+      const user = state.page.filter(function (candidate) {
+        return String(candidate.id) === id;
+      })[0];
+      if (user) {
+        openZoneEditor(user);
+      }
+    });
+
+    // Delegated from the document, because the grid is redrawn each time the panel opens and
+    // a handler bound to the boxes themselves would go with the nodes they were bound to.
+    $(document).on('change', '#zx-grid .access__check', function () {
+      const code = $(this).val();
+      const on = $(this).is(':checked');
+      const at = state.zonesChosen.indexOf(code);
+      if (on && at < 0) {
+        state.zonesChosen.push(code);
+      } else if (!on && at >= 0) {
+        state.zonesChosen.splice(at, 1);
+      }
+      $(this).closest('.access__item').toggleClass('is-on', on);
+      renderZoneDiff();
+    });
+
+    $('#zx-none').on('click', function () {
+      setAll($('#zx-grid'), false);
+      state.zonesChosen = [];
+      renderZoneDiff();
+    });
+
+    $('#zx-cancel').on('click', closeZoneEditor);
+    $('#zx-save').on('click', saveZoneEditor);
 
     $('#create-cancel').on('click', function () {
       $('#create-panel').prop('hidden', true);
