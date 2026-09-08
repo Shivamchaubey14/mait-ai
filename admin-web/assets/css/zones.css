@@ -1,0 +1,121 @@
+/**
+ * Zone setup (W20).
+ *
+ * The screen is mostly borrowed on purpose: the stat tiles, the table and the editor panel are
+ * the portal's own, and the BMC/MCC picker is the shared access grid — the one Users & roles
+ * hands out pages with, moved into portal.css when this screen became its second caller. That
+ * is not
+ * economy — the two screens do the same job in the operator's head (this account reaches this
+ * much), and a second way of ticking a list would make them look like different decisions.
+ *
+ * What this file adds is the small amount that is genuinely particular: a centre already
+ * spoken for by another zone, and the two places where a zone's membership is summarised.
+ */
+
+@import url('forms.css');
+@import url('editor.css');
+
+/* --- the editor's mark ---------------------------------------------------------------------
+   Green while adding, ink while editing — the same signal the product editor gives, so the two
+   panels do not have to be read to know which of the two jobs is open. */
+.zone-editor__mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: var(--radius-md);
+  color: var(--color-surface);
+  background: var(--color-ink);
+}
+
+.zone-editor--adding .zone-editor__mark {
+  background: var(--color-primary);
+}
+
+.zone-editor__mark svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* The search sits in the picker's own toolbar rather than the page filter bar: it filters the
+   nineteen boxes below it, not the table further down, and a search that governs something
+   other than the thing beneath it is the one control people reliably misread. */
+.zone-editor__search {
+  flex: 1 1 200px;
+  /* Capped, or it takes the whole row and pushes the two buttons beside it off the panel at
+     1280 — the width every back-office machine here actually runs at. */
+  max-width: 320px;
+}
+
+/* --- the BMC/MCC picker --------------------------------------------------------------------
+   `.access` in portal.css supplies the grid; these are the two states it does not have. The
+   cards are wider than that grid's because each carries a second line — how big the centre is,
+   or which zone already holds it — and that line is what makes the choice informed rather than
+   a list of nineteen names nobody outside the region can rank. */
+.zone-plants {
+  grid-template-columns: repeat(auto-fill, minmax(224px, 1fr));
+  max-height: 340px;
+  /* Nineteen today and more as the dairy grows. Scrolling the picker keeps the save button
+     reachable without a page scroll — an editor whose action is below the fold is one people
+     abandon half-filled. */
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.zone-plant {
+  align-items: flex-start;
+  min-height: 56px;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+/* Spoken for by another zone. Muted rather than hidden, and it keeps its name: an operator
+   looking for NANPARA has to find out that it is in Bahraich Zone, not fail to find it at all.
+   The cursor says the box will not move before the pointer reaches it. */
+.zone-plant.is-taken {
+  background: var(--color-background);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.zone-plant.is-taken .access__name {
+  color: var(--color-text-muted);
+}
+
+.zone-plant.is-taken .access__meta {
+  color: var(--color-secondary-pressed);
+}
+
+/* --- a zone's centres, in the table ---------------------------------------------------------
+   Named rather than counted. "4 BMC/MCC" is a number an operator then has to open the row to
+   understand, and this column exists precisely so they do not have to. */
+.zone-plants-cell {
+  max-width: 420px;
+}
+
+.chip--static {
+  min-height: 26px;
+  padding: 0 var(--space-2);
+  margin: 2px 0;
+  font-size: var(--text-caption);
+  cursor: default;
+  background: var(--color-primary-wash);
+  border-color: transparent;
+  color: var(--color-primary-dark);
+}
+
+/* --- what is in no zone --------------------------------------------------------------------
+   Each one is a button that opens a new zone with that centre already ticked, because on a
+   fresh install the zones get built one at a time from exactly this list. */
+.zone-free {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.chip__meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}

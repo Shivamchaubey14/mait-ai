@@ -53,6 +53,9 @@ window.MaitAI = window.MaitAI || {};
        dairy, and it has to be impossible to confuse with the export beside it. */
     'mait-payment': 'M2 6h20v12H2zM6.5 9.5h5.5M6.5 12h5.5M11 9.5c0 2.2-1.5 2.5-4.5 2.5l4.5 3.5',
     users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M2 20a7 7 0 0 1 14 0M18 8v6M15 11h6',
+    /* A map divided into areas. Not the MPP pin and not the Assignment pin — both of those
+       say "a place", and a zone is the line drawn around several of them. */
+    zones: 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15',
     /* A shield with a tick. Not a document glyph — Reports and Mait payment already own
        that shape, and this is not another thing to read: it is the record that says what
        everybody did, including who opened a farmer's identity card. */
@@ -104,6 +107,10 @@ window.MaitAI = window.MaitAI || {};
     // pull an AI-event export.
     { key: 'mait-payment', label: 'Mait payment', href: 'mait-payment.html' },
     { key: 'users', label: 'Users & roles', href: 'users.html' },
+    // Directly under Users & roles, because it is the other half of the same job. That screen
+    // says which pages an account opens; this one says how much of the network it sees
+    // through them — and an account that can edit zones can widen its own view.
+    { key: 'zones', label: 'Zones', href: 'zones.html' },
     // Last, and directly under Users & roles: the trail records who read a farmer's
     // Aadhaar card and who took a workbook of bank details away, and the desk that
     // administers accounts is the one that answers for it.
@@ -288,6 +295,11 @@ window.MaitAI = window.MaitAI || {};
   function refreshProfile(active) {
     const before = JSON.stringify(assigned());
     MaitAI.api.me().done(function () {
+      // Always, and before the section comparison below returns early. The cached profile is
+      // from sign-in and a tab opened from a bookmark has none at all, so this is the first
+      // moment the screen can know it is scoped — without it the line appears only on the
+      // second page somebody visits, which is worse than never appearing at all.
+      MaitAI.shell.scopeNote();
       if (JSON.stringify(assigned()) === before) {
         return;
       }
@@ -346,6 +358,7 @@ window.MaitAI = window.MaitAI || {};
       $shell.prepend(renderSidebar(active));
       wireAccount();
       decorate();
+      MaitAI.shell.scopeNote();
       refreshProfile(active);
       return active;
     },
@@ -390,6 +403,63 @@ window.MaitAI = window.MaitAI || {};
         return false;
       }
       return true;
+    },
+
+    /**
+     * Say, under the page title, that these figures are not the whole network.
+     *
+     * Every screen a zone narrows draws this, and it is not decoration. A figure that has been
+     * narrowed and does not admit it is worse than no figure at all: an area manager reads 412
+     * inseminations, repeats it in a meeting as the network total, and nothing on the screen
+     * ever said otherwise.
+     *
+     * **It installs its own slot.** Seventeen screens are scoped and none of them had a place
+     * to put this; adding a `<span>` to seventeen HTML files is exactly the drift the shell
+     * exists to prevent — sixteen would get it and the seventeenth would be the one somebody
+     * reports. The topbar's meta line is on every screen by the same convention that puts a
+     * sidebar on them, so the note is appended there.
+     *
+     * Nothing is drawn for an unscoped account, which is most of them. A line reading "all
+     * zones" on every screen is a line people stop seeing, and then the one that matters is
+     * invisible too.
+     */
+    scopeNote: function () {
+      const stored = MaitAI.api.profile.get();
+      const zones = (stored && stored.zones) || {};
+      const scoped = zones.scoped && (zones.names || []).length;
+
+      let $slot = $('#scope-note');
+      if (!$slot.length) {
+        if (!scoped) {
+          // Nothing to say, so nothing is put in the document at all.
+          return;
+        }
+        const $meta = $('.topbar__meta').first();
+        if (!$meta.length) {
+          return;
+        }
+        // A separator only when there is already something to be separated from — the
+        // dashboard's meta line opens with the date, the zones screen's with a count, and a
+        // screen whose line is otherwise empty must not start with a stray middot.
+        if ($.trim($meta.text())) {
+          $meta.append(' · ');
+        }
+        $slot = $('<span id="scope-note"></span>').appendTo($meta);
+      }
+
+      if (!scoped) {
+        $slot.empty().prop('hidden', true);
+        return;
+      }
+      $slot
+        .prop('hidden', false)
+        .html(
+          '<span class="scope" title="Your account is limited to these zones">' +
+            icon('zones', 'scope__icon') +
+            '<span>' +
+            escapeHtml(zones.names.join(', ')) +
+            '</span></span>'
+        );
     },
 
     /** Update the count of things needing a human, shown on every screen. */

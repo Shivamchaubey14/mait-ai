@@ -180,6 +180,172 @@ a:hover {
   gap: var(--space-3);
 }
 
+/* --- the access grid ------------------------------------------------------------------------
+   A grid of tickable cards, used wherever an operator hands out reach: which pages an account
+   opens (Users & roles) and which zones it sees (Users & roles, and Zones).
+
+   It lived in users.css until a second screen wanted it. Moved rather than copied, because a
+   component duplicated across two stylesheets is one that looks subtly different on the second
+   screen within a month — and these two are deliberately the same gesture, so that ticking a
+   zone and ticking a page feel like the same kind of decision.
+*/
+.access {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: var(--space-2);
+}
+
+.access__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-label);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.access__item:hover {
+  border-color: var(--green-300);
+}
+
+/* On is the sidebar's own colouring — the green pill an active section wears — so a ticked
+   card and the link it stands for read as the same thing. */
+.access__item.is-on {
+  color: var(--color-text);
+  font-weight: 600;
+  border-color: var(--color-primary);
+  background: var(--color-primary-wash);
+}
+
+/* Kept focusable and kept where it is: hiding it with `display: none` takes it out of the tab
+   order, and a grid of seventeen controls nobody can reach by keyboard is not a control. */
+.access__check {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.access__item:has(.access__check:focus-visible) {
+  outline: 2px solid var(--color-primary-dark);
+  outline-offset: 2px;
+}
+
+.access__mark {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-disabled);
+}
+
+.access__item.is-on .access__mark {
+  color: var(--color-primary-dark);
+}
+
+.access__mark svg {
+  width: 17px;
+  height: 17px;
+}
+
+.access__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* The line height a two-line card needs; a one-line card is unaffected because the second
+     line simply is not there. */
+  line-height: 1.35;
+}
+
+/* A second line inside the card, under its name. What the thing being ticked actually is —
+   how big a chilling centre is, or which zone already holds it, or what a zone covers. The
+   name alone is rarely enough to decide with: "Bahraich Zone" means nothing to somebody who
+   does not already know the region. */
+.access__meta {
+  display: block;
+  font-size: var(--text-caption);
+  font-weight: 400;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The tick is the only thing that appears rather than changes, so the card's state survives
+   being read in a photocopy — colour is never carrying it alone. */
+.access__state {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-primary-dark);
+  visibility: hidden;
+}
+
+.access__item.is-on .access__state {
+  visibility: visible;
+}
+
+.access__state svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Select all / Clear. Above the grid and right-aligned, out of the way of the labels: they
+   are shortcuts through seventeen clicks, not two of the seventeen. */
+.access__quick {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.access__quick .btn {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-caption);
+}
+
+/* The pill in the editor head is `pill--admin`, which is info-on-info-wash — and the panel
+   behind it is that same wash, so it vanished into the card and left the role as three words
+   of blue text. Paper under it, the way editor.css puts paper under its field chips. */
+
+/* The glyph beside a "what can this account reach" field. Beside the access grid because it
+   labels it, on both screens that draw one. */
+.field__icon--pages {
+  color: var(--color-primary-dark);
+  background: var(--color-surface);
+}
+
+/* --- the scope line ------------------------------------------------------------------------
+   Under the page title, on every screen a zone narrows. It is the only thing that tells an
+   operator their figures are not the network's, and a narrowed figure that does not admit it
+   is worse than no figure: somebody reads 412 inseminations and repeats it in a meeting as
+   the whole platform's.
+
+   Drawn only when the account is actually scoped. A line reading "all zones" on seventeen
+   screens is a line people stop seeing, and then the one that matters is invisible too. */
+.scope {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-wash);
+  color: var(--color-primary-dark);
+  font-weight: 600;
+}
+
+.scope__icon {
+  width: 13px;
+  height: 13px;
+}
+
 /* --- rolling figures ----------------------------------------------------------------------
    A number that changes while somebody is watching it, shown the way a clock shows one. Built
    by `MaitAI.ui.roll`; see that function for why a figure moves at all.

@@ -88,6 +88,10 @@ window.MaitAI = window.MaitAI || {};
         role: value.role,
         role_display: value.role_display,
         portal_sections: value.portal_sections || [],
+        // How much of the network this account sees. Cached with the rest of the profile
+        // because every screen that narrows itself draws the same line saying so, and one
+        // that had to ask separately is one that can forget to.
+        zones: value.zones || { scoped: false, names: [] },
       };
       sessionStorage.setItem(PROFILE_KEY, JSON.stringify(kept));
       return kept;
@@ -790,6 +794,45 @@ window.MaitAI = window.MaitAI || {};
 
     users: function (query) {
       return request({ path: '/admin/users/', query: query });
+    },
+
+    /**
+     * The zones the dairy is run in, and the BMC/MCCs each one covers.
+     *
+     * `plants` on a write is the whole membership, not an addition to it — the set this zone
+     * holds after saving. That is what makes the tick-boxes on the setup screen mean what
+     * they appear to mean.
+     */
+    zones: function () {
+      return request({ path: '/admin/zones/' });
+    },
+
+    createZone: function (body) {
+      return request({ path: '/admin/zones/', method: 'POST', body: body });
+    },
+
+    updateZone: function (id, body) {
+      return request({ path: '/admin/zones/' + id + '/', method: 'PATCH', body: body });
+    },
+
+    deleteZone: function (id) {
+      return request({ path: '/admin/zones/' + id + '/', method: 'DELETE' });
+    },
+
+    /**
+     * Every BMC/MCC the master data knows about, with its size and the zone holding it.
+     *
+     * There is no plant master to read: the code and the name arrive on each MPP row, so this
+     * is the distinct set across them. An unassigned one is the point of the screen rather
+     * than an error — a chilling centre appears the moment SAP first mentions it.
+     */
+    zonePlants: function () {
+      return request({ path: '/admin/zones/plants/' });
+    },
+
+    /** Zones ranked by the work done in them, for the panel head office reads. */
+    zonePerformance: function (query) {
+      return request({ path: '/dashboard/zones/', query: query });
     },
 
     request: request,

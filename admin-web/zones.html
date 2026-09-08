@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zones · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <!-- zones.css pulls in forms.css, which imports portal.css. -->
+    <link rel="stylesheet" href="assets/css/zones.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="zones">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Zones</h1>
+            <p class="topbar__meta"><span id="zone-count">—</span></p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--primary" id="add" type="button">Add a zone</button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- Blue, because this explains a rule rather than flagging a backlog: what a zone is
+             for, and the one constraint that shapes every decision on this screen. -->
+        <div class="notice notice--info">
+          <span class="notice__icon" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">
+              A zone is a group of BMC/MCCs, and it decides what an account sees.
+            </p>
+            <p class="notice__body">
+              The chilling centres come from the SAP master data — they cannot be typed in here.
+              Each one belongs to a single zone, so adding it to a second means taking it out of the
+              first. Give an account its zone on
+              <a href="users.html">Users &amp; roles</a>; an account with no zone sees the whole
+              network.
+            </p>
+          </div>
+        </div>
+
+        <!-- The unassigned count is a working figure, not an error: a chilling centre appears
+             the moment SAP first mentions it and somebody has to place it afterwards. It sits
+             here rather than in a card because it is the one number that says whether this
+             screen still has work outstanding. -->
+        <section class="tiles" aria-label="Summary">
+          <article class="tile tile--good">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
+                </svg>
+              </span>
+              Zones
+            </p>
+            <p class="tile__value" data-kpi="zones">—</p>
+            <p class="tile__foot" data-kpi="zones-foot"></p>
+          </article>
+          <article class="tile tile--info">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6" />
+                </svg>
+              </span>
+              BMC/MCCs placed
+            </p>
+            <p class="tile__value" data-kpi="placed">—</p>
+            <p class="tile__foot" data-kpi="placed-foot"></p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M3 20a6 6 0 0 1 12 0M17 11a3 3 0 1 0 0-6M21 20a6 6 0 0 0-4-5.6"
+                  />
+                </svg>
+              </span>
+              Members covered
+            </p>
+            <p class="tile__value" data-kpi="members">—</p>
+            <p class="tile__foot" data-kpi="members-foot"></p>
+          </article>
+        </section>
+
+        <!-- The editor. Same shape as the product and access editors: a head that says which
+             record is open, the fields the panel exists for, and a save that names what it
+             will change. -->
+        <section class="panel editor zone-editor" id="editor" aria-labelledby="editor-title" hidden>
+          <div class="editor__head">
+            <span class="zone-editor__mark" id="editor-mark" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
+              </svg>
+            </span>
+            <div class="editor__who">
+              <h2 class="editor__name" id="editor-title">Add a zone</h2>
+              <p class="editor__code" id="editor-meta">Name it, then tick the centres it covers</p>
+            </div>
+            <span id="editor-state"></span>
+          </div>
+
+          <!-- Not a <form>: saving and deleting are two different decisions. -->
+          <div class="form-grid">
+            <div class="field field--iconed">
+              <label class="field__label" for="code">
+                <span class="field__icon field__icon--code" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M8 4l-4 8 4 8M16 4l4 8-4 8" />
+                  </svg>
+                </span>
+                Code
+              </label>
+              <input
+                class="input field__control"
+                id="code"
+                type="text"
+                maxlength="20"
+                autocomplete="off"
+                placeholder="ZONE1"
+              />
+              <p class="field__hint" id="code-hint">Set once and never changed</p>
+            </div>
+
+            <div class="field field--iconed">
+              <label class="field__label" for="name">
+                <span class="field__icon field__icon--label" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20.6 13.4 12 22l-9-9V3h10zM7.5 7.5h.01" />
+                  </svg>
+                </span>
+                Name
+              </label>
+              <input
+                class="input field__control"
+                id="name"
+                type="text"
+                maxlength="100"
+                placeholder="Bahraich Zone"
+              />
+              <p class="field__hint">What everyone reads on their dashboard</p>
+            </div>
+
+            <div class="field field--iconed field--wide">
+              <label class="field__label" for="description">
+                <span class="field__icon field__icon--label" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 6h16M4 12h16M4 18h10" />
+                  </svg>
+                </span>
+                Note
+              </label>
+              <input
+                class="input field__control"
+                id="description"
+                type="text"
+                maxlength="255"
+                placeholder="Optional — who runs it, or why it is grouped this way"
+              />
+            </div>
+
+            <div class="field field--iconed field--wide">
+              <span class="field__label">
+                <span class="field__icon field__icon--pages" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6" />
+                  </svg>
+                </span>
+                BMC/MCCs in this zone
+                <span class="field__count" id="plant-count">—</span>
+              </span>
+
+              <div class="access__quick">
+                <input
+                  class="input zone-editor__search"
+                  id="plant-search"
+                  type="search"
+                  placeholder="Search by name or code"
+                  aria-label="Search the BMC/MCC list"
+                />
+                <button class="btn" type="button" id="pick-free">Tick every free one</button>
+                <button class="btn" type="button" id="pick-none">Clear</button>
+              </div>
+
+              <div class="access zone-plants" id="plant-grid" role="group" aria-label="BMC/MCCs">
+                <p class="empty-state">Loading the BMC/MCC list…</p>
+              </div>
+              <p class="field__hint" id="plant-diff">—</p>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn--primary" id="save" type="button">Save zone</button>
+            <button class="btn" id="cancel" type="button">Cancel</button>
+            <button class="btn btn--danger-outline" id="remove" type="button" hidden>Delete</button>
+            <p class="field__hint" id="editor-status">—</p>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="list-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="list-title">Zones</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Zone</th>
+                  <th scope="col">BMC/MCC</th>
+                  <th scope="col" class="table__num">MPPs</th>
+                  <th scope="col" class="table__num">Members</th>
+                  <th scope="col" class="table__num">Accounts</th>
+                  <th scope="col">Status</th>
+                  <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="rows" aria-busy="true">
+                <tr class="skeleton" aria-hidden="true">
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Whatever is in no zone at all. Its own panel rather than a line on the one above,
+             because until it is empty the zone rows do not add up to the network total — and a
+             dashboard that quietly loses events is one nobody can reconcile. -->
+        <section class="panel panel--warning" id="unplaced-panel" aria-labelledby="unplaced-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="unplaced-title">
+              <span class="panel__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3 2 20h20zM12 9v5M12 17.5v.5" />
+                </svg>
+              </span>
+              In no zone yet
+            </h2>
+            <span class="panel__count" data-count="unplaced">—</span>
+          </div>
+          <div id="unplaced"></div>
+        </section>
+      </main>
+    </div>
+
+    <!--
+      Vendor scripts are served locally, never from a CDN. This portal renders member PII,
+      and a third-party script on the page can read everything the page can — see README.md.
+    -->
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/controls.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/zones.js"></script>
+  </body>
+</html>
