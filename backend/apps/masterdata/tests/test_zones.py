@@ -331,6 +331,41 @@ def test_zones_are_ranked_with_what_is_in_no_zone_reported_separately(db, networ
     assert response.data["unassigned_plants"] == 1
 
 
+def test_todays_work_is_counted_before_the_hourly_job_has_seen_it(db, network, bahraich_zone):
+    """
+    The panel sits under a chart that overlays the recent tail live, and the two read the same
+    window. Trusting the aggregate all the way to today left the chart drawing this morning's
+    events above a zone row that did not count them — and on the dev path, where no worker
+    runs at all, the panel showed nothing at all on a database full of inseminations.
+
+    No aggregation is run here on purpose: that is the state this panel has to be right in.
+    """
+    from apps.dashboard.models import DailyAIAggregate
+
+    assert not DailyAIAggregate.objects.exists()
+
+    response = _as(_admin()).get(f"{BASE}/dashboard/zones/?days=30")
+    assert response.status_code == 200
+    assert response.data["results"][0]["events"] == 1
+    assert response.data["total"] == 1
+    assert response.data["unassigned_events"] == 1
+
+
+def test_a_settled_day_is_not_counted_twice(db, network, bahraich_zone):
+    """
+    The aggregate covers the settled days and the events cover the tail, and the boundary
+    between them is half-open. Overlapping by a day would double every figure in the panel,
+    which reads as the app recording each insemination twice.
+    """
+    from apps.dashboard.tasks import aggregate_daily_ai_counts
+
+    aggregate_daily_ai_counts()
+
+    response = _as(_admin()).get(f"{BASE}/dashboard/zones/?days=30")
+    assert response.data["results"][0]["events"] == 1
+    assert response.data["total"] == 1
+
+
 def test_a_zone_account_compares_only_its_own_zones(zone_admin, network, bahraich_zone):
     """The panel is a comparison, not a way around the scope."""
     from apps.dashboard.tasks import aggregate_daily_ai_counts

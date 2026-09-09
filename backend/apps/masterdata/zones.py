@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, viewsets
@@ -24,6 +24,7 @@ from apps.core.exceptions import RecordInUse
 from apps.core.permissions import IsAdmin, in_section
 from apps.core.scoping import scope_of
 from apps.core.services import record_audit
+from apps.core.timeframe import end_of_day, start_of_day
 
 from .models import MPP, Zone, ZonePlant, plants_with_counts
 
@@ -287,13 +288,22 @@ def zone_performance(request):
     denormalised: the alternative is a join from every aggregate row through the MPP to its
     plant, on the one screen with a 400ms budget.
 
-    The recent tail is *not* overlaid live here, unlike the trend chart. This panel is a
-    ranking over a period of weeks and the last two days cannot reorder it; paying for a live
-    count of them on every dashboard load would buy nothing anybody can see.
+    The recent tail is read live and only the days before it come off the aggregate, exactly
+    as ``trends`` and ``mait_performance`` do it. This panel used to trust the table all the
+    way to today on the grounds that two days cannot reorder a ranking of weeks — true of the
+    order, and beside the point for the totals. It sits directly beneath a chart that *does*
+    overlay the tail, so the two read the same window and disagreed about it: the chart drew
+    this morning's work and the panel under it did not count it, and the zone rows summed to
+    less than the tile at the top of the page. On the no-Docker dev path, where no worker
+    runs at all, the gap was every day since somebody last ran ``rebuild_ai_aggregates``.
+
+    It costs the tail, not the window — settled days stay on the aggregate, which is what it
+    is for.
     """
     # Imported here rather than at module scope: `apps.dashboard` imports this module's
     # models, and naming its own at the top would close the circle at startup.
-    from apps.dashboard.models import DailyAIAggregate
+    from apps.ai_events.models import AIEvent
+    from apps.dashboard.models import AGGREGATE_LOOKBACK_DAYS, DailyAIAggregate
 
     try:
         days = min(365, max(1, int(request.query_params.get("days", 30))))
@@ -309,7 +319,12 @@ def zone_performance(request):
         allowed = set(scope)
         zones = [zone for zone in zones if set(zone.plant_codes) & allowed]
 
-    counted = DailyAIAggregate.objects.filter(date__gte=start, date__lte=end)
+    # Where the aggregate stops being authoritative. The hourly job rewrites the last
+    # `AGGREGATE_LOOKBACK_DAYS` days wholesale — an event captured offline can arrive hours
+    # late and land on one of them — so those days are read off the events themselves.
+    live_from = max(start, end - timedelta(days=AGGREGATE_LOOKBACK_DAYS))
+
+    counted = DailyAIAggregate.objects.filter(date__gte=start, date__lt=live_from)
     if scope is not None:
         counted = counted.filter(plant_code__in=scope)
 
@@ -317,6 +332,20 @@ def zone_performance(request):
         row["plant_code"]: row["events"] or 0
         for row in counted.values("plant_code").annotate(events=Sum("ai_count"))
     }
+
+    # The tail, counted live and grouped by the same column. Bounded by the job's own
+    # look-back, so this is a few days of events however wide the window is.
+    live_qs = AIEvent.objects.filter(
+        status=AIEvent.Status.COMPLETED,
+        completed_at__gte=start_of_day(live_from),
+        completed_at__lt=end_of_day(end),
+    )
+    if scope is not None:
+        live_qs = live_qs.filter(mpp__plant_code__in=scope)
+
+    for row in live_qs.values("mpp__plant_code").annotate(events=Count("id")):
+        code = row["mpp__plant_code"] or ""
+        totals[code] = totals.get(code, 0) + (row["events"] or 0)
 
     rows = []
     for zone in zones:
