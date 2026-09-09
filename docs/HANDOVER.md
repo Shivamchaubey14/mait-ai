@@ -77,6 +77,29 @@ the handsets, which is already what `mobile/eas.json` points the preview build a
 :8080 instead does not work: the browser gets the portal on :443 and every request it makes
 goes to a `:8000` that does not exist out there.
 
+### Leaving it running
+
+`dev-start.ps1` starts each server once, which is right for a morning at the desk and wrong for
+a machine that is showing the product to somebody. A dropped network, a laptop lid or Windows
+reclaiming memory takes one of them down and it stays down — and the first anybody knows of it
+is a screen of errors on a colleague's handset.
+
+```powershell
+.\scripts\dev-keepalive.ps1              # a supervised window per server
+.\scripts\dev-keepalive.ps1 -Role backend
+```
+
+Same servers, under a loop that restarts whatever exits and says when and with what code. The
+ngrok URL is reserved to the account, so a tunnel that comes back comes back on the same
+address and the preview build in `mobile/eas.json` keeps working across the outage. The
+supervised API runs `--noreload`: the autoreloader is a parent watching a child, and only the
+parent can be waited on, so a bad kill orphans a child still holding :8000.
+
+Worth knowing which of the three actually follows the network. Only ngrok does — its agent
+reconnects on its own after a blip, and this loop is for the case where the agent itself is
+gone. Django binds `0.0.0.0` and serves happily through a dropped Wi-Fi; when it dies it is for
+some other reason.
+
 Free-tier ngrok answers anything browser-shaped with an interstitial, so a first-time visitor
 clicks "Visit Site" once. Requests the portal makes carry `ngrok-skip-browser-warning`, the
 same header `mobile/src/api/client.ts` has always sent — without it every screen reports a
