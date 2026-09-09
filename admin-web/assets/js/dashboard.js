@@ -455,18 +455,40 @@
    * A zone that did nothing still appears. A zone missing from the panel reads as a zone that
    * does not exist; a zone showing zero reads as a zone that did no work, and only one of
    * those is ever true here.
+   *
+   * Two paths, the same split the chart above it makes and for the same reason. The zones
+   * coming back with new numbers are *moved*; a different set of zones is drawn from scratch.
+   * Rebuilding on every beat replayed the entrance animation on rows somebody was reading,
+   * twice a minute, on a screen that is left open all morning — a panel visibly flickering
+   * while reporting that nothing had changed.
    */
+
+  /** Which zones are currently drawn. The set, not the order — see `orderZones`. */
+  let drawnZones = '';
+
+  function zonesKey(rows) {
+    return rows
+      .map(function (zone) {
+        return zone.code;
+      })
+      .sort()
+      .join('|');
+  }
+
   function renderZones(data) {
     const rows = data.results || [];
     // Nothing to compare is not an empty panel, it is no panel. On a network nobody has
     // divided into zones yet this would be a box asking a question that has no answer set up.
     $('#zone-panel').prop('hidden', !rows.length);
     if (!rows.length) {
+      drawnZones = '';
       return;
     }
 
     $('#zone-total').text(count(data.total) + ' events across ' + rows.length + ' zones');
 
+    // Scaled against the busiest zone rather than against the total, so the quiet ones are
+    // still a readable length instead of a sliver against a leader.
     const peak = Math.max(
       1,
       ...rows.map(function (zone) {
@@ -474,35 +496,14 @@
       })
     );
 
-    $('#zone-rows').html(
-      rows
-        .map(function (zone, index) {
-          return (
-            '<div class="zone-row" style="--i:' +
-            index * 30 +
-            '">' +
-            '<span class="zone-row__name">' +
-            MaitAI.shell.escapeHtml(zone.name) +
-            // The chilling centres in it, on the line beneath. A zone name means little to
-            // anybody who does not already know the region; the centres are what it is.
-            '<span class="zone-row__plants">' +
-            MaitAI.shell.escapeHtml((zone.plant_names || []).join(', ') || 'no BMC/MCC yet') +
-            '</span></span>' +
-            // Scaled against the busiest zone rather than against the total, so the quiet
-            // ones are still a readable length instead of a sliver against a leader.
-            '<span class="zone-row__bar"><span class="zone-row__fill" style="width:' +
-            ((zone.events || 0) / peak) * 100 +
-            '%"></span></span>' +
-            '<span class="zone-row__value">' +
-            count(zone.events) +
-            '<span class="zone-row__share">' +
-            (zone.share_percent || 0).toFixed(1) +
-            '%</span></span>' +
-            '</div>'
-          );
-        })
-        .join('')
-    );
+    const $rows = $('#zone-rows');
+    const key = zonesKey(rows);
+    if (key === drawnZones && $rows.children('.zone-row').length === rows.length) {
+      updateZones($rows, rows, peak);
+    } else {
+      drawnZones = key;
+      buildZones($rows, rows, peak);
+    }
 
     const stray = data.unassigned_events || 0;
     $('#zone-unplaced')
@@ -515,6 +516,90 @@
               ' BMC/MCC in no zone, so these rows do not add up to the total above.'
           : ''
       );
+  }
+
+  function buildZones($rows, zones, peak) {
+    $rows.html(
+      zones
+        .map(function (zone, index) {
+          return (
+            // Keyed by code, which is what lets a later beat find this row again rather than
+            // replacing it — and what lets the panel re-rank without redrawing.
+            '<div class="zone-row" data-zone="' +
+            MaitAI.shell.escapeHtml(zone.code) +
+            '" style="--i:' +
+            index * 30 +
+            '">' +
+            '<span class="zone-row__name">' +
+            MaitAI.shell.escapeHtml(zone.name) +
+            // The chilling centres in it, on the line beneath. A zone name means little to
+            // anybody who does not already know the region; the centres are what it is.
+            '<span class="zone-row__plants"></span></span>' +
+            '<span class="zone-row__bar"><span class="zone-row__fill"></span></span>' +
+            '<span class="zone-row__value"><span class="zone-row__count"></span>' +
+            '<span class="zone-row__share"></span></span>' +
+            '</div>'
+          );
+        })
+        .join('')
+    );
+    // Filled through the same path every later beat takes, so one place decides what a row
+    // says. It runs before the browser has resolved a style for these nodes, so the fills
+    // arrive at their width rather than transitioning to it — the entrance here is the row
+    // rising in, and a bar that also grew would be the same quantity animated twice.
+    updateZones($rows, zones, peak);
+  }
+
+  /**
+   * The same zones, with new numbers.
+   *
+   * Moving the widths lets the transition in dashboard.css carry each bar from where it was to
+   * where it now is — the update being *shown* rather than merely applied — and the counts
+   * roll like every other figure on this screen. A beat that changed nothing moves nothing:
+   * `roll` and the width assignment are both no-ops at the same value.
+   */
+  function updateZones($rows, zones, peak) {
+    const held = {};
+    $rows.children('.zone-row').each(function () {
+      held[this.getAttribute('data-zone')] = $(this);
+    });
+
+    zones.forEach(function (zone) {
+      const $row = held[zone.code];
+      if (!$row) {
+        return;
+      }
+      // Names drift as SAP re-sends the masters, and a centre can be moved between zones
+      // while this screen is open, so the line beneath the name is rewritten rather than
+      // assumed. `text` leaves the node alone when it is already saying this.
+      $row.find('.zone-row__plants').text((zone.plant_names || []).join(', ') || 'no BMC/MCC yet');
+      $row.find('.zone-row__fill').css('width', ((zone.events || 0) / peak) * 100 + '%');
+      MaitAI.ui.roll($row.find('.zone-row__count'), count(zone.events));
+      $row.find('.zone-row__share').text((zone.share_percent || 0).toFixed(1) + '%');
+    });
+
+    orderZones($rows, zones, held);
+  }
+
+  /**
+   * The ranking, once the numbers have moved.
+   *
+   * Only rows that are actually in the wrong place are moved. Re-appending all of them would
+   * restart the entrance animation on every row — the flicker this split exists to stop — for
+   * a re-rank that concerns two of them. A row that does move replays it, which is the right
+   * amount of noise for a zone that has just overtaken another.
+   */
+  function orderZones($rows, zones, held) {
+    zones.forEach(function (zone, index) {
+      const $row = held[zone.code];
+      if (!$row) {
+        return;
+      }
+      const current = $rows.children('.zone-row').eq(index);
+      if (current[0] !== $row[0]) {
+        $row.insertBefore(current);
+      }
+    });
   }
 
   const QUEUES = {
