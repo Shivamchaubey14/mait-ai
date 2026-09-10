@@ -30,6 +30,12 @@ jest.mock('@react-native-async-storage/async-storage', () => {
         store.delete(key);
         return Promise.resolve();
       },
+      // Used by the queue and the offline read cache, both of which clear several keys at
+      // once — the queue and its event-id map, the cache and everything its index names.
+      multiRemove: keys => {
+        keys.forEach(key => store.delete(key));
+        return Promise.resolve();
+      },
       clear: () => {
         store.clear();
         return Promise.resolve();
