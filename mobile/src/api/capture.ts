@@ -1,21 +1,43 @@
 /**
- * The two writes that must survive no signal (SRS §6.9).
+ * The three writes that must survive no signal (SRS §6.9).
  *
- * Both follow the same shape: try the network, and if anything at all goes wrong put the job
- * on the queue instead of showing the Mait an error. The insemination has already happened by
- * this point — refusing to record it because a village has no bars would be the app failing at
- * the one thing it exists to do.
+ * All three follow the same shape: try the network, and if anything at all goes wrong put the
+ * job on the queue instead of showing the Mait an error. The insemination has already happened
+ * by this point — refusing to record it because a village has no bars would be the app failing
+ * at the one thing it exists to do.
  *
  * Everything carries the capture's `client_uuid`, so a job that in fact reached the server
  * before the connection dropped is recognised as a replay rather than repeated.
+ *
+ * **Opening the event is one of them now, and it was the gap that mattered.** The photo and
+ * the completion have always queued; the create did not, and it is the first write in the
+ * flow — so a Mait who reached step 5 with no signal was stopped there, at the moment the
+ * straw was already drawn. The queue had a `createEvent` job kind the whole time and nothing
+ * ever put one on it.
+ *
+ * A capture opened this way has no server id yet, so it carries a *provisional* one: a
+ * negative number, minted here, that the network never sees. `sync.ts` swaps in the real id
+ * the moment the create lands, and `isProvisional` is what every caller checks before it
+ * tries to put an id in a URL.
  */
 
 import type { CapturedPhoto } from '@/features/aiFlow/CapturePhotoScreen';
 import { API_BASE_URL } from '@/config/env';
 
-import { enqueue, pendingCount } from './queue';
+import { idempotencyHeaders, newClientUuid } from './client';
+import { clockTime, enqueue, pendingCount, rememberEventId, rememberServerId } from './queue';
 import type { QueuedLabel } from './queue';
 import { drainQueue } from './sync';
+import type {
+  AadhaarImages,
+  AIEvent,
+  AIEventDraft,
+  Animal,
+  AnimalDraft,
+  NonMember,
+  NonMemberDraft,
+  ProblemDetails,
+} from './types';
 
 export interface CaptureOutcome {
   /** True when the server took it now. */
@@ -31,6 +53,15 @@ export interface CaptureOutcome {
   queued: boolean;
   /** The server's own words when it refused. Only ever set on a refusal. */
   problem?: string;
+  /**
+   * The whole refusal, for a caller that has boxes to put it in.
+   *
+   * `problem` is the sentence; this is the RFC 7807 body it came out of, `errors` map and all
+   * (SRS §9.11). A form that can show "that ear tag belongs to another animal" *under the tag
+   * field* should, and `splitRejection` is what does it — but it needs the map, and a
+   * sentence cannot be turned back into one.
+   */
+  problemBody?: ProblemDetails;
   remaining: number;
 }
 
@@ -42,16 +73,22 @@ export interface CaptureOutcome {
  * do; "could not save" tells them to tap again. Absent or unreadable, the caller falls back to
  * its own sentence rather than showing an empty one.
  */
-function problemDetail(body: string | null): { problem?: string } {
+function problemDetail(body: string | null): { problem?: string; problemBody?: ProblemDetails } {
   try {
-    const parsed = JSON.parse(body ?? '') as { detail?: string };
-    return parsed?.detail ? { problem: parsed.detail } : {};
+    const parsed = JSON.parse(body ?? '') as ProblemDetails;
+    // The body is carried whole even when it has no `detail` — a validation failure often has
+    // only an `errors` map, and that is the half a form can actually put somewhere.
+    return parsed
+      ? { ...(parsed.detail ? { problem: parsed.detail } : {}), problemBody: parsed }
+      : {};
   } catch {
     return {};
   }
 }
 
-async function refusal(response: Response): Promise<{ problem?: string }> {
+async function refusal(
+  response: Response,
+): Promise<{ problem?: string; problemBody?: ProblemDetails }> {
   try {
     return problemDetail(await response.text());
   } catch {
@@ -121,6 +158,326 @@ function putPhoto(
 }
 
 /**
+ * An id for a row the server has not made yet — a capture, or an animal.
+ *
+ * Negative, and that is the whole design: every real row id is positive, so one number tells
+ * any caller whether this thing exists on the server. Nothing negative is ever put in a URL —
+ * `attachPhoto`, `completeEvent` and the payment step all check `isProvisional` first and go
+ * straight to the queue, where the job names the row by its `client_uuid` instead and the
+ * drain fills in the real id once the create has landed.
+ *
+ * Counted down from the clock so two rows made in the same minute cannot collide, and so the
+ * number is stable for as long as the flow holds it.
+ */
+export function provisionalId(): number {
+  return -Date.now();
+}
+
+/** Whether this is a row the server has not seen. */
+export function isProvisional(id: number): boolean {
+  return id < 0;
+}
+
+export interface RegisteredFarmer extends CaptureOutcome {
+  /**
+   * The farmer the rest of the flow works with — the server's, or a provisional one.
+   *
+   * Null only where the server refused, which here is nearly always the Aadhaar belonging to
+   * somebody already on file. That is a fact about who she is, not a network problem, and the
+   * form shows it rather than queuing a registration that can never be accepted.
+   */
+  nonMember: NonMember | null;
+}
+
+/**
+ * Register a farmer, or queue the registration and carry on with a provisional one.
+ *
+ * **This is the one queued write that can cost a farmer money, and the business has said yes
+ * to it deliberately.** Everything else on the queue is a record of something that already
+ * happened; this one is a record the office may still refuse — and by the time it does, the
+ * Mait will have taken cash, because a non-member pays in the yard. The alternative was worse:
+ * a Mait who meets an unregistered farmer in a village with no signal could not serve her at
+ * all, and those are the villages where most of them are.
+ *
+ * Three things keep the risk small, and none of them is optional:
+ *
+ * 1. Her Aadhaar is checked live wherever there is any signal at all, before the money
+ *    (`AddNonMemberScreen`), so the queued case is only ever the genuinely disconnected one.
+ * 2. Her mobile number is checked against the roster on the handset even with no signal, which
+ *    catches the common shape of this mistake — a farmer already on the collection point's
+ *    books.
+ * 3. A refusal is never silent. It lands on the waiting list in the server's own words, and
+ *    everything queued behind her is marked with it, so the office learns of it that day
+ *    rather than from a farmer's complaint months later.
+ *
+ * Her key is her own, not the capture's: she stays on the roster after this insemination is
+ * closed, and a Mait who abandons the capture has still registered her.
+ */
+export async function registerNonMember(
+  draft: Omit<NonMemberDraft, 'client_uuid'>,
+  provisional: Omit<NonMember, 'id' | 'client_uuid'>,
+  accessToken: string | null,
+  /** Both faces of her card, which are queued as a job of their own. */
+  card?: AadhaarImages | null,
+  /** What the waiting list needs in order to name her row. */
+  label?: QueuedLabel,
+): Promise<RegisteredFarmer> {
+  const clientUuid = newClientUuid();
+  const body: NonMemberDraft = { ...draft, client_uuid: clientUuid };
+
+  const queueCard = async (nonMemberId: number | null) => {
+    if (card?.front && card?.back) {
+      await enqueue('attachAadhaar', clientUuid, {
+        nonMemberId,
+        front: card.front,
+        back: card.back,
+      });
+    }
+  };
+
+  const queueIt = async (): Promise<RegisteredFarmer> => {
+    await enqueue('createNonMember', clientUuid, { ...body }, label);
+    await queueCard(null);
+    return {
+      sent: false,
+      queued: true,
+      nonMember: {
+        ...provisional,
+        id: provisionalId(),
+        client_uuid: clientUuid,
+      } as NonMember,
+      remaining: await pendingCount(),
+    };
+  };
+
+  if (!accessToken) {
+    return queueIt();
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/non-members/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...idempotencyHeaders(clientUuid),
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      const nonMember = (await response.json()) as NonMember;
+      await rememberServerId('nonMember', clientUuid, nonMember.id);
+      await queueCard(nonMember.id);
+      // The card is allowed to fail and must not hold the step: she is registered and the
+      // flow needs her, not her photographs. Drained now so on a working connection it goes
+      // immediately rather than waiting for the next tick.
+      const drained = await drainQueue(accessToken);
+      return { sent: true, queued: false, nonMember, remaining: drained.remaining };
+    }
+
+    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+      return {
+        sent: false,
+        queued: false,
+        nonMember: null,
+        remaining: await pendingCount(),
+        ...(await refusal(response)),
+      };
+    }
+  } catch {
+    // Network. Fall through to the queue.
+  }
+
+  return queueIt();
+}
+
+export interface RegisteredAnimal extends CaptureOutcome {
+  /**
+   * The animal to carry into the rest of the step.
+   *
+   * The server's own where it could be reached, and a provisional one otherwise. Null only
+   * where the server refused — an ear tag already registered to a different animal is the
+   * commonest, and it is a fact about the yard that the Mait has to resolve rather than a
+   * network problem to wait out.
+   */
+  animal: Animal | null;
+}
+
+/**
+ * Register an animal, or queue the registration and carry on with a provisional one.
+ *
+ * A farmer whose cow is not on her roster yet is the ordinary case in a young deployment, not
+ * an edge — and it happens in the same villages as everything else. This used to be a live
+ * POST that simply failed there, which stopped the capture two steps before the straw.
+ *
+ * She gets her own `client_uuid`, not the capture's: she outlives it. She stays on the
+ * farmer's roster after this insemination is closed, and a Mait who abandons the capture has
+ * still registered the cow. It also means the server can recognise a replay of *her* — the
+ * key is what stops one dropped response leaving the farmer with two identical rows.
+ *
+ * Her portrait follows on its own job and is allowed to fail exactly as it does online: the
+ * flow needs the animal, not the photograph.
+ */
+export async function registerAnimal(
+  draft: Omit<AnimalDraft, 'client_uuid'>,
+  provisional: Omit<Animal, 'id' | 'client_uuid'>,
+  accessToken: string | null,
+  /** Her portrait, where the Mait took one. */
+  photoUri?: string | null,
+  /** Whose animal she is, so the waiting list can name the row rather than say "Capture". */
+  ownerName?: string,
+): Promise<RegisteredAnimal> {
+  const clientUuid = newClientUuid();
+  const body: AnimalDraft = { ...draft, client_uuid: clientUuid };
+
+  const queueIt = async (): Promise<RegisteredAnimal> => {
+    await enqueue(
+      'createAnimal',
+      clientUuid,
+      { ...body },
+      {
+        farmer: ownerName ?? '',
+        kind: body.member_code ? 'member' : 'nonMember',
+        at: clockTime(),
+        kindOfRow: 'animal',
+      },
+    );
+    if (photoUri) {
+      await enqueue('attachAnimalPhoto', clientUuid, { animalId: null, photoUri });
+    }
+    return {
+      sent: false,
+      queued: true,
+      animal: { ...provisional, id: provisionalId(), client_uuid: clientUuid } as Animal,
+      remaining: await pendingCount(),
+    };
+  };
+
+  if (!accessToken) {
+    return queueIt();
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/animals/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...idempotencyHeaders(clientUuid),
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      const animal = (await response.json()) as Animal;
+      await rememberServerId('animal', clientUuid, animal.id);
+      if (photoUri) {
+        // Queued rather than sent inline, and never blocking the step: it is the same bargain
+        // the online path already struck — she is registered and the Mait can go on; her
+        // portrait follows. Drained straight away, so on a working connection it goes now
+        // rather than waiting for the next tick.
+        await enqueue('attachAnimalPhoto', clientUuid, { animalId: animal.id, photoUri });
+        const drained = await drainQueue(accessToken);
+        return { sent: true, queued: false, animal, remaining: drained.remaining };
+      }
+      return { sent: true, queued: false, animal, remaining: await pendingCount() };
+    }
+
+    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+      return {
+        sent: false,
+        queued: false,
+        animal: null,
+        remaining: await pendingCount(),
+        ...(await refusal(response)),
+      };
+    }
+  } catch {
+    // Network. Fall through to the queue.
+  }
+
+  return queueIt();
+}
+
+export interface CreatedEvent extends CaptureOutcome {
+  /**
+   * The event the rest of the flow works with.
+   *
+   * The server's own on a capture that reached it, and the provisional one otherwise. Null
+   * only where the server refused — there is no capture to carry on with, and the screen says
+   * why rather than moving on.
+   */
+  event: AIEvent | null;
+}
+
+/**
+ * Open the capture, or queue it and carry on with a provisional one.
+ *
+ * This is the step that commits: the straw is drawn and the animal is served, and from here
+ * the flow has something it must not lose. Refusing to go on because a village has no bars
+ * would strand a Mait exactly where the work has already been done — so a create that cannot
+ * reach the server goes on the queue and the flow continues against `provisional`.
+ *
+ * A refusal is different and is passed back as one. `insufficient-stock` means the flask
+ * cannot cover the doses and no amount of signal will change that; queuing it would put a
+ * capture on the waiting list that can never be sent. The screen shows the reason instead.
+ */
+export async function createEvent(
+  draft: AIEventDraft,
+  provisional: AIEvent,
+  accessToken: string | null,
+  /** As on the other two: what the waiting list needs in order to name this capture. */
+  label?: QueuedLabel,
+): Promise<CreatedEvent> {
+  const queueIt = async (): Promise<CreatedEvent> => {
+    await enqueue('createEvent', draft.client_uuid, { ...draft }, label);
+    return { sent: false, queued: true, event: provisional, remaining: await pendingCount() };
+  };
+
+  if (!accessToken) {
+    return queueIt();
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/ai-events/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...idempotencyHeaders(draft.client_uuid),
+      },
+      body: JSON.stringify(draft),
+    });
+
+    if (response.ok) {
+      const event = (await response.json()) as AIEvent;
+      // Remembered even on the path where nothing was queued: a completion that fails later
+      // in this same capture queues a job naming this event, and the drain reads the id from
+      // here rather than from a screen that may be long gone.
+      await rememberEventId(draft.client_uuid, event.id);
+      return { sent: true, queued: false, event, remaining: await pendingCount() };
+    }
+
+    // As on the photo and the completion: a 4xx is the server having considered this and said
+    // no. It will say no again, so it is surfaced rather than queued.
+    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+      return {
+        sent: false,
+        queued: false,
+        event: null,
+        remaining: await pendingCount(),
+        ...(await refusal(response)),
+      };
+    }
+  } catch {
+    // Network. Fall through to the queue.
+  }
+
+  return queueIt();
+}
+
+/**
  * Attach the proof photo, or queue it.
  *
  * The photo stays where the camera wrote it and only its URI is queued — holding image bytes
@@ -160,9 +517,14 @@ export async function attachPhoto(
     gpsSource: photo.gpsSource,
   };
 
-  if (!accessToken) {
+  // No token, or an event the server has never heard of. The second is not a failure to send
+  // — there is nothing to send it *to* yet — so it goes straight to the queue, where the job
+  // names the capture and the drain fills in the id the create comes back with. Queued with
+  // `eventId` left out entirely rather than set to the negative placeholder: a job carrying a
+  // number that means nothing on the server is a job somebody will one day send.
+  if (!accessToken || isProvisional(eventId)) {
     onProgress?.({ stage: 'queueing' });
-    await enqueue('attachPhoto', clientUuid, payload, label);
+    await enqueue('attachPhoto', clientUuid, { ...payload, eventId: null }, label);
     return { sent: false, queued: true, remaining: await pendingCount() };
   }
 
@@ -244,8 +606,15 @@ export async function completeEvent(
 ): Promise<CaptureOutcome> {
   const body = { close_without_stock: withoutStock };
 
-  if (!accessToken) {
-    await enqueue('completeEvent', clientUuid, { eventId, closeWithoutStock: withoutStock }, label);
+  // See `attachPhoto`: a capture the server has not made yet has no id to complete, so this
+  // is queued against the capture and resolved when the create lands.
+  if (!accessToken || isProvisional(eventId)) {
+    await enqueue(
+      'completeEvent',
+      clientUuid,
+      { eventId: isProvisional(eventId) ? null : eventId, closeWithoutStock: withoutStock },
+      label,
+    );
     return { sent: false, queued: true, remaining: await pendingCount() };
   }
 
