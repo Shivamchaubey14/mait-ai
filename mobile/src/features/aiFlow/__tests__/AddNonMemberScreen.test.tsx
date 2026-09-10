@@ -11,6 +11,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import AddNonMemberScreen from '../AddNonMemberScreen';
 import type { MPP } from '@api/types';
+import { clearQueue, readQueue } from '@api/queue';
 import { jsonResponse, renderWithStore } from '@/test-utils';
 
 /**
@@ -69,9 +70,33 @@ function fieldErrorResponse(errors: Record<string, string[]>): Response {
   return response as unknown as Response;
 }
 
-/** The body of the nth fetch, whichever shape RTK Query happened to call it in. */
-async function requestBody(call: number): Promise<Record<string, unknown>> {
-  const [input, init] = (global.fetch as jest.Mock).mock.calls[call];
+/**
+ * The body of the registration itself, whichever shape RTK Query happened to call it in.
+ *
+ * Found by URL rather than by call number. The form asks the server whether the number is
+ * already on file while the Mait is typing, so the registration is no longer the first request
+ * this screen makes — and a test that counted calls would be asserting against a check.
+ *
+ * `/non-members/check/` is excluded explicitly rather than by taking the last call: an upload
+ * follows the create, and "the last one" would be the Aadhaar images.
+ */
+/** Every URL the screen has asked for, in order. */
+function sentTo(pattern: RegExp): string[] {
+  return (global.fetch as jest.Mock).mock.calls
+    .map(([input]) => (typeof input === 'string' ? input : input.url))
+    .filter((url: string) => pattern.test(url));
+}
+
+async function requestBody(): Promise<Record<string, unknown>> {
+  const call = (global.fetch as jest.Mock).mock.calls.find(([input, init]) => {
+    const href = typeof input === 'string' ? input : input.url;
+    const method = init?.method ?? (typeof input === 'string' ? 'GET' : input.method);
+    return href.endsWith('/non-members/') && String(method).toUpperCase() === 'POST';
+  });
+  if (!call) {
+    throw new Error('The registration was never sent.');
+  }
+  const [input, init] = call;
   const raw = init?.body ?? (typeof input === 'string' ? undefined : await input.text());
   return JSON.parse(String(raw));
 }
@@ -96,6 +121,8 @@ function render(overrides: Partial<React.ComponentProps<typeof AddNonMemberScree
   return renderWithStore(
     <AddNonMemberScreen
       mpp={MPP_FIXTURE}
+      accessToken="test-token"
+      online
       onCreated={jest.fn()}
       onCancel={jest.fn()}
       {...overrides}
@@ -114,9 +141,21 @@ function fillForm({
   aadhaar = '123456789012',
   relation = 'husband' as 'father' | 'husband' | '',
   cards = true,
-}: { aadhaar?: string; relation?: 'father' | 'husband' | ''; cards?: boolean } = {}) {
+  herd = true,
+}: {
+  aadhaar?: string;
+  relation?: 'father' | 'husband' | '';
+  cards?: boolean;
+  /** Her animals and her milk, required since they became the only record of either. */
+  herd?: boolean;
+} = {}) {
   fireEvent.changeText(screen.getByTestId('non-member-name'), 'Radha Singh');
   fireEvent.changeText(screen.getByTestId('non-member-mobile'), '9876543210');
+  if (herd) {
+    fireEvent.changeText(screen.getByTestId('non-member-cows'), '2');
+    fireEvent.changeText(screen.getByTestId('non-member-buffaloes'), '0');
+    fireEvent.changeText(screen.getByTestId('non-member-litres'), '8');
+  }
   if (aadhaar) {
     fireEvent.changeText(screen.getByTestId('non-member-aadhaar'), aadhaar);
   }
@@ -131,8 +170,11 @@ function fillForm({
 }
 
 describe('AddNonMemberScreen', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     global.fetch = jest.fn() as jest.Mock;
+    // A registration made with no signal lands on the queue, so each case starts with an
+    // empty one — otherwise the offline tests read each other's work.
+    await clearQueue();
   });
 
   afterEach(() => jest.resetAllMocks());
@@ -190,7 +232,7 @@ describe('AddNonMemberScreen', () => {
     fireEvent.press(screen.getByTestId('non-member-save'));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    expect(await requestBody(0)).toMatchObject({ aadhar_no: '123456789012' });
+    expect(await requestBody()).toMatchObject({ aadhar_no: '123456789012' });
   });
 
   it('says which member the Aadhaar already belongs to', async () => {
@@ -224,7 +266,7 @@ describe('AddNonMemberScreen', () => {
     fireEvent.press(screen.getByTestId('non-member-save'));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    expect(await requestBody(0)).toMatchObject({ consent: true });
+    expect(await requestBody()).toMatchObject({ consent: true });
   });
 
   it('says so when the refusal belongs to no field on the form', async () => {
@@ -244,14 +286,84 @@ describe('AddNonMemberScreen', () => {
   });
 
   it('says so when the server refuses with no field map at all', async () => {
-    // A plain problem detail, or a request that never arrived. Neither may end in silence.
-    (global.fetch as jest.Mock).mockRejectedValue(new TypeError('Network request failed'));
+    // A plain problem detail with nothing this form has a box for. It may not end in silence,
+    // and it may not be queued either: the server looked and said no.
+    (global.fetch as jest.Mock).mockResolvedValue(
+      fieldErrorResponse({ non_field_errors: ['That collection point is not yours.'] }),
+    );
 
     render();
     fillForm();
     fireEvent.press(screen.getByTestId('non-member-save'));
 
     await waitFor(() => expect(screen.getByTestId('non-member-error')).toBeTruthy());
+  });
+
+  describe('registering her with no signal', () => {
+    it('registers her on the handset rather than refusing', async () => {
+      // The business said yes to this. A Mait who meets an unregistered farmer in a village
+      // with no signal can now serve her; her Aadhaar is checked when the queue drains.
+      const onCreated = jest.fn();
+      (global.fetch as jest.Mock).mockRejectedValue(new TypeError('Network request failed'));
+
+      render({ online: false, onCreated });
+      fillForm();
+      fireEvent.press(screen.getByTestId('non-member-save'));
+
+      await waitFor(() => expect(onCreated).toHaveBeenCalled());
+      const [farmer, queued] = onCreated.mock.calls[0];
+      expect(queued).toBe(true);
+      // A provisional id the server has never seen. Nothing may ever put it in a URL.
+      expect(farmer.id).toBeLessThan(0);
+      expect(farmer.client_uuid).toBeTruthy();
+    });
+
+    it('queues her card with her', async () => {
+      // It is the evidence behind the number that was typed, and a village dropping a JPEG
+      // must not be the reason a registration has nothing standing behind it.
+      (global.fetch as jest.Mock).mockRejectedValue(new TypeError('Network request failed'));
+
+      render({ online: false });
+      fillForm();
+      fireEvent.press(screen.getByTestId('non-member-save'));
+
+      await waitFor(async () =>
+        expect((await readQueue()).map(job => job.kind)).toEqual([
+          'createNonMember',
+          'attachAadhaar',
+        ]),
+      );
+    });
+
+    it('says what is about to happen, before the button', async () => {
+      // The next thing on this flow is the Mait asking her for cash, and with no signal her
+      // details cannot be checked against the membership roll until the queue drains. The
+      // person about to ask for money is the person who should know that.
+      render({ online: false });
+
+      expect(screen.getByTestId('non-member-offline')).toHaveTextContent(/membership roll/i);
+    });
+
+    it('still warns about a number already on this phone', async () => {
+      // The check that matters most where the server cannot be reached: her Aadhaar is
+      // validated hours later, after the cash, so catching her by her number now is what
+      // prevents the mistake rather than reporting it.
+      (global.fetch as jest.Mock).mockImplementation(async (input: string | Request) => {
+        const href = typeof input === 'string' ? input : input.url;
+        if (href.includes('/non-members/roster/')) {
+          return jsonResponse([{ name: 'Kavita Devi', mobile_no: '9876543210', kind: 'member' }]);
+        }
+        return Promise.reject(new TypeError('Network request failed'));
+      });
+
+      render({ online: false });
+      fireEvent.changeText(screen.getByTestId('non-member-mobile'), '9876543210');
+
+      const warning = await screen.findByTestId('non-member-mobile-warning');
+      expect(warning).toHaveTextContent(/Kavita Devi/);
+      // Warned, never blocked: one phone per household is ordinary.
+      expect(screen.queryByTestId('non-member-save')).toBeTruthy();
+    });
   });
 
   it('sends whose name it is, so a wife is not filed as a daughter', async () => {
@@ -262,22 +374,161 @@ describe('AddNonMemberScreen', () => {
     fireEvent.press(screen.getByTestId('non-member-save'));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    expect(await requestBody(0)).toMatchObject({ relation: 'father' });
+    expect(await requestBody()).toMatchObject({ relation: 'father' });
   });
 
-  it('sends both faces of the card once she exists', async () => {
-    // Two calls, in order: the registration, then the images against the id it returned.
-    // The card cannot be sent first — there is nothing to attach it to.
+  it('sends both faces of the card against the id she came back with', async () => {
+    // The card cannot go first — there is nothing to attach it to. Found by URL rather than by
+    // call number: the form also asks whether her number is already on file while the Mait is
+    // typing, so the registration is not the first request this screen makes.
     (global.fetch as jest.Mock).mockResolvedValue(jsonResponse({ id: 5 }, 201));
     render();
     fillForm();
 
     fireEvent.press(screen.getByTestId('non-member-save'));
 
-    await waitFor(() => expect((global.fetch as jest.Mock).mock.calls.length).toBe(2));
-    const [input] = (global.fetch as jest.Mock).mock.calls[1];
-    const url = typeof input === 'string' ? input : input.url;
-    expect(url).toContain('/non-members/5/aadhaar/');
+    await waitFor(() => expect(sentTo(/\/aadhaar\/$/)).toHaveLength(1));
+    expect(sentTo(/\/aadhaar\/$/)[0]).toContain('/non-members/5/aadhaar/');
+  });
+
+  describe('catching a farmer who is already on file', () => {
+    const FREE = { available: true, blocking: false, kind: '', detail: '' };
+
+    /**
+     * The server's answers to "is this already somebody's", one per field.
+     *
+     * Routed by which field the request asked about, not answered with one body for both. The
+     * screen asks two questions with two different consequences — the Aadhaar stops the form,
+     * the mobile only warns — and a mock that gave the same answer to both would make it
+     * impossible to tell which one a test had actually proved.
+     */
+    function answering({
+      aadhaar = FREE,
+      mobile = FREE,
+    }: {
+      aadhaar?: Record<string, unknown>;
+      mobile?: Record<string, unknown>;
+    }) {
+      (global.fetch as jest.Mock).mockImplementation(
+        async (input: string | Request, init?: RequestInit) => {
+          const href = typeof input === 'string' ? input : input.url;
+          // The books this collection point keeps, which the form reads to warn about a
+          // duplicate with no signal. Empty here: these cases are about the server's answer.
+          if (href.includes('/non-members/roster/')) {
+            return jsonResponse([]);
+          }
+          if (!href.endsWith('/non-members/check/')) {
+            return jsonResponse({ id: 5, name: 'Radha Singh' }, 201);
+          }
+          const raw = init?.body ?? (typeof input === 'string' ? '{}' : await input.text());
+          const asked = JSON.parse(String(raw)) as { aadhar_no?: string };
+          return jsonResponse(asked.aadhar_no ? aadhaar : mobile);
+        },
+      );
+    }
+
+    it('says whose Aadhaar it is, before the farmer is asked for money', async () => {
+      // The whole point of checking as it is typed rather than at Save: by the time a Mait
+      // reaches the button they have already told her she is being registered as a
+      // non-member, and a non-member pays cash in the yard.
+      answering({
+        aadhaar: {
+          available: false,
+          blocking: true,
+          kind: 'member',
+          detail: 'Kavita Devi is already a member at Barsana MPP (0906167700010001).',
+        },
+      });
+      render();
+
+      fireEvent.changeText(screen.getByTestId('non-member-aadhaar'), '123456789012');
+
+      expect(await screen.findByText(/Kavita Devi is already a member/)).toBeTruthy();
+    });
+
+    it('will not let the registration go on', async () => {
+      answering({
+        aadhaar: {
+          available: false,
+          blocking: true,
+          kind: 'member',
+          detail: 'Kavita Devi is already a member at Barsana MPP.',
+        },
+      });
+      render();
+      fillForm();
+
+      // Waited for rather than asserted straight after the text appears: the mobile check and
+      // the Aadhaar check are two requests, and the one that renders first is not necessarily
+      // the one this case is about.
+      await waitFor(() => expect(screen.getByTestId('non-member-save')).toBeDisabled());
+    });
+
+    it('lets go the moment the number is corrected', async () => {
+      // A warning that outlived the number it was about would be worse than none: the Mait
+      // fixes a mistyped digit and the form keeps refusing a farmer who was never on file.
+      answering({
+        aadhaar: {
+          available: false,
+          blocking: true,
+          kind: 'member',
+          detail: 'Kavita Devi is already a member at Barsana MPP.',
+        },
+      });
+      render();
+      fillForm();
+      await waitFor(() => expect(screen.getByTestId('non-member-save')).toBeDisabled());
+
+      answering({});
+      fireEvent.changeText(screen.getByTestId('non-member-aadhaar'), '123456789013');
+
+      await waitFor(() => expect(screen.getByTestId('non-member-save')).toBeEnabled());
+    });
+
+    it('warns about a shared number without refusing it', async () => {
+      // One phone per household is ordinary, and a mother and a daughter share a handset. This
+      // is a question put to the Mait — go and look, or carry on because it really is a
+      // different woman — not an answer given to them.
+      answering({
+        mobile: {
+          available: false,
+          blocking: false,
+          kind: 'member',
+          detail: 'This number is on file for Kavita Devi, a member at Barsana MPP.',
+        },
+      });
+      render();
+      fillForm();
+
+      expect(await screen.findByTestId('non-member-mobile-warning')).toBeTruthy();
+      // Warned, and still able to go on.
+      expect(screen.getByTestId('non-member-save')).toBeEnabled();
+    });
+
+    it('says nothing at all when there is no signal to ask over', async () => {
+      // The create is still the authority and still refuses. A form that announced "could not
+      // check" on every keystroke in a village would teach a Mait to ignore the one message
+      // that matters.
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('Network request failed'));
+      render();
+
+      fireEvent.changeText(screen.getByTestId('non-member-aadhaar'), '123456789012');
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      expect(screen.queryByTestId('non-member-mobile-warning')).toBeNull();
+    });
+
+    it('does not block on an answer that never said so', async () => {
+      // A `200` from something that is not this endpoint — a captive portal, a proxy page, a
+      // body that lost a field. This warning stops a registration and names a farmer, so only
+      // an answer that actually said "no" may raise it.
+      answering({ aadhaar: { something: 'else' }, mobile: { something: 'else' } });
+      render();
+      fillForm();
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      expect(screen.getByTestId('non-member-save')).toBeEnabled();
+    });
   });
 
   describe('her herd', () => {
@@ -292,16 +543,51 @@ describe('AddNonMemberScreen', () => {
       fireEvent.press(screen.getByTestId('non-member-save'));
 
       await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-      expect(await requestBody(0)).toMatchObject({
+      expect(await requestBody()).toMatchObject({
         cattle_cows: 3,
         cattle_buffaloes: 2,
         daily_yield_litres: '12.5',
       });
     });
 
-    it('leaves them out entirely when she was not asked', async () => {
-      // A blank is not zero. Sending 0 would record a household with no cattle and no milk,
-      // which is a different answer and the one that drags a district average down.
+    it('will not save while a box is unanswered', () => {
+      // This is the only record the dairy will ever hold of the herd behind a farmer who is
+      // not on the membership roll. Left optional it was left blank.
+      render();
+      fillForm({ herd: false });
+
+      expect(screen.getByTestId('non-member-save')).toBeDisabled();
+    });
+
+    it('takes a zero, because a zero is an answer', () => {
+      // A household that keeps no buffaloes and is milking nothing today is an ordinary
+      // record. What is refused is silence, not nought.
+      render();
+      fillForm({ herd: false });
+
+      fireEvent.changeText(screen.getByTestId('non-member-cows'), '1');
+      fireEvent.changeText(screen.getByTestId('non-member-buffaloes'), '0');
+      fireEvent.changeText(screen.getByTestId('non-member-litres'), '0');
+
+      expect(screen.getByTestId('non-member-save')).toBeEnabled();
+    });
+
+    it('will not take a herd of nothing at all', () => {
+      // She is being registered so her animal can be inseminated. Two zeroes is not an
+      // answer, it is the fastest way past two boxes.
+      render();
+      fillForm({ herd: false });
+
+      fireEvent.changeText(screen.getByTestId('non-member-cows'), '0');
+      fireEvent.changeText(screen.getByTestId('non-member-buffaloes'), '0');
+      fireEvent.changeText(screen.getByTestId('non-member-litres'), '0');
+
+      expect(screen.getByTestId('non-member-save')).toBeDisabled();
+    });
+
+    it('sends the zero rather than dropping it', async () => {
+      // A blank must never reach the server as 0 — but an answered zero must, or the record
+      // says she was never asked.
       (global.fetch as jest.Mock).mockResolvedValue(jsonResponse({ id: 5 }, 201));
       render();
       fillForm();
@@ -309,18 +595,11 @@ describe('AddNonMemberScreen', () => {
       fireEvent.press(screen.getByTestId('non-member-save'));
 
       await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-      const body = await requestBody(0);
-      expect(body).not.toHaveProperty('cattle_cows');
-      expect(body).not.toHaveProperty('daily_yield_litres');
-    });
-
-    it('does not block the form', () => {
-      // Optional on a form that already runs to eight fields. A required one is the field a
-      // Mait guesses at to get past it, and a guess is worse than a blank.
-      render();
-      fillForm();
-
-      expect(screen.getByTestId('non-member-save')).toBeEnabled();
+      expect(await requestBody()).toMatchObject({
+        cattle_cows: 2,
+        cattle_buffaloes: 0,
+        daily_yield_litres: '8',
+      });
     });
 
     it('keeps a second decimal point out of the litres box', () => {
