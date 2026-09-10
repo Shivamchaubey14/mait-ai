@@ -94,6 +94,15 @@ export type Relation = 'father' | 'husband';
 
 export interface NonMember {
   id: number;
+  /**
+   * The key the handset minted when she was registered, where one was.
+   *
+   * Absent on every farmer the back office created, and on rows that predate the field. What
+   * it is for is the village: a farmer registered with no signal is carried through the
+   * capture on a provisional id, and this is how the queue knows which local registration the
+   * capture is waiting on (ADR 0003).
+   */
+  client_uuid?: string;
   name: string;
   father_husband_name: string;
   relation: Relation | '';
@@ -123,7 +132,32 @@ export interface FarmerOtpSent {
   expires_in_seconds: number;
 }
 
+/**
+ * Whether a farmer is already on file, asked while the Mait is still typing.
+ *
+ * `blocking` is the whole point of the shape. An Aadhaar match **is** the same person and the
+ * form must not go on. A mobile match is a question — a mother and a daughter share a handset,
+ * and one phone per household is ordinary — so it is put to the Mait rather than decided for
+ * them. Two different facts, two different consequences, one response.
+ */
+export interface IdentityCheck {
+  available: boolean;
+  blocking: boolean;
+  /** `member`, `non_member`, or empty when nobody was found. */
+  kind: 'member' | 'non_member' | '';
+  /** Named and placed, so the Mait can go and find her rather than guess. Empty when free. */
+  detail: string;
+}
+
 export interface NonMemberDraft {
+  /**
+   * Minted on the handset when the Mait fills the form, before any network attempt.
+   *
+   * What makes a retry after a dropped response a no-op rather than a second farmer who can
+   * be asked for cash again. Optional on the wire — the back office registers non-members too
+   * — and always sent by the app.
+   */
+  client_uuid?: string;
   name: string;
   father_husband_name?: string;
   /** Which of the two that name is — a Mait standing in front of her knows. */
@@ -140,6 +174,20 @@ export interface NonMemberDraft {
    * record, and the record is what SRS §7 asks for.
    */
   consent?: boolean;
+}
+
+/**
+ * One farmer on the handset's copy of a collection point's books.
+ *
+ * A name, a number and which of the two she is. It is what lets the registration form warn
+ * about a duplicate **with no signal**, which is when a farmer is most likely to be registered
+ * a second time — and it deliberately carries no Aadhaar, because twelve digits on a handset
+ * is a set anybody could brute-force whatever it was hashed with.
+ */
+export interface FarmerRosterRow {
+  name: string;
+  mobile_no: string;
+  kind: 'member' | 'non_member';
 }
 
 /** Both faces of the card, or whichever of them still needs sending after a failed try. */
@@ -209,6 +257,15 @@ export interface BreedConfig {
 
 export interface Animal {
   id: number;
+  /**
+   * The key the handset minted when this animal was registered, where one was.
+   *
+   * Absent on every animal registered from the portal, and on every row that predates the
+   * field. What it is for is the yard: a cow registered with no signal is carried through the
+   * capture on a provisional id, and this is how the queue knows which local registration the
+   * capture is waiting on (ADR 0003).
+   */
+  client_uuid?: string;
   owner_type: 'member' | 'non_member';
   member: number | null;
   non_member: number | null;
@@ -226,6 +283,14 @@ export interface Animal {
 }
 
 export interface AnimalDraft {
+  /**
+   * Minted on the handset when the Mait fills the form, before any network attempt.
+   *
+   * What makes a retry after a dropped response a no-op rather than a second identical cow on
+   * the farmer's roster. Optional on the wire — the portal registers animals too and has no
+   * handset to mint one — and always sent by the app.
+   */
+  client_uuid?: string;
   member_code?: string;
   non_member_id?: number;
   animal_type: AnimalTypeCode;
@@ -456,6 +521,22 @@ export interface AIEventTimelineEntry {
  */
 export interface AIEventDraft {
   client_uuid: string;
+  /**
+   * The farmer's local key, where she was registered offline and has no row id yet.
+   *
+   * `non_member_id` then carries a provisional number the server has never seen, and this is
+   * what the queue reads the real one from once her registration lands. Handset bookkeeping:
+   * `api/sync` swaps the two and drops this before sending.
+   */
+  non_member_client_uuid?: string;
+  /**
+   * The handset's own bookkeeping, and the one field here the server never sees.
+   *
+   * Set only where the animal was registered offline moments earlier and has no row id yet:
+   * `animal_id` then carries a provisional number and this says which queued registration to
+   * read the real one from. `api/sync` swaps the two and drops this before sending.
+   */
+  animal_client_uuid?: string;
   mpp_code: string;
   member_code?: string;
   non_member_id?: number;

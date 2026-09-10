@@ -15,14 +15,14 @@ import type {
   AIEvent,
   AIEventDraft,
   AIEventTimelineEntry,
-  Animal,
-  AnimalDraft,
   AnimalTypeCode,
   BreedConfig,
   CurrentUser,
   FarmerKey,
   Payment,
   FarmerOtpSent,
+  FarmerRosterRow,
+  IdentityCheck,
   InventorySummary,
   Member,
   MemberDetail,
@@ -111,6 +111,27 @@ export const maitaiApi = api.injectEndpoints({
       providesTags: ['Member'],
     }),
 
+    /**
+     * Is she already on file? — asked while the number is still going in.
+     *
+     * A mutation rather than a query because it must never be served from a cache: the answer
+     * is about a number the Mait is typing *now*, and a stale "she is free" on the one screen
+     * that ends with a farmer being asked for cash is the worst possible thing to cache.
+     *
+     * It answers with the same rule the create enforces, from one implementation server-side,
+     * so the form cannot promise something the create then refuses.
+     */
+    checkFarmerIdentity: builder.mutation<IdentityCheck, { aadharNo?: string; mobileNo?: string }>({
+      query: ({ aadharNo, mobileNo }) => ({
+        url: '/non-members/check/',
+        method: 'POST',
+        body: {
+          ...(aadharNo ? { aadhar_no: aadharNo } : {}),
+          ...(mobileNo ? { mobile_no: mobileNo } : {}),
+        },
+      }),
+    }),
+
     createNonMember: builder.mutation<NonMember, NonMemberDraft>({
       query: body => ({ url: '/non-members/', method: 'POST', body }),
       invalidatesTags: ['Member'],
@@ -138,6 +159,19 @@ export const maitaiApi = api.injectEndpoints({
           ...(search ? { search } : {}),
         },
       }),
+      providesTags: ['Member'],
+    }),
+
+    /**
+     * The collection point's books, thin enough to keep on the handset.
+     *
+     * Fetched when the registration form opens and answered from the offline cache thereafter,
+     * so a Mait registering a farmer in a village with no signal is still warned when her
+     * number is already on file. The Aadhaar check cannot work this way and never will; this
+     * is the half that can travel.
+     */
+    getFarmerRoster: builder.query<FarmerRosterRow[], string>({
+      query: mppCode => ({ url: '/non-members/roster/', params: { mpp__mpp_code: mppCode } }),
       providesTags: ['Member'],
     }),
 
@@ -257,28 +291,13 @@ export const maitaiApi = api.injectEndpoints({
       invalidatesTags: ['Payment', 'AIEvent'],
     }),
 
-    createAnimal: builder.mutation<Animal, AnimalDraft>({
-      query: body => ({ url: '/animals/', method: 'POST', body }),
-      // The farmer's animal list hangs off their detail record, so that is what goes stale.
-      invalidatesTags: ['Animal', 'Member'],
-    }),
-
-    /**
-     * Her portrait, sent after she has been registered.
-     *
-     * A second call rather than part of the first: the animal has to exist even if the upload
-     * dies on a village connection, because the capture flow is already standing on her id.
-     * A Mait who loses the photo has an animal with no picture; one who loses the animal has
-     * to start the step again with the farmer waiting.
+    /*
+     * Registering an animal and sending her portrait used to live here, as two mutations.
+     * They moved to `api/capture` alongside the writes of the capture flow, because a cow is
+     * registered in a yard with no signal as often as with one and an RTK Query mutation has
+     * nowhere to put a request the network cannot carry. The endpoints they called are
+     * unchanged; what changed is that a failure now queues instead of stopping the step.
      */
-    uploadAnimalPhoto: builder.mutation<Animal, { id: number; uri: string }>({
-      query: ({ id, uri }) => {
-        const form = new FormData();
-        form.append('photo', { uri, name: 'animal.jpg', type: 'image/jpeg' } as unknown as Blob);
-        return { url: `/animals/${id}/photo/`, method: 'PATCH', body: form };
-      },
-      invalidatesTags: ['Animal', 'Member'],
-    }),
 
     // ---- inventory -----------------------------------------------------------------
     /** The catalogue behind the stock request form. Cached — it changes rarely. */
@@ -487,16 +506,16 @@ export const {
   useListMppsQuery,
   useListMembersQuery,
   useGetMemberQuery,
+  useCheckFarmerIdentityMutation,
+  useGetFarmerRosterQuery,
   useCreateNonMemberMutation,
   useListNonMembersQuery,
   useUploadNonMemberAadhaarMutation,
   useGetNonMemberQuery,
   useListBreedsQuery,
-  useCreateAnimalMutation,
   useInitiatePaymentMutation,
   useVerifyPaymentOtpMutation,
   useAttachPaymentProofMutation,
-  useUploadAnimalPhotoMutation,
   useSendFarmerOtpMutation,
   useVerifyFarmerOtpMutation,
   useGetInventorySummaryQuery,
