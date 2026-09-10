@@ -21,9 +21,22 @@
  * the screen suggests exactly that and no more: a rule of thumb is what a stock count must not
  * be built on, and a Mait who used one sheath for two doses has to be able to say so.
  *
- * This is therefore the step that commits. The event is created here, which is why the tab bar
- * disappears after it and not before: from here on there is a record on the server that walking
- * away would strand.
+ * **The nitrogen is not one of them.** It is not spent by an insemination — it boils off the
+ * flask by the day and is topped up at the depot — so asking a visit to account for it asked
+ * for a figure nobody in a yard can know. See `NOT_CONSUMED_PER_VISIT`.
+ *
+ * This is therefore the step that commits. The event is opened here, which is why the tab bar
+ * disappears after it and not before: from here on there is a record that walking away would
+ * strand.
+ *
+ * **And it opens with or without a network.** This used to be the wall a Mait hit in a village:
+ * the create was a live POST, a failure showed "could not save", and the flow stopped at the
+ * exact moment the straw had already been drawn. It goes through `api/capture` now, the way
+ * the photo and the completion always have — the server gets it if it can be reached, and the
+ * queue gets it otherwise. What the Mait sees is the next step either way.
+ *
+ * A refusal is still a refusal. The flask not covering the doses is the server having looked
+ * and said no, and no amount of signal changes it, so that is shown here rather than queued.
  *
  * Every configured breed for this species is listed, including the ones the flask is empty of.
  * They are shown blocked with the reason on the row, never hidden: a Mait who cannot find
@@ -36,21 +49,33 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
-import { ErrorCode, errorCodeOf } from '@api/client';
-import {
-  useCreateAiEventMutation,
-  useGetInventorySummaryQuery,
-  useListBreedsQuery,
-} from '@api/endpoints';
-import type { AIEvent, AnimalTypeCode, BreedConfig, SuppliesLot } from '@api/types';
+import { createEvent, provisionalId } from '@api/capture';
+import { useGetInventorySummaryQuery, useListBreedsQuery } from '@api/endpoints';
+import type { QueuedLabel } from '@api/queue';
+import type { AIEvent, AIEventDraft, AnimalTypeCode, BreedConfig, SuppliesLot } from '@api/types';
 import { LOW_STRAWS_PER_BREED } from '@/config/env';
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
 import { FlowNotice, FlowScreen, FlowSpacer, OptionCard } from './components';
 
 /** Below this a consumable is called low, by catalogue code — the units are not comparable. */
-const LOW_CONSUMABLE: Record<string, number> = { LN2: 3, SHEATH: 10, GLOVES: 5 };
+const LOW_CONSUMABLE: Record<string, number> = { SHEATH: 10, GLOVES: 5 };
 const LOW_CONSUMABLE_FALLBACK = 5;
+
+/**
+ * Supplies this step does not ask about, by catalogue code.
+ *
+ * Liquid nitrogen is the only one, and it is here because it is not consumed by an
+ * insemination. It boils off the flask by the day whether a straw is drawn or not, and it is
+ * topped up against the flask at the depot rather than counted out per visit. Listed here it
+ * invited a number nobody could give honestly — a Mait cannot see how many litres a visit
+ * cost — and every guess entered against it moved a stock figure the dairy actually reorders
+ * on.
+ *
+ * It stays on the Inventory screen, where a Mait can see what is left in the flask and raise
+ * an indent for more. This is only about what one visit is asked to account for.
+ */
+const NOT_CONSUMED_PER_VISIT = ['LN2'];
 
 /** The most doses one visit can claim. Beyond this it is a typo, not an insemination. */
 const MAX_DOSES = 5;
@@ -76,8 +101,46 @@ interface Props {
     memberCode?: string;
     nonMemberId?: number;
     animalId: number;
+    /**
+     * Her local key, where the animal was registered offline and has no row id yet.
+     *
+     * `animalId` then carries a provisional number the server has never seen. This is what the
+     * queue reads the real one from once her registration lands — see `resolveAnimalId` in
+     * `api/sync`. Absent for every animal that came off the farmer's roster.
+     */
+    animalClientUuid?: string;
+    /**
+     * The farmer's local key, where she too was registered offline moments earlier.
+     *
+     * The same arrangement as `animalClientUuid`, one row up: in a village with no signal a
+     * Mait can register the farmer, register her cow and inseminate it without the server
+     * having seen any of the three.
+     */
+    nonMemberClientUuid?: string;
   };
-  onCreated: (event: AIEvent) => void;
+  /**
+   * The Mait's token, or null while the session is being restored.
+   *
+   * Passed in rather than read from the store here, the way every other write in the flow
+   * gets it: the shell owns the session and the screens are given what they need. Null goes
+   * straight to the queue, which is correct — there is nobody to send as.
+   */
+  accessToken: string | null;
+  /**
+   * What the waiting list needs to name this capture if it ends up queued.
+   *
+   * `queueLabel` rather than `label`, because this screen already has a `label()` of its own
+   * for putting a breed's name in the right language.
+   */
+  queueLabel: QueuedLabel;
+  /**
+   * Where the flow goes next, with the event it will carry.
+   *
+   * `queued` is true when nothing reached the server: the capture is on the handset and the
+   * event is provisional. The flow is the same either way — this is so the screens after it
+   * can say what is true rather than implying the record is filed.
+   */
+  onCreated: (event: AIEvent, queued: boolean) => void;
   onBack: () => void;
 }
 
@@ -149,6 +212,8 @@ export default function SelectBreedScreen({
   animalType,
   suggestedBreed,
   capture,
+  accessToken,
+  queueLabel,
   onCreated,
   onBack,
 }: Props): React.JSX.Element {
@@ -160,9 +225,15 @@ export default function SelectBreedScreen({
   const [used, setUsed] = useState<Record<string, number>>({});
   const [suggestionApplied, setSuggestionApplied] = useState(false);
   const [sheathsSuggested, setSheathsSuggested] = useState(false);
-  const [rejection, setRejection] = useState<'out_of_stock' | 'generic' | null>(null);
-
-  const [createAiEvent, { isLoading: creating }] = useCreateAiEventMutation();
+  /**
+   * Why the server refused, in its own words, or null.
+   *
+   * The server's sentence rather than one of two of ours. It knows whether the flask is short,
+   * the animal has moved farmer or the breed is unpriced, and it says so in a line a Mait can
+   * act on — which the old pair of `out_of_stock` / `generic` could not.
+   */
+  const [rejection, setRejection] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const { data: breeds = [], isLoading: breedsLoading } = useListBreedsQuery(animalType);
   const {
@@ -190,7 +261,10 @@ export default function SelectBreedScreen({
     return counted.sort((a, b) => b.straws - a.straws);
   }, [breeds, stock]);
 
-  const supplies: SuppliesLot[] = useMemo(() => stock?.consumables ?? [], [stock]);
+  const supplies: SuppliesLot[] = useMemo(
+    () => (stock?.consumables ?? []).filter(item => !NOT_CONSUMED_PER_VISIT.includes(item.code)),
+    [stock],
+  );
 
   const carrying = rows.some(row => row.straws > 0);
   const chosen = rows.find(row => row.breed.code === code && row.straws > 0);
@@ -250,34 +324,110 @@ export default function SelectBreedScreen({
     });
 
   /**
+   * What this capture would cost, worked out from the breed the Mait picked.
+   *
+   * The server decides the real figure and sends it back on the event; this is what stands in
+   * its place on a capture the server has not seen yet, so the payment screens after this one
+   * can say what a non-member owes in a village with no signal. Same source the server uses —
+   * the rate on the breed — and null where nobody has priced it, which the screens already
+   * render as "chargeable, no figure" rather than as free.
+   */
+  const priceOf = (breed: BreedConfig): string | null =>
+    (capture.memberCode ? breed.rate : breed.non_member_rate) ?? null;
+
+  /**
+   * The capture as it stands on the handset, before any server has seen it.
+   *
+   * Only the fields the rest of the flow actually reads are meaningful — the id, the amount,
+   * and the answers the Mait gave. The rest carry the shape of an event so the screens after
+   * this one need no second code path for a capture made offline.
+   */
+  const provisional = (breed: BreedConfig): AIEvent => ({
+    id: provisionalId(),
+    client_uuid: capture.clientUuid,
+    status: 'straw_verified',
+    status_display: '',
+    mpp: 0,
+    mpp_code: capture.mppCode,
+    mpp_name: '',
+    owner_type: capture.memberCode ? 'member' : 'non_member',
+    member: null,
+    member_code: capture.memberCode ?? '',
+    non_member: capture.nonMemberId ?? null,
+    owner_name: queueLabel.farmer,
+    animal: capture.animalId,
+    animal_type: animalType,
+    breed: suggestedBreed ?? '',
+    ear_tag_no: null,
+    semen_breed: breed.code,
+    doses,
+    consumables: [],
+    amount_due: priceOf(breed),
+    payment: null,
+    straw_unique_no: '',
+    stock_deducted: false,
+    ai_photo_url: '',
+    photo_source: 'camera',
+    gps_lat: null,
+    gps_lng: null,
+    gps_source: 'device',
+    performed_at: null,
+    completed_at: null,
+    cancelled_reason: '',
+    created_at: new Date().toISOString(),
+  });
+
+  /**
    * Open the event against the straws and the supplies this visit used.
    *
    * The server holds them from the Mait's stock and deducts nothing yet — an abandoned capture
    * costs them nothing, because no insemination happened. It can still refuse: the screen's
    * counts are a moment old, and another event may have taken the last one.
+   *
+   * With no network it goes on the queue instead and the flow carries on against a provisional
+   * event. That is the whole difference offline makes here, and it is deliberately invisible
+   * to the Mait: the straw is drawn and the animal is served either way.
    */
   const commit = async () => {
     if (!chosen) {
       return;
     }
     setRejection(null);
-    try {
-      const event = await createAiEvent({
-        client_uuid: capture.clientUuid,
-        mpp_code: capture.mppCode,
-        ...(capture.memberCode
-          ? { member_code: capture.memberCode }
-          : { non_member_id: capture.nonMemberId }),
-        animal_id: capture.animalId,
-        semen_breed: chosen.breed.code,
-        doses,
-        consumables: Object.entries(used).map(([itemCode, qty]) => ({ code: itemCode, qty })),
-      }).unwrap();
-      onCreated(event);
-    } catch (err) {
-      setRejection(errorCodeOf(err) === ErrorCode.INSUFFICIENT_STOCK ? 'out_of_stock' : 'generic');
-      refetch();
+    setCreating(true);
+
+    const draft: AIEventDraft = {
+      client_uuid: capture.clientUuid,
+      mpp_code: capture.mppCode,
+      ...(capture.memberCode
+        ? { member_code: capture.memberCode }
+        : { non_member_id: capture.nonMemberId }),
+      animal_id: capture.animalId,
+      // Handset bookkeeping, stripped before the draft is sent. See the type.
+      ...(capture.animalClientUuid ? { animal_client_uuid: capture.animalClientUuid } : {}),
+      ...(capture.nonMemberClientUuid
+        ? { non_member_client_uuid: capture.nonMemberClientUuid }
+        : {}),
+      semen_breed: chosen.breed.code,
+      doses,
+      consumables: Object.entries(used).map(([itemCode, qty]) => ({ code: itemCode, qty })),
+    };
+
+    const outcome = await createEvent(draft, provisional(chosen.breed), accessToken, {
+      ...queueLabel,
+      amount: priceOf(chosen.breed),
+    });
+    setCreating(false);
+
+    if (outcome.event) {
+      onCreated(outcome.event, outcome.queued);
+      return;
     }
+
+    // Refused. The commonest by far is the flask having been emptied of this breed by another
+    // capture since the screen was drawn, and the server names it — so the counts are re-read
+    // behind the message, and the Mait picks again from what is actually there.
+    setRejection(outcome.problem ?? t('errors.generic'));
+    refetch();
   };
 
   const tabs: { key: Tab; label: string; badge: number }[] = [
@@ -345,19 +495,15 @@ export default function SelectBreedScreen({
         </View>
       }
     >
-      {rejection === 'out_of_stock' && (
+      {/* The server's own sentence, which is the only one that can say *why*. It knows the
+          flask is short of this breed and the app does not — the counts on this screen are a
+          moment old by the time Continue is tapped. Nothing reaches here that a retry would
+          fix: no signal at all is queued rather than refused. */}
+      {!!rejection && (
         <FlowNotice
           tone="error"
-          title={t('aiFlow.strawNotInStockTitle')}
+          title={rejection}
           body={t('aiFlow.raiseIndentSoon')}
-          testID="breed-rejected"
-        />
-      )}
-      {rejection === 'generic' && (
-        <FlowNotice
-          tone="error"
-          title={t('errors.generic')}
-          body={t('aiFlow.tryAgainInAMoment')}
           testID="breed-rejected"
         />
       )}

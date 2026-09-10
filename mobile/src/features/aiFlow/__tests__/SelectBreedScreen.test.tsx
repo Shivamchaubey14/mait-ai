@@ -83,6 +83,9 @@ const CAPTURE = {
   animalId: 7,
 };
 
+/** What the waiting list would name this capture, were it to end up queued. */
+const LABEL = { farmer: 'Kavita Devi', kind: 'member' as const, at: '9:20' };
+
 describe('SelectBreedScreen', () => {
   const onCreated = jest.fn();
   const onBack = jest.fn();
@@ -99,6 +102,8 @@ describe('SelectBreedScreen', () => {
         animalType="COW"
         suggestedBreed={suggestedBreed}
         capture={CAPTURE}
+        accessToken="test-token"
+        queueLabel={LABEL}
         onCreated={onCreated}
         onBack={onBack}
       />,
@@ -256,6 +261,30 @@ describe('SelectBreedScreen', () => {
           { code: 'GLOVES', qty: 1 },
         ]),
       ),
+    );
+  });
+
+  it('never asks a visit to account for the nitrogen', async () => {
+    // It is not spent by an insemination — it boils off the flask by the day and is topped up
+    // at the depot. Listed here it asked for a figure nobody in a yard can know, and every
+    // guess moved a stock count the dairy reorders on. It stays on the Inventory screen.
+    mockApi({ HF_CROSS: 18 }, [
+      supply('LN2', 'Liquid nitrogen', 12),
+      supply('SHEATH', 'AI sheaths', 46),
+    ]);
+    renderScreen();
+
+    await screen.findByText('Cow · 18 with you');
+    fireEvent.press(screen.getByText('HF Cross'));
+    fireEvent.press(screen.getByTestId('use-tab-consumables'));
+
+    await waitFor(() => screen.getByTestId('supply-SHEATH-value'));
+    expect(screen.queryByText('Liquid nitrogen')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('breed-continue'));
+
+    await waitFor(async () =>
+      expect((await createdBody()).consumables).toEqual([{ code: 'SHEATH', qty: 1 }]),
     );
   });
 
