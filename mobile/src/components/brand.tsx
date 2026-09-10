@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { colors, fonts, green, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
@@ -15,6 +15,31 @@ import { colors, fonts, green, MIN_TOUCH_TARGET, radius, spacing, typography } f
 // --------------------------------------------------------------------------------------
 // Brand mark
 // --------------------------------------------------------------------------------------
+/**
+ * The logo itself — the circular badge, drawn rather than described.
+ *
+ * The same artwork the launcher icon is cut from (`assets/logo-mark.png`), so the thing a Mait
+ * taps on their home screen and the thing that greets them inside the app are recognisably one
+ * mark. Everything around it stays as it was: the wordmark below it is still type, because a
+ * badge at 28pt cannot be read and a name has to be.
+ *
+ * Transparent outside the circle, so it sits on Ink without a white box around it — which is
+ * the whole reason it is cut to a circle rather than used as the square it was supplied as.
+ */
+export function BrandLogo({ size = 96 }: { size?: number }) {
+  return (
+    <Image
+      source={require('../../assets/logo-mark.png')}
+      style={{ width: size, height: size }}
+      resizeMode="contain"
+      // Named for a screen reader, which cannot see it. The wordmark beside it carries the
+      // same words, so this is deliberately not announced twice.
+      accessible={false}
+      testID="brand-logo"
+    />
+  );
+}
+
 /**
  * The white "MAIT AI / FIELD CAPTURE" pill.
  *

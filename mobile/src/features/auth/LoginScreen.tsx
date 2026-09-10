@@ -32,7 +32,7 @@ import {
   useSendLoginOtpMutation,
   useVerifyLoginOtpMutation,
 } from '@api/endpoints';
-import { BrandWordmark, LanguageToggle } from '@/components/brand';
+import { BrandLogo, BrandWordmark, LanguageToggle } from '@/components/brand';
 import Problem, { useOnline } from '@/components/problem';
 import { Toast } from '@/components/toast';
 import { OTP_EXPIRY_SECONDS, OTP_LOCK_MINUTES, OTP_MAX_ATTEMPTS } from '@/config/env';
@@ -64,7 +64,12 @@ function Hero(): React.JSX.Element {
     // the signal bars and the battery.
     <View style={[styles.hero, { paddingTop: insets.top + spacing[3] }]}>
       <View style={styles.heroTop}>
-        <BrandWordmark size="small" />
+        {/* Small and beside the name here, rather than over it: this screen's job is the
+            question below, and a badge big enough to admire would push it off the fold. */}
+        <View style={styles.heroBrand}>
+          <BrandLogo size={30} />
+          <BrandWordmark size="small" />
+        </View>
         <LanguageToggle variant="inline" />
       </View>
 
@@ -428,6 +433,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing[5],
   },
+  // The mark and the name read as one thing, so they travel as one against the toggle on the
+  // far side rather than as two items sharing a row with it.
+  heroBrand: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   heroTitle: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
   heroSubtitle: {
     ...typography.body,

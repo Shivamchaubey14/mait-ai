@@ -20,7 +20,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { BrandWordmark } from '@/components/brand';
+import { BrandLogo, BrandWordmark } from '@/components/brand';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
 interface Props {
@@ -41,6 +41,11 @@ export default function SplashScreen({ progress = 0.35 }: Props): React.JSX.Elem
       <StatusBar style="light" backgroundColor={colors.ink} />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.centre}>
+          {/* Above the name, not beside it. This screen is one column of three things a
+              second long, and the mark is what a Mait recognises before they read anything. */}
+          <View style={styles.mark}>
+            <BrandLogo size={132} />
+          </View>
           <BrandWordmark />
           <Text style={styles.tagline}>{t('splash.tagline')}</Text>
 
@@ -70,6 +75,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Room between the badge and the name. Without it the two touch, and the mark stops being a
+  // mark and starts looking like part of the lettering.
+  mark: { marginBottom: spacing[4] },
   tagline: {
     ...typography.body,
     color: colors.surface,

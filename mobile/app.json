@@ -22,7 +22,7 @@
       "package": "in.Shwetdhara.maitai",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#3BB77E"
+        "backgroundColor": "#FFFFFF"
       },
       "permissions": ["CAMERA", "ACCESS_FINE_LOCATION"]
     },
