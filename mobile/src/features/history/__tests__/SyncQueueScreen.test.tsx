@@ -108,6 +108,7 @@ describe('toCaptures', () => {
 
 describe('SyncQueueScreen', () => {
   const onRetryAll = jest.fn();
+  const onRetryCapture = jest.fn();
   const onEnterCode = jest.fn();
 
   afterEach(() => jest.resetAllMocks());
@@ -123,6 +124,7 @@ describe('SyncQueueScreen', () => {
         synced={[]}
         progress={progress}
         onRetryAll={onRetryAll}
+        onRetryCapture={onRetryCapture}
         onEnterCode={onEnterCode}
         onBack={jest.fn()}
       />,

@@ -747,7 +747,14 @@ interface OptionCardProps {
    * are both green, the colour has stopped saying anything and the Mait has to read every row
    * to find the one that is actually moving.
    */
-  pillTone?: 'primary' | 'accent' | 'muted';
+  /**
+   * `error` is for a row the server has refused — the waiting list's *Not accepted*.
+   *
+   * Added rather than reused: `accent` is the yolk this app uses for "a person is needed
+   * here", and a refusal is a different thing from a job half done. Red is used sparingly and
+   * this is one of the few places that earns it.
+   */
+  pillTone?: 'primary' | 'accent' | 'muted' | 'error';
   selected?: boolean;
   /**
    * Blocked rows stay on screen rather than disappearing: a Mait who cannot find a farmer
@@ -874,6 +881,7 @@ export function OptionCard({
             styles.pill,
             pillTone === 'accent' && styles.pillAccent,
             pillTone === 'muted' && styles.pillMuted,
+            pillTone === 'error' && styles.pillError,
             blocked && styles.pillBlocked,
           ]}
         >
@@ -882,6 +890,7 @@ export function OptionCard({
               styles.pillLabel,
               pillTone === 'accent' && styles.pillLabelAccent,
               pillTone === 'muted' && styles.pillLabelMuted,
+              pillTone === 'error' && styles.pillLabelError,
               blocked && styles.pillLabelBlocked,
             ]}
           >
@@ -1984,12 +1993,14 @@ const styles = StyleSheet.create({
   },
   // Yolk fill with Ink on it, never yellow text on a pale surface (DESIGN_SYSTEM — Colour).
   pillAccent: { backgroundColor: colors.secondaryWash },
+  pillError: { backgroundColor: colors.errorWash },
   // The page's own grey, outlined so it still reads as a pill on a white card rather than as
   // a hole in it.
   pillMuted: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
   pillBlocked: { backgroundColor: colors.errorWash },
   pillLabel: { ...typography.caption, color: colors.primaryDark },
   pillLabelAccent: { color: yolk[800] },
+  pillLabelError: { color: colors.error },
   pillLabelMuted: { color: colors.textMuted },
   pillLabelBlocked: { color: colors.error },
 

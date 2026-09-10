@@ -8,10 +8,16 @@
  *
  * So the title is the reassurance, and the list is the evidence: **nothing here is lost.**
  *
- * Three states, and only one of them is the Mait's problem. *Synced* has reached the server.
- * *Syncing* is on its way. *Needs attention* is the one case the app cannot finish alone — a
- * payment whose code the farmer never read back — and it is the only row that carries a
- * button, because it is the only row a Mait can act on.
+ * *Synced* has reached the server. *Syncing* is on its way. *Waiting* is queued behind a
+ * network. Two states are the Mait's problem and carry a button, because they are the two the
+ * app cannot finish on its own: *Needs attention* is a payment whose code the farmer never
+ * read back, and *Not accepted* is the server having looked at a record and refused it.
+ *
+ * A refusal is shown in the server's own words and the row is never removed. The commonest
+ * one is real and unfixable from here — an animal sold, a farmer moved to another collection
+ * point, a straw already spent — and a Mait needs to be able to read it out to the office. A
+ * refused record that quietly disappeared would be a day's work gone with no account of where
+ * it went, which is the exact fear this screen exists to answer.
  *
  * Nothing here has to be tapped. The queue drains itself the moment the handset finds signal
  * (see the NetInfo listener in navigation), and this screen exists for the Mait who wants to
@@ -46,10 +52,26 @@ export interface QueuedCapture {
   mode?: 'COD' | 'ONLINE';
   at: string;
   eventId?: number;
+  /**
+   * What this row is, where it is not an insemination.
+   *
+   * A Mait registers a farmer and her cow in the same yard as the capture, so on a bad
+   * afternoon the list holds three rows bearing one name. Without this they all read as
+   * inseminations, and a Mait counting their day would count three.
+   */
+  kindOfRow?: 'registration' | 'animal';
   /** The one thing the app cannot do for them: the farmer's payment code. */
   needsCode: boolean;
   /** Being sent right now. */
   sending: boolean;
+  /**
+   * The server looked at this and refused it, and said why.
+   *
+   * Held as the reason rather than a flag, because the reason is the whole value: "This
+   * animal is not registered to that farmer" tells a Mait what to ring the office about, and
+   * a red pill on its own tells them to try again forever.
+   */
+  rejected?: string;
 }
 
 interface Props {
@@ -59,6 +81,8 @@ interface Props {
   /** Records already gone up, kept on screen so the list is the whole day, not the remainder. */
   synced: QueuedCapture[];
   onRetryAll: () => void;
+  /** Put one refused capture back in the queue, once whatever it fell over has been fixed. */
+  onRetryCapture: (capture: QueuedCapture) => void;
   onEnterCode: (capture: QueuedCapture) => void;
   onBack: () => void;
 }
@@ -85,6 +109,12 @@ export function toCaptures(jobs: QueuedJob[], sendingUuid?: string | null): Queu
       sending: false,
     };
 
+    // The first refusal on the capture is the one that stopped it; the jobs behind it never
+    // went out at all, so a later one would be a reason for something that never happened.
+    if (job.failed && !capture.rejected) {
+      capture.rejected = job.lastError || '';
+    }
+
     // First non-empty wins, so the earliest job still decides the time the capture happened
     // and a later one can only fill in what was missing.
     if (label) {
@@ -92,6 +122,7 @@ export function toCaptures(jobs: QueuedJob[], sendingUuid?: string | null): Queu
       capture.at ||= label.at;
       capture.amount ??= label.amount ?? null;
       capture.mode ??= label.mode;
+      capture.kindOfRow ??= label.kindOfRow;
       if (label.kind) {
         capture.kind = label.kind;
       }
@@ -104,17 +135,27 @@ export function toCaptures(jobs: QueuedJob[], sendingUuid?: string | null): Queu
     capture.sending = capture.sending || job.clientUuid === sendingUuid;
     byCapture.set(job.clientUuid, capture);
   });
-  // The ones that need a person come first: everything else is the network's problem.
-  return [...byCapture.values()].sort((a, b) => Number(b.needsCode) - Number(a.needsCode));
+  // The ones that need a person come first: everything else is the network's problem, and
+  // the network sorts itself out. A refusal outranks a missing code — one is a record that
+  // will never land without somebody, the other is a record that has landed and is owed a
+  // number.
+  const weight = (capture: QueuedCapture) =>
+    (capture.rejected !== undefined ? 2 : 0) + Number(capture.needsCode);
+  return [...byCapture.values()].sort((a, b) => weight(b) - weight(a));
 }
 
 /**
- * Which of the three words a waiting row carries.
+ * Which of the four words a waiting row carries.
  *
- * *Needs attention* wins over everything, because it is the only one that asks for a person.
- * After that the only question is whether this capture is the one on the wire right now.
+ * The two that ask for a person win, because they are the only ones a Mait can do anything
+ * about — and a refusal wins over a missing code, because it is the one that will never
+ * resolve itself. After that the only question is whether this capture is the one on the wire
+ * right now.
  */
 function status(capture: QueuedCapture): string {
+  if (capture.rejected !== undefined) {
+    return 'queue.notAccepted';
+  }
   if (capture.needsCode) {
     return 'queue.needsAttention';
   }
@@ -122,7 +163,11 @@ function status(capture: QueuedCapture): string {
 }
 
 function subtitle(capture: QueuedCapture, t: TFunction): string {
-  const who = t(capture.kind === 'member' ? 'aiFlow.member' : 'aiFlow.nonMember');
+  // What the row is, before who it is about. A registration and an insemination for the same
+  // farmer are two different things waiting, and the list has to say which is which.
+  const who = capture.kindOfRow
+    ? t(capture.kindOfRow === 'registration' ? 'queue.aRegistration' : 'queue.anAnimal')
+    : t(capture.kind === 'member' ? 'aiFlow.member' : 'aiFlow.nonMember');
   const money =
     capture.amount && capture.kind === 'nonMember'
       ? `₹ ${Math.round(Number(capture.amount))} ${t(
@@ -139,12 +184,15 @@ export default function SyncQueueScreen({
   progress,
   synced,
   onRetryAll,
+  onRetryCapture,
   onEnterCode,
   onBack,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
-  const needing = captures.filter(capture => capture.needsCode).length;
+  const needing = captures.filter(
+    capture => capture.needsCode || capture.rejected !== undefined,
+  ).length;
   const total = captures.length + synced.length;
 
   return (
@@ -185,7 +233,10 @@ export default function SyncQueueScreen({
       }
     >
       {captures.map(capture => (
-        <View key={capture.clientUuid} style={capture.needsCode ? styles.attention : undefined}>
+        <View
+          key={capture.clientUuid}
+          style={capture.needsCode || capture.rejected !== undefined ? styles.attention : undefined}
+        >
           <OptionCard
             swatch={false}
             title={capture.farmer || t('queue.unnamedCapture')}
@@ -194,11 +245,39 @@ export default function SyncQueueScreen({
             /* Green only while it is genuinely moving. A row that is merely queued gets the
                grey, because on a list of ten the colour is what a Mait reads first and it
                should point at the one thing happening. */
-            pillTone={capture.needsCode ? 'accent' : capture.sending ? 'primary' : 'muted'}
+            pillTone={
+              capture.rejected !== undefined
+                ? 'error'
+                : capture.needsCode
+                  ? 'accent'
+                  : capture.sending
+                    ? 'primary'
+                    : 'muted'
+            }
             testID={`queue-${capture.clientUuid}`}
           />
 
-          {capture.needsCode && (
+          {/* The server's own sentence, and the one thing left to do about it. Retrying is
+              offered rather than done: nothing here will send until whatever the server
+              objected to has been fixed, and a row that retried itself would be a Mait told
+              hourly that their record still does not work. */}
+          {capture.rejected !== undefined && (
+            <View style={styles.attentionBody}>
+              <Text style={styles.reason} testID={`queue-rejected-${capture.clientUuid}`}>
+                {capture.rejected || t('queue.rejectedNoReason')}
+              </Text>
+              <Text style={styles.reason}>{t('queue.rejectedWhatNow')}</Text>
+              <Text
+                style={styles.action}
+                onPress={() => onRetryCapture(capture)}
+                testID={`queue-retry-${capture.clientUuid}`}
+              >
+                {t('queue.tryThisAgain')}
+              </Text>
+            </View>
+          )}
+
+          {capture.needsCode && capture.rejected === undefined && (
             <View style={styles.attentionBody}>
               <Text style={styles.reason}>{t('queue.codeNeverEntered')}</Text>
               <Text
