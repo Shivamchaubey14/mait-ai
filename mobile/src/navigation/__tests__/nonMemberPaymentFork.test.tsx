@@ -241,6 +241,11 @@ async function walkToThePhoto() {
   fireEvent.changeText(screen.getByTestId('non-member-mobile'), '9876543210');
   fireEvent.changeText(screen.getByTestId('non-member-aadhaar'), '123456789012');
   fireEvent.press(screen.getByTestId('non-member-relation-husband'));
+  // Her herd and her milk, required since they became the only record the dairy holds of
+  // either for a farmer who is not on the membership roll.
+  fireEvent.changeText(screen.getByTestId('non-member-cows'), '2');
+  fireEvent.changeText(screen.getByTestId('non-member-buffaloes'), '0');
+  fireEvent.changeText(screen.getByTestId('non-member-litres'), '8');
   for (const face of ['front', 'back'] as const) {
     fireEvent.press(screen.getByTestId(`non-member-aadhaar-${face}`));
     fireEvent.press(screen.getByTestId(`aadhaar-camera-${face}-stub`));

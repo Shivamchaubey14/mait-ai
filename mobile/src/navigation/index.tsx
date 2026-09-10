@@ -17,12 +17,12 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, StyleSheet, View } from 'react-native';
+import { AppState, BackHandler, StyleSheet, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
 
-import { attachPhoto, completeEvent } from '@api/capture';
+import { attachPhoto, completeEvent, isProvisional } from '@api/capture';
 import type { CaptureProgress } from '@api/capture';
 import { ErrorCode, errorCodeOf, newClientUuid } from '@api/client';
 import {
@@ -38,7 +38,7 @@ import {
   useVerifyPaymentOtpMutation,
   useAttachPaymentProofMutation,
 } from '@api/endpoints';
-import { enqueue, pendingCount, readQueue } from '@api/queue';
+import { clockTime, enqueue, pendingCount, readQueue, retryFailed } from '@api/queue';
 import type { QueuedJob, QueuedLabel } from '@api/queue';
 import { drainQueue } from '@api/sync';
 import type { SyncProgress } from '@api/sync';
@@ -88,6 +88,7 @@ import PdRecordScreen from '@/features/pregnancy/PdRecordScreen';
 import RequestStockScreen from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { RETRY_TICK_MS } from '@/config/env';
 import { colors } from '@theme/tokens';
 
 /** Where the capture flow has got to. `null` means it is not running. */
@@ -132,12 +133,19 @@ const STEP_ORDER: CaptureStep[] = [
 /** Who the capture is for. Exactly one of the two codes is ever set. */
 type Farmer =
   | { kind: 'member'; name: string; memberCode: string }
-  | { kind: 'nonMember'; name: string; nonMemberId: number };
-
-function clockTime(): string {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-}
+  | {
+      kind: 'nonMember';
+      name: string;
+      nonMemberId: number;
+      /**
+       * Her local key, set only where she was registered on this handset with no signal.
+       *
+       * `nonMemberId` is then a provisional number the server has never seen, and this is what
+       * the queue reads the real one from once her registration lands. Absent for every farmer
+       * picked off the collection point's roster.
+       */
+      clientUuid?: string;
+    };
 
 export default function RootNavigator(): React.JSX.Element {
   const { t } = useTranslation();
@@ -428,6 +436,18 @@ export default function RootNavigator(): React.JSX.Element {
     dispatch(maitaiApi.util.invalidateTags(['AIEvent', 'Payment']));
   }, [dispatch]);
 
+  /**
+   * And the same for a farmer's roster, once a cow has been added to it.
+   *
+   * Registering an animal goes through `api/capture` now rather than an RTK Query mutation,
+   * for the same reason completion does — it has to survive no signal — and the cost is the
+   * same: nothing invalidates the farmer's detail, so the roster the Mait came from would go
+   * on showing the animals she had a minute ago.
+   */
+  const animalsChanged = useCallback(() => {
+    dispatch(maitaiApi.util.invalidateTags(['Animal', 'Member']));
+  }, [dispatch]);
+
   const sync = useCallback(async () => {
     setDraining(true);
     // Both directions on one gesture. Every pull-to-refresh in the app calls this, so a Mait
@@ -463,6 +483,12 @@ export default function RootNavigator(): React.JSX.Element {
    * A Mait finishes a round in a village with no signal and rides back through one. Waiting
    * for them to reopen the app would leave a day's events on a handset that might be dropped
    * in a canal before anyone noticed.
+   *
+   * **Connected is not the same as reachable**, which is why this cannot be the only trigger.
+   * A handset can hold four bars against a tower with no backhaul, a captive portal, or an API
+   * that is up and answering 502 — and in every one of those cases the connection never
+   * *changes*, so this listener never fires again and a queue sits still with a live network
+   * over it. The two below are what cover that.
    */
   useEffect(() => {
     pendingCount().then(setPending);
@@ -475,6 +501,49 @@ export default function RootNavigator(): React.JSX.Element {
       }
     });
     return () => unsubscribe();
+  }, [sync]);
+
+  /**
+   * Ask again, now and then, while anything is still waiting.
+   *
+   * Cheap by construction: every job carries its own backoff, so a tick with nothing due
+   * sends no requests at all and this costs a read of one storage key. What it buys is the
+   * case above — a network that never changes state and a server that is briefly unwell —
+   * where without it the only way to move the queue is a Mait who happens to pull a screen.
+   *
+   * Stopped the moment the queue is empty, so an idle handset in a pocket does no work.
+   */
+  useEffect(() => {
+    if (!online || pending === 0) {
+      return;
+    }
+    const timer = setInterval(() => {
+      // Never on top of a drain that is already running: two at once would send the same job
+      // twice, and while the server would answer the second as a replay, it is a request
+      // nobody needed to make.
+      if (!draining) {
+        sync();
+      }
+    }, RETRY_TICK_MS);
+    return () => clearInterval(timer);
+  }, [online, pending, draining, sync]);
+
+  /**
+   * And once more whenever the app comes back to the front.
+   *
+   * The commonest shape of a round: the handset goes in a pocket in a village and comes out
+   * at the depot. Android may have killed the process in between, so this covers the launch
+   * as well as the resume — and it is the moment a Mait is most likely to be looking at the
+   * screen, which is the moment the count under Home should be right.
+   */
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        pendingCount().then(setPending);
+        sync();
+      }
+    });
+    return () => subscription.remove();
   }, [sync]);
 
   /**
@@ -639,7 +708,12 @@ export default function RootNavigator(): React.JSX.Element {
    * and the only thing missing is a network. So it is queued and the screen says so, rather
    * than asking somebody to examine the animal again.
    */
-  const savePd = async (check: PregnancyCheck, outcome: PdOutcome, photoUri: string | null) => {
+  const savePd = async (
+    check: PregnancyCheck,
+    outcome: PdOutcome,
+    photoUri: string | null,
+    note: string,
+  ) => {
     // A result is written once. The screen already refuses to offer the choices for a check
     // that carries an outcome, and the server refuses the write regardless — this is the
     // third: a guard here means no future call site can reopen a settled record for editing
@@ -657,13 +731,16 @@ export default function RootNavigator(): React.JSX.Element {
         id: check.id,
         outcome,
         photoUrl: photoUri ?? undefined,
+        // Omitted rather than sent empty: a blank remark is not a remark, and the field is
+        // written once and never edited afterwards.
+        note: note || undefined,
         clientUuid: key,
       }).unwrap();
     } catch {
       await enqueue(
         'recordPd',
         key,
-        { checkId: check.id, outcome, photoUrl: photoUri },
+        { checkId: check.id, outcome, photoUrl: photoUri, note },
         {
           farmer: check.owner_name,
           kind: check.owner_type === 'member' ? 'member' : 'nonMember',
@@ -772,7 +849,9 @@ export default function RootNavigator(): React.JSX.Element {
     amount: event?.amount_due ?? null,
     ...(mode ? { mode } : {}),
     at: clockTime(),
-    ...(event ? { eventId: event.id } : {}),
+    // Only a real one. The waiting list uses this to reopen a record, and a negative
+    // placeholder is a row nothing can open.
+    ...(event && !isProvisional(event.id) ? { eventId: event.id } : {}),
   });
 
   /**
@@ -921,11 +1000,21 @@ export default function RootNavigator(): React.JSX.Element {
     setPayBusy(true);
     setPayFailed(null);
     try {
+      // A capture opened with no signal has no id on the server yet, so there is no payment
+      // endpoint to call — asking would be a request against a row that does not exist, and
+      // on a handset that has since found signal it would come back 404 and read as a
+      // refusal. It goes straight to the queue, which resolves the id once the create lands.
+      if (isProvisional(event.id)) {
+        throw new Error('The capture has not reached the server yet.');
+      }
       await initiatePayment({ eventId: event.id, ...(mode ? { mode } : {}) }).unwrap();
     } catch (err) {
       const problem = err as { status?: number | string; data?: { detail?: string } };
       const unreachable =
-        !online || problem.status === 'FETCH_ERROR' || problem.status === 'TIMEOUT_ERROR';
+        isProvisional(event.id) ||
+        !online ||
+        problem.status === 'FETCH_ERROR' ||
+        problem.status === 'TIMEOUT_ERROR';
 
       if (unreachable) {
         // No network is not a refusal. The insemination happened and the cash is already in
@@ -934,7 +1023,12 @@ export default function RootNavigator(): React.JSX.Element {
         await enqueue(
           'verifyPayment',
           clientUuid,
-          { eventId: event.id, mode: mode ?? 'COD' },
+          {
+            // Null on a capture the server has not made yet. The drain fills it in from what
+            // the create came back with — see `resolveEventId` in `api/sync`.
+            eventId: isProvisional(event.id) ? null : event.id,
+            mode: mode ?? 'COD',
+          },
           captureLabel(mode ?? 'COD'),
         );
       } else {
@@ -984,6 +1078,11 @@ export default function RootNavigator(): React.JSX.Element {
     setPayProblem(null);
     setPayBusy(true);
     try {
+      // As in `finishCapture`: a provisional capture has nowhere to send this yet, and the
+      // code is asked for when the network comes back.
+      if (isProvisional(event.id)) {
+        throw new Error('The capture has not reached the server yet.');
+      }
       const payment = await initiatePayment({ eventId: event.id, mode }).unwrap();
       setCodeSentTo(payment.mode === 'DEDUCT' ? null : t('payment.herNumber'));
     } catch {
@@ -1015,7 +1114,15 @@ export default function RootNavigator(): React.JSX.Element {
    * that reaches nobody.
    */
   const chooseNonMember = (selected: NonMember | NonMemberSummary) => {
-    setFarmer({ kind: 'nonMember', name: selected.name, nonMemberId: selected.id });
+    setFarmer({
+      kind: 'nonMember',
+      name: selected.name,
+      nonMemberId: selected.id,
+      // Only a farmer registered on this handset carries one, and only she needs it.
+      ...('client_uuid' in selected && selected.client_uuid
+        ? { clientUuid: selected.client_uuid }
+        : {}),
+    });
     setStep('confirmFarmer');
   };
 
@@ -1139,7 +1246,16 @@ export default function RootNavigator(): React.JSX.Element {
     return withTabs(
       <AddNonMemberScreen
         mpp={mpp}
-        onCreated={chooseNonMember}
+        accessToken={accessToken}
+        online={online}
+        onCreated={(created, queued) => {
+          if (queued) {
+            // Registered on this handset, not on the server. The count under Home has just
+            // gone up and should say so before the Mait reaches the next screen.
+            pendingCount().then(setPending);
+          }
+          chooseNonMember(created);
+        }}
         // Back to whichever roster this was reached from — the members, if the Mait went
         // looking there first, or the non-members they were just picking through.
         onCancel={() => setStep(ownerType === 'member' ? 'selectFarmer' : 'selectNonMember')}
@@ -1156,8 +1272,18 @@ export default function RootNavigator(): React.JSX.Element {
           nonMemberId: farmer.kind === 'nonMember' ? farmer.nonMemberId : undefined,
         }}
         animals={animals}
+        accessToken={accessToken}
         onSelect={selected => {
           setAnimal(selected);
+          // Registered a moment ago rather than picked off the roster. Two things are now out
+          // of date: the farmer's animal list, and — if there was no signal — the count of
+          // what this handset is holding.
+          if (!animals.some(known => known.id === selected.id)) {
+            animalsChanged();
+            if (isProvisional(selected.id)) {
+              pendingCount().then(setPending);
+            }
+          }
           setStep('selectBreed');
         }}
         // A non-member has already been created by the time this screen is reached, so back
@@ -1180,9 +1306,27 @@ export default function RootNavigator(): React.JSX.Element {
           memberCode: farmer.kind === 'member' ? farmer.memberCode : undefined,
           nonMemberId: farmer.kind === 'nonMember' ? farmer.nonMemberId : undefined,
           animalId: animal.id,
+          // Set only for a cow registered moments ago in a yard with no signal. `animalId` is
+          // then a provisional number, and this is what the queue reads the real one from
+          // once her registration lands.
+          animalClientUuid: isProvisional(animal.id) ? animal.client_uuid : undefined,
+          // And the same for the farmer herself, who in a village with no signal was very
+          // possibly registered on this handset two minutes ago.
+          nonMemberClientUuid:
+            farmer.kind === 'nonMember' && isProvisional(farmer.nonMemberId)
+              ? farmer.clientUuid
+              : undefined,
         }}
-        onCreated={created => {
+        accessToken={accessToken}
+        queueLabel={captureLabel()}
+        onCreated={(created, queued) => {
           setEvent(created);
+          if (queued) {
+            // Nothing reached the server, and the count under Home has just gone up. Read
+            // back so the badge and the waiting list agree with what actually happened,
+            // rather than waiting for the next drain to notice.
+            pendingCount().then(setPending);
+          }
           setStep('capturePhoto');
         }}
         onBack={() => setStep('selectAnimal')}
@@ -1370,6 +1514,22 @@ export default function RootNavigator(): React.JSX.Element {
         // looks like.
         progress={draining && progress && progress.total > 0 ? progress : null}
         onRetryAll={sync}
+        /**
+         * One refused capture, put back in the queue.
+         *
+         * Every job of that capture, not only the one that was refused: the jobs behind it
+         * were stood aside rather than tried, so they are not marked — and the one that was
+         * refused is the one holding the rest of them up. Then a drain, because a Mait who
+         * taps *Try again* means now.
+         */
+        onRetryCapture={async capture => {
+          await Promise.all(
+            queueJobs
+              .filter(job => job.clientUuid === capture.clientUuid)
+              .map(job => retryFailed(job.id)),
+          );
+          await sync();
+        }}
         onEnterCode={capture => {
           // Back into the payment step for that capture, where the code is asked for again.
           const job = queueJobs.find(item => item.clientUuid === capture.clientUuid);
@@ -1531,7 +1691,7 @@ export default function RootNavigator(): React.JSX.Element {
             busy={pdSaving}
             onBack={() => transition.back(() => setPdCheck(null))}
             onPhoto={setPdPhoto}
-            onSave={(outcome, photoUri) => savePd(pdCheck, outcome, photoUri)}
+            onSave={(outcome, photoUri, note) => savePd(pdCheck, outcome, photoUri, note)}
           />
         )}
         {!requestingStock && !!pdDone && (
