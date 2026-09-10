@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, status, viewsets
@@ -156,6 +157,10 @@ class AnimalViewSet(
         responses={201: AnimalSerializer},
     )
     def create(self, request, *args, **kwargs):
+        replayed = self._replay(request.data.get("client_uuid"))
+        if replayed is not None:
+            return Response(AnimalSerializer(replayed).data, status=status.HTTP_200_OK)
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         animal = serializer.save()
@@ -168,6 +173,28 @@ class AnimalViewSet(
             meta={"animal_type": animal.animal_type, "breed": animal.breed},
         )
         return Response(AnimalSerializer(animal).data, status=status.HTTP_201_CREATED)
+
+    def _replay(self, client_uuid):
+        """
+        The animal this ``client_uuid`` already registered, if there is one.
+
+        The same rule the AI event has (``AIEventViewSet._replay``), for the same reason: the
+        offline queue retries blindly, because it cannot tell "never arrived" from "arrived
+        and the response was lost" (ADR 0003). Answering with the animal that already exists
+        turns that retry into a no-op instead of a second identical cow on the farmer's
+        roster — which the Mait would then have to choose between, with nothing to tell them
+        apart.
+
+        Scoped to what the caller may see, so one Mait's key cannot fish another's animal out
+        of the database.
+        """
+        if not client_uuid:
+            return None
+        try:
+            return self.get_queryset().filter(client_uuid=client_uuid).first()
+        except (DjangoValidationError, ValueError, TypeError):
+            # Not a UUID at all. Let the serializer produce the readable field error.
+            return None
 
     @extend_schema(
         summary="Attach her portrait",

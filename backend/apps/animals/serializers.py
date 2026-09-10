@@ -125,6 +125,10 @@ class AnimalCreateSerializer(serializers.Serializer):
 
     member_code = serializers.CharField(required=False, allow_blank=True)
     non_member_id = serializers.IntegerField(required=False, allow_null=True)
+    # Optional, unlike the AI event's: the portal registers animals too, and it has no handset
+    # to mint one. Sent by the app on every registration, and it is what makes a retry after a
+    # dropped response a no-op rather than a second identical cow (ADR 0003).
+    client_uuid = serializers.UUIDField(required=False, allow_null=True)
     animal_type = serializers.ChoiceField(choices=AnimalType.choices)
     # Optional: step 4 of the capture flow registers the animal in front of the Mait from what
     # they can see — cow or buffalo, and the tag if she carries one. Her breed is a judgement
@@ -212,6 +216,9 @@ class AnimalCreateSerializer(serializers.Serializer):
             animal_type=validated_data["animal_type"],
             breed=validated_data.get("breed", ""),
             ear_tag_no=validated_data.get("ear_tag_no"),
+            # Stored so a retry after a lost response is recognised as one. Null from the
+            # portal, which has no handset to mint a key and no queue to retry from.
+            client_uuid=validated_data.get("client_uuid"),
         )
 
 

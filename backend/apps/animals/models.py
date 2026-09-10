@@ -90,6 +90,25 @@ class Animal(TimeStampedModel):
         related_name="animals",
     )
 
+    #: Minted on the handset when the Mait fills the form, and the idempotency key for this
+    #: registration (ADR 0003).
+    #:
+    #: An animal is now registered in the yard with no signal as often as with one — a farmer
+    #: whose cow is not yet on her roster is the ordinary case in a young deployment, not an
+    #: edge. The queue retries blindly and cannot tell "never arrived" from "arrived and the
+    #: reply was lost", so without this a dropped response registered the same cow twice and
+    #: the Mait was left choosing between two identical rows.
+    #:
+    #: Nullable, because every animal registered before this existed has none, and because the
+    #: portal registers animals too and has no handset to mint one. Unique where present, so
+    #: the database refuses a duplicate even if a code path forgets to look.
+    client_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="Device-generated id for a registration that may be retried (ADR 0003).",
+    )
+
     animal_type = models.CharField(max_length=4, choices=AnimalType.choices, db_index=True)
     breed = models.CharField(
         max_length=30,

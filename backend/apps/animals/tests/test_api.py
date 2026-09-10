@@ -90,6 +90,81 @@ class TestAnimalCreation:
         assert response.json()["owner_name"] == member.member_name
         assert Animal.objects.count() == 1
 
+    def test_a_replayed_registration_does_not_register_a_second_cow(
+        self, mait_client, breeds, member
+    ):
+        """
+        The registration landed and the reply was lost, which is an ordinary village afternoon.
+
+        An animal is registered offline as often as online now — a farmer whose cow is not yet
+        on her roster is the common case in a young deployment — and the queue retries blindly
+        because it cannot tell that from "it never arrived" (ADR 0003). Without the key the
+        farmer ends up with two identical rows and the Mait has nothing to choose between them.
+        """
+        body = {
+            "client_uuid": "77777777-7777-4777-8777-777777777777",
+            "member_code": member.member_code,
+            "animal_type": AnimalType.COW,
+            "breed": "GIR",
+        }
+
+        first = mait_client.post(f"{BASE}/animals/", body, format="json")
+        assert first.status_code == 201, first.json()
+
+        replay = mait_client.post(f"{BASE}/animals/", body, format="json")
+
+        # 200 rather than 201: nothing was created, and the app reads the id off the body
+        # either way.
+        assert replay.status_code == 200, replay.json()
+        assert replay.json()["id"] == first.json()["id"]
+        assert Animal.objects.count() == 1
+
+    def test_a_registration_without_a_key_is_still_accepted(self, mait_client, breeds, member):
+        """The portal registers animals too, and has no handset to mint one."""
+        response = mait_client.post(
+            f"{BASE}/animals/",
+            {"member_code": member.member_code, "animal_type": AnimalType.COW},
+            format="json",
+        )
+
+        assert response.status_code == 201, response.json()
+        assert Animal.objects.get().client_uuid is None
+
+    def test_one_maits_key_cannot_fish_out_another_maits_animal(self, mait_client, breeds, db):
+        """
+        The replay lookup is scoped, like every other read in this viewset.
+
+        A key is not a secret — it is minted by `Math.random` on a handset (see
+        `newClientUuid`) — so it must not be a way to read a row the caller could not
+        otherwise see. A collision reads as "no such animal" and the registration proceeds.
+        """
+        stranger = Mait.objects.create(sahayak_vendor_code="SAH-OTHER-2", name="Other")
+        other_mpp = MPP.objects.create(mpp_code="MPP-OTHER-2", mpp_name="Far", mait=stranger)
+        other_member = Member.objects.create(
+            member_code="MEM-OTHER-2", member_name="Not Yours", mpp=other_mpp
+        )
+        theirs = Animal.objects.create(
+            owner_type=Animal.OwnerType.MEMBER,
+            member=other_member,
+            animal_type=AnimalType.COW,
+            client_uuid="88888888-8888-4888-8888-888888888888",
+        )
+
+        response = mait_client.post(
+            f"{BASE}/animals/",
+            {
+                "client_uuid": str(theirs.client_uuid),
+                "member_code": other_member.member_code,
+                "animal_type": AnimalType.COW,
+            },
+            format="json",
+        )
+
+        # Refused on the owner, which is the rule that should stop this — never answered with
+        # the other Mait's animal.
+        assert response.status_code == 400
+        assert Animal.objects.count() == 1
+
     def test_rejects_a_member_at_another_maits_mpp(self, mait_client, breeds, db):
         """SRS §16 — a Mait may only act at their own MPPs."""
         stranger = Mait.objects.create(sahayak_vendor_code="SAH-OTHER", name="Other")
