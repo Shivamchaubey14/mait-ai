@@ -1,16 +1,29 @@
 /**
  * Runtime configuration.
  *
- * The API base URL is derived from wherever the Expo packager is being served, not
- * hardcoded. A phone cannot reach `127.0.0.1` — that address is the phone itself — so a
- * device build needs the host machine's LAN address. Expo already knows that address, and
- * reading it from there means nobody has to remember to update an IP that changes whenever
- * the laptop joins a different network.
+ * The API base URL is answered in three ways, in this order.
  *
- * A configured non-loopback URL in `app.json` wins, so a staging or production build points
- * where it is told (SRS §15).
+ * 1. **`EXPO_PUBLIC_API_URL`**, set per build profile in `eas.json`. This is what a built APK
+ *    uses, and it is the only one of the three that works in one: a standalone build has no
+ *    packager to ask and `app.json` carries a loopback address for local work.
+ * 2. **A non-loopback `extra.apiUrl`** in `app.json`, for a build that is told where to point.
+ * 3. **Wherever the Expo packager is being served**, for development. A phone cannot reach
+ *    `127.0.0.1` — that address is the phone itself — so a device needs the host machine's LAN
+ *    address, and Expo already knows it. Reading it from there means nobody has to update an
+ *    IP that changes whenever the laptop joins a different network.
  *
- * Nothing secret belongs in this file. A mobile bundle is a public binary.
+ * The first two are the same variable by two routes: `app.config.js` already copies
+ * `EXPO_PUBLIC_API_URL` into `extra.apiUrl` at build time, and Metro inlines it into the bundle
+ * as well. Reading it directly costs nothing and means the app is still pointed correctly if
+ * that mapping is ever changed or the dynamic config removed — but they cannot disagree,
+ * because there is only one value.
+ *
+ * Getting this wrong is worth guarding against because it is invisible now that the app works
+ * offline: a build pointed at itself looks exactly like a handset with no signal — every screen
+ * empty on a fresh install, every write queued and never sent.
+ *
+ * Nothing secret belongs in this file. A mobile bundle is a public binary, and `EXPO_PUBLIC_*`
+ * is inlined into it at build time (SRS §15).
  */
 
 import Constants from 'expo-constants';
@@ -27,11 +40,24 @@ function packagerHost(): string | null {
   return String(hostUri).split(':')[0] || null;
 }
 
+/** Whether an address is the handset talking to itself, which is never what anybody meant. */
+function isLoopback(url: string): boolean {
+  return url.includes('127.0.0.1') || url.includes('localhost');
+}
+
 function resolveApiBaseUrl(): string {
+  // Inlined at build time by Expo from the profile's `env` block in `eas.json`. Read first
+  // because it is the only answer a standalone build has: there is no packager to ask, and
+  // `app.json` holds a loopback address so that local development works.
+  const fromBuild = (process.env.EXPO_PUBLIC_API_URL ?? '').trim();
+  if (fromBuild && !isLoopback(fromBuild)) {
+    return fromBuild;
+  }
+
   const configured = Constants.expoConfig?.extra?.apiUrl as string | undefined;
 
-  // A configured non-loopback URL is a real deployment and wins outright.
-  if (configured && !configured.includes('127.0.0.1') && !configured.includes('localhost')) {
+  // A configured non-loopback URL is a real deployment and wins over the packager.
+  if (configured && !isLoopback(configured)) {
     return configured;
   }
 
@@ -67,6 +93,20 @@ export function mediaUrl(path: string | null | undefined): string | undefined {
 
 /** How long a queued offline event stays replayable. Mirrors the server TTL (ADR 0003). */
 export const IDEMPOTENCY_TTL_HOURS = 24;
+
+/**
+ * How often the app asks the queue again while something is still waiting.
+ *
+ * Not the retry schedule — each job carries its own backoff, and a tick with nothing due
+ * sends no requests at all. This is only how often the question gets asked, and it exists
+ * because the connection changing is not the only way a network becomes usable: a tower with
+ * no backhaul, a captive portal and a server answering 502 all leave the handset "connected"
+ * and unable to send, and none of them fire a connectivity event when they clear.
+ *
+ * A minute is short enough that a Mait riding past a village does not miss the window, and
+ * long enough to be invisible on a battery. The timer stops entirely once the queue is empty.
+ */
+export const RETRY_TICK_MS = 60_000;
 
 /** SRS §6.5.1 */
 export const OTP_LENGTH = 6;
