@@ -17,11 +17,8 @@ import React, { useMemo, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import {
-  useCreateAnimalMutation,
-  useListBreedsQuery,
-  useUploadAnimalPhotoMutation,
-} from '@api/endpoints';
+import { registerAnimal } from '@api/capture';
+import { useListBreedsQuery } from '@api/endpoints';
 import { splitRejection } from '@api/problem';
 import type { Animal, AnimalTypeCode } from '@api/types';
 import { mediaUrl } from '@/config/env';
@@ -35,6 +32,13 @@ interface Props {
   owner: { name: string; memberCode?: string; nonMemberId?: number };
   /** Animals already registered to this farmer, from their detail record. */
   animals: Animal[];
+  /**
+   * The Mait's token, or null while the session is being restored.
+   *
+   * Passed in rather than read from the store, the way every other write in the flow gets it.
+   * Null goes straight to the queue, which is correct — there is nobody to send as.
+   */
+  accessToken: string | null;
   onSelect: (animal: Animal) => void;
   onBack: () => void;
 }
@@ -68,6 +72,7 @@ function longDate(iso: string): string | null {
 export default function SelectAnimalScreen({
   owner,
   animals,
+  accessToken,
   onSelect,
   onBack,
 }: Props): React.JSX.Element {
@@ -90,8 +95,7 @@ export default function SelectAnimalScreen({
   // Read only to put a name to the breed codes already on the farmer's animals; the sheet asks
   // for its own list when it opens.
   const { data: breeds = [] } = useListBreedsQuery(animalType);
-  const [createAnimal, { isLoading: saving }] = useCreateAnimalMutation();
-  const [uploadPhoto] = useUploadAnimalPhotoMutation();
+  const [saving, setSaving] = useState(false);
 
   const hindi = i18n.language.startsWith('hi');
   const breedName = useMemo(
@@ -160,43 +164,69 @@ export default function SelectAnimalScreen({
   /**
    * Register her, then send her portrait.
    *
-   * Two calls, and the photo is the one allowed to fail: the flow is standing on the new
-   * animal's id by the time it is sent, and a Mait with a farmer waiting should not be sent
-   * back to the start of the step because a village connection dropped a JPEG.
+   * Two writes, and the photo is the one allowed to fail: the flow is standing on the new
+   * animal by the time it is sent, and a Mait with a farmer waiting should not be sent back
+   * to the start of the step because a village connection dropped a JPEG.
+   *
+   * Both go through `api/capture`, so a yard with no signal registers her all the same: she
+   * comes back with a provisional id, the flow carries on, and the queue turns it into a real
+   * one when the handset finds a tower. Her key is minted before any of that, which is what
+   * stops a dropped response leaving the farmer with two identical cows.
    */
   const handleSave = async (draft: AnimalDraftInput) => {
     setFieldErrors({});
     setRefusal(null);
-    try {
-      const created = await createAnimal({
+    setSaving(true);
+
+    const outcome = await registerAnimal(
+      {
         ...(owner.memberCode
           ? { member_code: owner.memberCode }
           : { non_member_id: owner.nonMemberId }),
         animal_type: draft.animalType,
         ...(draft.breed ? { breed: draft.breed } : {}),
         ...(draft.earTag.trim() ? { ear_tag_no: draft.earTag.trim() } : {}),
-      }).unwrap();
+      },
+      // Enough of an animal for the step to show her and the capture to name her. Everything
+      // else on the shape is what the server fills in.
+      {
+        owner_type: owner.memberCode ? 'member' : 'non_member',
+        member: null,
+        non_member: owner.nonMemberId ?? null,
+        owner_name: owner.name,
+        animal_type: draft.animalType,
+        animal_type_display: t(`aiFlow.animalType.${draft.animalType}`),
+        breed: draft.breed ?? '',
+        ear_tag_no: draft.earTag.trim() || null,
+        photo_url: '',
+        ai_event_count: 0,
+        last_ai_at: null,
+        created_at: new Date().toISOString(),
+      },
+      accessToken,
+      draft.photoUri,
+      owner.name,
+    );
+    setSaving(false);
 
-      if (draft.photoUri) {
-        try {
-          await uploadPhoto({ id: created.id, uri: draft.photoUri }).unwrap();
-        } catch {
-          // Deliberately swallowed. She is registered and the flow can go on; the photo can
-          // be taken again from her record later.
-        }
-      }
-
+    if (outcome.animal) {
       setAdding(false);
-      onSelect(created);
-    } catch (err) {
-      // The server is the authority on the ear tag being free and the breed being real;
-      // surface its per-field message so the Mait knows which box to fix. Everything it
-      // names that this sheet has no box for — an owner it will not accept, a farmer at
-      // another Mait's MPP — is said against the button instead of being dropped.
-      const { fields, message } = splitRejection(err, OWNED_FIELDS, t('errors.generic'));
-      setFieldErrors(fields);
-      setRefusal(message);
+      onSelect(outcome.animal);
+      return;
     }
+
+    // The server is the authority on the ear tag being free and the breed being real; surface
+    // its per-field message so the Mait knows which box to fix. Everything it names that this
+    // sheet has no box for — an owner it will not accept, a farmer at another Mait's MPP — is
+    // said against the button instead of being dropped. Nothing reaches here that a retry
+    // would fix: no signal at all is queued rather than refused.
+    const { fields, message } = splitRejection(
+      { data: outcome.problemBody },
+      OWNED_FIELDS,
+      t('errors.generic'),
+    );
+    setFieldErrors(fields);
+    setRefusal(message || outcome.problem || t('errors.generic'));
   };
 
   const chosen = animals.find(animal => animal.id === selectedId) ?? null;

@@ -67,7 +67,13 @@ describe('SelectAnimalScreen', () => {
 
   function renderScreen(animals: Animal[]) {
     return renderWithStore(
-      <SelectAnimalScreen owner={OWNER} animals={animals} onSelect={onSelect} onBack={onBack} />,
+      <SelectAnimalScreen
+        owner={OWNER}
+        animals={animals}
+        accessToken="test-token"
+        onSelect={onSelect}
+        onBack={onBack}
+      />,
     );
   }
 
