@@ -112,9 +112,36 @@ a code belongs to and create one who is genuinely new, but they no longer write 
 existing roster entry. The number is corrected on the Maits screen far more often than the
 sheet is regenerated, and a stale cell coming back in would put the old one back.
 
+### Is she already on file?
+
+`POST /non-members/check/` answers while the Mait is still typing, so a farmer who should not
+be registered as a non-member is caught before she is asked for cash. Send one of `aadhar_no`
+or `mobile_no`; the reply is `{available, blocking, kind, detail}`.
+
+`blocking` is the field that matters. An Aadhaar match **is** the same person, so the form must
+stop. A mobile match is a question — a household often has one phone — so it is surfaced as a
+warning the Mait can read and continue past. `detail` names the farmer it clashed with, because
+the Mait's next move is to go and find her.
+
+It answers with the same rule `POST /non-members/` enforces, from one implementation
+(`masterdata/identity.py`). A form that promised an answer the create then contradicted would be
+worse than no inline check.
+
+`POST /non-members/` also accepts a `client_uuid`, because a farmer is now registered in a
+village with no signal and the queue retries that write blindly (ADR 0003). A repeat returns
+`200` with the farmer who already exists rather than a second one who can be charged again.
+
+**With no signal**, `GET /non-members/roster/?mpp__mpp_code=` is what the form falls back on: a
+name, a mobile number and `member`/`non_member` for each farmer at that collection point,
+cached on the handset. It warns about a number already on the books when the server cannot be
+asked. It carries no Aadhaar and never will — twelve digits is small enough that a downloaded
+set is brute-forceable whatever it was hashed with.
+
 ### Her herd, at registration
 
-`POST /non-members/` accepts three optional figures alongside her details:
+`POST /non-members/` accepts three figures alongside her details. Optional on the wire — the
+portal and older builds omit them — and required by the app, which is the only thing that ever
+registers a non-member in a yard:
 
 | Field | Meaning |
 | --- | --- |
@@ -157,6 +184,8 @@ the rows that actually carry figures rather than the whole roster.
 | GET | `/members/{member_code}/` | Member detail incl. animals | JWT |
 | GET | `/non-members/` | The non-members already registered at the Mait's MPPs | Mait |
 | POST | `/non-members/` | Register a new non-member on the fly | Mait |
+| POST | `/non-members/check/` | Is this Aadhaar or mobile already somebody's? | Mait |
+| GET | `/non-members/roster/` | Names and numbers at one MPP, for the offline duplicate check | Mait |
 | PATCH | `/non-members/{id}/aadhaar/` | Attach the front and/or back of her Aadhaar card | Mait |
 | GET | `/non-members/{id}/` | Non-member detail | JWT |
 | GET | `/admin/non-members/` | Every Mait's field registrations, for the back office | Admin |

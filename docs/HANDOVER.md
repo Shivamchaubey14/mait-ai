@@ -77,6 +77,62 @@ the handsets, which is already what `mobile/eas.json` points the preview build a
 :8080 instead does not work: the browser gets the portal on :443 and every request it makes
 goes to a `:8000` that does not exist out there.
 
+### Working with no network
+
+The app is offline-first for the whole AI capture, and this is the shape of it.
+
+**Reads.** `mobile/src/api/offlineCache.ts` sits behind the RTK Query base query. Every
+allowlisted `GET` — the MPPs a Mait covers, the farmers at them, those farmers' animals, the
+breed catalogue, the flask, the event and check lists — is written to AsyncStorage on the way
+past, and a request that cannot reach the server is answered from there. Nothing else is
+cached, entries are keyed by the signed-in user, and sign-out clears them alongside the queue.
+No endpoint and no screen knows this is happening.
+
+**Writes.** `mobile/src/api/capture.ts` holds the five that must survive no signal: registering
+an animal, her portrait, opening the capture, the proof photo, and the completion. Each tries
+the network and queues on failure. A 4xx is *not* queued — that is the server having looked and
+said no, and it is shown to the Mait instead.
+
+**Rows that do not exist yet.** A capture opened offline carries a *provisional* id: a negative
+number the network never sees. `isProvisional` is what every caller checks before putting an id
+in a URL. `api/sync` swaps in the real one from what the create came back with, reading it off
+disk so the two halves can be sent by different runs of the app.
+
+**Draining.** `api/sync.ts` works capture by capture, not job by job: a failure stops that
+capture and nothing else, so one refused record no longer holds up a day's work behind it.
+Failures back off exponentially with jitter, and the schedule is stored on the job. A refusal is
+marked `failed`, stood aside, and shown on the waiting list with the server's own words and a
+*Try this one again* — never deleted, and never retried on its own.
+
+**When it drains.** On the connection returning, on the app coming to the front, on any
+pull-to-refresh, and on a one-minute tick while anything is still waiting. That last one is not
+belt-and-braces: "connected" is not "reachable", and a tower with no backhaul or a server
+answering 502 fires no connectivity event when it clears.
+
+Registering a farmer and registering an animal both work offline too — see *What the business decided* below, which is worth reading before touching that path.
+
+### Expo Go has to match the SDK the project is on
+
+The app is on **Expo SDK 54**, and Expo Go from the Play Store is always the newest one — SDK
+57 at the time of writing. Scanning the packager's QR with a newer Expo Go gets a blue screen
+saying "Project is incompatible with this version of Expo Go" and nothing else; the packager
+looks healthy and is.
+
+Install the matching Expo Go on the handset and it is fixed:
+
+```
+https://expo.dev/go?sdkVersion=54&platform=android&device=true
+```
+
+That page hands over an APK for SDK 54. Uninstall the Play Store copy first — two Expo Gos
+cannot sit side by side — and then **turn auto-update off for it** (Play Store → Expo Go →
+⋮ → uncheck Enable auto update), or Play will quietly put 57 back and the blue screen returns
+on a morning nobody changed anything.
+
+The other two answers, for when this stops being worth repeating: upgrade the project to the
+current SDK, or install the EAS preview build (`mobile/eas.json`), which is the app itself and
+does not care what Expo Go is on the phone.
+
 ### Leaving it running
 
 `dev-start.ps1` starts each server once, which is right for a morning at the desk and wrong for
@@ -256,6 +312,70 @@ account holding either.
   accepted deviation from `BRANCHING.md`.
 
 ---
+
+## What the business decided
+
+### The check now happens as the number is typed
+
+Worth knowing before reading the rest of this section. The registration form asks
+`POST /non-members/check/` while the Mait is still entering the number, so a farmer who should
+not be registered as a non-member is caught **before** she is asked for cash rather than when
+*Save* is tapped. Two checks, two different consequences:
+
+| Typed | Match means | The form |
+| --- | --- | --- |
+| Aadhaar | It **is** the same person | Stops. She cannot be registered here. |
+| Mobile | It **might** be | Warns, names her, and lets the Mait decide. |
+
+The mobile one only warns on purpose: a mother and a daughter share a handset, and one phone
+per household is ordinary, so blocking would refuse real registrations in exactly the villages
+where sharing is normal.
+
+Both answers come from `masterdata/identity.py`, which the create also calls — one
+implementation, because a form that promised an answer the create then contradicted would be
+worse than no inline check at all.
+
+### Registering a *new* non-member with no signal — allowed, and how it is made safe
+
+**The business decided yes**, so a Mait who meets an unregistered farmer in a village with no
+signal can serve her. This is the one queued write in the product that can cost a farmer money,
+and it is worth understanding why rather than discovering it.
+
+The hazard: `AddNonMemberScreen` is the only screen that ends with a Mait asking for cash, and
+the Aadhaar check against the membership roll is what stops a *member* being charged for a
+service her milk payment has already covered. Queued offline, that check runs when the queue
+drains — after the money has changed hands.
+
+Four things keep it small, and none of them is decoration:
+
+1. **The Aadhaar is checked live wherever there is any signal at all**, as the twelfth digit
+   lands, and it blocks the form. The queued case is therefore only ever the genuinely
+   disconnected one.
+2. **Her mobile number is checked with no signal**, against `/non-members/roster/` — a name and
+   a number per farmer at this collection point, cached on the handset. It catches the ordinary
+   shape of the mistake: a farmer already on the books. It warns rather than blocks, because
+   one phone per household is normal.
+3. **The form says so before the button.** With no signal it states plainly that her Aadhaar
+   cannot be checked yet and that the office will need to hear about it if she turns out to be
+   a member.
+4. **A refusal is never silent.** It lands on the waiting list in the server's own words, and
+   `blockDependentsOf` marks the capture behind her with the same reason — so a Mait does not
+   see one red row and take the rest of the list to be fine.
+
+What is still owed, and is a business process rather than code: **a way to refund her.** When
+the office learns a queued registration was refused, the cash the Mait collected has to go back,
+and nothing in the product does that today.
+
+The roster deliberately carries **no Aadhaar and never can**. Twelve digits is small enough that
+anyone holding the app could try all of them against a downloaded set, whatever it was hashed
+with, and the key that makes the fingerprint safe would have to travel with it to be usable.
+`masterdata/identity.py` says this at the top so nobody re-derives it.
+
+### Registering an animal offline
+
+Included on the same terms, and it was always the easier call: an animal row costs nobody
+money. The ear tag is the only uniqueness the server enforces, most animals carry none, and a
+rejection reaches the Mait on the waiting list with nothing having been taken from anyone.
 
 ## Where to start next
 

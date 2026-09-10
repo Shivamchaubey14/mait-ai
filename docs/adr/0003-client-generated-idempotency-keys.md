@@ -35,6 +35,37 @@ what happened at the time — but it means clients must refresh inventory from
 A client that reuses a key for genuinely different content is a client bug. The server detects
 the payload mismatch and returns `422` rather than silently serving the wrong response.
 
+### What carries a key (amended 2026-09-10)
+
+The decision above was written for the AI event and is unchanged. Two more rows have since
+needed the same protection, because both are now created in a yard with no signal:
+
+| Row | Key | Replay |
+| --- | --- | --- |
+| `ai_event` | `client_uuid`, minted when the capture starts | `AIEventViewSet._replay` |
+| `animal` | `client_uuid`, minted when the Mait fills the registration form | `AnimalViewSet._replay` |
+| `non_member` | `client_uuid`, minted when the Mait fills the registration form | `NonMemberViewSet._replay` |
+| `pregnancy_check` | `client_uuid`, minted when the outcome is tapped | unique column |
+
+A duplicate non-member is the most expensive of the three: she is a farmer who can be asked for
+cash a second time for one service, and once the round is over a duplicate is indistinguishable
+from a second woman.
+
+An animal's key is her own rather than the capture's, because she outlives it: she stays on
+the farmer's roster after the insemination is closed, and a Mait who abandons the capture has
+still registered the cow. A dropped response without it leaves the farmer with two identical
+rows and the Mait with no way to tell them apart.
+
+The AI event's photo `PATCH` carries no key of its own and is made replay-safe in the domain
+instead — `photo_already_attached` answers a repeat with the event as it stands, the way
+`complete` has always answered an already-completed one. Fingerprinting a multipart upload
+would compare the bytes of a re-encoded JPEG, which is not a stable identity.
+
+Two things follow for the handset. A row created offline has no server id, so the jobs behind
+it name it by its local key and the drain fills in the real one once the create lands
+(`api/queue`'s `rememberServerId`). And because the create and the jobs behind it are routinely
+sent by different runs of the app, that translation lives on disk rather than in the drain.
+
 ## Alternatives considered
 
 **Server-issued keys** — requires a round trip before the work can be queued, which defeats the
