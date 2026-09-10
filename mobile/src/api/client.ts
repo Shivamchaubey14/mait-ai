@@ -13,6 +13,8 @@ import type { FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query';
 import { API_BASE_URL } from '@/config/env';
 import type { RootState } from '@/store';
 
+import { cacheKeyFor, readCached, writeCached } from './offlineCache';
+
 /** RFC 7807 problem details, the shape every API error takes (SRS §9.11). */
 export interface ProblemDetails {
   type: string;
@@ -110,9 +112,69 @@ export const baseQueryWithReauth: BaseQueryFn<
   return result;
 };
 
+/**
+ * Whether a failure means "the server could not be reached" rather than "the server said no".
+ *
+ * The distinction decides whether a stored answer may stand in. A refusal is the server's
+ * considered reply and must reach the screen that asked — answering a 403 out of the cache
+ * would show a Mait a roster the office has just taken off them. Only a request that never
+ * got an answer, or that got one no server meant to give, falls back.
+ */
+function unreachable(error: FetchBaseQueryError | undefined): boolean {
+  if (!error) {
+    return false;
+  }
+  if (error.status === 'FETCH_ERROR' || error.status === 'TIMEOUT_ERROR') {
+    return true;
+  }
+  return typeof error.status === 'number' && error.status >= 500;
+}
+
+/**
+ * The same base query, with the last good answer behind it (see `offlineCache.ts`).
+ *
+ * Wrapped rather than rewritten: the token, the silent refresh and the tunnel header all
+ * still happen exactly once, in `baseQueryWithReauth`, and this only decides what to do with
+ * what comes back. Every endpoint in the app is unchanged and unaware.
+ *
+ * Reads that are not on the allowlist, and every write, pass through untouched.
+ */
+export const baseQueryWithOfflineReads: BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError
+> = async (args, api, extraOptions) => {
+  const key = cacheKeyFor(args);
+  const result = await baseQueryWithReauth(args, api, extraOptions);
+
+  // Keyed by the signed-in user, so a shared handset never serves one Mait's farmers to the
+  // next one to sign in. With nobody signed in there is nothing to key on and nothing worth
+  // storing.
+  const owner = (api.getState() as RootState).auth?.user?.id ?? null;
+  if (!key || owner === null) {
+    return result;
+  }
+
+  if (!result.error && result.data !== undefined) {
+    // Deliberately not awaited: the screen waiting on this read must not also wait on a disk
+    // write, and a write that fails costs a later fallback rather than this answer.
+    writeCached(owner, key, result.data);
+    return result;
+  }
+
+  if (unreachable(result.error)) {
+    const stored = await readCached(owner, key);
+    if (stored) {
+      return { data: stored.data, meta: { fromCache: true, savedAt: stored.savedAt } };
+    }
+  }
+
+  return result;
+};
+
 export const api = createApi({
   reducerPath: 'api',
-  baseQuery: baseQueryWithReauth,
+  baseQuery: baseQueryWithOfflineReads,
   tagTypes: ['Inventory', 'AIEvent', 'Indent', 'Member', 'MPP', 'Animal', 'Payment', 'Pregnancy'],
   // Endpoints are injected per feature slice so this module never becomes a dumping ground.
   endpoints: () => ({}),

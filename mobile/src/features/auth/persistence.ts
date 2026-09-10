@@ -9,6 +9,7 @@
 
 import type { Middleware } from '@reduxjs/toolkit';
 
+import { clearCache } from '@api/offlineCache';
 import { clearQueue } from '@api/queue';
 
 import { loggedIn, loggedOut, profileRefreshed, tokensRefreshed } from './authSlice';
@@ -61,6 +62,16 @@ export const sessionPersistence: Middleware = store => next => action => {
      * can only be sent by this Mait on this handset.
      */
     clearQueue();
+
+    /**
+     * And the farmers, animals and stock stored to make the round work without a signal.
+     *
+     * Same reason as the queue, one step further: those rosters are the members and
+     * non-members at this Mait's own collection points, read under this Mait's token. A
+     * handset passed to somebody else must not still be able to answer with them, and the
+     * cache is a fallback for a read the next signed-in Mait would not be allowed to make.
+     */
+    clearCache();
   }
 
   return result;
