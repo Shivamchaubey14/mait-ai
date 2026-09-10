@@ -10,10 +10,12 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Max, Q
 from django.http import Http404, HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
@@ -35,11 +37,14 @@ from apps.payments.services import issue_otp, verify_otp
 from . import columns as cols
 from .exports import COLUMNS as export_columns
 from .exports import non_member_workbook_response, with_last_known_position
+from .identity import aadhaar_clash, mobile_clash
 from .models import MPP, DataUploadLog, Member, NonMember
 from .serializers import (
     AdminNonMemberDetailSerializer,
     AdminNonMemberListSerializer,
     DataUploadLogSerializer,
+    FarmerIdentityCheckSerializer,
+    FarmerRosterRowSerializer,
     MasterUploadSerializer,
     MemberDetailSerializer,
     MemberListSerializer,
@@ -632,6 +637,144 @@ class NonMemberViewSet(
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Is this farmer already on file?",
+        description=(
+            "Asked by the registration form while the Mait is still typing, so a farmer who "
+            "should not be registered as a non-member is caught **before** she is asked for "
+            "cash. It answers with the same rule the create enforces "
+            "(`masterdata.identity`) — there is one implementation, because a form that "
+            "promised an answer the create then contradicted would be worse than no inline "
+            "check.\n\n"
+            "Send one of `aadhar_no` or `mobile_no`.\n\n"
+            "`blocking` is the difference between the two. An Aadhaar match **is** the same "
+            "person and the form must not go on. A mobile match is a question — a mother and "
+            "a daughter share a handset, and a household often has one phone — so it is "
+            "surfaced as a warning the Mait can look at and continue past.\n\n"
+            "Throttled, and it answers only about farmers at the requesting Mait's own MPPs "
+            "for the mobile lookup. The Aadhaar lookup is platform-wide because that is the "
+            "whole point of it — a member at another collection point is still a member."
+        ),
+        request=FarmerIdentityCheckSerializer,
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(detail=False, methods=["post"], url_path="check")
+    def check(self, request):
+        """
+        Answer, without ever putting the number in a log or a response.
+
+        What comes back names the farmer it clashed with, which is the one thing a Mait needs
+        in order to act — but the number they typed is never echoed, and nothing here writes
+        it anywhere. The audit trail is deliberately not touched: this is a read a Mait makes
+        several times per registration as the digits go in, and a trail of them would bury the
+        registrations themselves.
+        """
+        serializer = FarmerIdentityCheckSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        aadhaar = "".join(c for c in (data.get("aadhar_no") or "") if c.isdigit())
+        if len(aadhaar) == 12:
+            clash = aadhaar_clash(aadhaar)
+            return Response(
+                {
+                    "available": clash is None,
+                    # An Aadhaar match is the same person. There is nothing to weigh.
+                    "blocking": clash is not None,
+                    "kind": clash.kind if clash else "",
+                    "detail": clash.detail if clash else "",
+                }
+            )
+
+        clash = mobile_clash(data.get("mobile_no") or "")
+        return Response(
+            {
+                "available": clash is None,
+                # Never blocking: see `mobile_clash`. One phone per household is normal.
+                "blocking": False,
+                "kind": clash.kind if clash else "",
+                "detail": clash.detail if clash else "",
+            }
+        )
+
+    @extend_schema(
+        summary="The farmers at an MPP, as thin as a duplicate check can be",
+        description=(
+            "A name, a mobile number and whether she is a member — for every farmer at one of "
+            "the requesting Mait's collection points, members and non-members together.\n\n"
+            "Downloaded and kept on the handset so the registration form can warn about a "
+            "number already on file **with no signal**, which is when a farmer is most likely "
+            "to be registered a second time. It carries no Aadhaar and never will: the "
+            "Aadhaar match is the check that decides, and twelve digits is small enough that "
+            "a downloaded set could be brute-forced whatever it was hashed with "
+            "(`masterdata.identity`). The mobile number is already served to the app "
+            "unmasked, because a Mait has to be able to ring a farmer.\n\n"
+            "Not paginated. A collection point is a village: the largest on this data has a "
+            "few hundred farmers, and a roster delivered in pages is a roster that is "
+            "incomplete on the handset exactly when the network is gone."
+        ),
+        parameters=[
+            OpenApiParameter(
+                "mpp__mpp_code",
+                str,
+                required=True,
+                description="The collection point whose farmers to list.",
+            )
+        ],
+        responses={200: FarmerRosterRowSerializer(many=True)},
+    )
+    @action(detail=False, methods=["get"])
+    def roster(self, request):
+        mait = getattr(request.user, "mait_profile", None)
+        mpp_code = (request.query_params.get("mpp__mpp_code") or "").strip()
+        if mait is None or not mpp_code:
+            return Response([])
+
+        # Scoped the same way every other read here is: a Mait sees the farmers at the
+        # collection points they cover, and nothing else (SRS §16).
+        mpp = MPP.objects.filter(mpp_code=mpp_code, mait=mait).first()
+        if mpp is None:
+            return Response([])
+
+        rows = [
+            {"name": name, "mobile_no": mobile, "kind": "member"}
+            for name, mobile in Member.objects.filter(mpp=mpp)
+            .exclude(mobile_no="")
+            .values_list("member_name", "mobile_no")
+        ] + [
+            {"name": name, "mobile_no": mobile, "kind": "non_member"}
+            for name, mobile in NonMember.objects.filter(mpp=mpp)
+            .exclude(mobile_no="")
+            .values_list("name", "mobile_no")
+        ]
+        return Response(FarmerRosterRowSerializer(rows, many=True).data)
+
+    def _replay(self, client_uuid):
+        """
+        The non-member this ``client_uuid`` already registered, if there is one.
+
+        The same rule the AI event and the animal have, and the reason is sharpest here: the
+        offline queue retries blindly (ADR 0003), and a duplicate non-member is a farmer who
+        can be asked for cash a second time for one service. Answering with the row that
+        already exists turns the retry into a no-op.
+
+        Scoped to what this caller may see, so a key — which is `Math.random` on a handset,
+        not a secret — cannot fish another Mait's farmer out of the database.
+        """
+        if not client_uuid:
+            return None
+        try:
+            return self.get_queryset().filter(client_uuid=client_uuid).first()
+        except (DjangoValidationError, ValueError, TypeError):
+            # Not a UUID at all. Let the serializer produce the readable field error.
+            return None
+
+    def create(self, request, *args, **kwargs):
+        replayed = self._replay(request.data.get("client_uuid"))
+        if replayed is not None:
+            return Response(NonMemberDetailSerializer(replayed).data, status=status.HTTP_200_OK)
+        return super().create(request, *args, **kwargs)
 
     def get_serializer_context(self):
         # The serializer needs to know whose MPPs are whose before it accepts one.

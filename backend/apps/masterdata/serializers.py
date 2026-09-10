@@ -5,8 +5,8 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.animals.serializers import MAX_PHOTO_BYTES, AnimalSerializer
-from apps.core.fields import pii_lookup_hash
 
+from .identity import aadhaar_clash
 from .models import MAX_ERRORS_STORED, MPP, DataUploadLog, Mait, Member, NonMember
 
 # openpyxl only reads the OOXML format. Rejecting other types up front gives a clear error
@@ -281,6 +281,46 @@ class MemberDetailSerializer(serializers.ModelSerializer):
         return bool(obj.mobile_no)
 
 
+class FarmerIdentityCheckSerializer(serializers.Serializer):
+    """
+    What the registration form asks while the Mait is still typing.
+
+    One of the two, not both: the form asks about the mobile number as it is entered and about
+    the Aadhaar as the twelfth digit lands, and they are two different questions with two
+    different consequences.
+    """
+
+    aadhar_no = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    mobile_no = serializers.CharField(required=False, allow_blank=True, max_length=15)
+
+    def validate(self, attrs):
+        if not (attrs.get("aadhar_no") or attrs.get("mobile_no")):
+            raise serializers.ValidationError("Supply an aadhar_no or a mobile_no to check.")
+        return attrs
+
+
+class FarmerRosterRowSerializer(serializers.Serializer):
+    """
+    One farmer, as thin as the offline duplicate check can be made.
+
+    A name, a number and which of the two she is — and nothing else. This is downloaded and
+    kept on the handset so the registration form can warn about a number already on file with
+    no signal, so every extra column would be one more thing sitting in a village on a phone
+    that gets shared and lost.
+
+    **No Aadhaar, and there never can be.** The Aadhaar match is the check that actually
+    decides, and it stays on the server permanently: twelve digits is small enough that anyone
+    holding the app could try all of them against a downloaded set, whatever it was hashed
+    with (see `identity.py`). What travels here is a mobile number the app is already given
+    unmasked, because a Mait has to be able to ring a farmer.
+    """
+
+    name = serializers.CharField()
+    mobile_no = serializers.CharField()
+    #: `member` or `non_member` — the Mait's next move differs, so the app has to know which.
+    kind = serializers.CharField()
+
+
 class NonMemberSerializer(serializers.ModelSerializer):
     """Quick-capture registration by a Mait in the field (SRS §6.3 step 2)."""
 
@@ -289,6 +329,10 @@ class NonMemberSerializer(serializers.ModelSerializer):
     # handset that has already stored it — a phone in a field is the last place it belongs.
     aadhar_no = serializers.CharField(write_only=True, max_length=20)
     masked_aadhar = serializers.CharField(read_only=True)
+    # Optional on the wire — the back office registers non-members too and has no handset to
+    # mint one — and always sent by the app. It is what makes a retry after a dropped response
+    # a no-op rather than a second farmer who can be charged again (ADR 0003).
+    client_uuid = serializers.UUIDField(required=False, allow_null=True)
 
     # She agreed, and the agreement is the record — not the disabled button on the handset
     # that made her agree before the Mait could tap Save (SRS §7 Compliance). The app has
@@ -327,6 +371,7 @@ class NonMemberSerializer(serializers.ModelSerializer):
             "address",
             "aadhar_no",
             "masked_aadhar",
+            "client_uuid",
             "aadhar_front_captured",
             "aadhar_back_captured",
             "consent",
@@ -357,49 +402,22 @@ class NonMemberSerializer(serializers.ModelSerializer):
         """
         Twelve digits, and belonging to nobody already on file — member or non-member.
 
-        The membership check is what stops the fraud the non-member path invites: a member
-        recorded as a non-member is a farmer the Mait can take cash from for a service the
-        dairy has already paid for out of her milk payment. She has no reason to query it —
-        she was asked for money and she paid it.
+        The rule itself lives in `identity.aadhaar_clash`, because the app now asks it twice:
+        once while the Mait is still typing the number, and again here when the form is
+        submitted. Two implementations would be worse than one inline check fewer — a form
+        that says the number is free and a create that then refuses it is a Mait who stops
+        believing either.
 
-        The non-member check closes the other half of the same hole, which was open. One
-        Aadhaar could be registered any number of times: at a second MPP, or at the same one
-        on a different mobile — the only uniqueness the table had was mobile-per-MPP. Every
-        copy is a farmer who can be charged again, and a duplicate is indistinguishable from
-        a second woman once the round is over.
-
-        Both are matched on the keyed fingerprint, never on the number: the encrypted column
-        cannot be searched, and adding a searchable copy of an Aadhaar to solve that would be
-        a worse problem than the one being solved.
+        This remains the authority. The inline check is a courtesy that happens before the
+        farmer is asked for money; this is what actually decides.
         """
         digits = "".join(c for c in value if c.isdigit())
         if len(digits) != 12:
             raise serializers.ValidationError("Aadhaar is 12 digits.")
 
-        fingerprint = pii_lookup_hash(digits)
-
-        member = Member.objects.filter(aadhar_hash=fingerprint).select_related("mpp").first()
-        if member is not None:
-            # Named, because the Mait's next action is to go back and find her in the roster,
-            # and "this Aadhaar is registered" would leave them guessing at which farmer.
-            raise serializers.ValidationError(
-                f"{member.member_name} is already a member at "
-                f"{member.mpp.mpp_name} ({member.member_code}). "
-                "Record this as a member — she pays nothing today."
-            )
-
-        already = NonMember.objects.filter(aadhar_hash=fingerprint)
-        if self.instance is not None:
-            already = already.exclude(pk=self.instance.pk)
-        duplicate = already.select_related("mpp").first()
-        if duplicate is not None:
-            # Named and placed, so the Mait can go and find the record rather than conclude
-            # the app is refusing her for no reason.
-            raise serializers.ValidationError(
-                f"This Aadhaar is already registered to {duplicate.name} at "
-                f"{duplicate.mpp.mpp_name}. She is on file — pick her instead of "
-                "registering her twice."
-            )
+        clash = aadhaar_clash(digits, exclude_non_member=self.instance)
+        if clash is not None:
+            raise serializers.ValidationError(clash.detail)
 
         return digits
 
