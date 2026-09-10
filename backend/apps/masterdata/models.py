@@ -212,6 +212,24 @@ class NonMember(TimeStampedModel):
         FATHER = "father", "Father"
         HUSBAND = "husband", "Husband"
 
+    #: Minted on the handset when the Mait fills the registration form, and the idempotency
+    #: key for this registration (ADR 0003).
+    #:
+    #: A farmer is now registered in a village with no signal, so the queue retries this write
+    #: blindly — it cannot tell "never arrived" from "arrived and the reply was lost". Without
+    #: the key a dropped response registers her twice, and a duplicate non-member is a farmer
+    #: who can be charged twice for one service.
+    #:
+    #: Nullable, because every row registered before this existed has none and because the
+    #: back office creates non-members too. Unique where present, so the database refuses a
+    #: duplicate even if a code path forgets to look.
+    client_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="Device-generated id for a registration that may be retried (ADR 0003).",
+    )
+
     name = models.CharField(max_length=150, db_index=True)
     # Two women in one village share a first name more often than not, and the roster a Mait
     # reads on the second visit has to tell them apart. Members carry the same field from SAP.
