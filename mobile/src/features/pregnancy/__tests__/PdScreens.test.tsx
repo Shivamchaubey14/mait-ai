@@ -277,7 +277,9 @@ describe('asking the owner first', () => {
     fireEvent.press(screen.getByTestId('pd-consent-no'));
     fireEvent.press(screen.getByTestId('pd-decline-save'));
 
-    expect(onSave).toHaveBeenCalledWith('declined', null);
+    // No remark either: a refusal is not a finding, and there was nothing examined to
+    // remark on.
+    expect(onSave).toHaveBeenCalledWith('declined', null, '');
   });
 
   it('commits the refusal on a second tap, never the first', () => {
@@ -494,7 +496,7 @@ describe('recording what was found', () => {
     fireEvent.press(screen.getByTestId('pd-outcome-not-pregnant'));
     fireEvent.press(screen.getByTestId('pd-save'));
 
-    expect(onSave).toHaveBeenCalledWith('not_pregnant', 'file:///a.jpg');
+    expect(onSave).toHaveBeenCalledWith('not_pregnant', 'file:///a.jpg', '');
   });
 
   it('does not demand a photograph for the other two', () => {
@@ -505,7 +507,56 @@ describe('recording what was found', () => {
     fireEvent.press(screen.getByTestId('pd-outcome-pregnant'));
     fireEvent.press(screen.getByTestId('pd-save'));
 
-    expect(onSave).toHaveBeenCalledWith('pregnant', null);
+    expect(onSave).toHaveBeenCalledWith('pregnant', null, '');
+  });
+
+  it('offers no remark box until there is an answer to remark on', () => {
+    // Before that it is a fourth question asked ahead of the first, on a screen whose whole
+    // job is to get one answer chosen.
+    withConsent();
+
+    expect(screen.queryByTestId('pd-remark')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('pd-outcome-unsure'));
+
+    expect(screen.getByTestId('pd-remark')).toBeTruthy();
+  });
+
+  it('sends the remark with the answer it was written about', () => {
+    const onSave = jest.fn();
+    withConsent({ onSave, photoUri: null });
+
+    fireEvent.press(screen.getByTestId('pd-outcome-unsure'));
+    fireEvent.changeText(screen.getByTestId('pd-remark-input'), '  horn felt full but early  ');
+    fireEvent.press(screen.getByTestId('pd-save'));
+
+    // Trimmed, so a stray space is not the difference between a remark and a blank one.
+    expect(onSave).toHaveBeenCalledWith('unsure', null, 'horn felt full but early');
+  });
+
+  it('keeps a remark when the answer is changed under it', () => {
+    // It was written about the animal, not about the radio button. Clearing it would teach a
+    // Mait to write it last or not at all.
+    const onSave = jest.fn();
+    withConsent({ onSave, photoUri: 'file:///a.jpg' });
+
+    fireEvent.press(screen.getByTestId('pd-outcome-unsure'));
+    fireEvent.changeText(screen.getByTestId('pd-remark-input'), 'bulled again on the 5th');
+    fireEvent.press(screen.getByTestId('pd-outcome-not-pregnant'));
+
+    expect(screen.getByTestId('pd-remark-input').props.value).toBe('bulled again on the 5th');
+    fireEvent.press(screen.getByTestId('pd-save'));
+    expect(onSave).toHaveBeenCalledWith('not_pregnant', 'file:///a.jpg', 'bulled again on the 5th');
+  });
+
+  it('saves without a remark, because it is not one of the questions', () => {
+    const onSave = jest.fn();
+    withConsent({ onSave, photoUri: null });
+
+    fireEvent.press(screen.getByTestId('pd-outcome-pregnant'));
+    fireEvent.press(screen.getByTestId('pd-save'));
+
+    expect(onSave).toHaveBeenCalledWith('pregnant', null, '');
   });
 
   it('opens the camera when the photograph is asked for', () => {
@@ -562,6 +613,27 @@ describe('recording what was found', () => {
     );
 
     expect(screen.getByTestId('pd-recorded-calving')).toHaveTextContent(/28 Feb/);
+  });
+
+  it('reads the remark back on a settled record', () => {
+    // The half of the record a farmer's later question is usually actually about — three
+    // radio buttons cannot say the animal was thin.
+    render(
+      withArea(
+        <PdRecordScreen
+          {...props}
+          check={check({ outcome: 'not_pregnant', note: 'bulled again on the 5th' })}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('pd-recorded-remark')).toHaveTextContent(/bulled again on the 5th/);
+  });
+
+  it('shows no remark block on a record that carries none', () => {
+    render(withArea(<PdRecordScreen {...props} check={check({ outcome: 'pregnant' })} />));
+
+    expect(screen.queryByTestId('pd-recorded-remark')).toBeNull();
   });
 
   it('names the animal and how long she has been carrying', () => {

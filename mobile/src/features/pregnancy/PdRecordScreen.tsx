@@ -31,9 +31,18 @@
  * somebody money and the one a farmer disputes six months later. Everywhere else a photograph
  * is a courtesy, and demanding one would teach a Mait to take a picture of a wall to get past
  * the screen.
+ *
+ * **And a line of their own, on whichever answer they gave.** Three radio buttons are the
+ * whole finding, and a finding is not the whole visit: the animal was thin, the owner said
+ * she bulled again on the 5th, the horn felt full but early. That is what a vet reads before
+ * the recheck and what an office reads when a farmer argues, and until now the only place for
+ * it was a Mait's memory. It is optional on purpose — a remark demanded on every check is a
+ * remark that says "ok" — and it is offered only after an answer is chosen, so it is a note
+ * *about that answer* rather than a fourth question asked before the first is settled. The
+ * server has carried the field all along (`PregnancyCheck.note`); nothing sent one.
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -41,6 +50,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -50,6 +60,7 @@ import { useTranslation } from 'react-i18next';
 import type { PdOutcome, PregnancyCheck } from '@api/types';
 import { settlementFor } from './charge';
 import FlowCamera from '@/features/aiFlow/FlowCamera';
+import { useRevealOnFocus } from '@/features/aiFlow/components';
 import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
 import { shortDate } from './PdListScreen';
@@ -165,7 +176,7 @@ export default function PdRecordScreen({
 }: {
   check: PregnancyCheck;
   onBack: () => void;
-  onSave: (outcome: PdOutcome, photoUri: string | null) => void;
+  onSave: (outcome: PdOutcome, photoUri: string | null, note: string) => void;
   /** Held by the shell, so a photograph survives this screen being rebuilt. */
   photoUri: string | null;
   onPhoto: (uri: string | null) => void;
@@ -174,10 +185,26 @@ export default function PdRecordScreen({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [outcome, setOutcome] = useState<PdOutcome | null>(null);
+  /**
+   * The Mait's own line about what they found. Kept as typed and trimmed once, on save.
+   *
+   * Not cleared when the answer is changed: a Mait who wrote "bulled again on the 5th" and
+   * then moved from Not sure to Not pregnant wrote it about the animal, not about the radio
+   * button, and retyping it is how it stops being written at all.
+   */
+  const [remark, setRemark] = useState('');
   const [camera, setCamera] = useState(false);
   // Stage one until the owner has answered. `null` is "not asked yet" and is different from
   // `false`: one is a screen waiting for a tap, the other is a refusal about to be recorded.
   const [consented, setConsented] = useState<boolean | null>(null);
+
+  // The remark box is the last thing on a scrolling body with a button pinned under it, so
+  // on a short handset the keyboard opens straight over it. Same answer the capture flow's
+  // forms use, rather than a second one written here.
+  const { scroller, content, overlap: keyboard, api: scrollApi } = useRevealOnFocus();
+  // The wrapper, not the box: the label has to come up with the field it names, or a Mait
+  // sees an unlabelled box appear over the keyboard.
+  const remarkRef = useRef<View>(null);
 
   const animal = t(`animalType.${check.animal_type}`, { defaultValue: check.animal_type });
   const subject = check.ear_tag_no
@@ -337,6 +364,16 @@ export default function PdRecordScreen({
             </Text>
           )}
 
+          {/* What the Mait wrote at the time, read back verbatim. This is the half of the
+              record a farmer's question is usually actually about — three radio buttons
+              cannot say the animal was thin or that she bulled again on the 5th. */}
+          {!!check.note && (
+            <View style={styles.remarkRead} testID="pd-recorded-remark">
+              <Text style={styles.sectionLabel}>{t('pd.recordedRemark')}</Text>
+              <Text style={styles.remarkReadText}>{check.note}</Text>
+            </View>
+          )}
+
           {/* Why there is nothing to tap, said rather than left to be discovered. */}
           <View style={styles.locked} testID="pd-locked">
             <Ionicons name="lock-closed-outline" size={17} color={colors.textMuted} />
@@ -407,7 +444,7 @@ export default function PdRecordScreen({
               accessibilityRole="button"
               accessibilityState={{ disabled: busy, busy }}
               disabled={busy}
-              onPress={() => onSave('declined', null)}
+              onPress={() => onSave('declined', null, '')}
               style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
               testID="pd-decline-save"
             >
@@ -437,7 +474,15 @@ export default function PdRecordScreen({
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scroller}
+        innerViewRef={content}
+        /* A keyboard's worth of room under the content while one is up, so the remark box at
+           the foot can actually be scrolled clear of it. */
+        contentContainerStyle={keyboard ? [styles.body, { paddingBottom: keyboard }] : styles.body}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {/* Before the findings, not after them. The Mait says this to the owner while the
             animal is still standing there, and a price produced once the work is done is a
             bill rather than a quote. */}
@@ -522,6 +567,32 @@ export default function PdRecordScreen({
             {photoUri ? t('pd.photoRetake') : t('pd.photoTake')}
           </Text>
         </Pressable>
+
+        {/* Only once there is an answer to remark on. Before that it is a fourth question
+            asked ahead of the first, and a Mait reading four things chooses none of them. */}
+        {!!outcome && (
+          <View ref={remarkRef} style={styles.remark} testID="pd-remark">
+            <Text style={styles.remarkLabel}>{t('pd.remarkLabel')}</Text>
+            <TextInput
+              style={styles.remarkInput}
+              value={remark}
+              onChangeText={setRemark}
+              /* Written for the answer that was given. "Bulled again on the 5th" belongs to a
+                 not-pregnant and would be nonsense under a pregnant, and a placeholder that
+                 fits is the difference between a remark and a blank. */
+              placeholder={t(`pd.remarkHint_${outcome}`, { defaultValue: t('pd.remarkHintAny') })}
+              placeholderTextColor={colors.textDisabled}
+              accessibilityLabel={t('pd.remarkLabel')}
+              onFocus={() => scrollApi.reveal(remarkRef.current)}
+              multiline
+              /* The column is 255 (`PregnancyCheck.note`). Stopped here rather than truncated
+                 there, so nothing a Mait typed is silently dropped between the two. */
+              maxLength={255}
+              testID="pd-remark-input"
+            />
+            <Text style={styles.remarkFoot}>{t('pd.remarkOptional')}</Text>
+          </View>
+        )}
       </ScrollView>
 
       <View style={[styles.foot, { paddingBottom: spacing[3] + insets.bottom }]}>
@@ -529,7 +600,7 @@ export default function PdRecordScreen({
           accessibilityRole="button"
           accessibilityState={{ disabled: !canSave, busy }}
           disabled={!canSave}
-          onPress={() => outcome && onSave(outcome, photoUri)}
+          onPress={() => outcome && onSave(outcome, photoUri, remark.trim())}
           style={({ pressed }) => [
             styles.cta,
             !canSave && styles.ctaInert,
@@ -749,6 +820,38 @@ const styles = StyleSheet.create({
   photoHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   photoHintRequired: { color: colors.error },
   photoAction: { ...typography.bodyStrong, color: colors.primaryDark },
+
+  // -- the Mait's own line -----------------------------------------------------------------
+  remark: {
+    marginTop: spacing[4],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  remarkLabel: { ...typography.label, color: colors.textMuted, letterSpacing: 1 },
+  remarkInput: {
+    ...typography.body,
+    color: colors.ink,
+    marginTop: spacing[2],
+    // Tall enough for two lines before it grows, so a Mait can see it is a place to write a
+    // sentence rather than a code.
+    minHeight: MIN_TOUCH_TARGET,
+    // Android centres a single line in a multiline box and leaves the text floating.
+    textAlignVertical: 'top',
+    padding: 0,
+  },
+  remarkFoot: { ...typography.caption, color: colors.textMuted, marginTop: spacing[2] },
+  remarkRead: {
+    marginTop: spacing[4],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  remarkReadText: { ...typography.body, color: colors.ink, marginTop: spacing[2], lineHeight: 20 },
 
   foot: {
     paddingHorizontal: spacing[4],
