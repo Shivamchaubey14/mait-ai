@@ -204,6 +204,26 @@ def verify_straw(
 
 
 @transaction.atomic
+def photo_already_attached(event: AIEvent) -> bool:
+    """
+    Whether this event's proof photo is already on file.
+
+    The offline queue retries blindly: it cannot tell "the upload never arrived" from "the
+    upload arrived and the response was lost on the way back" (ADR 0003). The second case is
+    ordinary on a village connection, and it used to be fatal — the replay asked for a
+    transition out of ``photo_captured``, the state machine refused it with a ``409``, and the
+    app treats a 409 as retryable, so the job sat in the queue retrying a request that could
+    never succeed and holding up everything behind it.
+
+    So the same rule the completion has always had applies here: a photo attached to an event
+    that already has one is a replay, and the honest answer is that it is done. Asked as a
+    question rather than answered inside ``attach_photo`` because the view has to know
+    *before* it writes the uploaded file — a replayed capture must not leave a second copy of
+    the same photograph in storage.
+    """
+    return bool(event.ai_photo_url) and not event.can_transition_to(AIEvent.Status.PHOTO_CAPTURED)
+
+
 def attach_photo(
     event: AIEvent,
     *,
@@ -230,6 +250,11 @@ def attach_photo(
     whose camera will not open has to be able to finish the round — but nobody reading the
     record later should have to guess which of the two they are holding.
     """
+    if photo_already_attached(event):
+        # A retry whose first response was lost. The photograph is on file, the event has
+        # moved on, and nothing further should be written — see `photo_already_attached`.
+        return event
+
     chosen = photo_source == AIEvent.PhotoSource.GALLERY
     _transition(
         event,

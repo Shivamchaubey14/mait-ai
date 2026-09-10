@@ -36,7 +36,12 @@ from .serializers import (
     AIEventSerializer,
     AIEventTimelineSerializer,
 )
-from .services import attach_photo, complete_ai_event, start_ai_event
+from .services import (
+    attach_photo,
+    complete_ai_event,
+    photo_already_attached,
+    start_ai_event,
+)
 from .storage import store_photo
 
 
@@ -292,6 +297,13 @@ class AIEventViewSet(
     def photo(self, request, pk=None):
         event = self.get_object()
         self._assert_own(event, request)
+
+        # A replay of an upload whose response was lost, which is an ordinary outcome on a
+        # village connection. Answered before the serializer runs and before anything is
+        # written: the photograph is already on file, and storing the same picture a second
+        # time would leave an orphan in the bucket for every retry the queue makes.
+        if photo_already_attached(event):
+            return Response(AIEventSerializer(event).data)
 
         serializer = AIEventPhotoSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

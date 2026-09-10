@@ -80,6 +80,85 @@ class TestPhoto:
         assert response.json()["ai_photo_url"]
         assert response.json()["gps_lat"] == "28.3670000"
 
+    def test_a_replayed_upload_is_answered_rather_than_refused(
+        self, mait_client, mpp, member, animal, stocked_mait
+    ):
+        """
+        The upload landed and the reply was lost, which is an ordinary afternoon in a village.
+
+        The offline queue cannot tell that from "it never arrived", so it sends the photo
+        again (ADR 0003). This used to be fatal in a quiet way: the replay asked the state
+        machine to leave ``photo_captured``, which is not a transition it has, so the answer
+        was a 409 — and the app treats a 409 as worth retrying, so the job sat in the queue
+        forever failing a request that could never succeed, holding up every capture behind
+        it. The same rule the completion has always had applies here: it is already done.
+        """
+        straw = stocked_mait(1)[0]
+        event = mait_client.post(
+            f"{BASE}/",
+            {
+                "client_uuid": "66666666-6666-4666-8666-666666666666",
+                "mpp_code": mpp.mpp_code,
+                "member_code": member.member_code,
+                "animal_id": animal.id,
+                "straw_unique_no": straw.unique_straw_no,
+            },
+            format="json",
+        ).json()
+
+        first = mait_client.patch(
+            f"{BASE}/{event['id']}/photo/",
+            {"photo": a_photo(), "gps_lat": "28.3670000", "gps_lng": "79.4304000"},
+            format="multipart",
+        )
+        assert first.status_code == 200, first.json()
+
+        replay = mait_client.patch(
+            f"{BASE}/{event['id']}/photo/",
+            {"photo": a_photo(), "gps_lat": "28.3670000", "gps_lng": "79.4304000"},
+            format="multipart",
+        )
+
+        assert replay.status_code == 200, replay.json()
+        assert replay.json()["status"] == AIEvent.Status.PHOTO_CAPTURED
+        # The first photograph, not a second copy of it. Every retry that stored its own
+        # upload would leave an orphan in the bucket, and the record would point at whichever
+        # one arrived last.
+        assert replay.json()["ai_photo_url"] == first.json()["ai_photo_url"]
+
+        # And nothing was written twice: one photograph, one line on the trail.
+        trail = mait_client.get(f"{BASE}/{event['id']}/timeline/").json()
+        captured = [step for step in trail if step["to_status"] == AIEvent.Status.PHOTO_CAPTURED]
+        assert len(captured) == 1
+
+    def test_a_photo_replayed_after_completion_is_not_an_error_either(
+        self, mait_client, verified_event
+    ):
+        """
+        The whole capture went up while the response to the photo was still lost.
+
+        A queue that drains out of order, or a Mait who catches signal between two jobs, can
+        get here: the event is completed and the photo job is still on the handset. It is done
+        and the honest answer is to say so, rather than a 409 the app would retry all week.
+        """
+        event, _straw = verified_event()
+        event.ai_photo_url = "media/ai-photos/already-there.jpg"
+        event.status = AIEvent.Status.COMPLETED
+        # The row's own constraint: a completed event has a straw and a time. Set here rather
+        # than worked around, because a record that could be completed without either is the
+        # leakage this platform exists to stop.
+        event.completed_at = timezone.now()
+        event.save(update_fields=["ai_photo_url", "status", "completed_at"])
+
+        response = mait_client.patch(
+            f"{BASE}/{event.id}/photo/",
+            {"photo": a_photo(), "gps_lat": "28.3670000", "gps_lng": "79.4304000"},
+            format="multipart",
+        )
+
+        assert response.status_code == 200, response.json()
+        assert response.json()["ai_photo_url"] == "media/ai-photos/already-there.jpg"
+
     def test_a_gallery_photo_is_accepted_and_recorded_as_one(
         self, mait_client, mpp, member, animal, stocked_mait
     ):
