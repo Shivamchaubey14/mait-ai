@@ -28,7 +28,8 @@ from apps.core.exceptions import (
     StrawAlreadyConsumed,
 )
 from apps.core.permissions import IsAdmin, IsMait, in_section
-from apps.masterdata.models import Mait
+from apps.core.scoping import scope_note, scope_of
+from apps.masterdata.models import Mait, Zone
 
 from .models import Consumable, MaitInventory, MaitInventoryLedger, ProductType, SemenBatch
 from .serializers import (
@@ -307,7 +308,13 @@ def inventory_summary(request):
 @api_view(["GET"])
 @permission_classes([IsAdmin, in_section(PortalSection.INVENTORY)])
 def mait_inventory_detail(request, mait_id: int):
-    mait = get_object_or_404(Mait, pk=mait_id)
+    # The same reach as the list it is opened from: a zonal manager reads the Maits in their
+    # zone, and a Mait outside it is a 404 rather than a row they could not have clicked.
+    maits = Mait.objects.all()
+    codes = scope_of(request)
+    if codes is not None:
+        maits = maits.filter(mpps__plant_code__in=codes).distinct()
+    mait = get_object_or_404(maits, pk=mait_id)
     payload = build_summary(mait)
     payload["mait_id"] = mait.id
     payload["mait_name"] = mait.name
@@ -445,26 +452,95 @@ class LedgerViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         return super().list(request, *args, **kwargs)
 
 
+def _oversight_plants(request) -> list[str] | None:
+    """
+    The BMC/MCCs the oversight covers: the account's own zones, narrowed by `?zone=`.
+
+    ``None`` is the whole network. A zone asked for is intersected with the account's scope
+    rather than trusted, so a zonal manager passing somebody else's zone id gets an empty
+    screen, not a way round their own.
+    """
+    codes = scope_of(request)
+    zone_id = request.query_params.get("zone")
+    if zone_id and str(zone_id).isdigit():
+        zone = Zone.objects.filter(pk=int(zone_id), is_active=True).first()
+        wanted = zone.plant_codes if zone else []
+        codes = wanted if codes is None else [code for code in wanted if code in set(codes)]
+    return codes
+
+
+def _store_shelves(codes: list[str] | None) -> list[dict]:
+    """
+    Every open store in reach, and what is on its shelf.
+
+    A store is in a zone when it serves one of the zone's BMC/MCCs, or has been put in the zone
+    outright — a depot still being set up has no centres yet and should not vanish from the
+    manager who is setting it up. Imported here because the stores app imports this one's
+    models, and naming it at module scope would close the circle at startup.
+    """
+    from apps.stores.models import Store
+    from apps.stores.serializers import ItemNames, stock_lines
+    from apps.stores.services import open_indents
+
+    stores = Store.objects.filter(is_active=True).select_related("zone").prefetch_related("plants")
+    if codes is not None:
+        stores = stores.filter(
+            Q(plants__plant_code__in=codes) | Q(zone__plants__plant_code__in=codes)
+        ).distinct()
+
+    names = ItemNames()
+    shelves = []
+    for store in stores.order_by("name"):
+        lines = stock_lines(store, names)
+        straws = [line for line in lines if line["product_type"] == ProductType.STRAW]
+        shelves.append(
+            {
+                "id": store.id,
+                "code": store.code,
+                "name": store.name,
+                "zone_name": store.zone.name if store.zone_id else "",
+                "plant_names": [p.plant_name or p.plant_code for p in store.plants.all()],
+                "lines": lines,
+                "straws_on_hand": sum(line["on_hand"] for line in straws),
+                "straws_set_aside": sum(line["set_aside"] for line in straws),
+                "open_indents": open_indents(store).count(),
+            }
+        )
+    return shelves
+
+
 @extend_schema(
     tags=["inventory"],
-    summary="Stock across every Mait",
+    summary="Stock across every Mait, and on every store's shelf",
     description=(
         "Admin oversight of where the straws are (SRS §6.7.6). The Mait-facing endpoints "
         "only ever report the caller's own stock, so this is the only view that can answer "
         "who is about to run out.\n\n"
         "A Mait at zero is reported separately from one merely low: at zero they cannot "
-        "record an AI event at all, which is a stopped Mait rather than a warning."
+        "record an AI event at all, which is a stopped Mait rather than a warning.\n\n"
+        "Narrowed to the account's zones — a zonal manager sees the Maits whose collection "
+        "points are in their zone and the stores serving it — and further by `?zone=<id>`. "
+        "`stores` is each store in reach with its shelf (`on_hand`, `set_aside`, `available` "
+        "per item); `scope` says what the figures cover."
     ),
     responses={200: dict},
 )
 @api_view(["GET"])
 @permission_classes([IsAdmin, in_section(PortalSection.INVENTORY)])
 def inventory_oversight(request):
+    codes = _oversight_plants(request)
+    maits = Mait.objects.filter(is_active=True)
     lines = (
         MaitInventory.objects.filter(product_type=ProductType.STRAW, qty_available__gt=0)
         .select_related("mait")
         .prefetch_related("mait__mpps")
     )
+    if codes is not None:
+        # A Mait is in a zone when any collection point they cover reports into it. Through
+        # their MPPs, because a Mait carries no plant of their own.
+        in_reach = Mait.objects.filter(mpps__plant_code__in=codes).values("id")
+        maits = maits.filter(id__in=in_reach)
+        lines = lines.filter(mait_id__in=in_reach)
 
     batches = SemenBatch.objects.in_bulk([line.product_ref_id for line in lines])
 
@@ -491,7 +567,7 @@ def inventory_oversight(request):
 
     # Every active Mait appears, including the ones holding nothing — they are the whole
     # point of the screen, and a list built only from stock rows would omit them.
-    for mait in Mait.objects.filter(is_active=True).prefetch_related("mpps"):
+    for mait in maits.prefetch_related("mpps"):
         holders.setdefault(
             mait.id,
             {
@@ -507,6 +583,17 @@ def inventory_oversight(request):
     rows = sorted(holders.values(), key=lambda row: (row["total"], row["name"]))
 
     threshold = settings.LOW_STOCK_THRESHOLD
+    stores = _store_shelves(codes)
+    scope = scope_note(request)
+    if request.query_params.get("zone"):
+        # The line under the title names what is on screen, including a zone picked by hand.
+        zone = Zone.objects.filter(pk=request.query_params["zone"]).first()
+        scope = {
+            **scope,
+            "scoped": True,
+            "zones": [zone.name] if zone else [],
+            "plant_codes": codes,
+        }
     return Response(
         {
             "summary": {
@@ -515,8 +602,12 @@ def inventory_oversight(request):
                 "low": sum(1 for row in rows if 0 < row["total"] <= threshold),
                 "at_zero": sum(1 for row in rows if row["total"] == 0),
                 "low_stock_threshold": threshold,
+                "stores": len(stores),
+                "store_straws": sum(store["straws_on_hand"] for store in stores),
             },
             "results": rows,
+            "stores": stores,
+            "scope": scope,
         }
     )
 
