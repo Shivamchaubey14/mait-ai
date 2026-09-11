@@ -6,7 +6,29 @@ from rest_framework import serializers
 
 from apps.inventory.models import Consumable
 
-from .models import IndentRequest
+from .models import IndentHandover, IndentRequest
+
+
+class HandoverSummarySerializer(serializers.ModelSerializer):
+    """
+    One trip across a store's counter, as the Mait and the portal see it.
+
+    Carries no code. The Mait's app is the one place the code must never reach: it is read
+    aloud at the counter, and a handset that already knew it would prove nothing by typing it.
+    """
+
+    store_name = serializers.CharField(source="store.name", read_only=True)
+    state = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IndentHandover
+        fields = ["id", "qty", "store_name", "issued_at", "collected_at", "cancelled_at", "state"]
+        read_only_fields = fields
+
+    def get_state(self, obj) -> str:
+        if obj.cancelled_at:
+            return "cancelled"
+        return "collected" if obj.collected_at else "waiting"
 
 
 class IndentSerializer(serializers.ModelSerializer):
@@ -25,6 +47,13 @@ class IndentSerializer(serializers.ModelSerializer):
     mait_name = serializers.CharField(source="mait.name", read_only=True)
     mait_code = serializers.CharField(source="mait.sahayak_vendor_code", read_only=True)
     item = serializers.SerializerMethodField()
+    store_name = serializers.SerializerMethodField()
+    approved_by_name = serializers.SerializerMethodField()
+    approved_by_zone = serializers.SerializerMethodField()
+    qty_open = serializers.IntegerField(read_only=True)
+    qty_to_collect = serializers.SerializerMethodField()
+    needs_code = serializers.SerializerMethodField()
+    handovers = serializers.SerializerMethodField()
 
     class Meta:
         model = IndentRequest
@@ -49,8 +78,68 @@ class IndentSerializer(serializers.ModelSerializer):
             "issued_at",
             "received_at",
             "note",
+            "store",
+            "store_name",
+            "approved_at",
+            "approved_by_name",
+            "approved_by_zone",
+            "qty_open",
+            "qty_to_collect",
+            "needs_code",
+            "handovers",
         ]
         read_only_fields = fields
+
+    # -- stores ------------------------------------------------------------------------------
+    #
+    # Read off `handovers.all()` rather than filtered querysets, so a list view that prefetched
+    # them answers every row from one query.
+
+    def _handovers(self, obj) -> list[IndentHandover]:
+        return [h for h in obj.handovers.all() if h.cancelled_at is None]
+
+    def _waiting(self, obj) -> list[IndentHandover]:
+        return [h for h in self._handovers(obj) if h.collected_at is None]
+
+    def get_store_name(self, obj) -> str:
+        return obj.store.name if obj.store_id else ""
+
+    def get_approved_by_name(self, obj) -> str:
+        return obj.approved_by.full_name if obj.approved_by_id else ""
+
+    def get_approved_by_zone(self, obj) -> str:
+        """
+        The approver's zone, for "approved by the zonal manager, Mathura".
+
+        The first of them, because a line on a handset has room for one — and an approver
+        holding several is head office, who is better described by name than by region.
+        """
+        if not obj.approved_by_id:
+            return ""
+        zones = [zone.name for zone in obj.approved_by.zones.all() if zone.is_active]
+        return zones[0] if len(zones) == 1 else ""
+
+    def get_qty_to_collect(self, obj) -> int:
+        """
+        What is at a counter with the Mait's name on it right now.
+
+        Handed over at a store and not yet confirmed; or, for an indent the portal issued, the
+        whole issue until it is confirmed. This is the number the app's *Confirm collection*
+        is about, and it is not the same as `qty_issued` once an indent has been issued twice.
+        """
+        handovers = self._handovers(obj)
+        if handovers:
+            return sum(h.qty for h in handovers if h.collected_at is None)
+        if obj.status == IndentRequest.Status.ISSUED and not obj.received_at:
+            return obj.qty_issued
+        return 0
+
+    def get_needs_code(self, obj) -> bool:
+        """Whether collecting needs the code a store keeper reads out — every store handover."""
+        return bool(self._waiting(obj))
+
+    def get_handovers(self, obj) -> list[dict]:
+        return HandoverSummarySerializer(self._handovers(obj), many=True).data
 
     def _catalogue(self) -> tuple[dict[int, str], dict[str, str]]:
         """
@@ -106,6 +195,12 @@ class IndentCreateSerializer(serializers.Serializer):
         if attrs["product_type"] == "straw" and not (attrs.get("breed") or "").strip():
             raise serializers.ValidationError({"breed": "A straw request must name a breed."})
         return attrs
+
+
+class IndentCollectSerializer(serializers.Serializer):
+    """The code a store keeper read out. Not needed for stock the portal issued."""
+
+    code = serializers.CharField(max_length=8, required=False, allow_blank=True)
 
 
 class IndentRejectSerializer(serializers.Serializer):

@@ -11,6 +11,10 @@ deliberately absent before, and the reason still stands — an admin marking sto
 asserting a handover the platform cannot verify. What keeps that honest is in
 ``services.py``: straws are issued by their printed numbers, never as a bare quantity, and a
 straw already held or already consumed is refused. Read that module before changing this one.
+
+Approving is the zonal manager's job, and the list is narrowed to their zone the way every
+other "who" screen is. Issuing, where a store serves the Mait, belongs to that store's keeper
+in the app (``apps.stores``); the portal's own Issue is refused for those indents.
 """
 
 from __future__ import annotations
@@ -27,10 +31,13 @@ from apps.accounts.models import PortalSection, Role
 from apps.core.idempotency import idempotent
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin, IsMait, in_section
+from apps.core.scoping import scope_of
 from apps.core.services import record_audit
+from apps.stores.services import store_for_mait
 
 from .models import IndentRequest, stale_indent_q
 from .serializers import (
+    IndentCollectSerializer,
     IndentCreateSerializer,
     IndentIssueSerializer,
     IndentRejectSerializer,
@@ -52,11 +59,17 @@ class IndentFilter(django_filters.FilterSet):
         term = (value or "").strip()
         if not term:
             return queryset
-        return queryset.filter(
+        match = (
             Q(mait__name__icontains=term)
             | Q(indent_easy_ref_no__icontains=term)
             | Q(breed__icontains=term)
+            | Q(store__name__icontains=term)
         )
+        # "IND-13" is how every screen prints an indent, so it is how people search for one.
+        number = term.upper().removeprefix("IND").lstrip("-# ")
+        if number.isdigit():
+            match |= Q(pk=int(number))
+        return queryset.filter(match)
 
     def filter_stale(self, queryset, name, value):
         """
@@ -93,10 +106,21 @@ class IndentViewSet(
         return [IsAuthenticated(), in_section(PortalSection.INDENTS)()]
 
     def get_queryset(self):
-        base = IndentRequest.objects.select_related("mait").order_by("-requested_at")
+        base = (
+            IndentRequest.objects.select_related("mait", "store", "approved_by")
+            .prefetch_related("handovers__store", "approved_by__zones")
+            .order_by("-requested_at")
+        )
         user = self.request.user
         if getattr(user, "role", None) in (Role.SUPER_ADMIN, Role.ADMIN):
-            return base
+            # A zonal manager approves their own zone's indents and sees no one else's. Through
+            # the Mait's collection points, because an indent carries no plant of its own —
+            # and scoped here, on the queryset, so approving one outside the zone is a 404
+            # rather than a button that happens not to be drawn.
+            codes = scope_of(self.request)
+            if codes is None:
+                return base
+            return base.filter(mait__mpps__plant_code__in=codes).distinct()
         mait = getattr(user, "mait_profile", None)
         if mait is None:
             return base.none()
@@ -122,8 +146,12 @@ class IndentViewSet(
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        mait = request.user.mait_profile
         indent = IndentRequest.objects.create(
-            mait=request.user.mait_profile,
+            mait=mait,
+            # Routed now, so the office can see where it will be collected before approving
+            # it. Approval routes it again if no store served this Mait yet.
+            store=store_for_mait(mait),
             product_type=data["product_type"],
             product_ref_id=data.get("product_ref_id"),
             breed=(data.get("breed") or "").strip(),
@@ -159,7 +187,7 @@ class IndentViewSet(
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         indent = approve_indent(self.get_object(), actor=request.user, request=request)
-        return Response(IndentSerializer(indent).data)
+        return Response(IndentSerializer(self.get_queryset().get(pk=indent.pk)).data)
 
     @extend_schema(
         summary="Reject an indent",
@@ -185,17 +213,28 @@ class IndentViewSet(
     @extend_schema(
         summary="Confirm collection",
         description=(
-            "The Mait acknowledges that issued stock reached them. Moves no stock — the "
-            "balance rose when it was issued — and is the only step in the chain the Mait "
-            "owns. Allowed once, on an issued indent."
+            "The Mait acknowledges that issued stock reached them, and this is where their "
+            "balance rises — issuing only sets the stock aside. The only step in the chain the "
+            "Mait owns.\n\n"
+            "Stock handed over at a store needs `code`: the four digits the store keeper read "
+            "out at the counter. A wrong code is refused as `collection-code-invalid`; after "
+            "five, `collection-code-locked` until the keeper reads out a new one. Stock issued "
+            "from the portal needs no code."
         ),
-        request=None,
+        request=IndentCollectSerializer,
         responses={200: IndentSerializer},
     )
     @action(detail=True, methods=["post"], url_path="confirm-collection")
     def confirm_collection(self, request, pk=None):
-        indent = confirm_collection(self.get_object(), actor=request.user, request=request)
-        return Response(IndentSerializer(indent).data)
+        payload = IndentCollectSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        indent = confirm_collection(
+            self.get_object(),
+            code=payload.validated_data.get("code"),
+            actor=request.user,
+            request=request,
+        )
+        return Response(IndentSerializer(self.get_queryset().get(pk=indent.pk)).data)
 
     @extend_schema(
         summary="Issue an approved indent",
@@ -206,7 +245,9 @@ class IndentViewSet(
             "stock, so a count with no numbers behind it credits a balance nothing can be "
             "scanned against. Consumable requests take `qty`.\n\n"
             "Issuing fewer than were requested is allowed and closes the indent; the "
-            "remainder needs a fresh request."
+            "remainder needs a fresh request.\n\n"
+            "Refused for an indent routed to a store: that store's keeper hands it over from "
+            "the app (`/store/indents/{id}/issue/`), and part-issues stay open there."
         ),
         request=IndentIssueSerializer,
         responses={200: IndentSerializer},
