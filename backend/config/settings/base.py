@@ -56,6 +56,7 @@ LOCAL_APPS = [
     "apps.ai_events",
     "apps.payments",
     "apps.indents",
+    "apps.stores",
     "apps.integrations",
     "apps.pregnancy",
     "apps.dashboard",
@@ -178,8 +179,10 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
-    # Default-deny. Every endpoint opts in to its audience explicitly (SECURITY.md).
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    # Default-deny. Every endpoint opts in to its audience explicitly (SECURITY.md). Signed in
+    # as an admin or a Mait, not merely signed in: the views that lean on this default scope
+    # by those two roles and nothing else — see `IsKnownRole`.
+    "DEFAULT_PERMISSION_CLASSES": ["apps.core.permissions.IsKnownRole"],
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.StandardLimitOffsetPagination",
     "PAGE_SIZE": 50,
     "DEFAULT_FILTER_BACKENDS": [
@@ -196,6 +199,9 @@ REST_FRAMEWORK = {
         # OTP endpoints are the fraud surface — throttled hardest (SRS §16).
         "otp_send": "5/hour",
         "otp_verify": "10/hour",
+        # Asking the office for a sign-in code. Each ask puts a row in front of a person, so it
+        # is throttled like the SMS it stands in for.
+        "super_otp_request": "5/hour",
         "login": "20/hour",
         "upload": "10/hour",
         "burst": "120/min",
@@ -275,6 +281,14 @@ CACHES = {
 # --------------------------------------------------------------------------------------
 OTP_LENGTH = env.int("OTP_LENGTH", default=6)
 OTP_EXPIRY_SECONDS = env.int("OTP_EXPIRY_SECONDS", default=300)  # SRS §6.5.1 — 5 minutes
+
+# A sign-in code generated on the portal when the SMS did not arrive (accounts.SuperOTP).
+# Longer-lived than an SMS code because it is read out over a phone call, and a call can drop;
+# fewer than ten minutes and a Mait reading it back slowly in a yard can run out of time.
+SUPER_OTP_EXPIRY_SECONDS = env.int("SUPER_OTP_EXPIRY_SECONDS", default=600)
+SUPER_OTP_MAX_ATTEMPTS = env.int("SUPER_OTP_MAX_ATTEMPTS", default=5)
+# An ask nobody answered within this long leaves the queue.
+SUPER_OTP_REQUEST_TTL_HOURS = env.int("SUPER_OTP_REQUEST_TTL_HOURS", default=24)
 OTP_MAX_ATTEMPTS = env.int("OTP_MAX_ATTEMPTS", default=3)  # SRS §6.5.1
 
 # Numbers that receive a known OTP instead of a random one, so the app can be demonstrated

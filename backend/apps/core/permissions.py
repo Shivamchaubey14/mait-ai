@@ -33,6 +33,40 @@ class IsMait(_RolePermission):
     allowed_roles = (Role.MAIT,)
 
 
+class IsStoreKeeper(BasePermission):
+    """
+    A store keeper, attached to a store that is still open.
+
+    The store is part of the check rather than left to each view: a keeper whose store was
+    closed, or who was never given one, has no queue to work, and every store endpoint would
+    otherwise have to remember to refuse them itself.
+    """
+
+    message = "This account is not attached to an open store."
+
+    def has_permission(self, request, view) -> bool:
+        user = request.user
+        if not (user and user.is_authenticated and user.role == Role.STORE):
+            return False
+        store = getattr(user, "store", None)
+        return bool(store and store.is_active)
+
+
+class IsKnownRole(_RolePermission):
+    """
+    Signed in, as one of the roles the product's querysets know how to scope.
+
+    The project-wide default in place of plain ``IsAuthenticated``. Every older view that
+    declares no permission of its own was written when there were only admins and Maits, and
+    scopes by "an admin sees everything, a Mait sees their own" — so an account of any other
+    kind reaching one would be answered with whichever half its queryset happened to fall
+    into. A store keeper is the first such role; the next one is covered without anybody
+    having to audit forty views to find out.
+    """
+
+    allowed_roles = (Role.SUPER_ADMIN, Role.ADMIN, Role.MAIT)
+
+
 class InPortalSection(BasePermission):
     """
     An office account may only reach the sections it has been assigned (SRS §6.8.3).
@@ -49,6 +83,9 @@ class InPortalSection(BasePermission):
     the querysets already apply it — so gating them by section would refuse the app the
     master data it runs on.
 
+    A store keeper does not. Their app reads its own endpoints under ``/store/``, and the
+    querysets behind the portal's sections were written for admins and Maits only.
+
     Use ``in_section`` to build one; do not subclass this directly.
     """
 
@@ -59,8 +96,10 @@ class InPortalSection(BasePermission):
         user = request.user
         if not (user and user.is_authenticated):
             return False
-        if not user.is_admin:
+        if user.role == Role.MAIT:
             return True
+        if not user.is_admin:
+            return False
         return user.can_view_section(*self.sections)
 
 

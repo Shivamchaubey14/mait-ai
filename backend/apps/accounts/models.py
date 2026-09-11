@@ -27,6 +27,10 @@ class Role(models.TextChoices):
     SUPER_ADMIN = "super_admin", "Super Admin"
     ADMIN = "admin", "Admin / Back-office"
     MAIT = "mait", "Mait (Field Agent)"
+    # The person behind the counter at a depot, who hands approved stock to a Mait. Signs in
+    # to the same app by OTP, because the store is a room with a phone in it rather than a desk
+    # with a browser, and sees one store's queue and nothing else (apps/stores).
+    STORE = "store", "Store keeper"
 
 
 class PortalSection(models.TextChoices):
@@ -55,6 +59,9 @@ class PortalSection(models.TextChoices):
     PRODUCTS = "products", "Products"
     RATES = "rates", "Rates"
     INDENTS = "indents", "Indents"
+    # Beside Indents, because a store is where an approved indent goes next: which depot serves
+    # which BMC/MCCs, and who stands behind its counter.
+    STORES = "stores", "Stores"
     LEADERBOARD = "leaderboard", "Leaderboard"
     PREGNANCY = "pregnancy", "Pregnancy"
     EXCEPTIONS = "exceptions", "Exceptions"
@@ -65,6 +72,9 @@ class PortalSection(models.TextChoices):
     # automatically the account allowed to pull an AI-event export.
     MAIT_PAYMENT = "mait-payment", "Mait payment"
     USERS = "users", "Users & roles"
+    # Beside Users & roles: handing somebody a code that signs them in without their SMS is
+    # account administration, and it belongs to the desk that already does that.
+    SUPER_OTP = "super-otp", "Super OTP"
     # Beside Users & roles, and for the same reason: both hand out reach. That one says which
     # screens an account opens, this one says how much of the network it sees through them —
     # and an account that can edit zones can widen its own view, so it belongs behind the same
@@ -140,6 +150,15 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
             "Which zones this account sees. Empty means the whole network — the default, "
             "and what every head-office account keeps."
         ),
+    )
+    store = models.ForeignKey(
+        "stores.Store",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="keepers",
+        help_text="For a store keeper, the one store whose counter they work. Empty for "
+        "everyone else.",
     )
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -230,3 +249,119 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     def touch_login(self) -> None:
         self.last_login_at = timezone.now()
         self.save(update_fields=["last_login_at", "updated_at"])
+
+
+class SuperOTP(TimeStampedModel):
+    """
+    A code generated on the portal, standing in for an SMS that never arrived — at any step.
+
+    The SMS gateway is a third party, and when it is down — or a village's tower is not passing
+    texts — every step that sends a code stops: signing in, checking a farmer is who she says,
+    and her authorising a payment. At each of those the app offers to ask the office; an admin
+    generates a code here and reads it out over the phone; it is typed into the same boxes the
+    SMS code goes in, and ``verify_otp`` accepts it for that step and that number only.
+
+    **Whom the office calls is the SMS's own recipient, never whoever asked.** For sign-in that
+    is the account holder. For a farmer check or a payment it is *the farmer*, on the number on
+    her record: she hears the code from the office and tells the Mait, exactly as she would have
+    read it off the SMS. The Mait asking never learns it from the office — which is what keeps a
+    farmer's consent meaning something when the code did not come by text.
+
+    It is kept narrow:
+
+    - Asked for only by a registered, active field user, and for a farmer step only against the
+      farmer or payment already on their screen, after the SMS has actually been tried.
+    - The code is shown to the admin once, when it is generated, and stored only as a salted
+      hash. It works once, for ``SUPER_OTP_EXPIRY_SECONDS``, and for ``SUPER_OTP_MAX_ATTEMPTS``
+      wrong tries. Generating a new one revokes the last.
+    - The portal tells the admin to call the number *on file*, never the number that rang in.
+      The code only signs in that number, so reading it to a stranger on another phone is the
+      one way this can be abused, and the screen says so.
+    - Every step — the ask, the code, its use, a refusal — is in the audit log.
+    """
+
+    class Status(models.TextChoices):
+        REQUESTED = "requested", "Asked for"
+        ISSUED = "issued", "Code given"
+        USED = "used", "Used to sign in"
+        DECLINED = "declined", "Declined"
+        REVOKED = "revoked", "Replaced by a newer code"
+
+    #: Which step it stands in for — the SMS template it replaces (``OTPLog.Purpose``).
+    purpose = models.CharField(max_length=20, default="login", db_index=True)
+    #: Who asked: the account holder for sign-in, the Mait for a farmer step.
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="super_otps")
+    #: The number the SMS was for, and the only number the code works on. The one to call.
+    mobile_no = models.CharField(max_length=15, db_index=True)
+    #: For a farmer step: who she is, and what it is about ("AI event 64 · ₹300 cash").
+    farmer_name = models.CharField(max_length=150, blank=True)
+    context = models.CharField(max_length=160, blank=True)
+    ai_event_id = models.BigIntegerField(null=True, blank=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.REQUESTED, db_index=True
+    )
+
+    # The ask. Empty when the user phoned the office rather than asking from the app.
+    requested_at = models.DateTimeField(null=True, blank=True)
+    request_count = models.PositiveSmallIntegerField(default=0)
+    reason = models.CharField(max_length=200, blank=True)
+
+    # The code. Never stored in the clear.
+    code_hash = models.CharField(max_length=64, blank=True)
+    issued_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="super_otps_issued",
+    )
+    issued_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    decided_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="super_otps_declined",
+    )
+    decline_reason = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        db_table = "super_otp"
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["mobile_no", "status"], name="super_otp_mobile_status_idx"),
+            models.Index(fields=["mobile_no", "purpose", "status"], name="super_otp_step_idx"),
+            models.Index(fields=["status", "-requested_at"], name="super_otp_queue_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Super OTP for {self.mobile_no} [{self.status}]"
+
+    @property
+    def state(self) -> str:
+        """
+        Where it stands now, which is not always what was last written.
+
+        A code nobody used goes stale without anybody touching the row, and so does an ask
+        nobody answered within ``SUPER_OTP_REQUEST_TTL_HOURS`` — by then the user has found
+        signal, driven to the office, or given up, and it should not sit in the queue.
+        """
+        from django.conf import settings
+
+        now = timezone.now()
+        if self.status == self.Status.ISSUED:
+            if self.expires_at and self.expires_at <= now:
+                return "expired"
+            if self.attempt_count >= settings.SUPER_OTP_MAX_ATTEMPTS:
+                return "locked"
+            return "issued"
+        if self.status == self.Status.REQUESTED:
+            lapsed = self.requested_at and (now - self.requested_at).total_seconds() > (
+                settings.SUPER_OTP_REQUEST_TTL_HOURS * 3600
+            )
+            return "lapsed" if lapsed else "waiting"
+        return self.status

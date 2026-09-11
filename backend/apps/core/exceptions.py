@@ -136,6 +136,41 @@ class MPPNotAssigned(DomainError):
     default_detail = "You are not assigned to this MPP."
 
 
+class StoreStockShort(DomainError):
+    """
+    A keeper issuing more than the store can promise.
+
+    Promise, not hold: stock set aside for a Mait who has not collected it yet is still on the
+    shelf and still spoken for, and issuing it again would send two Maits to the counter for
+    the same straws.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    error_code = "store-stock-short"
+    default_detail = "The store does not have that many to hand over."
+
+
+class CollectionCodeInvalid(DomainError):
+    """The code the Mait typed is not the one the store keeper read out."""
+
+    error_code = "collection-code-invalid"
+    default_detail = "That is not the code the store read out. Ask them to read it again."
+
+
+class CollectionCodeLocked(DomainError):
+    """
+    Too many wrong codes against one handover.
+
+    Four digits is ten thousand guesses, which is not many. After a handful the keeper has to
+    read out a fresh one, which means the Mait has to be standing at the counter — the very
+    thing the code exists to prove.
+    """
+
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    error_code = "collection-code-locked"
+    default_detail = "Too many wrong codes. Ask the store for a new one."
+
+
 def problem_details_handler(exc, context):
     """DRF exception handler that reshapes every error into problem details."""
     response = drf_exception_handler(exc, context)

@@ -87,6 +87,27 @@ class IndentRequest(TimeStampedModel):
     )
     note = models.CharField(max_length=255, blank=True)
 
+    store = models.ForeignKey(
+        "stores.Store",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="indents",
+        help_text="The depot that hands this over. Worked out from the Mait's BMC/MCCs when "
+        "the indent is raised or approved; empty where no store serves them yet, which leaves "
+        "the portal's own Issue as the way out.",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_indents",
+        help_text="Who agreed to it — the zonal manager, normally. The store keeper reads "
+        "this before handing anything over.",
+    )
+
     class Meta:
         db_table = "indent_request"
         ordering = ["-requested_at"]
@@ -113,6 +134,18 @@ class IndentRequest(TimeStampedModel):
     @property
     def is_fulfilled(self) -> bool:
         return self.status == self.Status.ISSUED and self.qty_issued > 0
+
+    @property
+    def qty_open(self) -> int:
+        """
+        What the approval still owes: approved and not yet handed over.
+
+        Only an approved indent owes anything. A request nobody has agreed to owes nothing yet,
+        and one that was rejected or fully issued is closed.
+        """
+        if self.status != self.Status.APPROVED:
+            return 0
+        return max(self.qty_requested - self.qty_issued, 0)
 
     @property
     def is_stale(self) -> bool:
@@ -146,6 +179,76 @@ def stale_indent_q(now=None) -> Q:
         status__in=[IndentRequest.Status.ISSUED, IndentRequest.Status.REJECTED]
     ) & Q(requested_at__lt=cutoff)
     return open_and_unmoved | Q(sync_status=IndentRequest.SyncStatus.FAILED)
+
+
+class IndentHandover(TimeStampedModel):
+    """
+    One trip across a store's counter: this much of an indent, handed to the Mait.
+
+    An indent can take several. The store has 18 Murrah and the approval is for 25, so 18 go
+    today and the other 7 stay open on the same indent — the Mait does not raise it again, and
+    the next batch into the depot is issued against it.
+
+    **Issued is not collected.** The keeper issuing sets the stock aside on the shelf and reads
+    the Mait a four-digit code; the Mait typing that code into the app is what moves the stock
+    into their balance and off the store's. The code is what the handover proves: that the Mait
+    was standing at this counter when it happened, rather than confirming from a village that
+    something probably arrived. If they walk off without typing it, the handover stays open and
+    the depot still holds the count.
+    """
+
+    CODE_LENGTH = 4
+    MAX_CODE_ATTEMPTS = 5
+
+    indent = models.ForeignKey(IndentRequest, on_delete=models.PROTECT, related_name="handovers")
+    store = models.ForeignKey("stores.Store", on_delete=models.PROTECT, related_name="handovers")
+    qty = models.PositiveIntegerField()
+    collection_code = models.CharField(
+        max_length=8,
+        help_text="Read aloud by the keeper and typed in by the Mait. Never sent to the Mait's "
+        "app — a code the handset already knows proves nothing.",
+    )
+    code_attempts = models.PositiveSmallIntegerField(default=0)
+    flask_checked = models.BooleanField(
+        default=False,
+        help_text="The keeper checked the flask's temperature before straws left the store.",
+    )
+    issued_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="handovers_issued",
+    )
+    issued_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    collected_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    cancelled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="The Mait never collected it and the keeper put the stock back. The quantity "
+        "goes back to being open on the indent.",
+    )
+
+    class Meta:
+        db_table = "indent_handover"
+        ordering = ["-issued_at"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(qty__gt=0), name="handover_qty_positive"),
+        ]
+        indexes = [
+            models.Index(fields=["store", "-issued_at"], name="handover_store_time_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"IND-{self.indent_id} × {self.qty} at {self.store_id}"
+
+    @property
+    def is_pending(self) -> bool:
+        return self.collected_at is None and self.cancelled_at is None
+
+    @property
+    def is_locked(self) -> bool:
+        return self.code_attempts >= self.MAX_CODE_ATTEMPTS
 
 
 class IndentEasyWebhookEvent(TimeStampedModel):
