@@ -31,26 +31,49 @@ import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '
  */
 export type Tab = 'home' | 'stock' | 'history' | 'settings';
 
-const TABS: {
-  key: Tab;
+/**
+ * A store keeper's three. Profile keeps the Mait's key, `settings`, because it is the same
+ * place under the same name — who is signed in, the language, and the way out.
+ */
+export type StoreTab = 'toIssue' | 'storeStock' | 'storeHistory' | 'settings';
+
+export interface NavItem<T extends string> {
+  key: T;
   icon: React.ComponentProps<typeof Ionicons>['name'];
   activeIcon: React.ComponentProps<typeof Ionicons>['name'];
-}[] = [
+}
+
+const TABS: NavItem<Tab>[] = [
   { key: 'home', icon: 'home-outline', activeIcon: 'home' },
   { key: 'stock', icon: 'cube-outline', activeIcon: 'cube' },
   { key: 'history', icon: 'document-text-outline', activeIcon: 'document-text' },
   { key: 'settings', icon: 'person-outline', activeIcon: 'person' },
 ];
 
-export default function BottomNav({
+/** The box being handed over, the shopfront behind it, and the person at the counter. */
+export const STORE_TABS: NavItem<StoreTab>[] = [
+  { key: 'toIssue', icon: 'cube-outline', activeIcon: 'cube' },
+  { key: 'storeStock', icon: 'storefront-outline', activeIcon: 'storefront' },
+  // What went over the counter, and when. The same clock the Mait's AI events tab is not —
+  // that one is a document — because this is a record of times, not of paperwork.
+  { key: 'storeHistory', icon: 'time-outline', activeIcon: 'time' },
+  { key: 'settings', icon: 'person-outline', activeIcon: 'person' },
+];
+
+export default function BottomNav<T extends string = Tab>({
   active,
   onChange,
   /** Unsent records. Rides on AI events, which is where they are waiting. */
   pending = 0,
+  tabs = TABS as unknown as NavItem<T>[],
+  /** Which tab carries the count. AI events for a Mait; *To issue* for a store keeper. */
+  badgeOn = 'history' as T,
 }: {
-  active: Tab;
-  onChange: (tab: Tab) => void;
+  active: T;
+  onChange: (tab: T) => void;
   pending?: number;
+  tabs?: NavItem<T>[];
+  badgeOn?: T;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -77,7 +100,7 @@ export default function BottomNav({
       pointerEvents="box-none"
     >
       <View style={styles.bar}>
-        {TABS.map(({ key, icon, activeIcon }) => {
+        {tabs.map(({ key, icon, activeIcon }) => {
           const isActive = key === active;
           return (
             <Pressable
@@ -98,7 +121,7 @@ export default function BottomNav({
 
                 {/* On AI events rather than Home: the count is of records waiting to sync, and
                   that is the screen a Mait goes to when they want to look at them. */}
-                {key === 'history' && pending > 0 && (
+                {key === badgeOn && pending > 0 && (
                   <View style={styles.badge} testID="nav-pending">
                     <Text style={styles.badgeLabel}>{pending > 9 ? '9+' : pending}</Text>
                   </View>

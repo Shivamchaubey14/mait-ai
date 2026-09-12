@@ -67,6 +67,7 @@ export function toAuthUser(user: CurrentUser): AuthUser {
     mobileNo: user.mobile_no,
     maitId: user.mait_id,
     sahayakVendorCode: user.sahayak_vendor_code,
+    storeName: user.store?.name ?? null,
   };
 }
 

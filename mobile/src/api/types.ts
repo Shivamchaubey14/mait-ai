@@ -6,7 +6,8 @@
  * here disagrees with the schema, the schema is right.
  */
 
-export type UserRole = 'super_admin' | 'admin' | 'mait';
+/** `store` is a store keeper: same app, same OTP sign-in, a different shell entirely. */
+export type UserRole = 'super_admin' | 'admin' | 'mait' | 'store';
 
 export interface TokenPair {
   access: string;
@@ -27,6 +28,8 @@ export interface CurrentUser {
   sahayak_vendor_code: string | null;
   /** The MPPs this Mait may work at. Scopes everything the app shows (SRS §6.2.3). */
   assigned_mpp_codes: string[];
+  /** The store a keeper works. Null for everyone else — and what decides which shell opens. */
+  store?: { id: number; code: string; name: string } | null;
 }
 
 export interface Paginated<T> {
@@ -588,6 +591,144 @@ export interface Indent {
   /** Set when the Mait confirms they collected it. This is when the stock becomes theirs. */
   received_at: string | null;
   note: string;
+  /**
+   * The depot it is handed over at, and who approved it.
+   *
+   * Optional because the queue can replay an indent cached before stores existed; every one
+   * the server sends now carries them.
+   */
+  store?: number | null;
+  store_name?: string;
+  approved_at?: string | null;
+  approved_by_name?: string;
+  approved_by_zone?: string;
+  /** Approved and not yet handed over — what the next batch at the depot is for. */
+  qty_open?: number;
+  /** At a counter with the Mait's name on it right now: what *Confirm collection* is about. */
+  qty_to_collect?: number;
+  /** Collecting needs the four digits the store keeper reads out. Every store handover does. */
+  needs_code?: boolean;
+  handovers?: IndentHandoverSummary[];
+}
+
+/** One trip across a store's counter. Never carries the code — that is read aloud. */
+export interface IndentHandoverSummary {
+  id: number;
+  qty: number;
+  store_name: string;
+  issued_at: string;
+  collected_at: string | null;
+  cancelled_at: string | null;
+  state: 'waiting' | 'collected' | 'cancelled';
+}
+
+// ---- store keeper ------------------------------------------------------------------------
+
+/** The keeper's first screen: their store and the four figures under its name. */
+export interface StoreHome {
+  store: { id: number; code: string; name: string; zone_name: string; plant_names: string[] };
+  /** Every open indent in the queue. */
+  waiting: number;
+  ready: number;
+  /** The shelf covers some of what is owed, not all of it. */
+  short: number;
+  /** The shelf covers none of it. */
+  empty: number;
+  issued_today: number;
+  not_collected: number;
+}
+
+/**
+ * An approved indent in the store's queue, with what the shelf can do about it.
+ *
+ * `in_store` is what can still be promised — on hand, less what is already set aside for other
+ * Maits — and `readiness` is the word the row wears.
+ */
+export interface StoreIndent {
+  id: number;
+  mait_name: string;
+  mait_code: string;
+  product_type: 'straw' | 'consumable';
+  breed: string;
+  product_ref_id: number | null;
+  item_name: string;
+  item_name_hi: string;
+  unit: string;
+  qty_requested: number;
+  qty_issued: number;
+  qty_open: number;
+  in_store: number;
+  readiness: 'ready' | 'short' | 'waiting';
+  short_by: number;
+  waiting_days: number;
+  requested_at: string;
+  approved_at: string | null;
+  approved_by_name: string;
+  approved_by_zone: string;
+  note: string;
+  /**
+   * Batches already handed over against this indent and still waiting on the Mait's code —
+   * with the code, so the keeper can read it out again to a Mait who lost it.
+   */
+  waiting_handovers?: {
+    id: number;
+    qty: number;
+    collection_code: string;
+    issued_at: string;
+    locked: boolean;
+  }[];
+}
+
+/** A handover as the keeper sees it — with the code, which is theirs to read aloud. */
+export interface StoreHandover {
+  id: number;
+  indent_id: number;
+  mait_name: string;
+  product_type: 'straw' | 'consumable';
+  breed: string;
+  item_name: string;
+  item_name_hi: string;
+  qty: number;
+  qty_requested: number;
+  /** Still owed on the indent after this handover. */
+  qty_open: number;
+  collection_code: string;
+  flask_checked: boolean;
+  issued_at: string;
+  collected_at: string | null;
+  cancelled_at: string | null;
+  state: 'waiting' | 'collected' | 'cancelled';
+  /** Too many wrong codes typed against it; the keeper has to read out a new one. */
+  locked: boolean;
+}
+
+export interface StoreStockLine {
+  product_type: 'straw' | 'consumable';
+  breed: string;
+  product_ref_id: number | null;
+  item_name: string;
+  item_name_hi: string;
+  unit: string;
+  /** Physically on the shelf, including what is set aside. */
+  on_hand: number;
+  /** Issued and waiting for a Mait to collect. */
+  set_aside: number;
+  /** What can still be promised. */
+  available: number;
+}
+
+export interface StoreCatalogue {
+  breeds: { code: string; name: string; name_hi: string; animal_type: string }[];
+  products: { id: number; name: string; unit: string; category: 'consumable' | 'asset' }[];
+}
+
+export interface StoreReceipt {
+  client_uuid: string;
+  product_type: 'straw' | 'consumable';
+  breed?: string;
+  product_ref_id?: number;
+  qty: number;
+  note?: string;
 }
 
 export interface IndentDraft {

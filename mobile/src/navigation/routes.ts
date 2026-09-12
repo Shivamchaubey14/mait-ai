@@ -31,7 +31,16 @@ export type RouteKey =
   | 'pd'
   | 'pdRecord'
   | 'pdRoute'
-  | 'pdReorder';
+  | 'pdReorder'
+  // The store keeper's shell. Its own names rather than the Mait's, because the card under a
+  // tab change reads the context line from here — and "Your figures, MPPs and indents" under a
+  // keeper's Profile would be describing somebody else's account.
+  | 'toIssue'
+  | 'storeStock'
+  | 'storeProfile'
+  | 'storeHistory'
+  | 'storeIssue'
+  | 'storeIssued';
 
 export interface RouteMeta {
   /** Ionicons, because that is the set this app draws. The spec's Lucide is not installed. */
@@ -65,6 +74,16 @@ export const ROUTES: Record<RouteKey, RouteMeta> = {
     title: 'route2.reorderEyebrow',
     context: 'route.pdReorderContext',
   },
+  toIssue: { icon: 'cube', title: 'nav.toIssue', context: 'route.toIssueContext' },
+  storeStock: { icon: 'storefront', title: 'nav.storeStock', context: 'route.storeStockContext' },
+  storeProfile: { icon: 'person', title: 'nav.settings', context: 'route.storeProfileContext' },
+  storeHistory: { icon: 'time', title: 'nav.storeHistory', context: 'route.storeHistoryContext' },
+  storeIssue: { icon: 'cube', title: 'route.storeIssue', context: 'route.storeIssueContext' },
+  storeIssued: {
+    icon: 'checkmark-circle',
+    title: 'route.storeIssued',
+    context: 'route.storeIssuedContext',
+  },
 };
 
 /**
@@ -92,6 +111,14 @@ const ANNOUNCED: readonly RouteKey[] = [
   'pdRecord',
   'pdRoute',
   'pdReorder',
+  // A tab change, and a record opened from a list row — the same two the Mait's shell
+  // announces. The handover that follows an issue does not: it is the answer to the button the
+  // keeper just pressed, like *Recorded* at the end of a capture.
+  'toIssue',
+  'storeStock',
+  'storeProfile',
+  'storeHistory',
+  'storeIssue',
 ];
 
 export function announces(key: RouteKey): boolean {

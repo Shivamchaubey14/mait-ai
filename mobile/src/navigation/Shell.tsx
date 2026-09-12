@@ -24,14 +24,22 @@ import React from 'react';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SplashScreen from '@/features/auth/SplashScreen';
 import RootNavigator from '@/navigation';
+import StoreNavigator from '@/navigation/store';
 import { useAppSelector } from '@/store';
 
 export default function Shell({ fontsLoaded }: { fontsLoaded: boolean }): React.JSX.Element {
   const restored = useAppSelector(state => state.auth.restored);
   const signedIn = useAppSelector(state => !!state.auth.accessToken);
+  // A store keeper signs in on the same screen and gets a different app: the queue at their
+  // counter rather than a round of villages. Siblings, like login and the Mait's navigator,
+  // so nothing of one is ever mounted under the other.
+  const keeper = useAppSelector(state => state.auth.user?.role === 'store');
 
   if (fontsLoaded && restored) {
-    return signedIn ? <RootNavigator /> : <LoginScreen />;
+    if (!signedIn) {
+      return <LoginScreen />;
+    }
+    return keeper ? <StoreNavigator /> : <RootNavigator />;
   }
 
   // Two things are being waited on, so the bar can report which of them have landed rather

@@ -34,6 +34,12 @@ import type {
   Product,
   Indent,
   IndentDraft,
+  StoreCatalogue,
+  StoreHandover,
+  StoreHome,
+  StoreIndent,
+  StoreReceipt,
+  StoreStockLine,
   Paginated,
   StrawValidation,
   TokenPair,
@@ -60,6 +66,48 @@ export const maitaiApi = api.injectEndpoints({
         url: '/auth/otp/verify/',
         method: 'POST',
         body: { mobile_no: mobileNo, otp },
+      }),
+    }),
+
+    /**
+     * Ask the office for a sign-in code, because the SMS is not arriving.
+     *
+     * The answer is the same whether or not the number is registered. The office generates a
+     * code on the portal and calls the number on file with it; it goes into the same boxes.
+     */
+    requestSuperOtp: builder.mutation<
+      { detail: string; expires_in_seconds: number },
+      { mobileNo: string; reason?: string }
+    >({
+      query: ({ mobileNo, reason }) => ({
+        url: '/auth/otp/super/request/',
+        method: 'POST',
+        body: { mobile_no: mobileNo, reason: reason ?? '' },
+      }),
+    }),
+
+    /**
+     * The farmer's SMS code did not reach her: ask the office to phone it to her.
+     *
+     * Her number comes off her record on the server, never from here. Refused until the SMS has
+     * actually been tried for her.
+     */
+    askFarmerOfficeCode: builder.mutation<
+      { detail: string; mobile_no: string; expires_in_seconds: number },
+      FarmerKey
+    >({
+      query: key => ({ url: '/farmers/otp/office/', method: 'POST', body: key }),
+    }),
+
+    /** The same for her payment authorisation code, for one of the Mait's own events. */
+    askPaymentOfficeCode: builder.mutation<
+      { detail: string; mobile_no: string; expires_in_seconds: number },
+      { eventId: number }
+    >({
+      query: ({ eventId }) => ({
+        url: `/payments/${eventId}/otp/office/`,
+        method: 'POST',
+        body: {},
       }),
     }),
 
@@ -377,11 +425,113 @@ export const maitaiApi = api.injectEndpoints({
      * The Mait acknowledges that issued stock reached them.
      *
      * This is where the stock becomes theirs — until they collect, it is at the depot — so
-     * `Inventory` goes stale the moment it lands.
+     * `Inventory` goes stale the moment it lands. Stock handed over at a store needs `code`,
+     * the four digits the keeper read out at the counter.
      */
-    confirmIndentCollection: builder.mutation<Indent, number>({
-      query: id => ({ url: `/indents/${id}/confirm-collection/`, method: 'POST' }),
+    confirmIndentCollection: builder.mutation<Indent, { id: number; code?: string }>({
+      query: ({ id, code }) => ({
+        url: `/indents/${id}/confirm-collection/`,
+        method: 'POST',
+        body: code ? { code } : {},
+      }),
       invalidatesTags: ['Indent', 'Inventory'],
+    }),
+
+    // ---- store keeper ----------------------------------------------------------------
+    /**
+     * A store keeper's side of an indent: the queue at their counter, and the shelf behind it.
+     *
+     * All under `/store/`, which answers a keeper and nobody else. Everything is tagged
+     * `Store` and a handover invalidates the lot: issuing changes the queue, the shelf and the
+     * figures on the first screen at once, and three screens disagreeing about the same 18
+     * straws is worse than one refetch.
+     */
+    getStoreHome: builder.query<StoreHome, void>({
+      query: () => '/store/',
+      providesTags: ['Store'],
+    }),
+
+    listStoreIndents: builder.query<StoreIndent[], void>({
+      query: () => '/store/indents/',
+      providesTags: ['Store'],
+    }),
+
+    getStoreIndent: builder.query<StoreIndent, number>({
+      query: id => `/store/indents/${id}/`,
+      providesTags: ['Store'],
+    }),
+
+    /**
+     * Hand some or all of an indent over.
+     *
+     * The key rides along so a tap repeated over a bad connection hands over once — the second
+     * request is answered with the first handover, code and all.
+     */
+    issueFromStore: builder.mutation<
+      StoreHandover,
+      { id: number; qty: number; flaskChecked: boolean; clientUuid: string }
+    >({
+      query: ({ id, qty, flaskChecked, clientUuid }) => ({
+        url: `/store/indents/${id}/issue/`,
+        method: 'POST',
+        headers: idempotencyHeaders(clientUuid),
+        body: { qty, flask_checked: flaskChecked },
+      }),
+      invalidatesTags: ['Store'],
+    }),
+
+    listStoreHandovers: builder.query<StoreHandover[], 'waiting' | 'today'>({
+      query: state => ({ url: '/store/handovers/', params: { state } }),
+      providesTags: ['Store'],
+    }),
+
+    /**
+     * Everything this store handed over between two local days, newest first — the keeper's
+     * History tab. The days are the handset's own, sent as `YYYY-MM-DD`.
+     */
+    listStoreHistory: builder.query<StoreHandover[], { from: string; to: string }>({
+      query: ({ from, to }) => ({ url: '/store/handovers/', params: { from, to } }),
+      providesTags: ['Store'],
+    }),
+
+    getStoreHandover: builder.query<StoreHandover, number>({
+      query: id => `/store/handovers/${id}/`,
+      providesTags: ['Store'],
+    }),
+
+    cancelStoreHandover: builder.mutation<StoreHandover, number>({
+      query: id => ({ url: `/store/handovers/${id}/cancel/`, method: 'POST' }),
+      invalidatesTags: ['Store'],
+    }),
+
+    newHandoverCode: builder.mutation<StoreHandover, number>({
+      query: id => ({ url: `/store/handovers/${id}/new-code/`, method: 'POST' }),
+      invalidatesTags: ['Store'],
+    }),
+
+    getStoreStock: builder.query<StoreStockLine[], void>({
+      query: () => '/store/stock/',
+      providesTags: ['Store'],
+    }),
+
+    getStoreCatalogue: builder.query<StoreCatalogue, void>({
+      query: () => '/store/catalogue/',
+    }),
+
+    receiveStoreStock: builder.mutation<StoreStockLine[], StoreReceipt>({
+      query: body => ({
+        url: '/store/stock/receive/',
+        method: 'POST',
+        headers: idempotencyHeaders(body.client_uuid),
+        body: {
+          product_type: body.product_type,
+          breed: body.breed,
+          product_ref_id: body.product_ref_id,
+          qty: body.qty,
+          note: body.note,
+        },
+      }),
+      invalidatesTags: ['Store'],
     }),
 
     /**
@@ -500,6 +650,9 @@ export const maitaiApi = api.injectEndpoints({
 export const {
   useSendLoginOtpMutation,
   useVerifyLoginOtpMutation,
+  useRequestSuperOtpMutation,
+  useAskFarmerOfficeCodeMutation,
+  useAskPaymentOfficeCodeMutation,
   useLogoutMutation,
   useGetCurrentUserQuery,
   useLazyGetCurrentUserQuery,
@@ -532,4 +685,16 @@ export const {
   useListIndentsQuery,
   useGetIndentQuery,
   useConfirmIndentCollectionMutation,
+  useGetStoreHomeQuery,
+  useListStoreIndentsQuery,
+  useGetStoreIndentQuery,
+  useIssueFromStoreMutation,
+  useListStoreHandoversQuery,
+  useListStoreHistoryQuery,
+  useGetStoreHandoverQuery,
+  useCancelStoreHandoverMutation,
+  useNewHandoverCodeMutation,
+  useGetStoreStockQuery,
+  useGetStoreCatalogueQuery,
+  useReceiveStoreStockMutation,
 } = maitaiApi;

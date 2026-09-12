@@ -8,7 +8,7 @@
 
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-export type UserRole = 'super_admin' | 'admin' | 'mait';
+export type UserRole = 'super_admin' | 'admin' | 'mait' | 'store';
 
 export interface AuthUser {
   id: number;
@@ -25,6 +25,13 @@ export interface AuthUser {
    * portal, or in SAP.
    */
   sahayakVendorCode: string | null;
+  /**
+   * The store a keeper works, by name. Null for a Mait.
+   *
+   * Optional because a session written to disk before stores existed has no such field, and
+   * reading it back must not make every Mait's stored session invalid.
+   */
+  storeName?: string | null;
 }
 
 interface AuthState {
