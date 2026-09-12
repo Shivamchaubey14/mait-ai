@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stores · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <!-- stores.css pulls in zones.css, which pulls in forms.css and the editor panel. -->
+    <link rel="stylesheet" href="assets/css/stores.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="stores">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Stores</h1>
+            <p class="topbar__meta"><span id="store-count">—</span></p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--primary" id="add" type="button">Add a store</button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- Blue: the rule this screen runs on, not a backlog. -->
+        <div class="notice notice--info">
+          <span class="notice__icon" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">
+              A store is the counter an approved indent is collected from.
+            </p>
+            <p class="notice__body">
+              Tick the BMC/MCCs a store serves, and every Mait whose collection points report into
+              them collects there. The zonal manager approves on
+              <a href="indents.html">Indents</a>; the keeper hands the stock over from the app and
+              reads the Mait a code, and the Mait's stock rises only when they type it in.
+            </p>
+          </div>
+        </div>
+
+        <section class="tiles" aria-label="Summary">
+          <article class="tile tile--good">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M3 9l2-5h14l2 5M3 9h18M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M5 12v8h14v-8M10 20v-5h4v5"
+                  />
+                </svg>
+              </span>
+              Stores
+            </p>
+            <p class="tile__value" data-kpi="stores">—</p>
+            <p class="tile__foot" data-kpi="stores-foot"></p>
+          </article>
+          <article class="tile tile--info">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6" />
+                </svg>
+              </span>
+              BMC/MCCs served
+            </p>
+            <p class="tile__value" data-kpi="served">—</p>
+            <p class="tile__foot" data-kpi="served-foot"></p>
+          </article>
+          <article class="tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M6 3h9l5 5v13H6zM14 3v6h6M9 13h7M9 17h5" />
+                </svg>
+              </span>
+              Waiting at a counter
+            </p>
+            <p class="tile__value" data-kpi="open">—</p>
+            <p class="tile__foot" data-kpi="open-foot"></p>
+          </article>
+        </section>
+
+        <!-- The same filter bar every list screen wears. Searches what an operator has in hand
+             when a keeper rings: their name or number, the depot, or the village's centre. -->
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search store, keeper name or mobile, BMC/MCC or zone"
+            aria-label="Search store, keeper name or mobile, BMC/MCC or zone"
+            autocomplete="off"
+          />
+        </section>
+
+        <!-- The editor: which store, which centres, who stands behind the counter. -->
+        <section
+          class="panel editor zone-editor store-editor"
+          id="editor"
+          aria-labelledby="editor-title"
+          hidden
+        >
+          <div class="editor__head">
+            <span class="zone-editor__mark" id="editor-mark" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M3 9l2-5h14l2 5M3 9h18M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M5 12v8h14v-8M10 20v-5h4v5"
+                />
+              </svg>
+            </span>
+            <div class="editor__who">
+              <h2 class="editor__name" id="editor-title">Add a store</h2>
+              <p class="editor__code" id="editor-meta">Name it, then tick the centres it serves</p>
+            </div>
+            <span id="editor-state"></span>
+          </div>
+
+          <div class="form-grid">
+            <div class="field field--iconed">
+              <label class="field__label" for="code">
+                <span class="field__icon field__icon--code" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M8 4l-4 8 4 8M16 4l4 8-4 8" />
+                  </svg>
+                </span>
+                Code
+              </label>
+              <input
+                class="input field__control"
+                id="code"
+                type="text"
+                maxlength="20"
+                autocomplete="off"
+                placeholder="BARSANA"
+              />
+              <p class="field__hint" id="code-hint">Set once and never changed</p>
+            </div>
+
+            <div class="field field--iconed">
+              <label class="field__label" for="name">
+                <span class="field__icon field__icon--label" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20.6 13.4 12 22l-9-9V3h10zM7.5 7.5h.01" />
+                  </svg>
+                </span>
+                Name
+              </label>
+              <input
+                class="input field__control"
+                id="name"
+                type="text"
+                maxlength="100"
+                placeholder="Barsana depot"
+              />
+              <p class="field__hint">What the keeper and the Mait both read in the app</p>
+            </div>
+
+            <div class="field field--iconed">
+              <label class="field__label" for="zone">
+                <span class="field__icon field__icon--pages" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
+                  </svg>
+                </span>
+                Zone
+              </label>
+              <select class="select field__control" id="zone">
+                <option value="">No zone</option>
+              </select>
+              <p class="field__hint">
+                For grouping only — the centres below decide who collects here
+              </p>
+            </div>
+
+            <div class="field field--iconed">
+              <label class="field__label" for="active">
+                <span class="field__icon field__icon--label" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M8 12.5l2.5 2.5L16 9.5" />
+                  </svg>
+                </span>
+                Status
+              </label>
+              <select class="select field__control" id="active">
+                <option value="true">Open — keepers sign in and issue</option>
+                <option value="false">Closed — out of every queue and sign-in</option>
+              </select>
+              <p class="field__hint">Close a store rather than deleting it once it has history</p>
+            </div>
+
+            <div class="field field--iconed field--wide">
+              <span class="field__label">
+                <span class="field__icon field__icon--pages" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6" />
+                  </svg>
+                </span>
+                BMC/MCCs this store serves
+                <span class="field__count" id="plant-count">—</span>
+              </span>
+
+              <div class="access__quick">
+                <input
+                  class="input zone-editor__search"
+                  id="plant-search"
+                  type="search"
+                  placeholder="Search by name or code"
+                  aria-label="Search the BMC/MCC list"
+                />
+                <button class="btn" type="button" id="pick-zone">Tick its zone's free ones</button>
+                <button class="btn" type="button" id="pick-none">Clear</button>
+              </div>
+
+              <div class="access zone-plants" id="plant-grid" role="group" aria-label="BMC/MCCs">
+                <p class="empty-state">Loading the BMC/MCC list…</p>
+              </div>
+              <p class="field__hint" id="plant-diff">—</p>
+            </div>
+
+            <!-- Keepers: only once the store exists, because an account has to belong to one. -->
+            <div class="field field--iconed field--wide">
+              <span class="field__label">
+                <span class="field__icon field__icon--pages" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M2 20a7 7 0 0 1 14 0M18 8v6M15 11h6"
+                    />
+                  </svg>
+                </span>
+                Keepers
+                <span class="field__count" id="keeper-count">—</span>
+              </span>
+              <ul class="keepers" id="keepers"></ul>
+              <div class="keeper-add" id="keeper-add">
+                <input
+                  class="input"
+                  id="keeper-name"
+                  type="text"
+                  maxlength="150"
+                  placeholder="Their name"
+                  aria-label="Keeper's name"
+                />
+                <input
+                  class="input"
+                  id="keeper-mobile"
+                  type="tel"
+                  inputmode="numeric"
+                  maxlength="10"
+                  placeholder="10-digit mobile"
+                  aria-label="Keeper's mobile number"
+                />
+                <button class="btn" type="button" id="keeper-save">Add keeper</button>
+              </div>
+              <p class="field__hint" id="keeper-hint">
+                They sign in to the Mait AI app with this number and an OTP, and see this store's
+                queue and nothing else.
+              </p>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn--primary" id="save" type="button">Save store</button>
+            <button class="btn" id="cancel" type="button">Cancel</button>
+            <button class="btn btn--danger-outline" id="remove" type="button" hidden>Delete</button>
+            <p class="field__hint" id="editor-status">—</p>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="list-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="list-title">Stores</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Store</th>
+                  <th scope="col">BMC/MCC served</th>
+                  <th scope="col">Keepers</th>
+                  <th scope="col">On the shelf</th>
+                  <th scope="col" class="table__num">Waiting</th>
+                  <th scope="col">Status</th>
+                  <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="rows" aria-busy="true">
+                <tr class="skeleton" aria-hidden="true">
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Centres no store serves. Their Maits' indents can still be issued from the portal,
+             which is the fallback — but nobody reads them a code at a counter. -->
+        <section class="panel panel--warning" id="unserved-panel" aria-labelledby="unserved-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="unserved-title">
+              <span class="panel__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3 2 20h20zM12 9v5M12 17.5v.5" />
+                </svg>
+              </span>
+              Served by no store yet
+            </h2>
+            <span class="panel__count" data-count="unserved">—</span>
+          </div>
+          <div id="unserved"></div>
+        </section>
+      </main>
+    </div>
+
+    <!--
+      Vendor scripts are served locally, never from a CDN. This portal renders member PII,
+      and a third-party script on the page can read everything the page can — see README.md.
+    -->
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/controls.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/stores.js"></script>
+  </body>
+</html>

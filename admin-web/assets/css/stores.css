@@ -1,0 +1,83 @@
+/**
+ * Store setup (W21).
+ *
+ * Almost all of it is the Zones screen's — the tiles, the table, the editor and the BMC/MCC
+ * picker — because the two screens do the same job in the operator's head: draw a line around
+ * some chilling centres. What this adds is the keeper list, the one thing a zone does not
+ * have: people who sign in and act on what the line encloses.
+ */
+
+@import url('zones.css');
+
+/* --- keepers, in the editor ----------------------------------------------------------------
+   A short list of people, each with a way off it. A table would be furniture for two rows. */
+.keepers {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.keeper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.keeper__who {
+  flex: 1;
+  min-width: 0;
+}
+
+.keeper__name {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.keeper__meta {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+/* A keeper taken off the store stays listed, greyed: the audit trail names them, and an
+   account that simply vanished from the list would read as never having existed. */
+.keeper.is-off {
+  background: var(--color-background);
+  border-style: dashed;
+}
+
+.keeper.is-off .keeper__name {
+  color: var(--color-text-muted);
+}
+
+.keeper-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.keeper-add .input {
+  flex: 1 1 180px;
+  max-width: 260px;
+}
+
+/* --- the shelf, in the table --------------------------------------------------------------- */
+.store-shelf {
+  max-width: 280px;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+/* A store no keeper can sign in to. Amber text rather than a pill: the row already carries
+   one pill for its status, and two would compete for the eye. */
+.table__sub--warn {
+  color: var(--color-secondary-pressed);
+  font-weight: 600;
+}
