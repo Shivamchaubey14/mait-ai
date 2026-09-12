@@ -13,6 +13,31 @@
 
 @import url('forms.css');
 
+/* The zone picker's wrapper exists only so it can be hidden whole. */
+.zone-picker[hidden] {
+  display: none;
+}
+
+/* The store shelves panel: a line of "37 Murrah · 40 Gir" per depot, quieter than the counts
+   beside it, and wrapping rather than widening the table. */
+.store-shelf {
+  display: inline-block;
+  max-width: 340px;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.chip--static {
+  min-height: 26px;
+  padding: 0 var(--space-2);
+  margin: 2px 0;
+  font-size: var(--text-caption);
+  cursor: default;
+  background: var(--color-primary-wash);
+  border-color: transparent;
+  color: var(--color-primary-dark);
+}
+
 /* The panel is a surface for the three cards, not a fourth card. Left white it was a white box
    holding three white boxes, and the only thing separating any of them was a hairline border —
    so the tint goes here and the cards stay paper on top of it. */

@@ -14,6 +14,12 @@
  * against a Mait's name; it becomes theirs when they confirm they collected it. Straw numbers
  * are optional — the ones that matter are read off the straws at the AI step — and filling
  * them in here is for a depot slip that already lists them.
+ *
+ * **Where a store serves the Mait, this screen approves and the store issues.** The zonal
+ * manager approves here; the keeper at that store hands the stock over from the app, part of
+ * it if that is all the shelf holds, and reads the Mait a code. So an indent routed to a store
+ * has no Issue button on this screen — it says which depot has it instead — and the portal's
+ * own Issue is kept for Maits no store serves yet.
  */
 
 (function (MaitAI, $) {
@@ -106,13 +112,46 @@
         ? ui.pill('Collected', 'good')
         : ui.pill('Awaiting collection', 'warn');
     }
+    // Some of it has gone over a store's counter and the rest is still owed. Yellow, like
+    // every state in this portal that is waiting on somebody — here, the next batch.
+    if (indent.status === 'approved' && indent.qty_issued > 0) {
+      return ui.pill('Part-issued ' + indent.qty_issued + '/' + indent.qty_requested, 'warn');
+    }
     return ui.pill(indent.status_display, STATUS_TONE[indent.status] || null);
+  }
+
+  /** The store that hands this over — routed when the Mait raised it, or at approval. */
+  function depotLine(indent) {
+    const parts = [];
+    if (indent.qty_issued) {
+      parts.push(indent.qty_issued + ' issued');
+    }
+    if (indent.qty_to_collect) {
+      parts.push(indent.qty_to_collect + ' at the counter');
+    }
+    if (indent.store_name) {
+      parts.push(indent.store_name);
+    } else if (indent.status === 'requested' || indent.status === 'approved') {
+      // Said only while there is still something to issue. On a closed indent it is history
+      // nobody needs, repeated down every row.
+      parts.push('no store — issued from here');
+    }
+    return parts.length
+      ? '<span class="table__sub">' + ui.escapeHtml(parts.join(' · ')) + '</span>'
+      : '';
   }
 
   /** Only the two open states have anything an admin can do to them. */
   function actionCell(indent) {
     if (indent.status === 'requested') {
       return '<button class="btn" type="button" data-open="' + indent.id + '">Review</button>';
+    }
+    if (indent.status === 'approved' && indent.store_name) {
+      // The store's keeper issues this one. Once part of it has gone there is nothing left for
+      // the office to do; before that, the panel still offers to reject it.
+      return indent.qty_issued
+        ? '<span class="table__sub">With ' + ui.escapeHtml(indent.store_name) + '</span>'
+        : '<button class="btn" type="button" data-open="' + indent.id + '">Review</button>';
     }
     if (indent.status === 'approved') {
       // Labelled for the likely action, not the only one — rejecting is still on the panel.
@@ -139,9 +178,7 @@
       '</td>' +
       '<td>' +
       ui.escapeHtml(indent.item) +
-      (indent.qty_issued
-        ? '<span class="table__sub">' + indent.qty_issued + ' issued</span>'
-        : '') +
+      depotLine(indent) +
       '</td>' +
       '<td>' +
       ageCell(indent) +
@@ -187,6 +224,8 @@
 
     const isStraw = indent.product_type === 'straw';
     const requested = indent.status === 'requested';
+    // A store serves this Mait, so the keeper issues it from the app and this panel does not.
+    const atStore = !!indent.store_name;
 
     $('#fulfil').prop('hidden', false);
     $('#fulfil-title').text('IND-' + indent.id);
@@ -203,7 +242,11 @@
     $('#fact-qty').text(ui.number(indent.qty_requested));
     $('#fact-unit').text(isStraw ? 'straws' : 'units');
     $('#fact-item').text(indent.breed || indent.item);
-    $('#fact-kind').text(isStraw ? 'Semen straws' : 'Consumable or equipment');
+    $('#fact-kind').text(
+      (isStraw ? 'Semen straws' : 'Consumable or equipment') +
+        ' · ' +
+        (atStore ? indent.store_name : 'no store')
+    );
     $('#fact-raised').text(ui.date(indent.requested_at));
     const days = ui.daysAgo(indent.requested_at);
     $('#fact-age').text(days === 0 ? 'today' : days + ' days ago');
@@ -217,17 +260,27 @@
 
     // Quantity is the normal way in, for straws as much as for sheaths. The numbers box is
     // there for a depot slip that already lists them.
-    $('#field-qty').prop('hidden', requested);
-    $('#field-straws').prop('hidden', requested || !isStraw);
-    $('#do-issue').prop('hidden', requested);
+    $('#field-qty').prop('hidden', requested || atStore);
+    $('#field-straws').prop('hidden', requested || atStore || !isStraw);
+    $('#do-issue').prop('hidden', requested || atStore);
 
     // Says what the buttons will actually do. Approving moves nothing; issuing sets stock
     // aside against a Mait's name, and that is worth stating rather than inferring.
     $('#fulfil-effect').toggleClass('fulfil__effect--decide', requested);
     $('#fulfil-effect-text').text(
       requested
-        ? 'Approving moves no stock — it records that the office agrees. Rejecting closes the request, and the Mait reads your reason.'
-        : 'Issuing sets this stock aside for ' +
+        ? 'Approving moves no stock — it records that the office agrees' +
+            (atStore
+              ? ' and puts it in ' + indent.store_name + "'s queue. "
+              : '. No store serves this Mait yet, so it is issued from this screen. ') +
+            'Rejecting closes the request, and the Mait reads your reason.'
+        : atStore
+          ? indent.store_name +
+            ' hands this over from the app — as much as its shelf holds, with the rest left ' +
+            'open. The keeper reads ' +
+            indent.mait_name +
+            ' a code, and the stock is theirs when they type it in.'
+          : 'Issuing sets this stock aside for ' +
             indent.mait_name +
             '. It becomes theirs when they confirm they have collected it.'
     );
@@ -251,7 +304,15 @@
       return;
     }
     if (indent.status === 'requested') {
-      $('#fulfil-hint').text('Approving moves no stock. Issue it once the straws change hands.');
+      $('#fulfil-hint').text(
+        indent.store_name
+          ? 'Approving sends it to ' + indent.store_name + ' to hand over.'
+          : 'Approving moves no stock. Issue it once the straws change hands.'
+      );
+      return;
+    }
+    if (indent.store_name) {
+      $('#fulfil-hint').text('Only rejecting is left to the office — the store issues it.');
       return;
     }
     if (indent.product_type !== 'straw') {
@@ -426,8 +487,15 @@
       busy(true);
       MaitAI.api
         .approveIndent(indent.id)
-        .done(function () {
-          afterAction('IND-' + indent.id + ' approved. Issue it once the stock changes hands.');
+        .done(function (approved) {
+          afterAction(
+            'IND-' +
+              indent.id +
+              ' approved.' +
+              (approved.store_name
+                ? ' It is in ' + approved.store_name + "'s queue to hand over."
+                : ' Issue it once the stock changes hands.')
+          );
         })
         .fail(failed)
         .always(function () {

@@ -16,7 +16,10 @@
         <header class="topbar">
           <div>
             <h1 class="topbar__title">Inventory oversight</h1>
-            <p class="topbar__meta">Stock in the hands of <span id="mait-count">—</span> Maits</p>
+            <p class="topbar__meta">
+              Stock in the hands of <span id="mait-count">—</span> Maits and
+              <span id="store-count">—</span>
+            </p>
           </div>
           <div class="topbar__actions">
             <button class="btn btn--logout" id="account" type="button">Log out</button>
@@ -99,6 +102,52 @@
             <p class="tile__value" id="breeds"></p>
             <p class="tile__foot">Across the whole field</p>
           </article>
+          <!-- The depots' half of the answer. A Mait at zero next to a store holding forty is
+               an indent waiting to be approved, not a shortage. -->
+          <article class="tile tile--good">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M3 9l2-5h14l2 5M3 9h18M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M5 12v8h14v-8M10 20v-5h4v5"
+                  /></svg
+              ></span>
+              On store shelves
+            </p>
+            <p class="tile__value" id="store-straws"></p>
+            <p class="tile__foot" id="store-straws-foot">Straws at the depots</p>
+          </article>
+        </section>
+
+        <!-- Every store in reach and what is on its shelf. Above the Maits, because it is the
+             stock a zonal manager can still move: an approval sends it to a Mait. -->
+        <section class="panel" id="stores-panel" aria-labelledby="stores-title" hidden>
+          <div class="panel__head">
+            <h2 class="panel__title" id="stores-title">Store shelves</h2>
+            <span class="panel__count" id="stores-count">—</span>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Store</th>
+                  <th scope="col">Serves</th>
+                  <th scope="col">On the shelf</th>
+                  <th class="table__num" scope="col">Straws</th>
+                  <th class="table__num" scope="col">Set aside</th>
+                  <th class="table__num" scope="col">Waiting</th>
+                </tr>
+              </thead>
+              <tbody id="store-rows"></tbody>
+            </table>
+          </div>
         </section>
 
         <section class="filters" aria-label="Filters">
@@ -112,6 +161,15 @@
           <button class="chip is-active" id="filter-low" type="button" aria-pressed="true">
             Low stock first
           </button>
+          <!-- Head office picks a zone here; a zonal manager is already narrowed to theirs, and
+               the line under the title says so. Filled only for accounts that can read zones. -->
+          <!-- Hidden on the wrapper, not the select: controls.js draws its own control beside the
+               native one, and that control does not inherit the select's `hidden`. -->
+          <span class="zone-picker" id="zone-picker" hidden>
+            <select class="select" id="filter-zone" aria-label="Zone">
+              <option value="">Zone: whole network</option>
+            </select>
+          </span>
         </section>
 
         <!-- Opened by clicking a row. Above the table rather than in a dialog: an admin is

@@ -276,6 +276,85 @@
         });
   }
 
+  /**
+   * The store shelves in reach — each depot, the centres it serves, and what it holds.
+   *
+   * Straws and set-aside are counted separately because they answer different questions: the
+   * shelf is what the store has, and set-aside is the part already promised to a Mait who has
+   * not typed their code. A store showing 40 with 40 set aside has nothing left to give.
+   */
+  function storeRow(store) {
+    const shelf = (store.lines || []).length
+      ? store.lines
+          .map(function (line) {
+            return ui.number(line.on_hand) + ' ' + ui.escapeHtml(line.item_name);
+          })
+          .join(' · ')
+      : '<span class="table__sub">Nothing on the shelf</span>';
+    const serves = (store.plant_names || []).length
+      ? store.plant_names
+          .map(function (name) {
+            return '<span class="chip chip--static">' + ui.escapeHtml(name) + '</span>';
+          })
+          .join(' ')
+      : '<span class="table__sub">No BMC/MCC yet</span>';
+    return (
+      '<tr>' +
+      '<td>' +
+      ui.identity(store.name, store.code + (store.zone_name ? ' · ' + store.zone_name : '')) +
+      '</td>' +
+      '<td>' +
+      serves +
+      '</td>' +
+      '<td><span class="store-shelf">' +
+      shelf +
+      '</span></td>' +
+      '<td class="table__num">' +
+      ui.number(store.straws_on_hand) +
+      '</td>' +
+      '<td class="table__num">' +
+      (store.straws_set_aside
+        ? ui.number(store.straws_set_aside)
+        : '<span class="table__sub">none</span>') +
+      '</td>' +
+      '<td class="table__num">' +
+      (store.open_indents
+        ? '<a href="indents.html?status=approved">' + ui.number(store.open_indents) + '</a>'
+        : '<span class="table__sub">none</span>') +
+      '</td>' +
+      '</tr>'
+    );
+  }
+
+  function renderStores(stores) {
+    $('#stores-panel').prop('hidden', false);
+    $('#stores-count').text(stores.length + (stores.length === 1 ? ' store' : ' stores'));
+    ui.rows(
+      $('#store-rows'),
+      stores,
+      storeRow,
+      'No store serves this part of the network yet — set one up on the Stores screen.',
+      6
+    );
+  }
+
+  /** Head office's zone picker. Filled only if this account may read the zones at all. */
+  function loadZones() {
+    MaitAI.api.zones().done(function (zones) {
+      const list = (zones.results || zones || []).filter(function (zone) {
+        return zone.is_active;
+      });
+      if (!list.length) {
+        return;
+      }
+      const $select = $('#filter-zone');
+      list.forEach(function (zone) {
+        $select.append($('<option></option>').val(String(zone.id)).text(zone.name));
+      });
+      $('#zone-picker').prop('hidden', false);
+    });
+  }
+
   function render() {
     renderHead();
     ui.rows($('#rows'), visibleRows(), row, 'No Maits match that search.', state.breeds.length + 5);
@@ -283,8 +362,9 @@
 
   function load() {
     MaitAI.shell.clearAlert();
+    const zone = $('#filter-zone').val();
     MaitAI.api
-      .inventoryOversight()
+      .inventoryOversight(zone ? { zone: zone } : {})
       .done(function (data) {
         // The server already returns them emptiest first.
         state.rows = data.results || [];
@@ -304,6 +384,17 @@
         $('#zero').text(ui.number(data.summary.at_zero));
         $('#breeds').text(ui.number(state.breeds.length));
         $('#mait-count').text(ui.number(data.summary.maits));
+        const storeTotal = data.summary.stores || 0;
+        $('#store-count').text(
+          'on ' + ui.number(storeTotal) + (storeTotal === 1 ? ' store shelf' : ' store shelves')
+        );
+        $('#store-straws').text(ui.number(data.summary.store_straws || 0));
+        $('#store-straws-foot').text(
+          (data.summary.stores || 0) === 1
+            ? 'Straws at the one depot in view'
+            : 'Straws across ' + ui.number(data.summary.stores || 0) + ' depots'
+        );
+        renderStores(data.stores || []);
 
         render();
       })
@@ -319,6 +410,12 @@
     }
     MaitAI.shell.mount();
     load();
+    loadZones();
+
+    $('#filter-zone').on('change', function () {
+      $('#holding').prop('hidden', true);
+      load();
+    });
 
     // Delegated: the table is rebuilt whenever the search or the sort changes.
     $('#rows').on('click', '[data-open]', function () {
