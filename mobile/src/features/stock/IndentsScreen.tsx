@@ -84,6 +84,12 @@ export const INDENT_STATES: IndentState[] = [
 ];
 
 export function indentState(indent: Indent): IndentState {
+  // Anything at a counter waiting on the Mait reads as issued, whatever the indent's own
+  // status: a store short of stock hands over part of an approval, and those straws are just
+  // as much a trip to the depot as a whole issue is.
+  if ((indent.qty_to_collect ?? 0) > 0) {
+    return 'issued';
+  }
   return indent.received_at ? 'collected' : indent.status;
 }
 
@@ -128,6 +134,15 @@ export function statusTone(indent: Indent, t: TFunction): { label: string; tone:
 function nextStep(indent: Indent, t: TFunction): string {
   if (indent.received_at) {
     return t('indents.lineCollected', { date: shortDate(indent.received_at) });
+  }
+  if ((indent.qty_to_collect ?? 0) > 0) {
+    return t('indents.lineIssued', {
+      date: shortDate(indent.issued_at ?? indent.requested_at),
+    });
+  }
+  // Part of it handed over and collected, the rest still owed by the store.
+  if (indent.status === 'approved' && indent.qty_issued > 0) {
+    return t('indents.linePart', { issued: indent.qty_issued, qty: indent.qty_requested });
   }
   switch (indent.status) {
     case 'issued':

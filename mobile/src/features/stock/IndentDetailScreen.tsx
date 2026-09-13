@@ -12,6 +12,13 @@
  *
  * Wears the same green hero as every other tab screen rather than the capture flow's stepped
  * one. This is a place a Mait looks something up, not a sequence they are part-way through.
+ *
+ * **Stock handed over at a store needs the store's code.** The keeper reads four digits out
+ * across the counter and the Mait types them here; that is what proves they were standing
+ * there when it happened, and it is the only way the count on Inventory moves. The server
+ * never sends the code to this app — a handset that already knew it would prove nothing. A
+ * store short of stock hands over what it has and the rest stays open on the same indent, so
+ * this screen can be collected from more than once.
  */
 
 import React, { useState } from 'react';
@@ -22,12 +29,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import { ErrorCode, errorCodeOf } from '@api/client';
 import {
   useConfirmIndentCollectionMutation,
   useGetIndentQuery,
@@ -65,30 +74,40 @@ export function rejectionReason(note: string): string | null {
   return reason || null;
 }
 
+/**
+ * What is at a counter with this Mait's name on it right now.
+ *
+ * The server says so directly; an indent cached before it did is worked out the old way —
+ * issued and not yet collected means the whole issue is waiting.
+ */
+export function toCollect(indent: Indent): number {
+  if (indent.qty_to_collect !== undefined) {
+    return indent.qty_to_collect;
+  }
+  return indent.status === 'issued' && !indent.received_at ? indent.qty_issued : 0;
+}
+
 function stateOf(indent: Indent, step: number): StepState {
   // requested → approved → issued → received. Collection is the Mait's own step, and the
   // only one that moves without the office doing anything.
   if (indent.received_at) {
     return 'done';
   }
-  const reached =
-    indent.status === 'issued'
-      ? 3
-      : indent.status === 'approved'
-        ? 2
-        : indent.status === 'rejected'
-          ? 1
-          : 1;
+  // A store part-way through handing it over has issued, even though the indent is still
+  // open for the rest — so any quantity out of the store reaches the third step.
+  const issuedAny = indent.status === 'issued' || indent.qty_issued > 0;
+  const reached = issuedAny ? 3 : indent.status === 'approved' ? 2 : 1;
+  const waitingOnYou = toCollect(indent) > 0;
   if (step < reached) {
     return 'done';
   }
   if (step === reached) {
     // Issued is finished business for the depot; what is open is the collection after it.
-    return indent.status === 'issued' && step === 3 ? 'done' : 'current';
+    return issuedAny && step === 3 ? 'done' : 'current';
   }
   // The step immediately after issue is the one waiting on the Mait, so it reads as current
   // rather than as something still to be done to them.
-  return indent.status === 'issued' && step === 4 ? 'current' : 'waiting';
+  return waitingOnYou && step === 4 ? 'current' : 'waiting';
 }
 
 /** Date and time on one line, in the order a timeline is read. */
@@ -112,15 +131,39 @@ export default function IndentDetailScreen({
   const indent = query.data;
   const [confirmCollection, confirmation] = useConfirmIndentCollectionMutation();
   const [error, setError] = useState<string | null>(null);
+  /** The four digits the store keeper read out. Never known to this app until typed. */
+  const [code, setCode] = useState('');
+  /** What the collection just added to the Mait's stock — this trip, not the indent's total. */
+  const [added, setAdded] = useState<string | null>(null);
 
   const confirm = async () => {
     setError(null);
+    const adding = indent ? toCollect(indent) : 0;
     try {
-      await confirmCollection(indentId).unwrap();
-    } catch {
-      // The server owns the rule — stock not issued yet, or already confirmed. Saying so
-      // beats a button that appears to do nothing.
-      setError(t('indents.confirmFailed'));
+      await confirmCollection({ id: indentId, code: code || undefined }).unwrap();
+      setCode('');
+      // Said as a number, because the indent's own figures are running totals: a second batch
+      // of 2 against an indent of 5 leaves "Issued so far 5" on the screen, and a Mait who reads
+      // that as five more straws plans a round around three they do not have.
+      if (adding > 0) {
+        setAdded(t('indents.addedToStock', { qty: adding, item: itemName }));
+      }
+    } catch (err) {
+      // A wrong code and a locked one need two different things from the Mait: read it again,
+      // or ask for a new one. Anything else is the server's own rule — not issued yet, or
+      // already confirmed — and saying so beats a button that appears to do nothing.
+      switch (errorCodeOf(err)) {
+        case ErrorCode.COLLECTION_CODE_INVALID:
+          setError(t('indents.codeWrong'));
+          setCode('');
+          break;
+        case ErrorCode.COLLECTION_CODE_LOCKED:
+          setError(t('indents.codeLocked'));
+          setCode('');
+          break;
+        default:
+          setError(t('indents.confirmFailed'));
+      }
     }
   };
 
@@ -184,12 +227,17 @@ export default function IndentDetailScreen({
   const breedConfig = (breeds.data ?? []).find(config => config.code === indent.breed);
   const breedLabel = (hindi && breedConfig?.name_hi) || breedConfig?.name || indent.breed;
   const item = indent.breed ? `${indent.qty_requested} ${breedLabel}` : indent.item;
+  /** The thing itself, with no quantity in front — "Murrah", or the product's name. */
+  const itemName = breedLabel || indent.item.replace(/^\d+\s*(×\s*)?/, '');
 
   const plants = Array.from(
     new Set((mpps.data?.results ?? []).map(mpp => mpp.plant_name).filter(Boolean)),
   );
-  const depot =
-    plants.length === 1
+  // The store the server routed it to, when there is one: that is where the Mait goes, and it
+  // is a name the keeper behind the counter will recognise.
+  const depot = indent.store_name
+    ? t('indents.collectAtStore', { store: indent.store_name })
+    : plants.length === 1
       ? t('indents.collectAtNamed', { plant: plants[0] })
       : t('indents.collectAtMpp');
 
@@ -238,15 +286,28 @@ export default function IndentDetailScreen({
           key: 'approved',
           label: t('indents.stepApproved'),
           meta: approvedReached
-            ? t('indents.stepApprovedMeta', { qty: indent.qty_requested })
+            ? indent.approved_by_name
+              ? t('indents.stepApprovedBy', {
+                  qty: indent.qty_requested,
+                  name: indent.approved_by_name,
+                })
+              : t('indents.stepApprovedMeta', { qty: indent.qty_requested })
             : t('indents.stepApprovedWaiting'),
         },
         {
           key: 'issued',
           label: t('indents.stepIssued'),
           meta:
-            indent.status === 'issued'
-              ? [stamp(indent.issued_at), t('indents.stepIssuedMeta', { qty: indent.qty_issued })]
+            indent.status === 'issued' || indent.qty_issued > 0
+              ? [
+                  stamp(indent.issued_at),
+                  indent.store_name
+                    ? t('indents.stepIssuedAt', {
+                        qty: indent.qty_issued,
+                        store: indent.store_name,
+                      })
+                    : t('indents.stepIssuedMeta', { qty: indent.qty_issued }),
+                ]
                   .filter(Boolean)
                   .join(' · ')
               : t('indents.stepIssuedWaiting'),
@@ -256,20 +317,34 @@ export default function IndentDetailScreen({
           label: t('indents.stepReceived'),
           meta: indent.received_at
             ? (stamp(indent.received_at) ?? t('indents.stepReceivedDone'))
-            : indent.status === 'issued'
+            : toCollect(indent) > 0
               ? t('indents.stepReceivedReady')
               : t('indents.stepReceivedWaiting'),
         },
       ];
 
-  const collectable = indent.status === 'issued' && !indent.received_at;
+  const waitingQty = toCollect(indent);
+  /** Each trip across a store's counter, oldest first — the order they happened in. */
+  const handovers = [...(indent.handovers ?? [])]
+    .filter(trip => trip.state !== 'cancelled')
+    .sort((a, b) => a.issued_at.localeCompare(b.issued_at));
+  const collectable = waitingQty > 0;
+  const needsCode = collectable && !!indent.needs_code;
   const issuedPending = indent.qty_issued === 0 && !rejected;
+  // Some handed over and the rest still owed: the store issues it when the next batch lands.
+  const partOpen = !rejected && indent.qty_issued > 0 && (indent.qty_open ?? 0) > 0;
 
   const confirming = confirmation.isLoading;
 
   return (
     <View style={styles.root}>
       <Toast message={error} onDismiss={() => setError(null)} testID="indent-confirm-error" />
+      <Toast
+        message={added}
+        tone="success"
+        onDismiss={() => setAdded(null)}
+        testID="indent-added"
+      />
 
       <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
         {heroTop}
@@ -376,6 +451,38 @@ export default function IndentDetailScreen({
           </Text>
         </View>
 
+        {/* One row per trip across the counter. The figures above are running totals, and an
+            indent the store fills in two batches has to say which straws came when — or the
+            Mait who collected 2 reads "5" and believes five went into the flask. */}
+        {handovers.length > 0 && (
+          <>
+            <Text style={[styles.section, styles.sectionSpaced]}>{t('indents.tripsTitle')}</Text>
+            {handovers.map(trip => (
+              <View key={trip.id} style={styles.qtyRow} testID={`indent-trip-${trip.id}`}>
+                <View style={styles.qtyBody}>
+                  <Text style={styles.qtyLabel}>
+                    {t('indents.tripLine', { qty: trip.qty, item: itemName })}
+                  </Text>
+                  <Text style={styles.qtyMeta}>
+                    {trip.collected_at
+                      ? t('indents.tripCollected', {
+                          store: trip.store_name,
+                          when: stamp(trip.collected_at),
+                        })
+                      : t('indents.tripWaiting', {
+                          store: trip.store_name,
+                          when: stamp(trip.issued_at),
+                        })}
+                  </Text>
+                </View>
+                <Text
+                  style={[styles.qtyValue, !trip.collected_at && styles.qtyValueWaiting]}
+                >{`+${trip.qty}`}</Text>
+              </View>
+            ))}
+          </>
+        )}
+
         {/* Whichever it is, said in words. A button that cannot be pressed with nothing
             explaining why reads as a broken screen. */}
         {rejected ? (
@@ -409,6 +516,17 @@ export default function IndentDetailScreen({
           />
         )}
 
+        {partOpen && (
+          <FlowNotice
+            tone="accent"
+            title={t('indents.partOpenTitle', { qty: indent.qty_open })}
+            body={t('indents.partOpenBody')}
+            pill={t('indents.state_part')}
+            icon="time-outline"
+            testID="indent-part-open"
+          />
+        )}
+
         {indent.sync_status === 'failed' && (
           <FlowNotice
             tone="error"
@@ -423,11 +541,44 @@ export default function IndentDetailScreen({
           stays in view however long the timeline runs. Nothing competes with it here — the
           tab bar carries no action on this screen. */}
       <View style={[styles.action, { paddingBottom: spacing[3] + insets.bottom }]}>
+        {/* The store's code, above the button it unlocks. Four wide cells' worth of one input,
+            number pad only, because it is read aloud across a counter and typed by a thumb. */}
+        {needsCode && (
+          <View style={styles.codeWrap} testID="indent-code">
+            <View style={styles.codeText}>
+              <Text style={styles.codeLabel}>{t('indents.codeLabel')}</Text>
+              <Text style={styles.codeHint}>
+                {indent.store_name
+                  ? t('indents.codeHint', { store: indent.store_name })
+                  : t('indents.codeHintPlain')}
+              </Text>
+              {/* The code is never on this phone — a handset that knew it would prove nothing
+                  — so a lost one comes from the counter, and the Mait needs telling that. */}
+              <Text style={styles.codeHint} testID="indent-code-lost">
+                {t('indents.codeLost')}
+              </Text>
+            </View>
+            <TextInput
+              value={code}
+              onChangeText={value => setCode(value.replace(/\D/g, '').slice(0, 4))}
+              keyboardType="number-pad"
+              maxLength={4}
+              placeholder="····"
+              placeholderTextColor={colors.textDisabled}
+              style={styles.codeInput}
+              accessibilityLabel={t('indents.codeLabel')}
+              testID="indent-code-input"
+            />
+          </View>
+        )}
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ disabled: !collectable || confirming, busy: confirming }}
+          accessibilityState={{
+            disabled: !collectable || confirming || (needsCode && code.length < 4),
+            busy: confirming,
+          }}
           onPress={confirm}
-          disabled={!collectable || confirming}
+          disabled={!collectable || confirming || (needsCode && code.length < 4)}
           style={({ pressed }) => [
             styles.cta,
             collectable ? styles.ctaReady : styles.ctaInert,
@@ -445,7 +596,9 @@ export default function IndentDetailScreen({
                   ? t('indents.collectedLabel')
                   : rejected
                     ? t('indents.rejectedLabel')
-                    : t('indents.confirmCollection')}
+                    : needsCode
+                      ? t('indents.confirmQty', { qty: waitingQty })
+                      : t('indents.confirmCollection')}
               </Text>
             </>
           )}
@@ -544,6 +697,7 @@ const styles = StyleSheet.create({
   stepMetaRefused: { color: colors.error },
 
   section: { ...typography.h3, color: colors.ink, marginBottom: spacing[3] },
+  sectionSpaced: { marginTop: spacing[3] },
 
   qtyRow: {
     flexDirection: 'row',
@@ -562,6 +716,28 @@ const styles = StyleSheet.create({
   qtyValue: { ...typography.h2, color: colors.ink },
   qtyValueMuted: { color: colors.textDisabled },
   qtyValueWaiting: { color: colors.secondaryPressed },
+
+  codeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    marginBottom: spacing[3],
+  },
+  codeText: { flex: 1 },
+  codeLabel: { ...typography.bodyStrong, color: colors.ink },
+  codeHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  codeInput: {
+    ...typography.h1,
+    width: 132,
+    minHeight: 54,
+    textAlign: 'center',
+    letterSpacing: 8,
+    color: colors.ink,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
 
   action: {
     paddingHorizontal: spacing[5],

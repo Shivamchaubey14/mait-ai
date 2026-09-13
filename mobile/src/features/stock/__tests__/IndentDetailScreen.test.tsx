@@ -11,7 +11,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import IndentDetailScreen, { rejectionReason } from '../IndentDetailScreen';
 import type { Indent } from '@api/types';
-import { jsonResponse, renderWithStore } from '@/test-utils';
+import { jsonResponse, problemResponse, renderWithStore } from '@/test-utils';
 
 function indent(overrides: Partial<Indent> = {}): Indent {
   return {
@@ -193,8 +193,8 @@ describe('IndentDetailScreen', () => {
     renderWithStore(<IndentDetailScreen indentId={2291} onBack={onBack} />);
 
     await waitFor(() => expect(screen.getByTestId('indent-status')).toHaveTextContent(/Rejected/));
-    expect(screen.getByText(/Turned down by store/)).toBeTruthy();
-    expect(screen.queryByText(/Waiting on the store/)).toBeNull();
+    expect(screen.getByText(/Turned down by the office/)).toBeTruthy();
+    expect(screen.queryByText(/Waiting on the zonal manager/)).toBeNull();
     expect(screen.queryByText(/Not packed yet/)).toBeNull();
     expect(screen.queryByText(/Confirmed when you collect/)).toBeNull();
   });
@@ -240,5 +240,169 @@ describe('IndentDetailScreen', () => {
     renderScreen();
 
     await waitFor(() => expect(screen.getByTestId('indent-not-synced')).toBeTruthy());
+  });
+
+  describe('stock handed over at a store', () => {
+    /** 18 of 25 over the counter at Barsana, waiting for the Mait's code; 7 still owed. */
+    const atCounter = indent({
+      status: 'approved',
+      status_display: 'Approved',
+      qty_issued: 18,
+      issued_at: '2026-08-20T05:50:00Z',
+      store: 1,
+      store_name: 'Barsana depot',
+      approved_at: '2026-08-19T09:00:00Z',
+      approved_by_name: 'Zonal manager',
+      approved_by_zone: 'Mathura',
+      qty_open: 7,
+      qty_to_collect: 18,
+      needs_code: true,
+      handovers: [],
+    });
+
+    it('asks for the store’s code before it will confirm', async () => {
+      mockIndent(atCounter);
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('indent-code-input'));
+      expect(screen.getByTestId('indent-confirm-collection')).toBeDisabled();
+      expect(screen.getByTestId('indent-confirm-collection')).toHaveTextContent(
+        /Confirm 18 collected/,
+      );
+      expect(screen.getByText('Ask Barsana depot to read you the four digits')).toBeTruthy();
+      // The code never reaches this phone, so a lost one comes from the counter — and says so.
+      expect(screen.getByTestId('indent-code-lost')).toHaveTextContent(
+        'Lost it? The store can read it out to you again.',
+      );
+
+      fireEvent.changeText(screen.getByTestId('indent-code-input'), '4729');
+      expect(screen.getByTestId('indent-confirm-collection')).not.toBeDisabled();
+    });
+
+    it('sends the code the Mait typed', async () => {
+      mockIndent(atCounter);
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('indent-code-input'));
+      fireEvent.changeText(screen.getByTestId('indent-code-input'), '47a29');
+      fireEvent.press(screen.getByTestId('indent-confirm-collection'));
+
+      await waitFor(() =>
+        expect(
+          (global.fetch as jest.Mock).mock.calls.some(
+            ([input]) => (input as Request).method === 'POST',
+          ),
+        ).toBe(true),
+      );
+      const post = (global.fetch as jest.Mock).mock.calls
+        .map(([input]) => input as Request)
+        .find(request => request.method === 'POST') as Request;
+      expect(post.url).toMatch(/confirm-collection\/$/);
+      // Digits only, four of them — a stray letter from the keyboard never reaches the server.
+      expect(await post.clone().json()).toEqual({ code: '4729' });
+    });
+
+    it('says the code was wrong rather than that something failed', async () => {
+      (global.fetch as jest.Mock).mockImplementation(async (input: Request) => {
+        if (input.method === 'POST') {
+          return problemResponse(400, 'collection-code-invalid');
+        }
+        if (input.url.includes('/config/')) {
+          return jsonResponse([]);
+        }
+        if (input.url.includes('/mpp/')) {
+          return jsonResponse({ count: 0, next: null, previous: null, results: [] });
+        }
+        return jsonResponse(atCounter);
+      });
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('indent-code-input'));
+      fireEvent.changeText(screen.getByTestId('indent-code-input'), '1111');
+      fireEvent.press(screen.getByTestId('indent-confirm-collection'));
+
+      await waitFor(() =>
+        expect(
+          screen.getByText('That is not the code the store read out. Ask them to read it again.'),
+        ).toBeTruthy(),
+      );
+    });
+
+    it('shows each batch on its own, so a second trip of 2 never reads as 5', async () => {
+      mockIndent(
+        indent({
+          status: 'issued',
+          status_display: 'Issued',
+          qty_requested: 5,
+          qty_issued: 5,
+          store: 1,
+          store_name: 'Akbarpur depot',
+          qty_open: 0,
+          qty_to_collect: 0,
+          needs_code: false,
+          received_at: '2026-09-11T06:09:14Z',
+          handovers: [
+            {
+              id: 2,
+              qty: 2,
+              store_name: 'Akbarpur depot',
+              issued_at: '2026-09-11T06:08:00Z',
+              collected_at: '2026-09-11T06:09:14Z',
+              cancelled_at: null,
+              state: 'collected',
+            },
+            {
+              id: 1,
+              qty: 3,
+              store_name: 'Akbarpur depot',
+              issued_at: '2026-09-11T05:29:00Z',
+              collected_at: '2026-09-11T05:30:06Z',
+              cancelled_at: null,
+              state: 'collected',
+            },
+          ],
+        }),
+      );
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('indent-trip-1'));
+      expect(screen.getByTestId('indent-trip-1')).toHaveTextContent(/\+3/);
+      expect(screen.getByTestId('indent-trip-2')).toHaveTextContent(/\+2/);
+      expect(screen.getByTestId('indent-trip-2')).toHaveTextContent(/From Akbarpur depot/);
+    });
+
+    it('says how many the collection just added', async () => {
+      (global.fetch as jest.Mock).mockImplementation(async (input: Request) => {
+        if (input.method === 'POST') {
+          return jsonResponse({ ...atCounter, qty_to_collect: 0, needs_code: false });
+        }
+        if (input.url.includes('/config/')) {
+          return jsonResponse([
+            { code: 'MURRAH', name: 'Murrah', name_hi: '', animal_type: 'BUFF', display_order: 1 },
+          ]);
+        }
+        if (input.url.includes('/mpp/')) {
+          return jsonResponse({ count: 0, next: null, previous: null, results: [] });
+        }
+        return jsonResponse(atCounter);
+      });
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('indent-code-input'));
+      fireEvent.changeText(screen.getByTestId('indent-code-input'), '4729');
+      fireEvent.press(screen.getByTestId('indent-confirm-collection'));
+
+      await waitFor(() => expect(screen.getByText('18 Murrah added to your stock.')).toBeTruthy());
+    });
+
+    it('names the store and says the rest is still open', async () => {
+      mockIndent(atCounter);
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('indent-part-open'));
+      expect(screen.getByTestId('indent-part-open')).toHaveTextContent(/7 still open/);
+      expect(screen.getByText(/18 issued at Barsana depot/)).toBeTruthy();
+      expect(screen.getByText(/25 approved · Zonal manager/)).toBeTruthy();
+    });
   });
 });
