@@ -25,7 +25,7 @@
  *    there — including across a restart, because it is on disk rather than in this function.
  */
 
-import { API_BASE_URL } from '@/config/env';
+import { apiBaseUrl } from '@/config/env';
 import {
   blockDependentsOf,
   eventIdFor,
@@ -195,7 +195,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
    * already exists rather than a second one who can be asked for cash again.
    */
   if (job.kind === 'createNonMember') {
-    return fetch(`${API_BASE_URL}/non-members/`, {
+    return fetch(`${apiBaseUrl()}/non-members/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(job.payload),
@@ -221,7 +221,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
       name: 'aadhaar-back.jpg',
       type: 'image/jpeg',
     } as unknown as Blob);
-    return fetch(`${API_BASE_URL}/non-members/${nonMemberId}/aadhaar/`, {
+    return fetch(`${apiBaseUrl()}/non-members/${nonMemberId}/aadhaar/`, {
       method: 'PATCH',
       headers,
       body: card,
@@ -236,7 +236,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
    * of the capture in the queue, because the capture cannot name her until this has landed.
    */
   if (job.kind === 'createAnimal') {
-    return fetch(`${API_BASE_URL}/animals/`, {
+    return fetch(`${apiBaseUrl()}/animals/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(job.payload),
@@ -257,7 +257,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
       name: 'animal.jpg',
       type: 'image/jpeg',
     } as unknown as Blob);
-    return fetch(`${API_BASE_URL}/animals/${animalId}/photo/`, {
+    return fetch(`${apiBaseUrl()}/animals/${animalId}/photo/`, {
       method: 'PATCH',
       headers,
       body: portrait,
@@ -273,7 +273,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
    * key in the header are both for.
    */
   if (job.kind === 'createEvent') {
-    return fetch(`${API_BASE_URL}/ai-events/`, {
+    return fetch(`${apiBaseUrl()}/ai-events/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(await withResolvedRefs(job)),
@@ -292,7 +292,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
     if (eventId === null) {
       throw new AwaitingEventId();
     }
-    return fetch(`${API_BASE_URL}/payments/${eventId}/initiate/`, {
+    return fetch(`${apiBaseUrl()}/payments/${eventId}/initiate/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: job.payload.mode }),
@@ -307,7 +307,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
    * own so a result found in a village needs no second trip to the yard.
    */
   if (job.kind === 'recordPd') {
-    return fetch(`${API_BASE_URL}/pregnancy-checks/${job.payload.checkId}/record/`, {
+    return fetch(`${apiBaseUrl()}/pregnancy-checks/${job.payload.checkId}/record/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -326,7 +326,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
     if (eventId === null) {
       throw new AwaitingEventId();
     }
-    return fetch(`${API_BASE_URL}/ai-events/${eventId}/complete/`, {
+    return fetch(`${apiBaseUrl()}/ai-events/${eventId}/complete/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       // Defaulted false for a job queued by an older build, and for every ordinary capture:
@@ -356,7 +356,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
   form.append('photo_source', String(job.payload.source ?? 'camera'));
   form.append('gps_source', String(job.payload.gpsSource ?? 'device'));
 
-  return fetch(`${API_BASE_URL}/ai-events/${eventId}/photo/`, {
+  return fetch(`${apiBaseUrl()}/ai-events/${eventId}/photo/`, {
     method: 'PATCH',
     headers,
     body: form,

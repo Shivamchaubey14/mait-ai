@@ -51,8 +51,8 @@ describe('a built APK', () => {
   it('uses the address its build profile was given', () => {
     // `eas.json` sets this per profile and nothing read it, so every preview build fell
     // through to the loopback address in `app.json` and could reach no server at all.
-    expect(apiUrlWith('https://apolonia-unvouchsafed-joy.ngrok-free.dev/api/v1')).toBe(
-      'https://apolonia-unvouchsafed-joy.ngrok-free.dev/api/v1',
+    expect(apiUrlWith('https://diary-flattery-hurray.ngrok-free.dev/api/v1')).toBe(
+      'https://diary-flattery-hurray.ngrok-free.dev/api/v1',
     );
   });
 

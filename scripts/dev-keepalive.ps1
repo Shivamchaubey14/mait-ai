@@ -29,8 +29,17 @@
 
     Each role wants its own window. Run with no role to open all three.
 
+    Safe to re-run. Whatever is already up is left alone, and only the gap is started -
+    which is the normal case, because the three do not die together: the tunnel and the
+    portal sit in their own windows for hours while the API is reclaimed for memory. A
+    second window for a role already running cannot bind the port, or claim a reserved
+    address one agent already holds, so it would only fail and scroll.
+
 .PARAMETER Role
     backend, portal, tunnel, or omitted for one window each.
+
+.PARAMETER Force
+    Start the role even when it looks like it is already running.
 
 .EXAMPLE
     .\scripts\dev-keepalive.ps1
@@ -44,27 +53,66 @@ param(
 
     # The reserved ngrok address. Overridable so this is not the one file that has to be
     # edited when the account's URL changes; the default is the one docs/HANDOVER.md names.
-    [string]$TunnelUrl = 'https://apolonia-unvouchsafed-joy.ngrok-free.dev',
+    [string]$TunnelUrl = 'https://diary-flattery-hurray.ngrok-free.dev',
 
     # Seconds between an exit and the next attempt. Long enough that a server failing to
     # bind at all scrolls at a readable pace rather than filling the window.
-    [int]$RestartDelaySeconds = 3
+    [int]$RestartDelaySeconds = 3,
+
+    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 
+function Test-Listening {
+    param([int]$Port)
+    # SilentlyContinue rather than a try: no connection on the port is the ordinary answer
+    # here, not an error, and the script-wide 'Stop' would otherwise make it terminating.
+    $null -ne (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+}
+
+function Test-RoleRunning {
+    param([string]$Name, [string]$Url)
+
+    switch ($Name) {
+        'backend' { return (Test-Listening 8000) }
+        'portal'  { return (Test-Listening 8080) }
+        'tunnel'  {
+            # Ask the agent's own API rather than looking for an ngrok.exe, because the
+            # question is not whether an agent exists but whether one is serving *this*
+            # reserved address. An agent up on somebody else's tunnel is a different fault,
+            # and one this should not quietly treat as success.
+            try {
+                $agent = Invoke-RestMethod -Uri 'http://127.0.0.1:4040/api/tunnels' -TimeoutSec 3
+            } catch {
+                return $false
+            }
+            return [bool]($agent.tunnels | Where-Object { $_.public_url -eq $Url })
+        }
+    }
+    return $false
+}
+
 if (-not $Role) {
     Write-Host 'Opening a supervised window for each server ...' -ForegroundColor Cyan
     foreach ($each in @('backend', 'portal', 'tunnel')) {
+        if (-not $Force -and (Test-RoleRunning -Name $each -Url $TunnelUrl)) {
+            Write-Host "  $each is already up - left alone." -ForegroundColor DarkGray
+            continue
+        }
         Start-Process powershell -ArgumentList @(
             '-NoExit', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
             '-Role', $each, '-TunnelUrl', $TunnelUrl
         )
+        Write-Host "  $each starting in its own window." -ForegroundColor Gray
     }
     Write-Host ''
     Write-Host "Portal   http://127.0.0.1:8080/   (and $TunnelUrl for the office)" -ForegroundColor Green
     Write-Host "API      http://127.0.0.1:8000/api/v1/   (and $TunnelUrl/api/v1/ for handsets)" -ForegroundColor Green
+    Write-Host "Tunnel   $TunnelUrl  ->  127.0.0.1:8000" -ForegroundColor Green
+    Write-Host '         Reserved to the account, so a restarted tunnel returns on the same' -ForegroundColor DarkGray
+    Write-Host '         address and mobile/eas.json stays correct.' -ForegroundColor DarkGray
     Write-Host ''
     Write-Host 'Expo is not started here - it belongs in your own window:' -ForegroundColor Yellow
     Write-Host '    cd mobile; npx expo start -c' -ForegroundColor Yellow
@@ -109,6 +157,11 @@ if ($Role -ne 'tunnel' -and -not (Test-Path (Join-Path $repo 'backend\.env'))) {
 }
 if (-not (Get-Command $plan.File -ErrorAction SilentlyContinue)) {
     Write-Error "$($plan.File) is not on PATH, so the $Role cannot be started."
+}
+
+if (-not $Force -and (Test-RoleRunning -Name $Role -Url $TunnelUrl)) {
+    Write-Host "$Role is already up - nothing to do. Pass -Force to supervise a second one anyway." -ForegroundColor Yellow
+    return
 }
 
 $Host.UI.RawUI.WindowTitle = "mait-ai $Role"

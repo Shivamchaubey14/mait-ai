@@ -18,6 +18,11 @@
  * that mapping is ever changed or the dynamic config removed — but they cannot disagree,
  * because there is only one value.
  *
+ * **And a built APK can move afterwards.** The answer above is only where a build *starts*:
+ * `serverAddress.ts` asks `mobile/server.json` in the repository where the server is now, and
+ * moves every request there once the new address answers. So everything that builds a URL
+ * reads `apiBaseUrl()` at the moment it sends, never a constant taken at import.
+ *
  * Getting this wrong is worth guarding against because it is invisible now that the app works
  * offline: a build pointed at itself looks exactly like a handset with no signal — every screen
  * empty on a fresh install, every write queued and never sent.
@@ -69,7 +74,43 @@ function resolveApiBaseUrl(): string {
   return configured ?? `http://127.0.0.1:${API_PORT}${API_PATH}`;
 }
 
+/** The address this binary was built with — where it starts, and what the tests check. */
 export const API_BASE_URL = resolveApiBaseUrl();
+
+let current = API_BASE_URL;
+
+/** Where requests go right now. Read at send time, because a built APK can move (see above). */
+export function apiBaseUrl(): string {
+  return current;
+}
+
+export function setApiBaseUrl(url: string): void {
+  current = url;
+}
+
+/**
+ * Whether this binary finds its server by asking the repository.
+ *
+ * Only a standalone build given a real address at build time. Expo Go and a development build
+ * follow the packager to the laptop, and must not be pulled away from it.
+ */
+export function discoversServer(): boolean {
+  const fromBuild = (process.env.EXPO_PUBLIC_API_URL ?? '').trim();
+  return !!fromBuild && !isLoopback(fromBuild);
+}
+
+/**
+ * Where the current server address is published: `mobile/server.json` on `develop`, raw.
+ *
+ * A build profile can point elsewhere with `EXPO_PUBLIC_SERVER_CONFIG_URL`. The repository is
+ * public, and all the file carries is the tunnel's address — which is in `eas.json` anyway.
+ */
+const DEFAULT_SERVER_CONFIG_URL =
+  'https://raw.githubusercontent.com/Shivamchaubey14/mait-ai/develop/mobile/server.json';
+
+export function serverConfigUrl(): string {
+  return (process.env.EXPO_PUBLIC_SERVER_CONFIG_URL ?? '').trim() || DEFAULT_SERVER_CONFIG_URL;
+}
 
 /**
  * Turn a stored file path into something a handset can fetch.
@@ -87,7 +128,7 @@ export function mediaUrl(path: string | null | undefined): string | undefined {
   if (/^https?:\/\//i.test(path)) {
     return path;
   }
-  const origin = API_BASE_URL.replace(API_PATH, '');
+  const origin = apiBaseUrl().replace(API_PATH, '');
   return `${origin}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 

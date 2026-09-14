@@ -22,7 +22,7 @@
  */
 
 import type { CapturedPhoto } from '@/features/aiFlow/CapturePhotoScreen';
-import { API_BASE_URL } from '@/config/env';
+import { apiBaseUrl } from '@/config/env';
 
 import { idempotencyHeaders, newClientUuid } from './client';
 import { clockTime, enqueue, pendingCount, rememberEventId, rememberServerId } from './queue';
@@ -255,7 +255,7 @@ export async function registerNonMember(
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/non-members/`, {
+    const response = await fetch(`${apiBaseUrl()}/non-members/`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -359,7 +359,7 @@ export async function registerAnimal(
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/animals/`, {
+    const response = await fetch(`${apiBaseUrl()}/animals/`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -440,7 +440,7 @@ export async function createEvent(
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/ai-events/`, {
+    const response = await fetch(`${apiBaseUrl()}/ai-events/`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -549,7 +549,7 @@ export async function attachPhoto(
 
   try {
     const response = await putPhoto(
-      `${API_BASE_URL}/ai-events/${eventId}/photo/`,
+      `${apiBaseUrl()}/ai-events/${eventId}/photo/`,
       accessToken,
       clientUuid,
       form,
@@ -619,7 +619,7 @@ export async function completeEvent(
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/ai-events/${eventId}/complete/`, {
+    const response = await fetch(`${apiBaseUrl()}/ai-events/${eventId}/complete/`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,

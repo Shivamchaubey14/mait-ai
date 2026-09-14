@@ -20,8 +20,9 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://apolonia-unvouchsafed-joy.ngrok-free.dev/api/v1",
-        "EXPO_ALLOW_CLEARTEXT": "true"
+        "EXPO_PUBLIC_API_URL": "https://diary-flattery-hurray.ngrok-free.dev/api/v1",
+        "EXPO_ALLOW_CLEARTEXT": "true",
+        "EXPO_PUBLIC_SERVER_CONFIG_URL": "https://raw.githubusercontent.com/Shivamchaubey14/mait-ai/develop/mobile/server.json"
       }
     },
     "production": {

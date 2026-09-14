@@ -10,7 +10,8 @@
 import { BaseQueryFn, createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query';
 
-import { API_BASE_URL } from '@/config/env';
+import { apiBaseUrl } from '@/config/env';
+import { discoverServerAddress } from '@/config/serverAddress';
 import type { RootState } from '@/store';
 
 import { cacheKeyFor, readCached, writeCached } from './offlineCache';
@@ -42,6 +43,9 @@ export const ErrorCode = {
   OTP_EXPIRED: 'otp-expired',
   OTP_ATTEMPTS_EXCEEDED: 'otp-attempts-exceeded',
   MPP_NOT_ASSIGNED: 'mpp-not-assigned',
+  COLLECTION_CODE_INVALID: 'collection-code-invalid',
+  COLLECTION_CODE_LOCKED: 'collection-code-locked',
+  STORE_STOCK_SHORT: 'store-stock-short',
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -55,8 +59,7 @@ export function errorCodeOf(error: unknown): string | null {
   return parts[parts.length - 1] ?? null;
 }
 
-const rawBaseQuery = fetchBaseQuery({
-  baseUrl: API_BASE_URL,
+const queryOptions: Omit<Parameters<typeof fetchBaseQuery>[0] & object, 'baseUrl'> = {
   timeout: 30_000,
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as RootState).auth?.accessToken;
@@ -71,7 +74,39 @@ const rawBaseQuery = fetchBaseQuery({
     headers.set('ngrok-skip-browser-warning', 'true');
     return headers;
   },
-});
+};
+
+/**
+ * The fetch, against wherever the server is right now.
+ *
+ * Rebuilt only when the address has moved (`serverAddress.ts`), so every request after a move
+ * goes to the new tunnel without any endpoint or screen knowing there was one.
+ */
+let queryBase = '';
+let queryFor: ReturnType<typeof fetchBaseQuery> | null = null;
+
+const rawBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = (
+  args,
+  api,
+  extraOptions,
+) => {
+  const base = apiBaseUrl();
+  if (!queryFor || base !== queryBase) {
+    queryBase = base;
+    queryFor = fetchBaseQuery({ ...queryOptions, baseUrl: base });
+  }
+  return queryFor(args, api, extraOptions);
+};
+
+/**
+ * Whether an answer means the server is not where we are calling.
+ *
+ * Unreachable, or answered by something that is not this API at all — a dead ngrok address
+ * replies with its own HTML page, which arrives here as a parse failure rather than as JSON.
+ */
+function serverGone(error: FetchBaseQueryError | undefined): boolean {
+  return unreachable(error) || error?.status === 'PARSING_ERROR';
+}
 
 /**
  * Wraps the base query with a single refresh-and-retry on 401.
@@ -86,6 +121,12 @@ export const baseQueryWithReauth: BaseQueryFn<
   FetchBaseQueryError
 > = async (args, api, extraOptions) => {
   let result = await rawBaseQuery(args, api, extraOptions);
+
+  // The server may have moved to a new tunnel. Ask where it is now, and if the answer is a new
+  // address that answers, send this request again there — once.
+  if (serverGone(result.error) && (await discoverServerAddress())) {
+    result = await rawBaseQuery(args, api, extraOptions);
+  }
 
   if (result.error?.status === 401) {
     const state = api.getState() as RootState;
@@ -175,7 +216,17 @@ export const baseQueryWithOfflineReads: BaseQueryFn<
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithOfflineReads,
-  tagTypes: ['Inventory', 'AIEvent', 'Indent', 'Member', 'MPP', 'Animal', 'Payment', 'Pregnancy'],
+  tagTypes: [
+    'Inventory',
+    'AIEvent',
+    'Indent',
+    'Member',
+    'MPP',
+    'Animal',
+    'Payment',
+    'Pregnancy',
+    'Store',
+  ],
   // Endpoints are injected per feature slice so this module never becomes a dumping ground.
   endpoints: () => ({}),
 });
