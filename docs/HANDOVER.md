@@ -18,7 +18,7 @@ endpoint surface, [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) for both UI patterns, a
 | 2 · Master data & auth | 4–8 | Done |
 | 3 · Core AI event & inventory | 9–14 | **Done** |
 | 4 · Payments | 15–18 | **Not started** — `apps/payments/urls.py` is empty |
-| 5 · Indent & Indent Easy | 19–22 | Day 19 done (indent API + screens). An admin can now approve, reject and issue from the portal — see below. Days 20–22 — the outbound push, the GRN webhook and reconciliation — still not started |
+| 5 · Indent & Indent Easy | 19–22 | Day 19 done (indent API + screens). **Stores added 2026-09-11**: the zonal manager approves on the portal, the store keeper hands over from the app with a code the Mait types in — see *Stores* below. Days 20–22 — the outbound push, the GRN webhook and reconciliation — still not started |
 | 6 · Mobile polish | 23–25 | Substantially done ahead of schedule |
 | 7 · Admin dashboard & reports | 26–28 | Done — all 16 portal screens built |
 | 8 · Hardening, UAT, go-live | 29–30 | Not started |
@@ -69,7 +69,7 @@ The static server on 8080 is still the convenient way to work; the point of the 
 that **one** origin means one tunnel:
 
 ```powershell
-ngrok http 8000 --url=https://apolonia-unvouchsafed-joy.ngrok-free.dev
+ngrok http 8000 --url=https://diary-flattery-hurray.ngrok-free.dev
 ```
 
 That single tunnel is then the whole product — the portal for the office and `/api/v1` for
@@ -156,6 +156,15 @@ reconnects on its own after a blip, and this loop is for the case where the agen
 gone. Django binds `0.0.0.0` and serves happily through a dropped Wi-Fi; when it dies it is for
 some other reason.
 
+**When the tunnel's address changes, installed APKs follow it — no rebuild.** Since
+2026-09-11 a standalone build asks `mobile/server.json` on `develop` (read raw from GitHub)
+where the server is, at launch and whenever a request finds the server gone, and moves there
+once the new address answers its own `/health/`. The last good address is kept on the handset.
+So a new ngrok account is: edit that one line, push `develop`, and the phones reconnect on their
+next launch — or within a minute of their next failed request. Update `eas.json` too, so the
+next build *starts* in the right place. Expo Go never asks; it follows the packager as before.
+APKs built before 2026-09-11 predate this and still need replacing once.
+
 Free-tier ngrok answers anything browser-shaped with an interstitial, so a first-time visitor
 clicks "Visit Site" once. Requests the portal makes carry `ngrok-skip-browser-warning`, the
 same header `mobile/src/api/client.ts` has always sent — without it every screen reports a
@@ -173,6 +182,8 @@ anything standing, use `docs/DEPLOYMENT.md`.
 | App | `9999999999` / `123456` — a fixed dev OTP, wired via `DEV_FIXED_OTP_NUMBERS` in `backend/.env`. Production refuses to boot if it is set. |
 | Portal | `admin` / `MaitAdmin@2026` |
 | Portal, restricted | `rateclerk` / `RateClerk@2026x` — an Admin holding Dashboard, Products and Rates only, for checking per-account portal access |
+| Portal, zonal manager | `zonal-ayodhya` / `ZonalAyodhya@2026` — an Admin with Dashboard, Indents and Inventory, limited to **Ayodhya Zone** (which holds AKBARPUR). Approves that zone's indents and sees its Maits' stock and store shelves, nothing else |
+| App, store keeper | `9876500001` / `123456` — Ramesh Yadav at **Akbarpur depot**, which serves the AKBARPUR BMC the demo Mait's MPPs report into. Made by `seed_store` |
 
 The demo Mait is ROHIT KUMAR (`5500000054`), assigned MPPs 001302, 001308 and 001371, holding
 straws in three breeds plus consumables and equipment. None of that survives a database reset;
@@ -185,6 +196,16 @@ python manage.py seed_supplies --mait 5500000054
 
 Both go through `credit_stock`, so the ledger stays summable to the balance —
 `/api/v1/mait/inventory/check/` should always answer `consistent: true`.
+
+A store for that Mait, with a keeper and stock on its shelf:
+
+```powershell
+python manage.py seed_store --mait 5500000054 --keeper "9876500001:Ramesh Yadav" --straws 40 --breeds MURRAH,HF_CROSS,JERSEY,GIR --supplies 50
+```
+
+It serves every BMC/MCC the Mait's MPPs report into that no other store already serves, and
+stocks the shelf through `receive_stock` — the path a keeper's own delivery takes. Like
+`seed_test_maits`, it refuses to run unless the fixed dev OTP is configured.
 
 ### Handing a build to a room of testers
 
@@ -308,6 +329,47 @@ account holding either.
   and grouping by day in Python: see `apps/core/timeframe.py`, and use it rather than
   reintroducing `__date`. Loading the timezone tables in production is still worth doing, but
   no query should need it.
+- **Stores: the zonal manager approves, the store issues, the Mait's code moves the stock.**
+  Built 2026-09-11 (`apps/stores`, the portal's Stores screen, the keeper's shell in
+  `mobile/src/navigation/store.tsx`). Read the docstring at the top of
+  `apps/stores/services.py` first. Four things are true and not obvious:
+  - *Issuing moves no count.* A handover sets stock aside on the shelf and hands the keeper a
+    four-digit code; the store's count and the Mait's both move only when the Mait types the
+    code into *Confirm collection*. A Mait who walks off leaves it open — the keeper can read
+    the code out again from *Not collected*, or put the stock back.
+  - *Short is not a refusal.* A store holding 18 against an approval of 25 hands over the 18
+    and the indent stays `approved` with 7 open; the next batch is issued against the same
+    indent. Only when the last of it goes does the indent become `issued`.
+  - *One indent, one issuer.* An indent routed to a store cannot be issued from the portal
+    (`409`), and a part-issued one cannot be rejected. The portal's Issue is now the fallback
+    for Maits no store serves — which on 2026-09-11 is everyone outside AKBARPUR.
+  - *A store keeper reaches nothing but `/store/`.* `IsKnownRole` replaced `IsAuthenticated`
+    as the DRF default, and `in_section` now refuses any role that is neither admin nor Mait —
+    so every older view, written when there were two roles, refuses the third. Add a view a
+    keeper needs under `apps/stores`, with `IsStoreKeeper`.
+  - The keeper has a **History** tab: every handover under the day it happened, with what went,
+    to whom, and whether the code was typed — `GET /store/handovers/?from=&to=&search=`.
+  - **Inventory oversight is zone-scoped** and carries the store shelves in reach: a zonal
+    manager sees the Maits whose MPPs are in their zone and the stores serving it; head office
+    sees everything and can pick a zone. The per-Mait detail refuses a Mait outside the zone.
+  - The zonal manager is an ordinary Admin with a zone and the Indents section. Their Indents
+    list is narrowed to their zone through the Mait's MPPs, the same `zone_scope` every other
+    "who" screen uses.
+- **Super OTP — a code from the office at every step, when the SMS does not arrive.** Built
+  2026-09-11 (`accounts.SuperOTP`, `apps/accounts/super_otp.py`, portal `super-otp.html`). It
+  stands in for **every SMS template**: sign-in, the farmer check, and both payment
+  confirmations. It is accepted inside `verify_otp`, so every step takes it without code of its
+  own. For a farmer step the office phones **the farmer** on her record's number — never the Mait
+  who asked — and she reads it to the Mait; asks for those are tied to the farmer or payment on
+  the Mait's own screen (`/farmers/otp/office/`, `/payments/{id}/otp/office/`) and refused until
+  the SMS has been tried. The sign-in part, for reference:
+  A Mait or keeper taps *Not getting the SMS? Ask the office for a code*; the ask lands on the
+  portal's **Login codes** screen with whether their last SMS was actually delivered; an admin
+  generates a 6-digit code — shown **once**, stored as a hash — and calls the number *on file*
+  to read it out; it goes into the same six boxes and `/auth/otp/verify/` checks it before the
+  SMS code. One use, 10 minutes, 5 wrong tries, a new code revokes the last, every step in the
+  audit log, zonal managers see only their zone. The section is granted to holders of Users &
+  roles.
 - **`develop` is pushed to directly**, bypassing the branch-protection rule. That is a known,
   accepted deviation from `BRANCHING.md`.
 

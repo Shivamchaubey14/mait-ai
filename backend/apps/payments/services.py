@@ -94,7 +94,78 @@ def issue_otp(*, mobile_no: str, purpose: str, payment: Payment | None = None) -
 
 def verify_otp(*, mobile_no: str, purpose: str, code: str) -> OTPLog:
     """
-    Verify a submitted OTP (SRS §6.5.1).
+    Verify a submitted code for one step — the SMS code, or the office's code standing in for it.
+
+    Every step that sends a code checks it here: sign-in, the farmer check, and both payment
+    confirmations. So this is where a code generated on the portal for an SMS that never arrived
+    (``accounts.SuperOTP``) is accepted, and every step takes it without knowing it exists. It
+    is checked first, for this number and this step only; with none live, the SMS code is checked
+    exactly as before.
+
+    The returned log carries ``via_office`` so a caller that records *how* — the sign-in audit
+    entry — can say so.
+    """
+    from apps.accounts.super_otp import consume
+
+    office = consume(mobile_no=mobile_no, purpose=purpose, code=code)
+    if office.matched:
+        return _verified_by_office(mobile_no=mobile_no, purpose=purpose)
+
+    try:
+        otp = _verify_sms(mobile_no=mobile_no, purpose=purpose, code=code)
+    except (OTPInvalid, OTPExpired, OTPAttemptsExceeded) as exc:
+        # The code being typed is the office's — say so in its terms, not the SMS's. "No OTP is
+        # pending, request a new one" would send them to ask for another SMS, which is the one
+        # thing that is not arriving.
+        if office.active:
+            if office.remaining <= 0:
+                raise OTPAttemptsExceeded(
+                    "Too many wrong tries at the office's code. Ask the office for a new one."
+                ) from exc
+            raise OTPInvalid(
+                f"That is not the code the office read out. {office.remaining} attempt(s) left."
+            ) from exc
+        raise
+    otp.via_office = False
+    return otp
+
+
+def _verified_by_office(*, mobile_no: str, purpose: str) -> OTPLog:
+    """
+    Close the SMS code the office's code stood in for, so it cannot be used as well.
+
+    The step's pending SMS code is marked verified — one step, one code, whichever arrived. With
+    none pending (the send itself failed before a row was written), a row is written to say the
+    step was passed on a code from the office, so the SMS log still answers "how was this
+    verified" for every step that ever was.
+    """
+    now = timezone.now()
+    otp = (
+        OTPLog.objects.filter(mobile_no=mobile_no, purpose=purpose, is_verified=False)
+        .order_by("-created_at")
+        .first()
+    )
+    if otp is None:
+        otp = OTPLog.objects.create(
+            purpose=purpose,
+            mobile_no=mobile_no,
+            otp_code_hash="",
+            is_verified=True,
+            verified_at=now,
+            expires_at=now,
+            sent_via="office",
+        )
+    else:
+        otp.is_verified = True
+        otp.verified_at = now
+        otp.save(update_fields=["is_verified", "verified_at"])
+    otp.via_office = True
+    return otp
+
+
+def _verify_sms(*, mobile_no: str, purpose: str, code: str) -> OTPLog:
+    """
+    Verify a submitted SMS code (SRS §6.5.1).
 
     Failure modes are distinguished deliberately — expired, wrong, and out of attempts each
     need a different action from the Mait standing in the field.

@@ -17,7 +17,7 @@ from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import filters, mixins, status, viewsets
+from rest_framework import filters, mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
@@ -1046,6 +1046,65 @@ class FarmerOTPSendView(APIView):
             {
                 "mobile_no": mask_mobile(mobile_no),
                 "expires_in_seconds": settings.OTP_EXPIRY_SECONDS,
+            }
+        )
+
+
+class FarmerOfficeCodeSerializer(FarmerKeySerializer):
+    reason = serializers.CharField(max_length=200, required=False, allow_blank=True)
+
+
+@extend_schema(tags=["master-data"])
+class FarmerOTPOfficeView(APIView):
+    """The farmer's code did not reach her: ask the office to phone it to her instead."""
+
+    permission_classes = [IsMait]
+    throttle_scope = "super_otp_request"
+
+    @extend_schema(
+        summary="Ask the office to phone the farmer her verification code",
+        description=(
+            "For when the SMS from `/farmers/otp/send/` does not reach her. The office "
+            "generates a code on the portal and calls **her**, on the number on her record — "
+            "never the Mait — and she reads it to the Mait as she would have read the SMS. It "
+            "is then checked at `/farmers/otp/verify/` like any other code.\n\n"
+            "Refused until the SMS has actually been tried for her within the hour."
+        ),
+        request=FarmerOfficeCodeSerializer,
+        responses={200: dict},
+    )
+    def post(self, request):
+        from apps.accounts.super_otp import request_farmer_code
+
+        serializer = FarmerOfficeCodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        mait = getattr(request.user, "mait_profile", None)
+        farmer, mobile_no = resolve_farmer(
+            mait=mait,
+            member_code=data["member_code"],
+            non_member_id=data.get("non_member_id"),
+        )
+        if farmer is None or not mobile_no:
+            return Response(
+                {"detail": "No such farmer at your MPPs."}, status=status.HTTP_404_NOT_FOUND
+            )
+        name = getattr(farmer, "member_name", "") or getattr(farmer, "name", "")
+        request_farmer_code(
+            requester=request.user,
+            mobile_no=mobile_no,
+            purpose=OTPLog.Purpose.FARMER_VERIFY,
+            farmer_name=name,
+            context=f"Checking her at {farmer.mpp.mpp_name}" if farmer.mpp_id else "",
+            reason=data.get("reason", ""),
+            request=request,
+        )
+        return Response(
+            {
+                "detail": "The office has been asked. They will call her on the number on her "
+                "record and read her a code — type in what she tells you.",
+                "mobile_no": mask_mobile(mobile_no),
+                "expires_in_seconds": settings.SUPER_OTP_EXPIRY_SECONDS,
             }
         )
 

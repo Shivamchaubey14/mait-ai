@@ -61,6 +61,32 @@ returns `429` with `Retry-After`.
 | POST | `/auth/logout/` | Blacklist current refresh token | JWT |
 | GET | `/auth/me/` | Current user's profile & role | JWT |
 
+### Super OTP — a code from the office when the SMS does not arrive, at every step
+
+Added 2026-09-11 (`accounts.SuperOTP`). Stands in for every SMS template — sign-in, the farmer
+check, online and cash payment — and is accepted by `verify_otp` itself, so each step's own
+verify endpoint takes it unchanged. For a farmer step the office calls **the farmer**, on the
+number on her record, never the Mait who asked.
+
+| Method | Endpoint | Description | Auth |
+| --- | --- | --- | --- |
+| POST | `/farmers/otp/office/` | `{member_code \| non_member_id, reason?}` — her check code did not reach her. Her number comes off her record. `400` until `/farmers/otp/send/` has been tried for her within the hour | Mait |
+| POST | `/payments/{ai_event_id}/otp/office/` | Her payment code did not reach her. `409` once the payment is authorised; `404` for another Mait's event | Mait |
+
+Sign-in:
+
+| Method | Endpoint | Description | Auth |
+| --- | --- | --- | --- |
+| POST | `/auth/otp/super/request/` | `{"mobile_no", "reason"?}` — ask the office for a code. Always `200` with the same body, registered or not. Throttled `super_otp_request` | Public |
+| POST | `/auth/otp/verify/` | Unchanged shape. A live office code for the number is checked first; a wrong one answers `otp-invalid` naming the office, five answer `otp-attempts-exceeded` | Public |
+| GET | `/admin/super-otp/?state=open\|all` | Asks waiting and codes live (or everything): who, the number on file, the reason, and `sms` — whether their last sign-in SMS was delivered. Never the code. Zone-scoped | Admin · `super-otp` |
+| POST | `/admin/super-otp/{id}/issue/` | Generate the code for an ask. `201` with `code` — **the only response that carries it**, `Cache-Control: no-store`. Revokes any earlier code for the person; `409` if they can no longer sign in | Admin · `super-otp` |
+| POST | `/admin/super-otp/issue-for-number/` | `{"mobile_no"}` — the same, for somebody who phoned. `409` for a number nobody signs in with, `404` outside the admin's zone (checked before anything is revoked) | Admin · `super-otp` |
+| POST | `/admin/super-otp/{id}/decline/` | `{"reason"?}` | Admin · `super-otp` |
+
+A code works once, for `SUPER_OTP_EXPIRY_SECONDS` (600), with `SUPER_OTP_MAX_ATTEMPTS` (5)
+wrong tries; an ask nobody answers leaves the queue after `SUPER_OTP_REQUEST_TTL_HOURS` (24).
+
 ## 9.2 Master data upload (admin)
 
 | Method | Endpoint | Description | Auth |
@@ -372,8 +398,8 @@ event and the rest of the app names a member by her SAP code, not by her row id.
 | GET | `/indents/{id}/` | Indent detail | JWT |
 | POST | `/indents/{id}/approve/` | Back office agrees to the request. Moves no stock | Admin |
 | POST | `/indents/{id}/reject/` | Decline, with a reason the Mait can read | Admin |
-| POST | `/indents/{id}/issue/` | Record the handover and credit the stock | Admin |
-| POST | `/indents/{id}/confirm-collection/` | Mait acknowledges the stock reached them, and it becomes theirs | Mait |
+| POST | `/indents/{id}/issue/` | Record the handover and credit the stock — only where no store serves the Mait | Admin |
+| POST | `/indents/{id}/confirm-collection/` | Mait acknowledges the stock reached them, and it becomes theirs. `{"code"}` for a store handover | Mait |
 | POST | `/integrations/indent-easy/grn-callback/` | Webhook — Indent Easy notifies GRN/issue completion | HMAC API key |
 | GET | `/integrations/indent-easy/status/` | Integration health check | Admin |
 
@@ -405,6 +431,61 @@ the goods are at the depot — a balance counting them would tell them they can 
 whose straw is miles away, and the platform rests on not being able to consume a straw you do
 not hold (ADR 0002). Allowed once, on an issued indent, by the Mait it belongs to; an admin
 gets `403`, because signing for goods you did not receive is the thing this step rules out.
+
+### Stores — where an approved indent is handed over
+
+Added 2026-09-11. Each location has a store, and each store serves a set of BMC/MCCs — the
+same partition shape as a zone. An indent is routed to the store serving most of the Mait's
+collection points when it is raised, and again at approval if nothing served them then. The
+chain becomes: **Mait raises → zonal manager approves on the portal → the store keeper issues
+from the app → the Mait types the keeper's code**.
+
+What changes on the endpoints above:
+
+- The indent read shape gains `store`, `store_name`, `approved_at`, `approved_by_name`,
+  `approved_by_zone`, `qty_open` (approved and not yet handed over), `qty_to_collect` (at a
+  counter waiting for the Mait), `needs_code` and `handovers` (`id`, `qty`, `store_name`,
+  `issued_at`, `collected_at`, `cancelled_at`, `state`). **No response to a Mait ever carries a
+  collection code.**
+- The admin list is narrowed to the account's zones (`User.zone_scope`, through the Mait's
+  MPPs), so a zonal manager approves their own zone and gets `404` on anybody else's.
+- `issue` answers `409 invalid-state-transition` for an indent routed to a store — one indent,
+  one issuer. It remains the path for Maits no store serves yet.
+- `reject` answers `409` once any of the indent has been handed over at a store.
+- `confirm-collection` takes `{"code": "4729"}` when a store handover is waiting. Wrong:
+  `400 collection-code-invalid`, and the attempt is counted. Five wrong: `429
+  collection-code-locked` until the keeper reads out a new code. Stock issued from the portal
+  needs no code, as before.
+
+The store keeper (role `store`) signs in by OTP like a Mait, and reaches `/store/…` and
+nothing else — every section-gated and default-permission endpoint refuses the role (`403`).
+
+| Method | Endpoint | Description | Auth |
+| --- | --- | --- | --- |
+| GET | `/store/` | This store, and `waiting` / `ready` / `short` / `empty` / `issued_today` / `not_collected` | Store keeper |
+| GET | `/store/indents/` | Approved indents at this counter, oldest approval first. Each carries `in_store` (what the shelf can still promise) and `readiness` (`ready` · `short` · `waiting`), and `waiting_handovers` — batches already issued against it and still waiting on the Mait, **with their codes**, so a lost code is read out again. `?search=` matches the Mait or `IND-13` | Store keeper |
+| GET | `/store/indents/{id}/` | One of them | Store keeper |
+| POST | `/store/indents/{id}/issue/` | `{"qty": 18, "flask_checked": true}` → the handover, with `collection_code`. Less than is owed leaves the rest open on the same indent. `409 store-stock-short` beyond what can be promised. Idempotent | Store keeper |
+| GET | `/store/handovers/?state=waiting\|collected\|cancelled\|today&from=&to=&search=` | Handovers at this counter, newest first — the keeper's History tab. `from`/`to` are local dates, inclusive; at most 500 | Store keeper |
+| GET | `/store/handovers/{id}/` | One handover — the app polls it until the Mait types the code | Store keeper |
+| POST | `/store/handovers/{id}/cancel/` | The Mait never collected it: stop setting the stock aside, reopen the quantity | Store keeper |
+| POST | `/store/handovers/{id}/new-code/` | A fresh code after five wrong ones | Store keeper |
+| GET | `/store/stock/` | The shelf: `on_hand`, `set_aside`, `available` per item | Store keeper |
+| POST | `/store/stock/receive/` | Record a delivery — straws by `breed`, anything else by `product_ref_id`. Idempotent | Store keeper |
+| GET | `/store/catalogue/` | Breeds and products a delivery can be | Store keeper |
+| GET | `/admin/inventory/?zone=<id>` | Stock with every Mait **and on every store's shelf** (`stores`: `lines`, `straws_on_hand`, `straws_set_aside`, `open_indents`), narrowed to the account's zones and optionally one zone. `/admin/inventory/{mait_id}/` answers `404` outside them | Admin · `inventory` |
+| GET/POST/PATCH/DELETE | `/admin/stores/` | Stores, the BMC/MCCs each serves (`plants`, the whole set on write), keepers and shelf | Admin · `stores` |
+| GET | `/admin/stores/plants/` | Every BMC/MCC and the store serving it | Admin · `stores` |
+| POST | `/admin/stores/{id}/keepers/` | `{"full_name", "mobile_no"}` → a keeper account. A number a Mait or another account signs in with is refused | Admin · `stores` |
+| POST | `/admin/stores/{id}/keepers/{user_id}/remove/` | Deactivate a keeper | Admin · `stores` |
+
+**Issuing sets stock aside; the code moves it.** A handover leaves the store's shelf count
+alone and marks the quantity set aside, so it cannot be promised to a second Mait. When the
+Mait types the code, the store's ledger takes it off (`store_ledger`, `issue`) and the Mait's
+ledger credits it (`mait_inventory_ledger`, `indent`) in one transaction — there is no instant
+at which the straws are counted in both places, or in neither. Straws collected from a store
+are unnumbered, as a portal issue by quantity is; each handover's placeholders carry its own
+id so two batches against one indent never collide.
 
 ### Claiming an unnumbered straw
 

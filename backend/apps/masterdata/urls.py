@@ -14,6 +14,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AdminNonMemberViewSet,
+    FarmerOTPOfficeView,
     FarmerOTPSendView,
     FarmerOTPVerifyView,
     MasterUploadViewSet,
@@ -40,5 +41,6 @@ urlpatterns = [
     # charges nothing, so it lives with the people rather than with the money.
     path("farmers/otp/send/", FarmerOTPSendView.as_view(), name="farmer-otp-send"),
     path("farmers/otp/verify/", FarmerOTPVerifyView.as_view(), name="farmer-otp-verify"),
+    path("farmers/otp/office/", FarmerOTPOfficeView.as_view(), name="farmer-otp-office"),
     path("", include(router.urls)),
 ]

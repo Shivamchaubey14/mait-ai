@@ -37,6 +37,7 @@ import {
   useRecordPregnancyCheckMutation,
   useVerifyPaymentOtpMutation,
   useAttachPaymentProofMutation,
+  useAskPaymentOfficeCodeMutation,
 } from '@api/endpoints';
 import { clockTime, enqueue, pendingCount, readQueue, retryFailed } from '@api/queue';
 import type { QueuedJob, QueuedLabel } from '@api/queue';
@@ -379,6 +380,9 @@ export default function RootNavigator(): React.JSX.Element {
   const [initiatePayment] = useInitiatePaymentMutation();
   const [verifyPaymentOtp] = useVerifyPaymentOtpMutation();
   const [attachPaymentProof] = useAttachPaymentProofMutation();
+  const [askPaymentOffice, paymentOfficeAsk] = useAskPaymentOfficeCodeMutation();
+  /** The office has been asked to phone her the payment code (OfficeCode.tsx). */
+  const [payOfficeAsked, setPayOfficeAsked] = useState(false);
   const inventory = useGetInventorySummaryQuery();
 
   const memberDetail = useGetMemberQuery(farmer?.kind === 'member' ? farmer.memberCode : '', {
@@ -822,6 +826,7 @@ export default function RootNavigator(): React.JSX.Element {
     setPayProof(null);
     setPayProblem(null);
     setPayFailed(null);
+    setPayOfficeAsked(false);
   };
 
   const leaveCapture = () => {
@@ -1482,6 +1487,26 @@ export default function RootNavigator(): React.JSX.Element {
         onUtrChange={setPayUtr}
         proofUri={payProof}
         onProofCaptured={setPayProof}
+        // Her code did not reach her: the office phones it to her instead, and she reads it
+        // out into the same box. Only for a capture the server already has.
+        onAskOffice={
+          isProvisional(event.id)
+            ? undefined
+            : async () => {
+                setPayProblem(null);
+                try {
+                  await askPaymentOffice({ eventId: event.id }).unwrap();
+                  setPayOfficeAsked(true);
+                } catch (err) {
+                  setPayProblem(
+                    (err as { data?: { detail?: string } })?.data?.detail ??
+                      t('aiFlow.officeAskFailed'),
+                  );
+                }
+              }
+        }
+        officeAsked={payOfficeAsked}
+        askingOffice={paymentOfficeAsk.isLoading}
         onBack={() => setStep('collectPayment')}
       />,
     );

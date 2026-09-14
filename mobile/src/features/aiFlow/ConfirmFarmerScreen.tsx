@@ -31,12 +31,14 @@ import { ErrorCode, errorCodeOf } from '@api/client';
 import {
   useGetMemberQuery,
   useGetNonMemberQuery,
+  useAskFarmerOfficeCodeMutation,
   useSendFarmerOtpMutation,
   useVerifyFarmerOtpMutation,
 } from '@api/endpoints';
 import type { Animal, FarmerKey } from '@api/types';
 import { Sheet } from '@/components/BottomSheet';
 import { AI_FLOW_STEPS, OTP_LENGTH } from '@/config/env';
+import { OfficeCodeAsk } from './OfficeCode';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
 import { FlowNotice, FlowScreen, groupedMobile, IdentityCard, LabelledField } from './components';
@@ -73,6 +75,22 @@ export default function ConfirmFarmerScreen({
 
   const [sendOtp, { isLoading: sending }] = useSendFarmerOtpMutation();
   const [checkOtp, { isLoading: checking }] = useVerifyFarmerOtpMutation();
+  const [askOffice, { isLoading: askingOffice }] = useAskFarmerOfficeCodeMutation();
+  /** The office has been asked to phone her the code; the next thing is her reading it out. */
+  const [officeAsked, setOfficeAsked] = useState(false);
+
+  const askTheOffice = async () => {
+    setProblem(null);
+    try {
+      const answer = await askOffice(key).unwrap();
+      setSentTo(answer.mobile_no);
+      setOfficeAsked(true);
+    } catch (err) {
+      setProblem(
+        (err as { data?: { detail?: string } })?.data?.detail ?? t('aiFlow.officeAskFailed'),
+      );
+    }
+  };
 
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [code, setCode] = useState('');
@@ -156,7 +174,13 @@ export default function ConfirmFarmerScreen({
           setSentTo(null);
           break;
         default:
-          setProblem(t('aiFlow.otpWrong'));
+          // The office's code answers in its own words — "not the code the office read out" —
+          // which is the sentence a Mait needs to go back to her with.
+          setProblem(
+            officeAsked
+              ? ((err as { data?: { detail?: string } })?.data?.detail ?? t('aiFlow.otpWrong'))
+              : t('aiFlow.otpWrong'),
+          );
       }
     }
   };
@@ -332,6 +356,13 @@ export default function ConfirmFarmerScreen({
             <Text style={styles.resend} onPress={send} testID="farmer-otp-resend">
               {t('aiFlow.sendAgain')}
             </Text>
+            <OfficeCodeAsk
+              asked={officeAsked}
+              busy={askingOffice}
+              onAsk={askTheOffice}
+              sentTo={sentTo}
+              testID="farmer-office-code"
+            />
           </View>
         )}
 

@@ -395,7 +395,9 @@ paths:
         Admin oversight of where the straws are (SRS §6.7.6). The Mait-facing endpoints only ever report the caller's own stock, so this is the only view that can answer who is about to run out.
 
         A Mait at zero is reported separately from one merely low: at zero they cannot record an AI event at all, which is a stopped Mait rather than a warning.
-      summary: Stock across every Mait
+
+        Narrowed to the account's zones — a zonal manager sees the Maits whose collection points are in their zone and the stores serving it — and further by `?zone=<id>`. `stores` is each store in reach with its shelf (`on_hand`, `set_aside`, `available` per item); `scope` says what the figures cover.
+      summary: Stock across every Mait, and on every store's shelf
       tags:
       - inventory
       security:
@@ -930,6 +932,420 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/admin/stores/:
+    get:
+      operationId: admin_stores_list
+      description: |-
+        Which depot serves which BMC/MCCs, and who works each counter.
+
+        Every write is audited: a BMC/MCC moving between stores changes where a village's Maits
+        are sent to collect, and "why did Sunil's indent go to Barsana" needs an answer.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - stores
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StoreAdmin'
+          description: ''
+    post:
+      operationId: admin_stores_create
+      description: |-
+        Which depot serves which BMC/MCCs, and who works each counter.
+
+        Every write is audited: a BMC/MCC moving between stores changes where a village's Maits
+        are sent to collect, and "why did Sunil's indent go to Barsana" needs an answer.
+      tags:
+      - stores
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StoreAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StoreAdminRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreAdmin'
+          description: ''
+  /api/v1/admin/stores/{id}/:
+    get:
+      operationId: admin_stores_retrieve
+      description: |-
+        Which depot serves which BMC/MCCs, and who works each counter.
+
+        Every write is audited: a BMC/MCC moving between stores changes where a village's Maits
+        are sent to collect, and "why did Sunil's indent go to Barsana" needs an answer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this store.
+        required: true
+      tags:
+      - stores
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreAdmin'
+          description: ''
+    put:
+      operationId: admin_stores_update
+      description: |-
+        Which depot serves which BMC/MCCs, and who works each counter.
+
+        Every write is audited: a BMC/MCC moving between stores changes where a village's Maits
+        are sent to collect, and "why did Sunil's indent go to Barsana" needs an answer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this store.
+        required: true
+      tags:
+      - stores
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StoreAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StoreAdminRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreAdmin'
+          description: ''
+    patch:
+      operationId: admin_stores_partial_update
+      description: |-
+        Which depot serves which BMC/MCCs, and who works each counter.
+
+        Every write is audited: a BMC/MCC moving between stores changes where a village's Maits
+        are sent to collect, and "why did Sunil's indent go to Barsana" needs an answer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this store.
+        required: true
+      tags:
+      - stores
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStoreAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStoreAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStoreAdminRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreAdmin'
+          description: ''
+    delete:
+      operationId: admin_stores_destroy
+      description: |-
+        Which depot serves which BMC/MCCs, and who works each counter.
+
+        Every write is audited: a BMC/MCC moving between stores changes where a village's Maits
+        are sent to collect, and "why did Sunil's indent go to Barsana" needs an answer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this store.
+        required: true
+      tags:
+      - stores
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/admin/stores/{id}/keepers/:
+    post:
+      operationId: admin_stores_keepers_create
+      description: Makes a store-keeper account from a name and a mobile number. They
+        sign in to the app with that number and an OTP, the same way a Mait does,
+        and see this store's queue and nothing else.
+      summary: Give a store a keeper
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this store.
+        required: true
+      tags:
+      - stores
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddKeeperRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddKeeperRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddKeeperRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreAdmin'
+          description: ''
+  /api/v1/admin/stores/{id}/keepers/{user_id}/remove/:
+    post:
+      operationId: admin_stores_keepers_remove_create
+      description: Deactivates the account, so it can no longer sign in.
+      summary: Take a keeper off a store
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this store.
+        required: true
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - stores
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreAdmin'
+          description: ''
+  /api/v1/admin/stores/plants/:
+    get:
+      operationId: admin_stores_plants_retrieve
+      description: |-
+        Which depot serves which BMC/MCCs, and who works each counter.
+
+        Every write is audited: a BMC/MCC moving between stores changes where a village's Maits
+        are sent to collect, and "why did Sunil's indent go to Barsana" needs an answer.
+      summary: Every BMC/MCC, and the store that serves it
+      tags:
+      - stores
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreAdmin'
+          description: ''
+  /api/v1/admin/super-otp/:
+    get:
+      operationId: admin_super_otp_list
+      description: '`state=open` (the default) for what needs the office: asks waiting,
+        and codes given and not yet used. `state=all` for the last 200 of everything,
+        used, declined and expired included.'
+      summary: Asks and codes
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - super-otp
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SuperOTP'
+          description: ''
+  /api/v1/admin/super-otp/{id}/:
+    get:
+      operationId: admin_super_otp_retrieve
+      description: Sign-in codes for field users whose SMS did not arrive.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this super otp.
+        required: true
+      tags:
+      - super-otp
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuperOTP'
+          description: ''
+  /api/v1/admin/super-otp/{id}/decline/:
+    post:
+      operationId: admin_super_otp_decline_create
+      description: Sign-in codes for field users whose SMS did not arrive.
+      summary: Decline an ask
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this super otp.
+        required: true
+      tags:
+      - super-otp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeclineRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeclineRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DeclineRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuperOTP'
+          description: ''
+  /api/v1/admin/super-otp/{id}/issue/:
+    post:
+      operationId: admin_super_otp_issue_create
+      description: Returns the code **once**, as `code`, for the admin to read out
+        on the phone. It is stored only as a hash and is never returned again. Expires
+        in `SUPER_OTP_EXPIRY_SECONDS`; any earlier code for the same person is revoked.
+      summary: Generate the code for an ask
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this super otp.
+        required: true
+      tags:
+      - super-otp
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/admin/super-otp/issue-for-number/:
+    post:
+      operationId: admin_super_otp_issue_for_number_create
+      description: No ask from the app needed — for a user who rang the office instead.
+      summary: Generate a code for somebody who phoned
+      tags:
+      - super-otp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueForNumberRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IssueForNumberRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IssueForNumberRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/admin/uploads/:
     get:
       operationId: admin_uploads_list
@@ -1332,11 +1748,13 @@ paths:
           enum:
           - admin
           - mait
+          - store
           - super_admin
         description: |-
           * `super_admin` - Super Admin
           * `admin` - Admin / Back-office
           * `mait` - Mait (Field Agent)
+          * `store` - Store keeper
       - name: search
         required: false
         in: query
@@ -2343,6 +2761,38 @@ paths:
                   value:
                     mobile_no: '9795402473'
           description: ''
+  /api/v1/auth/otp/super/request/:
+    post:
+      operationId: auth_otp_super_request_create
+      description: |-
+        For a field user whose sign-in SMS is not arriving. Puts the ask in front of the office on the portal's Login codes screen; an admin generates a one-time code and reads it to them on the phone, and they type it into `/auth/otp/verify/` as if it were the SMS code.
+
+        Always answers 200 with the same body, whether or not the number is registered — confirming which numbers exist would let anyone enumerate the field workforce.
+      summary: Ask the office for a sign-in code
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuperOTPRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SuperOTPRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SuperOTPRequestRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/auth/otp/verify/:
     post:
       operationId: auth_otp_verify_create
@@ -2624,6 +3074,37 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/farmers/otp/office/:
+    post:
+      operationId: farmers_otp_office_create
+      description: |-
+        For when the SMS from `/farmers/otp/send/` does not reach her. The office generates a code on the portal and calls **her**, on the number on her record — never the Mait — and she reads it to the Mait as she would have read the SMS. It is then checked at `/farmers/otp/verify/` like any other code.
+
+        Refused until the SMS has actually been tried for her within the hour.
+      summary: Ask the office to phone the farmer her verification code
+      tags:
+      - master-data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FarmerOfficeCodeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FarmerOfficeCodeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FarmerOfficeCodeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/farmers/otp/send/:
     post:
       operationId: farmers_otp_send_create
@@ -2885,9 +3366,10 @@ paths:
   /api/v1/indents/{id}/confirm-collection/:
     post:
       operationId: indents_confirm_collection_create
-      description: The Mait acknowledges that issued stock reached them. Moves no
-        stock — the balance rose when it was issued — and is the only step in the
-        chain the Mait owns. Allowed once, on an issued indent.
+      description: |-
+        The Mait acknowledges that issued stock reached them, and this is where their balance rises — issuing only sets the stock aside. The only step in the chain the Mait owns.
+
+        Stock handed over at a store needs `code`: the four digits the store keeper read out at the counter. A wrong code is refused as `collection-code-invalid`; after five, `collection-code-locked` until the keeper reads out a new one. Stock issued from the portal needs no code.
       summary: Confirm collection
       parameters:
       - in: path
@@ -2898,6 +3380,17 @@ paths:
         required: true
       tags:
       - indents
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndentCollectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IndentCollectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IndentCollectRequest'
       security:
       - jwtAuth: []
       responses:
@@ -2916,6 +3409,8 @@ paths:
         Straw requests take `straw_numbers` — the number printed on each straw handed over — and never a bare quantity: the app scans a straw against the Mait's stock, so a count with no numbers behind it credits a balance nothing can be scanned against. Consumable requests take `qty`.
 
         Issuing fewer than were requested is allowed and closes the indent; the remainder needs a fresh request.
+
+        Refused for an indent routed to a store: that store's keeper hands it over from the app (`/store/indents/{id}/issue/`), and part-issues stay open there.
       summary: Issue an approved indent
       parameters:
       - in: path
@@ -3466,6 +3961,87 @@ paths:
               schema:
                 $ref: '#/components/schemas/NonMember'
           description: ''
+  /api/v1/non-members/check/:
+    post:
+      operationId: non_members_check_create
+      description: |-
+        Asked by the registration form while the Mait is still typing, so a farmer who should not be registered as a non-member is caught **before** she is asked for cash. It answers with the same rule the create enforces (`masterdata.identity`) — there is one implementation, because a form that promised an answer the create then contradicted would be worse than no inline check.
+
+        Send one of `aadhar_no` or `mobile_no`.
+
+        `blocking` is the difference between the two. An Aadhaar match **is** the same person and the form must not go on. A mobile match is a question — a mother and a daughter share a handset, and a household often has one phone — so it is surfaced as a warning the Mait can look at and continue past.
+
+        Throttled, and it answers only about farmers at the requesting Mait's own MPPs for the mobile lookup. The Aadhaar lookup is platform-wide because that is the whole point of it — a member at another collection point is still a member.
+      summary: Is this farmer already on file?
+      tags:
+      - master-data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FarmerIdentityCheckRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FarmerIdentityCheckRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FarmerIdentityCheckRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/non-members/roster/:
+    get:
+      operationId: non_members_roster_list
+      description: |-
+        A name, a mobile number and whether she is a member — for every farmer at one of the requesting Mait's collection points, members and non-members together.
+
+        Downloaded and kept on the handset so the registration form can warn about a number already on file **with no signal**, which is when a farmer is most likely to be registered a second time. It carries no Aadhaar and never will: the Aadhaar match is the check that decides, and twelve digits is small enough that a downloaded set could be brute-forced whatever it was hashed with (`masterdata.identity`). The mobile number is already served to the app unmasked, because a Mait has to be able to ring a farmer.
+
+        Not paginated. A collection point is a village: the largest on this data has a few hundred farmers, and a roster delivered in pages is a roster that is incomplete on the handset exactly when the network is gone.
+      summary: The farmers at an MPP, as thin as a duplicate check can be
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: mpp__mpp_code
+        schema:
+          type: string
+        description: The collection point whose farmers to list.
+        required: true
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFarmerRosterRowList'
+          description: ''
   /api/v1/payments/{ai_event_id}/:
     get:
       operationId: payments_retrieve
@@ -3548,6 +4124,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
+          description: ''
+  /api/v1/payments/{ai_event_id}/otp/office/:
+    post:
+      operationId: payments_otp_office_create
+      description: For when the authorisation SMS for this payment does not reach
+        her. The office calls **her**, on the number on her record, with a code for
+        this payment; she reads it to the Mait, who enters it at `/payments/{id}/otp/verify/`
+        as usual.
+      summary: Ask the office to phone the farmer her payment code
+      parameters:
+      - in: path
+        name: ai_event_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/v1/payments/{ai_event_id}/otp/verify/:
     post:
@@ -4011,6 +4613,264 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StrawValidation'
+          description: ''
+  /api/v1/store/:
+    get:
+      operationId: store_retrieve
+      description: '`waiting` is every open indent in the queue and `short` the ones
+        the shelf covers only part of; `issued_today` counts handovers and `not_collected`
+        the ones a Mait has yet to confirm.'
+      summary: This store, and the figures on the keeper's first screen
+      tags:
+      - store
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/store/catalogue/:
+    get:
+      operationId: store_catalogue_retrieve
+      description: The breeds and products a keeper picks from when recording a delivery.
+      summary: What a delivery can be
+      tags:
+      - store
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/store/handovers/:
+    get:
+      operationId: store_handovers_list
+      description: |-
+        Newest first. `state=waiting` for the ones a Mait has not collected yet — the keeper reads the code out again from here; `collected` and `cancelled` for the rest; `today` for everything issued today.
+
+        The history screen narrows by `from` and `to` (local dates, `YYYY-MM-DD`, both inclusive) and `search` (the Mait's name or the indent number). At most 500 rows — a keeper reads a month, not a year.
+      summary: Handovers at this store — the waiting list, and the history
+      tags:
+      - store
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StoreHandover'
+          description: ''
+  /api/v1/store/handovers/{id}/:
+    get:
+      operationId: store_handovers_retrieve
+      description: Handovers across this store's counter — the ones still waiting
+        on a Mait, and today's.
+      summary: One handover
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - store
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreHandover'
+          description: ''
+  /api/v1/store/handovers/{id}/cancel/:
+    post:
+      operationId: store_handovers_cancel_create
+      description: For a Mait who walked off without confirming. The stock stops being
+        set aside and the quantity is open on the indent again.
+      summary: Put an uncollected handover back
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - store
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreHandover'
+          description: ''
+  /api/v1/store/handovers/{id}/new-code/:
+    post:
+      operationId: store_handovers_new_code_create
+      description: After too many wrong codes. The keeper reads the new one out.
+      summary: A fresh collection code
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - store
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreHandover'
+          description: ''
+  /api/v1/store/indents/:
+    get:
+      operationId: store_indents_list
+      description: Approved indents routed to this store and not yet fully handed
+        over, oldest approval first. Each row carries what the shelf can promise against
+        it — `readiness` is `ready`, `short` or `waiting`. `search` matches the Mait's
+        name, their vendor code, or the indent number (`IND-13` or `13`).
+      summary: What is waiting at this store
+      tags:
+      - store
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StoreIndent'
+          description: ''
+  /api/v1/store/indents/{id}/:
+    get:
+      operationId: store_indents_retrieve
+      description: 'The store''s counter: what is waiting to be handed over, and handing
+        it over.'
+      summary: One indent in this store's queue
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - store
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreIndent'
+          description: ''
+  /api/v1/store/indents/{id}/issue/:
+    post:
+      operationId: store_indents_issue_create
+      description: |-
+        Sets `qty` aside for the Mait and returns the handover with its four-digit `collection_code`, which the keeper reads out. The Mait's stock rises — and the store's falls — only when they type it into *Confirm collection*.
+
+        Issue less than is owed and the rest stays open on the same indent. Straws need `flask_checked`. Refused as `store-stock-short` beyond what the shelf can promise, counting what is already set aside for other Maits.
+
+        Accepts an `Idempotency-Key`, so a tap repeated over a bad connection hands over once.
+      summary: Hand an indent over
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - store
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IssueRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IssueRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreHandover'
+          description: ''
+  /api/v1/store/stock/:
+    get:
+      operationId: store_stock_retrieve
+      description: 'One line per item the store holds: `on_hand` is what is physically
+        there, `set_aside` what is issued and waiting for a Mait to collect, and `available`
+        what can still be promised.'
+      summary: What is on the shelf
+      tags:
+      - store
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/store/stock/receive/:
+    post:
+      operationId: store_stock_receive_create
+      description: Straws by `breed`, anything else by `product_ref_id` from the catalogue.
+        Returns the shelf as it now stands. Accepts an `Idempotency-Key`, so a delivery
+        recorded over a bad connection is counted once.
+      summary: Record a delivery into the store
+      tags:
+      - store
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiveRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReceiveRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReceiveRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
 components:
   schemas:
@@ -4556,6 +5416,26 @@ components:
       - id
       - note
       - to_status
+    AddKeeperRequest:
+      type: object
+      description: |-
+        A store keeper's account, made from a name and the number they sign in with.
+
+        The number has to be free. Sign-in looks an account up by its mobile number, and a keeper
+        sharing one with a Mait — or with another keeper — would sign in as whichever the lookup
+        happened to find first.
+      properties:
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        mobile_no:
+          type: string
+          minLength: 1
+          pattern: ^[6-9]\d{9}$
+      required:
+      - full_name
+      - mobile_no
     AdminNonMemberDetail:
       type: object
       description: |-
@@ -4856,7 +5736,7 @@ components:
           description: Required for Maits — this is where the login OTP is sent.
         role:
           allOf:
-          - $ref: '#/components/schemas/Role412Enum'
+          - $ref: '#/components/schemas/RoleB81Enum'
           readOnly: true
         role_display:
           type: string
@@ -5073,6 +5953,10 @@ components:
           type: string
         non_member_id:
           type: integer
+          nullable: true
+        client_uuid:
+          type: string
+          format: uuid
           nullable: true
         animal_type:
           $ref: '#/components/schemas/AnimalTypeEnum'
@@ -5420,7 +6304,7 @@ components:
           description: Required for Maits — this is where the login OTP is sent.
         role:
           allOf:
-          - $ref: '#/components/schemas/Role412Enum'
+          - $ref: '#/components/schemas/RoleB81Enum'
           readOnly: true
         role_display:
           type: string
@@ -5467,6 +6351,17 @@ components:
             with the profile rather than fetched per screen because it is the same answer for all
             of them, and a screen that had to ask separately is a screen that can forget to.
           readOnly: true
+        store:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          description: |-
+            The store a keeper works, which is what the app decides its whole shell from.
+
+            Null for every other account. A keeper and a Mait sign in on the same screen with the
+            same OTP, and this is the field that sends one of them to a queue of indents to hand
+            over rather than to a round of villages.
+          readOnly: true
       required:
       - assigned_mpp_codes
       - email
@@ -5480,6 +6375,7 @@ components:
       - role
       - role_display
       - sahayak_vendor_code
+      - store
       - username
       - zones
     DataUploadLog:
@@ -5594,6 +6490,27 @@ components:
         * `completed` - Completed
         * `completed_with_errors` - Completed with errors
         * `failed` - Failed
+    DeclineRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 200
+    FarmerIdentityCheckRequest:
+      type: object
+      description: |-
+        What the registration form asks while the Mait is still typing.
+
+        One of the two, not both: the form asks about the mobile number as it is entered and about
+        the Aadhaar as the twelfth digit lands, and they are two different questions with two
+        different consequences.
+      properties:
+        aadhar_no:
+          type: string
+          maxLength: 20
+        mobile_no:
+          type: string
+          maxLength: 15
     FarmerKeyRequest:
       type: object
       description: Exactly one of the two ways to name a farmer.
@@ -5618,6 +6535,44 @@ components:
           maxLength: 10
       required:
       - otp
+    FarmerOfficeCodeRequest:
+      type: object
+      description: Exactly one of the two ways to name a farmer.
+      properties:
+        member_code:
+          type: string
+        non_member_id:
+          type: integer
+          nullable: true
+        reason:
+          type: string
+          maxLength: 200
+    FarmerRosterRow:
+      type: object
+      description: |-
+        One farmer, as thin as the offline duplicate check can be made.
+
+        A name, a number and which of the two she is — and nothing else. This is downloaded and
+        kept on the handset so the registration form can warn about a number already on file with
+        no signal, so every extra column would be one more thing sitting in a village on a phone
+        that gets shared and lost.
+
+        **No Aadhaar, and there never can be.** The Aadhaar match is the check that actually
+        decides, and it stays on the server permanently: twelve digits is small enough that anyone
+        holding the app could try all of them against a downloaded set, whatever it was hashed
+        with (see `identity.py`). What travels here is a mobile number the app is already given
+        unmasked, because a Mait has to be able to ring a farmer.
+      properties:
+        name:
+          type: string
+        mobile_no:
+          type: string
+        kind:
+          type: string
+      required:
+      - kind
+      - mobile_no
+      - name
     GpsSourceEnum:
       enum:
       - device
@@ -5722,8 +6677,61 @@ components:
         note:
           type: string
           readOnly: true
+        store:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: The depot that hands this over. Worked out from the Mait's
+            BMC/MCCs when the indent is raised or approved; empty where no store serves
+            them yet, which leaves the portal's own Issue as the way out.
+        store_name:
+          type: string
+          readOnly: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        approved_by_name:
+          type: string
+          readOnly: true
+        approved_by_zone:
+          type: string
+          description: |-
+            The approver's zone, for "approved by the zonal manager, Mathura".
+
+            The first of them, because a line on a handset has room for one — and an approver
+            holding several is head office, who is better described by name than by region.
+          readOnly: true
+        qty_open:
+          type: integer
+          readOnly: true
+        qty_to_collect:
+          type: integer
+          description: |-
+            What is at a counter with the Mait's name on it right now.
+
+            Handed over at a store and not yet confirmed; or, for an indent the portal issued, the
+            whole issue until it is confirmed. This is the number the app's *Confirm collection*
+            is about, and it is not the same as `qty_issued` once an indent has been issued twice.
+          readOnly: true
+        needs_code:
+          type: boolean
+          description: Whether collecting needs the code a store keeper reads out
+            — every store handover.
+          readOnly: true
+        handovers:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
       required:
+      - approved_at
+      - approved_by_name
+      - approved_by_zone
       - breed
+      - handovers
       - id
       - indent_easy_ref_no
       - issued_at
@@ -5732,17 +6740,30 @@ components:
       - mait
       - mait_code
       - mait_name
+      - needs_code
       - note
       - product_type
       - qty_issued
+      - qty_open
       - qty_requested
+      - qty_to_collect
       - received_at
       - requested_at
       - status
       - status_display
+      - store
+      - store_name
       - sync_attempts
       - sync_status
       - sync_status_display
+    IndentCollectRequest:
+      type: object
+      description: The code a store keeper read out. Not needed for stock the portal
+        issued.
+      properties:
+        code:
+          type: string
+          maxLength: 8
     IndentCreateRequest:
       type: object
       description: |-
@@ -5852,6 +6873,27 @@ components:
       - is_low_stock
       - straws
       - total_straws
+    IssueForNumberRequest:
+      type: object
+      properties:
+        mobile_no:
+          type: string
+          minLength: 1
+          maxLength: 10
+          pattern: ^[6-9]\d{9}$
+      required:
+      - mobile_no
+    IssueRequest:
+      type: object
+      properties:
+        qty:
+          type: integer
+          minimum: 1
+        flask_checked:
+          type: boolean
+          default: false
+      required:
+      - qty
     LedgerEntry:
       type: object
       description: A movement in the immutable stock ledger (SRS §9.5).
@@ -6408,6 +7450,10 @@ components:
         masked_aadhar:
           type: string
           readOnly: true
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
         aadhar_front_captured:
           type: boolean
           readOnly: true
@@ -6494,6 +7540,10 @@ components:
         masked_aadhar:
           type: string
           readOnly: true
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
         aadhar_front_captured:
           type: boolean
           readOnly: true
@@ -6650,6 +7700,10 @@ components:
           writeOnly: true
           minLength: 1
           maxLength: 20
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
         consent:
           type: boolean
           writeOnly: true
@@ -6857,6 +7911,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DataUploadLog'
+    PaginatedFarmerRosterRowList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/FarmerRosterRow'
     PaginatedIndentList:
       type: object
       required:
@@ -7118,7 +8195,7 @@ components:
         is_active:
           type: boolean
         role:
-          $ref: '#/components/schemas/Role412Enum'
+          $ref: '#/components/schemas/RoleB81Enum'
         password:
           type: string
           writeOnly: true
@@ -7357,6 +8434,42 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
           description: What a non-member pays the Mait on the spot, in rupees. Zero
             means not priced, never free.
+    PatchedStoreAdminRequest:
+      type: object
+      description: |-
+        A store, the BMC/MCCs it serves, and who works its counter.
+
+        ``plants`` is the whole set on write, as it is for a zone: sending three codes to a store
+        that had five removes the other two, so unticking a box and saving does what it looks like.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: Short identifier, e.g. BARSANA. Set once — slips and saved
+            links use it.
+          maxLength: 20
+        name:
+          type: string
+          minLength: 1
+          description: e.g. Barsana depot.
+          maxLength: 100
+        zone:
+          type: integer
+          nullable: true
+          description: The zone it sits in, for grouping on the portal. Does not decide
+            which Maits it serves — its BMC/MCCs do.
+        description:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+        plants:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 10
+          writeOnly: true
     PatchedZoneRequest:
       type: object
       description: |-
@@ -7596,12 +8709,14 @@ components:
       - products
       - rates
       - indents
+      - stores
       - leaderboard
       - pregnancy
       - exceptions
       - reports
       - mait-payment
       - users
+      - super-otp
       - zones
       - logs
       type: string
@@ -7618,12 +8733,14 @@ components:
         * `products` - Products
         * `rates` - Rates
         * `indents` - Indents
+        * `stores` - Stores
         * `leaderboard` - Leaderboard
         * `pregnancy` - Pregnancy
         * `exceptions` - Exceptions
         * `reports` - Reports
         * `mait-payment` - Mait payment
         * `users` - Users & roles
+        * `super-otp` - Super OTP
         * `zones` - Zones
         * `logs` - Audit log
     PregnancyCheck:
@@ -7823,6 +8940,29 @@ components:
       description: |-
         * `straw` - Semen straw
         * `consumable` - Consumable
+    ReceiveRequest:
+      type: object
+      description: A delivery landing at the store. Straws by breed, everything else
+        by catalogue id.
+      properties:
+        product_type:
+          $ref: '#/components/schemas/ProductTypeEnum'
+        breed:
+          type: string
+          maxLength: 30
+        product_ref_id:
+          type: integer
+          nullable: true
+        qty:
+          type: integer
+          maximum: 100000
+          minimum: 1
+        note:
+          type: string
+          maxLength: 255
+      required:
+      - product_type
+      - qty
     RecordCheckRequest:
       type: object
       description: |-
@@ -7863,16 +9003,18 @@ components:
       description: |-
         * `father` - Father
         * `husband` - Husband
-    Role412Enum:
+    RoleB81Enum:
       enum:
       - super_admin
       - admin
       - mait
+      - store
       type: string
       description: |-
         * `super_admin` - Super Admin
         * `admin` - Admin / Back-office
         * `mait` - Mait (Field Agent)
+        * `store` - Store keeper
     SemenBatch:
       type: object
       properties:
@@ -7934,6 +9076,325 @@ components:
         * `payment_pending` - Payment pending
         * `completed` - Completed
         * `cancelled` - Cancelled
+    StoreAdmin:
+      type: object
+      description: |-
+        A store, the BMC/MCCs it serves, and who works its counter.
+
+        ``plants`` is the whole set on write, as it is for a zone: sending three codes to a store
+        that had five removes the other two, so unticking a box and saving does what it looks like.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          description: Short identifier, e.g. BARSANA. Set once — slips and saved
+            links use it.
+          maxLength: 20
+        name:
+          type: string
+          description: e.g. Barsana depot.
+          maxLength: 100
+        zone:
+          type: integer
+          nullable: true
+          description: The zone it sits in, for grouping on the portal. Does not decide
+            which Maits it serves — its BMC/MCCs do.
+        zone_name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+        plant_names:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        mpp_count:
+          type: integer
+          readOnly: true
+        keepers:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+        stock:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+        open_indents:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - keepers
+      - mpp_count
+      - name
+      - open_indents
+      - plant_names
+      - stock
+      - zone_name
+    StoreAdminRequest:
+      type: object
+      description: |-
+        A store, the BMC/MCCs it serves, and who works its counter.
+
+        ``plants`` is the whole set on write, as it is for a zone: sending three codes to a store
+        that had five removes the other two, so unticking a box and saving does what it looks like.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: Short identifier, e.g. BARSANA. Set once — slips and saved
+            links use it.
+          maxLength: 20
+        name:
+          type: string
+          minLength: 1
+          description: e.g. Barsana depot.
+          maxLength: 100
+        zone:
+          type: integer
+          nullable: true
+          description: The zone it sits in, for grouping on the portal. Does not decide
+            which Maits it serves — its BMC/MCCs do.
+        description:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+        plants:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 10
+          writeOnly: true
+      required:
+      - code
+      - name
+    StoreHandover:
+      type: object
+      description: |-
+        A handover as the keeper sees it — with the code, which is theirs to read aloud.
+
+        ``qty_open`` is what is still owed on the indent after this, for the line that says the
+        rest stays open.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        indent_id:
+          type: integer
+          readOnly: true
+        mait_name:
+          type: string
+          readOnly: true
+        product_type:
+          type: string
+          readOnly: true
+        breed:
+          type: string
+          readOnly: true
+        item_name:
+          type: string
+          readOnly: true
+        item_name_hi:
+          type: string
+          readOnly: true
+        qty:
+          type: integer
+          readOnly: true
+        qty_requested:
+          type: integer
+          readOnly: true
+        qty_open:
+          type: integer
+          readOnly: true
+        collection_code:
+          type: string
+          readOnly: true
+          description: Read aloud by the keeper and typed in by the Mait. Never sent
+            to the Mait's app — a code the handset already knows proves nothing.
+        flask_checked:
+          type: boolean
+          readOnly: true
+          description: The keeper checked the flask's temperature before straws left
+            the store.
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+        collected_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: The Mait never collected it and the keeper put the stock back.
+            The quantity goes back to being open on the indent.
+        state:
+          type: string
+          readOnly: true
+        locked:
+          type: boolean
+          readOnly: true
+      required:
+      - breed
+      - cancelled_at
+      - collected_at
+      - collection_code
+      - flask_checked
+      - id
+      - indent_id
+      - issued_at
+      - item_name
+      - item_name_hi
+      - locked
+      - mait_name
+      - product_type
+      - qty
+      - qty_open
+      - qty_requested
+      - state
+    StoreIndent:
+      type: object
+      description: |-
+        One indent in a store's queue, with what the shelf can do about it.
+
+        ``readiness`` is the word on the row: *ready* when the shelf covers what is still owed,
+        *short* when it covers some, *waiting* when it covers none. The count behind it is what
+        can still be promised — on hand, less what is already set aside for other Maits.
+
+        Expects ``shelf`` in the context (``services.availability``), computed once for the whole
+        queue rather than per row.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        mait_name:
+          type: string
+          readOnly: true
+        mait_code:
+          type: string
+          readOnly: true
+        product_type:
+          allOf:
+          - $ref: '#/components/schemas/ProductTypeEnum'
+          readOnly: true
+        breed:
+          type: string
+          readOnly: true
+          description: For straw requests (SRS §6.6.1).
+        product_ref_id:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Consumable.id where applicable. Straw requests are by breed,
+            not by straw — the specific straws are chosen at issue time.
+        item_name:
+          type: string
+          readOnly: true
+        item_name_hi:
+          type: string
+          readOnly: true
+        unit:
+          type: string
+          readOnly: true
+        qty_requested:
+          type: integer
+          readOnly: true
+        qty_issued:
+          type: integer
+          readOnly: true
+        qty_open:
+          type: integer
+          readOnly: true
+        in_store:
+          type: integer
+          readOnly: true
+        readiness:
+          type: string
+          readOnly: true
+        short_by:
+          type: integer
+          readOnly: true
+        waiting_days:
+          type: integer
+          description: Days since the zonal manager agreed to it — how long the Mait
+            has been waiting on us.
+          readOnly: true
+        requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        approved_by_name:
+          type: string
+          readOnly: true
+        approved_by_zone:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        waiting_handovers:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          description: |-
+            What already went over the counter against this indent and is still waiting on a code.
+
+            With the code, because this is the keeper's own view and the code is theirs to read
+            out again. A Mait who loses it comes back to the counter; the keeper opens the indent
+            and it is there, rather than on one screen that closed the moment they moved on.
+            Read off the prefetched handovers, so the queue answers every row from one query.
+          readOnly: true
+      required:
+      - approved_at
+      - approved_by_name
+      - approved_by_zone
+      - breed
+      - id
+      - in_store
+      - item_name
+      - item_name_hi
+      - mait_code
+      - mait_name
+      - note
+      - product_ref_id
+      - product_type
+      - qty_issued
+      - qty_open
+      - qty_requested
+      - readiness
+      - requested_at
+      - short_by
+      - unit
+      - waiting_days
+      - waiting_handovers
     StrawValidation:
       type: object
       description: |-
@@ -7965,6 +9426,166 @@ components:
       - reason
       - straw
       - valid
+    SuperOTP:
+      type: object
+      description: One ask or code, with who it is for and what their last SMS did.
+        Never the code.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        purpose:
+          type: string
+          readOnly: true
+        step:
+          type: string
+          readOnly: true
+        for_farmer:
+          type: boolean
+          description: The office calls her, not the Mait who asked — the reveal says
+            so.
+          readOnly: true
+        farmer_name:
+          type: string
+          readOnly: true
+        context:
+          type: string
+          readOnly: true
+        ai_event_id:
+          type: integer
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SuperOTPStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        role:
+          type: string
+          readOnly: true
+        role_display:
+          type: string
+          readOnly: true
+        who:
+          type: string
+          description: The line under the name that tells the office which Mait or
+            which store it is.
+          readOnly: true
+        mobile_no:
+          type: string
+          readOnly: true
+        number_on_file:
+          type: string
+          description: |-
+            The number to call back — the one on the record, not whoever rang the office.
+
+            For a Mait it is the SAP record's number, which is what sign-in resolves them by; the
+            office should dial that and nothing else. For a farmer step it is *her* number, off her
+            record — the one the SMS went to, and the only one the code works on.
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        request_count:
+          type: integer
+          readOnly: true
+        issued_by_name:
+          type: string
+          readOnly: true
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        attempt_count:
+          type: integer
+          readOnly: true
+        used_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        decline_reason:
+          type: string
+          readOnly: true
+        sms:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
+      required:
+      - ai_event_id
+      - attempt_count
+      - context
+      - decline_reason
+      - expires_at
+      - farmer_name
+      - for_farmer
+      - full_name
+      - id
+      - issued_at
+      - issued_by_name
+      - mobile_no
+      - number_on_file
+      - purpose
+      - reason
+      - request_count
+      - requested_at
+      - role
+      - role_display
+      - sms
+      - state
+      - status
+      - status_display
+      - step
+      - used_at
+      - who
+    SuperOTPRequestRequest:
+      type: object
+      description: Ask the office for a sign-in code. The reason is optional and shown
+        to the office.
+      properties:
+        mobile_no:
+          type: string
+          minLength: 1
+          pattern: ^[6-9]\d{9}$
+        reason:
+          type: string
+          maxLength: 200
+      required:
+      - mobile_no
+    SuperOTPStatusEnum:
+      enum:
+      - requested
+      - issued
+      - used
+      - declined
+      - revoked
+      type: string
+      description: |-
+        * `requested` - Asked for
+        * `issued` - Code given
+        * `used` - Used to sign in
+        * `declined` - Declined
+        * `revoked` - Replaced by a newer code
     SyncStatusEnum:
       enum:
       - pending

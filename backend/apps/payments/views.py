@@ -16,6 +16,7 @@ price could name a different one for every farmer.
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -199,6 +200,57 @@ class PaymentOTPVerifyView(_EventScoped):
             payment = finalise_payment(payment, actor=request.user)
 
         return Response(PaymentSerializer(payment).data)
+
+
+@extend_schema(tags=["payments"])
+class PaymentOTPOfficeView(_EventScoped):
+    """Her payment code did not reach her: ask the office to phone it to her instead."""
+
+    throttle_scope = "super_otp_request"
+
+    @extend_schema(
+        summary="Ask the office to phone the farmer her payment code",
+        description=(
+            "For when the authorisation SMS for this payment does not reach her. The office "
+            "calls **her**, on the number on her record, with a code for this payment; she "
+            "reads it to the Mait, who enters it at `/payments/{id}/otp/verify/` as usual."
+        ),
+        request=None,
+        responses={200: dict},
+    )
+    def post(self, request, ai_event_id: int):
+        from apps.accounts.super_otp import request_farmer_code
+        from apps.masterdata.verification import mask_mobile
+
+        event = self.event(request, ai_event_id)
+        payment = get_object_or_404(Payment, ai_event=event)
+        if payment.is_verified:
+            return Response(
+                {"detail": "This payment is already authorised."}, status=status.HTTP_409_CONFLICT
+            )
+        mobile_no = getattr(event.owner, "mobile_no", "") or ""
+        if not mobile_no:
+            raise DomainError("She has no mobile number on record, so no code can reach her.")
+        online = payment.mode == Payment.Mode.ONLINE
+        name = getattr(event.owner, "member_name", "") or getattr(event.owner, "name", "")
+        request_farmer_code(
+            requester=request.user,
+            mobile_no=mobile_no,
+            purpose=OTPLog.Purpose.PAYMENT_ONLINE if online else OTPLog.Purpose.PAYMENT_COD,
+            farmer_name=name,
+            context=f"AI event {event.id} · ₹{payment.amount} {'online' if online else 'cash'}",
+            ai_event_id=event.id,
+            reason=str(request.data.get("reason", "") or ""),
+            request=request,
+        )
+        return Response(
+            {
+                "detail": "The office has been asked. They will call her on the number on her "
+                "record and read her a code — type in what she tells you.",
+                "mobile_no": mask_mobile(mobile_no),
+                "expires_in_seconds": settings.SUPER_OTP_EXPIRY_SECONDS,
+            }
+        )
 
 
 @extend_schema(tags=["payments"])

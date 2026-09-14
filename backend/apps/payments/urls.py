@@ -16,6 +16,7 @@ from .views import (
     PaymentAmountView,
     PaymentDetailView,
     PaymentInitiateView,
+    PaymentOTPOfficeView,
     PaymentOTPVerifyView,
     PaymentProofView,
 )
@@ -29,5 +30,6 @@ urlpatterns = [
     path("<int:ai_event_id>/amount/", PaymentAmountView.as_view(), name="amount"),
     path("<int:ai_event_id>/initiate/", PaymentInitiateView.as_view(), name="initiate"),
     path("<int:ai_event_id>/otp/verify/", PaymentOTPVerifyView.as_view(), name="otp-verify"),
+    path("<int:ai_event_id>/otp/office/", PaymentOTPOfficeView.as_view(), name="otp-office"),
     path("<int:ai_event_id>/proof/", PaymentProofView.as_view(), name="proof"),
 ]

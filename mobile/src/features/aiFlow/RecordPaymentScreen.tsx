@@ -26,6 +26,7 @@ import { colors, radius, spacing, typography } from '@theme/tokens';
 
 import { CaptureTile, FlowLabel, FlowNotice, FlowScreen, LabelledField } from './components';
 import FlowCamera from './FlowCamera';
+import { OfficeCodeAsk } from './OfficeCode';
 
 interface Props {
   event: AIEvent;
@@ -52,6 +53,10 @@ interface Props {
   onUtrChange: (value: string) => void;
   proofUri: string | null;
   onProofCaptured: (uri: string) => void;
+  /** Her SMS code did not reach her: ask the office to phone it to her (OfficeCode.tsx). */
+  onAskOffice?: () => void;
+  officeAsked?: boolean;
+  askingOffice?: boolean;
 }
 
 export default function RecordPaymentScreen({
@@ -70,6 +75,9 @@ export default function RecordPaymentScreen({
   onUtrChange,
   proofUri,
   onProofCaptured,
+  onAskOffice,
+  officeAsked = false,
+  askingOffice = false,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [camera, setCamera] = useState(false);
@@ -156,6 +164,15 @@ export default function RecordPaymentScreen({
             maxLength={OTP_LENGTH}
             testID="payment-code-input"
           />
+          {!!onAskOffice && (
+            <OfficeCodeAsk
+              asked={officeAsked}
+              busy={askingOffice}
+              onAsk={onAskOffice}
+              sentTo={sentTo}
+              testID="payment-office-code"
+            />
+          )}
         </View>
       )}
 
