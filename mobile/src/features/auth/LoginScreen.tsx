@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import { ErrorCode, errorCodeOf } from '@api/client';
 import {
   useLazyGetCurrentUserQuery,
+  useRequestSuperOtpMutation,
   useSendLoginOtpMutation,
   useVerifyLoginOtpMutation,
 } from '@api/endpoints';
@@ -136,6 +137,10 @@ export default function LoginScreen(): React.JSX.Element {
   const [attemptsUsed, setAttemptsUsed] = useState(0);
   const [lockedFor, setLockedFor] = useState(0);
 
+  /** The office has been asked for a code; the next thing to arrive is a phone call. */
+  const [askedOffice, setAskedOffice] = useState(false);
+  const [requestSuperOtp, askState] = useRequestSuperOtpMutation();
+
   const [sendOtp, sendState] = useSendLoginOtpMutation();
   const [verifyOtp, verifyState] = useVerifyLoginOtpMutation();
   const [fetchCurrentUser] = useLazyGetCurrentUserQuery();
@@ -235,6 +240,8 @@ export default function LoginScreen(): React.JSX.Element {
           setSecondsLeft(0);
           break;
         case ErrorCode.OTP_ATTEMPTS_EXCEEDED:
+          // The office's code spent too: offer to ask again, which clears the lock.
+          setAskedOffice(false);
           setFailure('locked');
           setLockedFor(OTP_LOCK_MINUTES * 60);
           setSecondsLeft(0);
@@ -244,7 +251,9 @@ export default function LoginScreen(): React.JSX.Element {
           setAttemptsUsed(used);
           // The server is the authority on being locked out; this only anticipates it so
           // the screen does not offer a retry that is already spent.
-          if (used >= OTP_MAX_ATTEMPTS) {
+          // Not while the office's code is being typed: it has its own, larger allowance, and
+          // the server says when it is spent (OTP_ATTEMPTS_EXCEEDED, below).
+          if (used >= OTP_MAX_ATTEMPTS && !askedOffice) {
             setFailure('locked');
             setLockedFor(OTP_LOCK_MINUTES * 60);
           } else {
@@ -258,7 +267,36 @@ export default function LoginScreen(): React.JSX.Element {
         }
       }
     }
-  }, [attemptsUsed, dispatch, fetchCurrentUser, mobileNo, otp, t, verifyOtp]);
+  }, [askedOffice, attemptsUsed, dispatch, fetchCurrentUser, mobileNo, otp, t, verifyOtp]);
+
+  /**
+   * Ask the office for a code, because the SMS is not coming.
+   *
+   * The office's code has its own attempts and its own ten minutes, so whatever the SMS path
+   * had locked here is cleared: a Mait locked out of an SMS that never arrived must still be
+   * able to type the code they are read. Nothing is claimed about the number — the server
+   * answers the same whether or not it is registered.
+   */
+  const handleAskOffice = useCallback(async () => {
+    setError(null);
+    try {
+      await requestSuperOtp({ mobileNo }).unwrap();
+      setAskedOffice(true);
+      setFailure(null);
+      setAttemptsUsed(0);
+      setLockedFor(0);
+      setOtp('');
+    } catch (err) {
+      const status = (err as { status?: number | string })?.status;
+      setError(
+        status === 429
+          ? t('errors.tooManyRequests')
+          : status === 'FETCH_ERROR' || status === undefined
+            ? t('auth.officeAskOffline')
+            : t('errors.generic'),
+      );
+    }
+  }, [mobileNo, requestSuperOtp, t]);
 
   const onMobile = step === 'mobile';
 
@@ -278,6 +316,7 @@ export default function LoginScreen(): React.JSX.Element {
         onSubmit={handleVerify}
         onResend={handleSend}
         onEditNumber={() => {
+          setAskedOffice(false);
           setStep('mobile');
           setError(null);
           setFailure(null);
@@ -290,6 +329,9 @@ export default function LoginScreen(): React.JSX.Element {
         busy={verifyState.isLoading || sendState.isLoading}
         error={error}
         onDismissError={() => setError(null)}
+        onAskOffice={handleAskOffice}
+        askedOffice={askedOffice}
+        askingOffice={askState.isLoading}
       />
     );
   }

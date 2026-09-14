@@ -40,6 +40,10 @@ window.MaitAI = window.MaitAI || {};
     /* A price tag: the one section that is about money rather than about things or people. */
     rates: 'M20.6 13.4 12 22l-9-9V3h10zM7.5 7.5h.01',
     indents: 'M6 3h9l5 5v13H6zM14 3v6h6M9 13h7M9 17h5',
+    /* A shopfront with an awning. A store is a counter somebody stands behind, which is what
+       separates it from Inventory's box of stock and from the MPP pin beside it. */
+    stores:
+      'M3 9l2-5h14l2 5M3 9h18M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M5 12v8h14v-8M10 20v-5h4v5',
     leaderboard: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
     /* A booked visit, not a medical glyph. Pregnancy diagnosis is a round somebody walks
        on a date — the section is about whether the visit happened, so it is a calendar
@@ -53,6 +57,10 @@ window.MaitAI = window.MaitAI || {};
        dairy, and it has to be impossible to confuse with the export beside it. */
     'mait-payment': 'M2 6h20v12H2zM6.5 9.5h5.5M6.5 12h5.5M11 9.5c0 2.2-1.5 2.5-4.5 2.5l4.5 3.5',
     users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M2 20a7 7 0 0 1 14 0M18 8v6M15 11h6',
+    /* A key. A login code is exactly that — a way in handed across — and the only glyph in the
+       sidebar that is about getting into an account rather than about what is in one. */
+    'super-otp':
+      'M15 3a6 6 0 1 1-5.6 8.2L3 17.6V21h3.4l.8-.8V18h2.2l.8-.8v-2.2h2.2l1-1A6 6 0 0 1 15 3zM16.5 7.5h.01',
     /* A map divided into areas. Not the MPP pin and not the Assignment pin — both of those
        say "a place", and a zone is the line drawn around several of them. */
     zones: 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15',
@@ -93,6 +101,9 @@ window.MaitAI = window.MaitAI || {};
     { key: 'products', label: 'Products', href: 'products.html' },
     { key: 'rates', label: 'Rates', href: 'rates.html' },
     { key: 'indents', label: 'Indents', href: 'indents.html' },
+    // Directly under Indents, because a store is where an approved indent goes next: which
+    // depot serves which BMC/MCCs, and who stands behind its counter to hand the stock over.
+    { key: 'stores', label: 'Stores', href: 'stores.html' },
     { key: 'leaderboard', label: 'Leaderboard', href: 'leaderboard.html' },
     // After the leaderboard and before the exception queues: it is the other half of how
     // a Mait is judged. The leaderboard counts what was sold, this counts what it
@@ -107,6 +118,9 @@ window.MaitAI = window.MaitAI || {};
     // pull an AI-event export.
     { key: 'mait-payment', label: 'Mait payment', href: 'mait-payment.html' },
     { key: 'users', label: 'Users & roles', href: 'users.html' },
+    // Directly under Users & roles: a code that signs somebody in without their SMS is
+    // account administration, and it sits with the desk that already does that.
+    { key: 'super-otp', label: 'Super OTP', href: 'super-otp.html' },
     // Directly under Users & roles, because it is the other half of the same job. That screen
     // says which pages an account opens; this one says how much of the network it sees
     // through them — and an account that can edit zones can widen its own view.

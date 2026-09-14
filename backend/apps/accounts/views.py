@@ -16,6 +16,8 @@ from __future__ import annotations
 import contextlib
 import logging
 
+from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
@@ -39,6 +41,7 @@ from .serializers import (
     OTPSendSerializer,
     OTPVerifySerializer,
     PasswordLoginSerializer,
+    SuperOTPRequestSerializer,
     TokenPairSerializer,
 )
 
@@ -104,7 +107,7 @@ class OTPSendView(APIView):
         serializer.is_valid(raise_exception=True)
         mobile_no = serializer.validated_data["mobile_no"]
 
-        user = self._resolve_mait_user(mobile_no)
+        user = self._resolve_field_user(mobile_no)
         if user is not None:
             issue_otp(mobile_no=mobile_no, purpose=OTPLog.Purpose.LOGIN)
         else:
@@ -119,12 +122,18 @@ class OTPSendView(APIView):
         )
 
     @staticmethod
-    def _resolve_mait_user(mobile_no: str) -> User | None:
+    def _resolve_field_user(mobile_no: str) -> User | None:
         """
-        Find the active Mait login behind a mobile number.
+        Find the active field login behind a mobile number — a Mait's, or a store keeper's.
 
-        Matched on the Mait record rather than ``User.mobile_no`` because SAP is the source
-        of that number, and an Admin activating an account may set it on either.
+        A Mait is matched on the Mait record rather than ``User.mobile_no`` because SAP is the
+        source of that number, and an Admin activating an account may set it on either. A
+        store keeper has no SAP record, so their account's own number is the only one there
+        is; the Stores screen refuses a number a Mait already signs in with, so the two never
+        compete for one handset.
+
+        A keeper whose store has been closed is not found at all. There is nothing for them to
+        sign in to, and a session that opened onto an empty screen would be a fault report.
         """
         mait = (
             Mait.objects.select_related("user")
@@ -133,7 +142,13 @@ class OTPSendView(APIView):
         )
         if mait and mait.user and mait.user.is_active:
             return mait.user
-        return User.objects.filter(mobile_no=mobile_no, role=Role.MAIT, is_active=True).first()
+        return (
+            User.objects.filter(mobile_no=mobile_no, is_active=True)
+            .filter(
+                Q(role=Role.MAIT) | Q(role=Role.STORE, store__isnull=False, store__is_active=True)
+            )
+            .first()
+        )
 
 
 @extend_schema(tags=["auth"])
@@ -159,19 +174,26 @@ class OTPVerifyView(APIView):
         mobile_no = serializer.validated_data["mobile_no"]
 
         # Raises OTPInvalid / OTPExpired / OTPAttemptsExceeded, each a distinct problem
-        # type so the app can tell the Mait what to actually do next.
-        verify_otp(
+        # type so the app can tell the Mait what to actually do next. Also accepts a code the
+        # office generated on the portal for an SMS that never came (accounts/super_otp.py).
+        otp = verify_otp(
             mobile_no=mobile_no,
             purpose=OTPLog.Purpose.LOGIN,
             code=serializer.validated_data["otp"],
         )
 
-        user = OTPSendView._resolve_mait_user(mobile_no)
+        user = OTPSendView._resolve_field_user(mobile_no)
         if user is None:
             # The OTP was valid but the account has since been deactivated. Refusing here
             # keeps a revoked Mait from trading a stale code for a fresh token.
             raise OTPInvalid("This account is no longer active. Contact your administrator.")
 
+        return self._signed_in(
+            user, request, method="super_otp" if getattr(otp, "via_office", False) else "otp"
+        )
+
+    @staticmethod
+    def _signed_in(user, request, *, method: str):
         user.touch_login()
         record_audit(
             action=AuditLog.Action.LOGIN,
@@ -179,9 +201,49 @@ class OTPVerifyView(APIView):
             entity_id=user.id,
             actor=user,
             request=request,
-            meta={"method": "otp", "role": user.role},
+            meta={"method": method, "role": user.role},
         )
         return Response(TokenPairSerializer.for_user(user))
+
+
+@extend_schema(tags=["auth"])
+class SuperOTPRequestView(APIView):
+    """Ask the office for a sign-in code, because the SMS is not arriving."""
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+    throttle_scope = "super_otp_request"
+
+    @extend_schema(
+        summary="Ask the office for a sign-in code",
+        description=(
+            "For a field user whose sign-in SMS is not arriving. Puts the ask in front of the "
+            "office on the portal's Login codes screen; an admin generates a one-time code and "
+            "reads it to them on the phone, and they type it into `/auth/otp/verify/` as if it "
+            "were the SMS code.\n\n"
+            "Always answers 200 with the same body, whether or not the number is registered — "
+            "confirming which numbers exist would let anyone enumerate the field workforce."
+        ),
+        request=SuperOTPRequestSerializer,
+        responses={200: dict},
+    )
+    def post(self, request):
+        from .super_otp import request_code
+
+        serializer = SuperOTPRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        request_code(
+            mobile_no=serializer.validated_data["mobile_no"],
+            reason=serializer.validated_data.get("reason", ""),
+            request=request,
+        )
+        return Response(
+            {
+                "detail": "If this number is registered, the office has been asked. They will "
+                "call you on it with a code.",
+                "expires_in_seconds": settings.SUPER_OTP_EXPIRY_SECONDS,
+            }
+        )
 
 
 @extend_schema(tags=["auth"])

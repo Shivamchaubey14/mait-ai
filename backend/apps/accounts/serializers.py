@@ -65,6 +65,13 @@ class OTPSendSerializer(serializers.Serializer):
     mobile_no = serializers.CharField(validators=[mobile_validator])
 
 
+class SuperOTPRequestSerializer(serializers.Serializer):
+    """Ask the office for a sign-in code. The reason is optional and shown to the office."""
+
+    mobile_no = serializers.CharField(validators=[mobile_validator])
+    reason = serializers.CharField(max_length=200, required=False, allow_blank=True)
+
+
 class OTPVerifySerializer(serializers.Serializer):
     """Verify the login OTP and exchange it for tokens."""
 
@@ -100,6 +107,7 @@ class CurrentUserSerializer(serializers.ModelSerializer):
     assigned_mpp_codes = serializers.SerializerMethodField()
     portal_sections = serializers.SerializerMethodField()
     zones = serializers.SerializerMethodField()
+    store = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -118,6 +126,7 @@ class CurrentUserSerializer(serializers.ModelSerializer):
             "assigned_mpp_codes",
             "portal_sections",
             "zones",
+            "store",
         ]
         read_only_fields = fields
 
@@ -141,6 +150,19 @@ class CurrentUserSerializer(serializers.ModelSerializer):
         """
         names = obj.zone_names
         return {"scoped": bool(names), "names": names}
+
+    def get_store(self, obj) -> dict | None:
+        """
+        The store a keeper works, which is what the app decides its whole shell from.
+
+        Null for every other account. A keeper and a Mait sign in on the same screen with the
+        same OTP, and this is the field that sends one of them to a queue of indents to hand
+        over rather than to a round of villages.
+        """
+        store = obj.store if obj.role == Role.STORE else None
+        if store is None:
+            return None
+        return {"id": store.id, "code": store.code, "name": store.name}
 
     def _mait(self, obj):
         return getattr(obj, "mait_profile", None)

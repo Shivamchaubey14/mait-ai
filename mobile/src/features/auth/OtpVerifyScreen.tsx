@@ -64,6 +64,16 @@ interface Props {
   /** A request-level failure — network, throttling. Shown as a toast, not inline. */
   error?: string | null;
   onDismissError?: () => void;
+  /**
+   * Ask the office for a code, because the SMS is not coming.
+   *
+   * The office generates one on the portal and calls this number with it. It goes into the
+   * same six boxes, so nothing else on this screen changes.
+   */
+  onAskOffice?: () => void;
+  /** The office has been asked — the screen says so and waits for the call. */
+  askedOffice?: boolean;
+  askingOffice?: boolean;
 }
 
 /** `0:24`, `14:52`. The minutes are not padded — a clock does not write 00:24 either. */
@@ -218,6 +228,9 @@ export default function OtpVerifyScreen({
   busy = false,
   error = null,
   onDismissError,
+  onAskOffice,
+  askedOffice = false,
+  askingOffice = false,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -409,6 +422,37 @@ export default function OtpVerifyScreen({
               </View>
             )}
 
+            {/* The way round a gateway that is not delivering. Always on offer rather than only
+                after something fails, because an SMS that never comes produces no failure at
+                all — just a Mait watching a countdown. Once asked, it becomes the promise of a
+                call, with the number the office will ring. */}
+            {!!onAskOffice &&
+              (askedOffice ? (
+                <View style={styles.office} testID="otp-office-asked">
+                  <View style={styles.officeIcon}>
+                    <Ionicons name="call-outline" size={18} color={colors.primaryDark} />
+                  </View>
+                  <View style={styles.helpBody}>
+                    <Text style={styles.noticeTitle}>{t('auth.officeAskedTitle')}</Text>
+                    <Text style={styles.noticeText}>
+                      {t('auth.officeAskedBody', { number: displayMobile })}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: askingOffice, busy: askingOffice }}
+                  onPress={onAskOffice}
+                  disabled={askingOffice}
+                  style={styles.officeLink}
+                  testID="otp-ask-office"
+                >
+                  <Ionicons name="help-buoy-outline" size={16} color={colors.primaryDark} />
+                  <Text style={styles.officeLinkLabel}>{t('auth.askOffice')}</Text>
+                </Pressable>
+              ))}
+
             {/* Drops the button to the foot of the screen. The code arrives by SMS, so the
                 hand is already holding the phone at the bottom edge when it is typed. */}
             <View style={styles.spacer} />
@@ -452,6 +496,35 @@ export default function OtpVerifyScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+
+  officeLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing[2],
+    minHeight: MIN_TOUCH_TARGET,
+    marginTop: spacing[3],
+  },
+  officeLinkLabel: { ...typography.label, color: colors.primaryDark },
+  // Green, not blue: it is not a caution about the network, it is help on its way.
+  office: {
+    flexDirection: 'row',
+    gap: spacing[3],
+    marginTop: spacing[4],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryWash,
+  },
+  officeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
   flex: { flex: 1 },
   scroll: { flexGrow: 1 },
 

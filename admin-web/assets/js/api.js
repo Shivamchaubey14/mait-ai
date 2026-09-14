@@ -529,8 +529,12 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /** Stock across every Mait. The mait/ endpoints only ever report the caller's own. */
-    inventoryOversight: function () {
-      return request({ path: '/admin/inventory/' });
+    /**
+     * Stock with every Mait in reach, and on every store's shelf. Narrowed to the account's
+     * own zones by the server; `{zone: id}` narrows it further for head office.
+     */
+    inventoryOversight: function (query) {
+      return request({ path: '/admin/inventory/', query: query });
     },
 
     /**
@@ -828,6 +832,80 @@ window.MaitAI = window.MaitAI || {};
      */
     zonePlants: function () {
       return request({ path: '/admin/zones/plants/' });
+    },
+
+    /**
+     * The stores approved indents are handed over at, and the BMC/MCCs each one serves.
+     *
+     * Shaped like zones on purpose — `plants` on a write is the whole set — with the keepers
+     * who work each counter and what is on its shelf carried on the row.
+     */
+    stores: function () {
+      return request({ path: '/admin/stores/' });
+    },
+
+    createStore: function (body) {
+      return request({ path: '/admin/stores/', method: 'POST', body: body });
+    },
+
+    updateStore: function (id, body) {
+      return request({ path: '/admin/stores/' + id + '/', method: 'PATCH', body: body });
+    },
+
+    deleteStore: function (id) {
+      return request({ path: '/admin/stores/' + id + '/', method: 'DELETE' });
+    },
+
+    /** Every BMC/MCC, with the store that serves it — the list the store editor ticks from. */
+    storePlants: function () {
+      return request({ path: '/admin/stores/plants/' });
+    },
+
+    /** A keeper's account: a name and the number they sign in to the app with. */
+    addStoreKeeper: function (storeId, body) {
+      return request({
+        path: '/admin/stores/' + storeId + '/keepers/',
+        method: 'POST',
+        body: body,
+      });
+    },
+
+    removeStoreKeeper: function (storeId, userId) {
+      return request({
+        path: '/admin/stores/' + storeId + '/keepers/' + userId + '/remove/',
+        method: 'POST',
+        body: {},
+      });
+    },
+
+    /**
+     * Sign-in codes for field users whose SMS did not arrive. `state` is `open` (asks
+     * waiting and codes live) or `all`.
+     */
+    superOtps: function (query) {
+      return request({ path: '/admin/super-otp/', query: query });
+    },
+
+    /** Generate the code for an ask. The response carries `code` — the only time it does. */
+    issueSuperOtp: function (id) {
+      return request({ path: '/admin/super-otp/' + id + '/issue/', method: 'POST', body: {} });
+    },
+
+    /** A code for somebody who phoned rather than asking from the app. */
+    issueSuperOtpForNumber: function (mobileNo) {
+      return request({
+        path: '/admin/super-otp/issue-for-number/',
+        method: 'POST',
+        body: { mobile_no: mobileNo },
+      });
+    },
+
+    declineSuperOtp: function (id, reason) {
+      return request({
+        path: '/admin/super-otp/' + id + '/decline/',
+        method: 'POST',
+        body: { reason: reason || '' },
+      });
     },
 
     /** Zones ranked by the work done in them, for the panel head office reads. */

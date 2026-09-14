@@ -20,6 +20,7 @@ from .views import (
     OTPVerifyView,
     PasswordLoginView,
     ServerTimeView,
+    SuperOTPRequestView,
 )
 
 app_name = "accounts"
@@ -28,6 +29,7 @@ urlpatterns = [
     path("login/", PasswordLoginView.as_view(), name="login"),
     path("otp/send/", OTPSendView.as_view(), name="otp-send"),
     path("otp/verify/", OTPVerifyView.as_view(), name="otp-verify"),
+    path("otp/super/request/", SuperOTPRequestView.as_view(), name="otp-super-request"),
     path("refresh/", TokenRefreshView.as_view(), name="refresh"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", CurrentUserView.as_view(), name="me"),

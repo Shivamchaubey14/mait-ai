@@ -36,6 +36,7 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     **REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"],
     "otp_send": env("DEV_OTP_SEND_RATE", default="100/hour"),
     "otp_verify": env("DEV_OTP_VERIFY_RATE", default="200/hour"),
+    "super_otp_request": env("DEV_SUPER_OTP_REQUEST_RATE", default="100/hour"),
     "login": env("DEV_LOGIN_RATE", default="500/hour"),
 }
 

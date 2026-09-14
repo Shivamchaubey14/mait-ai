@@ -1,0 +1,88 @@
+/**
+ * Login codes (W22).
+ *
+ * The table and the filter bar are the portal's own. What is particular is the code itself:
+ * shown once, in Ink, large and spaced for reading down a phone line — the one place in the
+ * portal a live credential is on screen, and it should look like nothing else.
+ */
+
+@import url('forms.css');
+
+/* --- the code, the one time it is shown ---------------------------------------------------- */
+.code-reveal {
+  background: var(--color-ink);
+  color: var(--color-surface);
+  border-color: var(--color-ink);
+}
+
+.code-reveal__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.code-reveal__label {
+  margin: 0;
+  font-size: var(--text-caption);
+  opacity: 0.72;
+}
+
+.code-reveal__who {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+}
+
+.code-reveal__call {
+  margin: var(--space-1) 0 0;
+  font-weight: 600;
+  color: var(--yolk-300);
+}
+
+.code-reveal__code {
+  margin: var(--space-4) 0 var(--space-3);
+  font-family: var(--font-heading);
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  line-height: 1.1;
+  /* Spaced digits wrap badly; one line, always. */
+  white-space: nowrap;
+}
+
+.code-reveal__foot {
+  margin: 0;
+  font-size: var(--text-caption);
+  opacity: 0.8;
+}
+
+/* --- somebody phoned instead ---------------------------------------------------------------- */
+.phone-in__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.phone-in__input {
+  flex: 1 1 240px;
+  max-width: 320px;
+}
+
+/* --- the table ------------------------------------------------------------------------------- */
+.otp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.sms-bad {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.sms-good {
+  color: var(--color-primary-dark);
+}

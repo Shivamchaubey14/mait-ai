@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Super OTP · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <!-- super-otp.css pulls in forms.css, which imports portal.css. -->
+    <link rel="stylesheet" href="assets/css/super-otp.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="super-otp">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Super OTP</h1>
+            <p class="topbar__meta"><span id="code-count">—</span></p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- Yellow, because it is the one rule on this screen that matters more than the rest:
+             the code opens the account, and the only safe place to read it is the number the
+             account already has. -->
+        <div class="notice notice--warn">
+          <span class="notice__icon" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">Call the number on file. Never read a code to whoever rang.</p>
+            <p class="notice__body">
+              A code here stands in for an SMS that did not arrive — at sign-in, the farmer check,
+              or a payment. It works once, for 10 minutes, for that step and the number shown. Dial
+              that number yourself and read it to whoever answers. For a farmer step that is
+              <strong>the farmer</strong>, never the Mait who asked: she tells the Mait the code,
+              exactly as she would have read the SMS.
+            </p>
+          </div>
+        </div>
+
+        <!-- The code, the one time it exists outside a hash. Ink, large, spaced for reading
+             down a phone line, with the clock it is running against. -->
+        <section class="panel code-reveal" id="reveal" aria-live="polite" hidden>
+          <div class="code-reveal__head">
+            <div>
+              <p class="code-reveal__label">Read this to</p>
+              <h2 class="code-reveal__who" id="reveal-who">—</h2>
+              <p class="code-reveal__call" id="reveal-call">—</p>
+            </div>
+            <button class="btn" id="reveal-hide" type="button">I have read it out — hide it</button>
+          </div>
+          <p class="code-reveal__code" id="reveal-code">— — — — — —</p>
+          <p class="code-reveal__foot">
+            <span id="reveal-expiry">—</span> · They type it into the same six boxes the SMS code
+            goes in. It is not shown again — generate a new one if it is lost.
+          </p>
+        </section>
+
+        <section class="panel phone-in" aria-labelledby="phone-in-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="phone-in-title">Somebody phoned instead</h2>
+          </div>
+          <div class="phone-in__row">
+            <input
+              class="input phone-in__input"
+              id="phone-mobile"
+              type="tel"
+              inputmode="numeric"
+              maxlength="10"
+              placeholder="The 10-digit number they sign in with"
+              aria-label="The number they sign in with"
+            />
+            <button class="btn btn--primary" id="phone-issue" type="button">Generate a code</button>
+          </div>
+          <p class="field__hint">
+            Sign-in only — for a Mait or store keeper who rang rather than asking from the app. A
+            farmer's code is always asked for from the app, where the farmer and the payment are.
+            The code only works on this number, so hang up and call it back before reading it out.
+          </p>
+        </section>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search name, mobile, Mait code or store"
+            aria-label="Search name, mobile, Mait code or store"
+            autocomplete="off"
+          />
+          <button class="chip is-active" id="show-open" type="button" aria-pressed="true">
+            Waiting &amp; live
+          </button>
+          <button class="chip" id="show-all" type="button" aria-pressed="false">Everything</button>
+        </section>
+
+        <section class="panel panel--flush" aria-label="Asks and codes">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col">Who</th>
+                  <th scope="col">Number on file</th>
+                  <th scope="col">Asked</th>
+                  <th scope="col">Their last SMS</th>
+                  <th scope="col">State</th>
+                  <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="rows" aria-busy="true">
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/controls.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/super-otp.js"></script>
+  </body>
+</html>
