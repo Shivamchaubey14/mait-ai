@@ -93,8 +93,11 @@ export default function BottomNav<T extends string = Tab>({
           // The extra unit is so there is still a lift on a handset with hardware keys below
           // the screen, where the inset is zero and the bar would otherwise sit flush again.
           paddingBottom: insets.bottom + spacing[3],
-          paddingLeft: insets.left,
-          paddingRight: insets.right,
+          // Added to the side gutter, not in place of it: a per-side padding overrides
+          // `paddingHorizontal`, and in portrait these insets are zero, which welded the bar
+          // to both edges of the screen.
+          paddingLeft: insets.left + spacing[4],
+          paddingRight: insets.right + spacing[4],
         },
       ]}
       pointerEvents="box-none"
@@ -140,12 +143,10 @@ export default function BottomNav<T extends string = Tab>({
 }
 
 const styles = StyleSheet.create({
-  // Flat and full width, welded to the bottom edge. It is chrome, and chrome that floats
-  // takes up room the content below it could have used.
   // Holds the gap. Transparent and `box-none`, so the space it reserves under the bar is the
-  // system's to draw in and taps pass straight through it.
+  // system's to draw in and taps pass straight through it. Its side gutter — set inline, with
+  // the insets — is the page body's, so the bar lines up with the search box and cards.
   wrap: {
-    paddingHorizontal: spacing[3],
     backgroundColor: 'transparent',
   },
   // A card now, not a band welded to the bottom edge: rounded on all four corners, with the
