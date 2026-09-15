@@ -147,7 +147,6 @@ describe('ToIssueScreen', () => {
     render();
 
     await waitFor(() => screen.getByTestId('store-indent-13'));
-    fireEvent.press(screen.getByTestId('store-find'));
     fireEvent.changeText(screen.getByTestId('store-find-input'), 'IND-14');
 
     expect(screen.queryByTestId('store-indent-13')).toBeNull();
@@ -179,7 +178,6 @@ describe('ToIssueScreen', () => {
     render();
 
     await waitFor(() => screen.getByTestId('store-codes'));
-    fireEvent.press(screen.getByTestId('store-find'));
     fireEvent.changeText(screen.getByTestId('store-find-input'), 'sunil');
     expect(screen.getByTestId('store-handover-501-code')).toHaveTextContent('4729');
 

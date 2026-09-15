@@ -105,7 +105,6 @@ export default function ToIssueScreen({
   // Always read, not only under the tile: the codes waiting on a Mait head the queue.
   const waiting = useListStoreHandoversQuery('waiting');
 
-  const [searching, setSearching] = useState(false);
   const [term, setTerm] = useState('');
 
   const rows = useMemo(
@@ -302,25 +301,12 @@ export default function ToIssueScreen({
           </Pressable>
         </View>
 
-        {body()}
-      </ScrollView>
-
-      {/* Above the tab bar, where the thumb already is. A search box that sat at the top of the
-          list would be a reach to the far end of the screen with a canister in the other hand. */}
-      <View style={storeStyles.footer}>
-        {view === 'notCollected' ? (
-          <StoreAction
-            label={t('store.backToQueue')}
-            icon="arrow-back"
-            tone="outline"
-            onPress={() => setView('queue')}
-            testID="store-back-to-queue"
-          />
-        ) : searching ? (
+        {/* Straight under the day's figures, always open — the first thing a keeper does with a
+            Mait at the counter is look them up. */}
+        {view === 'queue' && (
           <View style={styles.search}>
             <Ionicons name="search" size={18} color={colors.textMuted} />
             <TextInput
-              autoFocus
               value={term}
               onChangeText={setTerm}
               placeholder={t('store.findPlaceholder')}
@@ -330,29 +316,34 @@ export default function ToIssueScreen({
               returnKeyType="search"
               testID="store-find-input"
             />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('common.close')}
-              onPress={() => {
-                setTerm('');
-                setSearching(false);
-              }}
-              style={styles.searchClose}
-              testID="store-find-close"
-            >
-              <Ionicons name="close" size={18} color={colors.textMuted} />
-            </Pressable>
+            {term ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
+                onPress={() => setTerm('')}
+                style={styles.searchClose}
+                testID="store-find-close"
+              >
+                <Ionicons name="close" size={18} color={colors.textMuted} />
+              </Pressable>
+            ) : null}
           </View>
-        ) : (
-          <StoreAction
-            label={t('store.find')}
-            icon="search"
-            tone="outline"
-            onPress={() => setSearching(true)}
-            testID="store-find"
-          />
         )}
-      </View>
+
+        {body()}
+      </ScrollView>
+
+      {view === 'notCollected' && (
+        <View style={storeStyles.footer}>
+          <StoreAction
+            label={t('store.backToQueue')}
+            icon="arrow-back"
+            tone="outline"
+            onPress={() => setView('queue')}
+            testID="store-back-to-queue"
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -365,6 +356,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: spacing[4],
     minHeight: MIN_TOUCH_TARGET + spacing[5],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Green for what went over the counter, yolk for what went over and is still waiting on
   // somebody — the same two colours every count in this product uses for those two things.
@@ -372,7 +365,7 @@ const styles = StyleSheet.create({
   tileGoodOn: { borderWidth: 2 },
   tileWait: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
   tileWaitOn: { borderWidth: 2 },
-  tileLabel: { ...typography.caption },
+  tileLabel: { ...typography.caption, textAlign: 'center' },
   tileLabelGood: { color: colors.primaryDark },
   tileLabelWait: { color: yolk[800] },
   tileValue: { ...typography.h1, marginTop: 2 },
@@ -422,6 +415,7 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     minHeight: MIN_TOUCH_TARGET + 6,
     paddingLeft: spacing[4],
+    marginBottom: spacing[3],
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.primary,
