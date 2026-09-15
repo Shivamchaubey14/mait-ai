@@ -92,7 +92,11 @@ export default function StoreProfileScreen(): React.JSX.Element {
           body={plants.length ? plants.join(', ') : t('store.servesNone')}
           testID="profile-serves"
         />
-        <Row title={t('settings.language')} right={<LanguageToggle />} testID="profile-language" />
+        <Row
+          title={t('settings.language')}
+          right={<LanguageToggle variant="light" />}
+          testID="profile-language"
+        />
 
         <SignOutButton
           label={t('settings.signOut')}
