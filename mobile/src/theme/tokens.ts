@@ -78,6 +78,7 @@ export const colors = {
   warning: yolk[500],
   warningWash: yolk[50],
   error: '#E54D42',
+  errorPressed: '#C73A30',
   // Washes for notice blocks. Pale enough to carry Ink text at full contrast — the status
   // colour itself is the dot and the border, never the text.
   errorWash: '#FDECEA',

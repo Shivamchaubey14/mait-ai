@@ -73,6 +73,32 @@ export function Button({
 }
 
 // --------------------------------------------------------------------------------------
+// SignOutButton
+// --------------------------------------------------------------------------------------
+// One button for every profile — Mait and store alike — so the way out looks the same
+// whichever role signed in.
+export function SignOutButton({
+  label,
+  onPress,
+  testID,
+}: {
+  label: string;
+  onPress: () => void;
+  testID?: string;
+}): React.JSX.Element {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.signOut, pressed && styles.signOutPressed]}
+    >
+      <Text style={styles.signOutLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// --------------------------------------------------------------------------------------
 // TextField
 // --------------------------------------------------------------------------------------
 interface TextFieldProps extends TextInputProps {
@@ -242,6 +268,16 @@ const styles = StyleSheet.create({
     color: colors.surface,
     fontWeight: '600',
   },
+  signOut: {
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing[3],
+    borderRadius: radius.lg,
+    backgroundColor: colors.error,
+  },
+  signOutPressed: { backgroundColor: colors.errorPressed },
+  signOutLabel: { ...typography.bodyStrong, color: colors.surface },
   field: { marginBottom: spacing[4] },
   fieldLabel: {
     ...typography.label,

@@ -8,10 +8,11 @@
  */
 
 import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { useGetStoreHomeQuery, useLogoutMutation } from '@api/endpoints';
+import { SignOutButton } from '@/components';
 import { LanguageToggle } from '@/components/brand';
 import PageHero from '@/components/hero';
 import { loggedOut } from '@/features/auth/authSlice';
@@ -93,14 +94,11 @@ export default function StoreProfileScreen(): React.JSX.Element {
         />
         <Row title={t('settings.language')} right={<LanguageToggle />} testID="profile-language" />
 
-        <Pressable
-          accessibilityRole="button"
+        <SignOutButton
+          label={t('settings.signOut')}
           onPress={signOut}
-          style={({ pressed }) => [styles.signOut, pressed && styles.signOutPressed]}
           testID="profile-sign-out"
-        >
-          <Text style={styles.signOutLabel}>{t('settings.signOut')}</Text>
-        </Pressable>
+        />
       </ScrollView>
     </View>
   );
@@ -122,16 +120,4 @@ const styles = StyleSheet.create({
   rowBody: { flex: 1 },
   rowTitle: { ...typography.bodyStrong, color: colors.ink },
   rowText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  signOut: {
-    minHeight: MIN_TOUCH_TARGET + 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.error,
-    backgroundColor: colors.surface,
-    marginTop: spacing[3],
-  },
-  signOutPressed: { backgroundColor: colors.errorWash },
-  signOutLabel: { ...typography.bodyStrong, color: colors.error },
 });

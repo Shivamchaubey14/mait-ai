@@ -33,6 +33,7 @@ import {
   useListMppsQuery,
   useLogoutMutation,
 } from '@api/endpoints';
+import { SignOutButton } from '@/components';
 import { LanguageToggle } from '@/components/brand';
 import { fitTitleSize } from '@/components/hero';
 import PullToRefresh from '@/components/pullToRefresh';
@@ -450,16 +451,11 @@ export default function SettingsScreen({
               </View>
             )}
 
-            <Pressable
-              accessibilityRole="button"
+            <SignOutButton
+              label={confirming ? t('settings.signOutAnyway') : t('settings.signOut')}
               onPress={signOut}
-              style={({ pressed }) => [styles.signOut, pressed && styles.signOutPressed]}
               testID="sign-out"
-            >
-              <Text style={styles.signOutLabel}>
-                {confirming ? t('settings.signOutAnyway') : t('settings.signOut')}
-              </Text>
-            </Pressable>
+            />
 
             {confirming && (
               <Pressable
@@ -584,21 +580,6 @@ const styles = StyleSheet.create({
   },
   warningTitle: { ...typography.bodyStrong, color: yolk[800] },
   warningText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-
-  // Outlined rather than filled. It is the one destructive thing on the screen and it should
-  // read as a way out, not as the action the page is for.
-  signOut: {
-    minHeight: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing[2],
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.error,
-  },
-  signOutPressed: { backgroundColor: colors.errorWash },
-  signOutLabel: { ...typography.bodyStrong, color: colors.error },
 
   cancel: { minHeight: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center' },
   cancelLabel: { ...typography.bodyStrong, color: colors.primaryDark },
