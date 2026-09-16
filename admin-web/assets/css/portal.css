@@ -1215,6 +1215,16 @@ a.btn:hover {
   text-align: right;
 }
 
+/* The Edit column. Named in the header like every other column — a blank heading leaves the
+   one clickable cell in the row looking like something the table forgot to label — and set
+   right, against the edge the buttons already sit nearest. */
+.table th.table__action,
+.table td.table__action {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
 /* Codes and identifiers read as data rather than prose. */
 .table__code {
   font-family: var(--font-heading);

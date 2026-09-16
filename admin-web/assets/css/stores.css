@@ -68,6 +68,17 @@
   max-width: 260px;
 }
 
+/* --- the list card --------------------------------------------------------------------------
+   Tinted, with the rows as paper on top of it. A column of white rows on a white card leaves
+   nothing saying where one store stops and the next begins. */
+.stores-panel .table tbody tr:not(.is-blocked) {
+  background: rgb(255 255 255 / 70%);
+}
+
+.stores-panel .table tbody tr:not(.is-blocked):hover {
+  background: var(--color-surface);
+}
+
 /* --- the shelf, in the table --------------------------------------------------------------- */
 .store-shelf {
   max-width: 280px;

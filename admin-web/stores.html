@@ -339,9 +339,27 @@
           </div>
         </section>
 
-        <section class="panel" aria-labelledby="list-title">
-          <div class="panel__head">
-            <h2 class="panel__title" id="list-title">Stores</h2>
+        <!-- Tinted rather than white: the shelf column is a small table of its own inside every
+             row, and on a white card those figures floated with nothing behind them. -->
+        <section class="panel panel--flush panel--tinted stores-panel" aria-labelledby="list-title">
+          <div class="panel__head panel__head--flush">
+            <h2 class="panel__title" id="list-title">
+              <span class="panel__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M3 9l2-5h14l2 5M3 9h18M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M5 12v8h14v-8M10 20v-5h4v5"
+                  />
+                </svg>
+              </span>
+              Stores
+            </h2>
           </div>
           <div class="table-wrap">
             <table class="table">
@@ -353,7 +371,7 @@
                   <th scope="col">On the shelf</th>
                   <th scope="col" class="table__num">Waiting</th>
                   <th scope="col">Status</th>
-                  <th scope="col"><span class="visually-hidden">Actions</span></th>
+                  <th scope="col" class="table__action">Action</th>
                 </tr>
               </thead>
               <tbody id="rows" aria-busy="true">

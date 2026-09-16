@@ -141,7 +141,7 @@
       '<td>' +
       (store.is_active ? ui.pill('Open', 'good') : ui.pill('Closed', 'bad')) +
       '</td>' +
-      '<td><button class="btn" type="button" data-edit="' +
+      '<td class="table__action"><button class="btn" type="button" data-edit="' +
       store.id +
       '">Edit</button></td>' +
       '</tr>'
