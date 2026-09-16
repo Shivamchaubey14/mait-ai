@@ -100,19 +100,42 @@
       .join('');
   }
 
+  /**
+   * The shelf, as a small table of its own inside the row.
+   *
+   * It used to be one run-on line — "37 Murrah · 40 Gir · 12 Sheath" — which is read word by
+   * word to answer "how much Gir". Item on the left, the count on the right in a chip, so a
+   * column of stores can be scanned down rather than read across. A nil count is amber: the
+   * item is on the shelf card and there is none of it, which is the one line worth seeing.
+   */
   function shelfSummary(store) {
     const lines = store.stock || [];
     if (!lines.length) {
       return '<span class="table__sub">Nothing recorded yet</span>';
     }
     return (
-      '<span class="store-shelf">' +
+      '<div class="shelf">' +
+      '<div class="shelf__row shelf__row--head">' +
+      '<span>Item</span><span>On hand</span>' +
+      '</div>' +
       lines
         .map(function (line) {
-          return ui.number(line.on_hand) + ' ' + ui.escapeHtml(line.item_name);
+          const qty = Number(line.on_hand) || 0;
+          return (
+            '<div class="shelf__row">' +
+            '<span class="shelf__item">' +
+            ui.escapeHtml(line.item_name) +
+            '</span>' +
+            '<span class="shelf__qty' +
+            (qty ? '' : ' shelf__qty--nil') +
+            '">' +
+            ui.number(line.on_hand) +
+            '</span>' +
+            '</div>'
+          );
         })
-        .join(' · ') +
-      '</span>'
+        .join('') +
+      '</div>'
     );
   }
 

@@ -69,8 +69,9 @@
 }
 
 /* --- the list card --------------------------------------------------------------------------
-   Tinted, with the rows as paper on top of it. A column of white rows on a white card leaves
-   nothing saying where one store stops and the next begins. */
+   Tinted, with the rows as paper on top of it. The shelf cell is a small table in its own
+   right, and on a white card its figures sat on the same white as everything around them —
+   nothing said where one store's shelf stopped and the next began. */
 .stores-panel .table tbody tr:not(.is-blocked) {
   background: rgb(255 255 255 / 70%);
 }
@@ -79,11 +80,65 @@
   background: var(--color-surface);
 }
 
-/* --- the shelf, in the table --------------------------------------------------------------- */
-.store-shelf {
-  max-width: 280px;
+/* --- the shelf, in the table ---------------------------------------------------------------
+   Item left, count right, one line each. The count is a chip rather than plain type because
+   it is the only figure in the cell and the eye has to find it without reading the names. */
+.shelf {
+  display: grid;
+  gap: 2px;
+  min-width: 150px;
+  max-width: 230px;
+}
+
+.shelf__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 0;
+  border-bottom: 1px dotted var(--color-border);
+}
+
+.shelf__row:last-child {
+  border-bottom: 0;
+}
+
+/* Names the two columns, the way the table above names its own. Kept to caption size and
+   muted: it is a label inside a cell, not a second heading competing with the real one. */
+.shelf__row--head {
   font-size: var(--text-caption);
+  font-weight: 600;
   color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.shelf__item {
+  overflow: hidden;
+  font-size: var(--text-caption);
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf__qty {
+  min-width: 34px;
+  padding: 1px var(--space-2);
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  text-align: right;
+  background: var(--color-primary-wash);
+  border-radius: var(--radius-pill);
+}
+
+/* An item the store carries and has none of. Amber, the same "waiting on somebody" tone the
+   rest of the product uses — not red, because a nil count is not a fault. */
+.shelf__qty--nil {
+  color: var(--color-secondary-pressed);
+  background: var(--color-secondary-wash);
 }
 
 /* A store no keeper can sign in to. Amber text rather than a pill: the row already carries
