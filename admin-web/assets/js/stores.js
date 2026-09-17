@@ -101,12 +101,13 @@
   }
 
   /**
-   * The shelf, as a small table of its own inside the row.
+   * The shelf: one chip per item, the name and its count together.
    *
-   * It used to be one run-on line — "37 Murrah · 40 Gir · 12 Sheath" — which is read word by
-   * word to answer "how much Gir". Item on the left, the count on the right in a chip, so a
-   * column of stores can be scanned down rather than read across. A nil count is amber: the
-   * item is on the shelf card and there is none of it, which is the one line worth seeing.
+   * It was a run-on line — "37 Murrah · 40 Gir" — which is read word by word to answer "how
+   * much Gir". A row per item answered that, but four items made the row three times as tall
+   * as the two beside it and the table lost its rhythm. Chips wrap instead of stacking, so
+   * the cell stays one or two lines deep and the count still has an edge to be found by.
+   * Amber when there is none of it: a nil count is the only line worth stopping on.
    */
   function shelfSummary(store) {
     const lines = store.stock || [];
@@ -115,23 +116,20 @@
     }
     return (
       '<div class="shelf">' +
-      '<div class="shelf__row shelf__row--head">' +
-      '<span>Item</span><span>On hand</span>' +
-      '</div>' +
       lines
         .map(function (line) {
           const qty = Number(line.on_hand) || 0;
           return (
-            '<div class="shelf__row">' +
+            '<span class="shelf__chip' +
+            (qty ? '' : ' shelf__chip--nil') +
+            '">' +
             '<span class="shelf__item">' +
             ui.escapeHtml(line.item_name) +
             '</span>' +
-            '<span class="shelf__qty' +
-            (qty ? '' : ' shelf__qty--nil') +
-            '">' +
+            '<span class="shelf__qty">' +
             ui.number(line.on_hand) +
             '</span>' +
-            '</div>'
+            '</span>'
           );
         })
         .join('') +

@@ -81,64 +81,54 @@
 }
 
 /* --- the shelf, in the table ---------------------------------------------------------------
-   Item left, count right, one line each. The count is a chip rather than plain type because
-   it is the only figure in the cell and the eye has to find it without reading the names. */
+   One chip per item: the name, then its count on a darker cap. Wraps rather than stacking —
+   a row per item made a four-item store three times as tall as an empty one, and a table
+   whose rows are all different heights is read as a list of cards, not a table. */
 .shelf {
-  display: grid;
-  gap: 2px;
-  min-width: 150px;
-  max-width: 230px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  max-width: 260px;
 }
 
-.shelf__row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 2px 0;
-  border-bottom: 1px dotted var(--color-border);
-}
-
-.shelf__row:last-child {
-  border-bottom: 0;
-}
-
-/* Names the two columns, the way the table above names its own. Kept to caption size and
-   muted: it is a label inside a cell, not a second heading competing with the real one. */
-.shelf__row--head {
-  font-size: var(--text-caption);
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.shelf__item {
+.shelf__chip {
+  display: inline-flex;
+  align-items: stretch;
   overflow: hidden;
   font-size: var(--text-caption);
-  color: var(--color-text);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shelf__qty {
-  min-width: 34px;
-  padding: 1px var(--space-2);
-  font-family: var(--font-heading);
-  font-size: var(--text-caption);
-  font-weight: 600;
-  color: var(--color-primary-dark);
-  text-align: right;
   background: var(--color-primary-wash);
   border-radius: var(--radius-pill);
 }
 
+.shelf__item {
+  padding: 2px var(--space-2);
+  color: var(--color-primary-dark);
+}
+
+/* The cap. Darker than the name beside it so the figure is what the eye lands on — the names
+   are read once, the counts are what an operator is actually here for. */
+.shelf__qty {
+  padding: 2px var(--space-2);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--color-surface);
+  background: var(--color-primary);
+}
+
 /* An item the store carries and has none of. Amber, the same "waiting on somebody" tone the
-   rest of the product uses — not red, because a nil count is not a fault. */
-.shelf__qty--nil {
-  color: var(--color-secondary-pressed);
+   rest of the product uses — not red, because a nil count is not a fault. Ink on the cap:
+   yolk cannot carry white text (see tokens.css). */
+.shelf__chip--nil {
   background: var(--color-secondary-wash);
+}
+
+.shelf__chip--nil .shelf__item {
+  color: var(--color-secondary-pressed);
+}
+
+.shelf__chip--nil .shelf__qty {
+  color: var(--color-ink);
+  background: var(--color-secondary);
 }
 
 /* A store no keeper can sign in to. Amber text rather than a pill: the row already carries
