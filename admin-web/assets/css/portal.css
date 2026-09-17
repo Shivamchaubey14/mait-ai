@@ -581,6 +581,23 @@ a.btn:hover {
   border-color: var(--color-ink);
 }
 
+/* Filled yolk, for the row action that repeats down a table — Edit, mostly. Green is spoken
+   for (one screen-owning action per view) and a white button in every row leaves the column
+   looking empty until you hover it.
+ *
+ * Ink on the fill, never white: yolk fails contrast under white text (see tokens.css). */
+.btn--warn,
+.btn--warn:hover {
+  color: var(--color-ink);
+  background: var(--color-secondary);
+  border-color: var(--color-secondary);
+}
+
+.btn--warn:hover {
+  background: var(--color-secondary-pressed);
+  border-color: var(--color-secondary-pressed);
+}
+
 /* Signing out is a labelled action, not a glyph to guess at: a back-office machine is shared
    and this portal renders member PII, so leaving a session open is the one mistake worth
    making obvious to undo. Same shape as Export beside it — only the colour differs, because

@@ -91,18 +91,21 @@
   max-width: 260px;
 }
 
+/* Slate on pale blue, not green. The BMC/MCC column two cells to the left is already a run of
+   green chips, and in the same colour the two columns read as one list of the same kind of
+   thing — which they are not: one is a place, this is a count. */
 .shelf__chip {
   display: inline-flex;
   align-items: stretch;
   overflow: hidden;
   font-size: var(--text-caption);
-  background: var(--color-primary-wash);
+  background: var(--color-info-wash);
   border-radius: var(--radius-pill);
 }
 
 .shelf__item {
   padding: 2px var(--space-2);
-  color: var(--color-primary-dark);
+  color: var(--ink-500);
 }
 
 /* The cap. Darker than the name beside it so the figure is what the eye lands on — the names
@@ -112,7 +115,7 @@
   font-family: var(--font-heading);
   font-weight: 600;
   color: var(--color-surface);
-  background: var(--color-primary);
+  background: var(--ink-500);
 }
 
 /* An item the store carries and has none of. Amber, the same "waiting on somebody" tone the
