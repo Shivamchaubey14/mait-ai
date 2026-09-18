@@ -42,6 +42,7 @@ import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '
 import { itemLabel, StoreAction, StoreHero, storeStyles, Stepper } from './parts';
 
 type Kind = 'straw' | 'consumable';
+type Animal = 'COW' | 'BUFF';
 
 /**
  * Record what came off the van.
@@ -67,6 +68,10 @@ function ReceiveSheet({
   const [receive, receiving] = useReceiveStoreStockMutation();
 
   const [kind, setKind] = useState<Kind>('straw');
+  // Straws are shelved by breed, and a breed belongs to an animal. Seventeen breed chips in
+  // one run is a wall to read; cow-or-buffalo first halves it, and it is the same two steps
+  // the portal's breed list is arranged in.
+  const [animal, setAnimal] = useState<Animal>('COW');
   const [picked, setPicked] = useState<string | null>(null);
   const [qty, setQty] = useState(10);
   const [note, setNote] = useState('');
@@ -76,19 +81,22 @@ function ReceiveSheet({
   const hindi = i18n.language.startsWith('hi');
   const options = useMemo(() => {
     if (kind === 'straw') {
-      return (catalogue.data?.breeds ?? []).map(breed => ({
-        value: breed.code,
-        label: (hindi && breed.name_hi) || breed.name,
-      }));
+      return (catalogue.data?.breeds ?? [])
+        .filter(breed => breed.animal_type === animal)
+        .map(breed => ({
+          value: breed.code,
+          label: (hindi && breed.name_hi) || breed.name,
+        }));
     }
     return (catalogue.data?.products ?? [])
       .filter(product => product.category === 'consumable')
       .map(product => ({ value: String(product.id), label: product.name }));
-  }, [catalogue.data, kind, hindi]);
+  }, [catalogue.data, kind, animal, hindi]);
 
   const label = options.find(option => option.value === picked)?.label ?? '';
 
   const reset = () => {
+    setAnimal('COW');
     setPicked(null);
     setQty(10);
     setNote('');
@@ -158,12 +166,33 @@ function ReceiveSheet({
           testID="receive-kind"
         />
 
+        {kind === 'straw' && (
+          <Segmented<Animal>
+            options={[
+              { value: 'COW', label: t('aiFlow.animalType.COW') },
+              { value: 'BUFF', label: t('aiFlow.animalType.BUFF') },
+            ]}
+            value={animal}
+            onChange={next => {
+              setAnimal(next);
+              setPicked(null);
+            }}
+            testID="receive-animal"
+          />
+        )}
+
         <Text style={styles.cardHint}>
           {kind === 'straw' ? t('store.breed') : t('store.product')}
         </Text>
         <View style={styles.chips}>
           {catalogue.isLoading ? (
             <SkeletonList rows={1} />
+          ) : !options.length ? (
+            // The office keeps this list. Blank space here reads as a screen that failed to
+            // load, when what it means is that nobody has configured a breed for this animal.
+            <Text style={styles.noneHere} testID="receive-no-options">
+              {kind === 'straw' ? t('store.noBreeds') : t('store.noProducts')}
+            </Text>
           ) : (
             options.map(option => {
               const on = option.value === picked;
@@ -365,6 +394,7 @@ const styles = StyleSheet.create({
   },
   cardLabel: { ...typography.label, color: colors.ink },
   cardHint: { ...typography.caption, color: colors.textMuted, marginTop: spacing[1] },
+  noneHere: { ...typography.body, color: colors.textMuted, paddingVertical: spacing[2] },
   optional: { ...typography.caption, color: colors.primaryDark },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },

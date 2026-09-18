@@ -424,8 +424,9 @@ describe('IssuedScreen', () => {
 describe('StoreStockScreen · record a delivery', () => {
   const CATALOGUE = {
     breeds: [
-      { code: 'MURRAH', name: 'Murrah', name_hi: 'मुर्रा', animal_type: 'BUFF' },
       { code: 'GIR', name: 'Gir', name_hi: 'गिर', animal_type: 'COW' },
+      { code: 'HF_CROSS', name: 'HF Cross', name_hi: 'एचएफ क्रॉस', animal_type: 'COW' },
+      { code: 'MURRAH', name: 'Murrah', name_hi: 'मुर्रा', animal_type: 'BUFF' },
     ],
     products: [{ id: 7, name: 'Gloves', unit: 'pair', category: 'consumable' as const }],
   };
@@ -481,6 +482,7 @@ describe('StoreStockScreen · record a delivery', () => {
     expect(screen.getByTestId('receive-qty-figure')).toHaveTextContent('10');
     expect(screen.getByTestId('receive-qty-figure')).not.toHaveTextContent('Murrah');
 
+    fireEvent.press(screen.getByTestId('receive-animal-BUFF'));
     fireEvent.press(await screen.findByTestId('receive-item-MURRAH'));
     expect(screen.getByTestId('receive-qty-figure')).toHaveTextContent(/10\s+Murrah/);
   });
@@ -516,5 +518,56 @@ describe('StoreStockScreen · record a delivery', () => {
     const [request] = sent;
     const body = JSON.parse(await request!.text());
     expect(body).toMatchObject({ product_type: 'straw', breed: 'GIR', qty: 25 });
+  });
+
+  it('shows one animal’s breeds at a time', async () => {
+    mockStock();
+    await open();
+
+    // Cow first, so a keeper is not reading seventeen chips to find one.
+    await screen.findByTestId('receive-item-GIR');
+    expect(screen.getByTestId('receive-item-HF_CROSS')).toBeTruthy();
+    expect(screen.queryByTestId('receive-item-MURRAH')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('receive-animal-BUFF'));
+    expect(screen.getByTestId('receive-item-MURRAH')).toBeTruthy();
+    expect(screen.queryByTestId('receive-item-GIR')).toBeNull();
+  });
+
+  it('forgets a breed picked under the other animal', async () => {
+    mockStock();
+    await open();
+
+    fireEvent.press(await screen.findByTestId('receive-item-GIR'));
+    expect(screen.getByTestId('receive-qty-figure')).toHaveTextContent(/Gir/);
+
+    // Otherwise the sheet would record a cow breed while reading Buffalo.
+    fireEvent.press(screen.getByTestId('receive-animal-BUFF'));
+    expect(screen.getByTestId('receive-qty-figure')).not.toHaveTextContent(/Gir/);
+    expect(screen.getByTestId('receive-save')).toBeDisabled();
+  });
+
+  it('says so when the office has configured no breed for an animal', async () => {
+    mockApi(request => {
+      if (request.url.includes('/store/catalogue/')) {
+        return jsonResponse({ breeds: [], products: [] });
+      }
+      if (request.url.includes('/store/stock/')) {
+        return jsonResponse(STOCK);
+      }
+      return undefined;
+    });
+    await open();
+
+    expect(await screen.findByTestId('receive-no-options')).toBeTruthy();
+  });
+
+  it('offers consumables without an animal step', async () => {
+    mockStock();
+    await open();
+
+    fireEvent.press(screen.getByTestId('receive-kind-consumable'));
+    expect(screen.queryByTestId('receive-animal-COW')).toBeNull();
+    expect(await screen.findByTestId('receive-item-7')).toBeTruthy();
   });
 });
