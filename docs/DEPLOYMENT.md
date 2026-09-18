@@ -25,7 +25,6 @@ full set with descriptions.
 | `REDIS_URL` | Cache, OTP store, Celery broker |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_STORAGE_BUCKET_NAME` | Object storage for photos and payment screenshots |
 | `SMS_GATEWAY_API_KEY` / `SMS_GATEWAY_SENDER_ID` | MSG91 or Twilio |
-| `INDENT_EASY_BASE_URL` / `INDENT_EASY_API_KEY` / `INDENT_EASY_WEBHOOK_SECRET` | Integration + inbound HMAC verification |
 | `SENTRY_DSN` | Error tracking |
 
 ## Deploy sequence
@@ -84,7 +83,6 @@ degrades capacity rather than causing a crash loop.
 | API P95 latency | > 800 ms writes / 400 ms reads (SRS §7) | Investigate |
 | Celery queue depth | > 1000 or growing 10 min straight | Investigate worker health |
 | Failed OTP sends | > 5% of attempts | Check gateway credentials/balance |
-| Indent Easy sync failures | Any 3 consecutive | Check integration; reconciliation job should catch up |
 | MySQL replica lag | > 30 s | Dashboards will read stale; consider failing reads to primary |
 | Disk on object storage | > 80% | Review lifecycle archival policy |
 
@@ -105,7 +103,6 @@ Celery queue depth.
 - [ ] RBAC matrix manually verified for all five roles
 - [ ] PII masking verified on every serializer returning Aadhaar/PAN/bank fields
 - [ ] Rate limits confirmed active on OTP endpoints
-- [ ] Indent Easy webhook HMAC verified with the real shared secret
 - [ ] `FIELD_ENCRYPTION_KEY` backed up in the secret manager, restore tested
 - [ ] Database backup taken and a restore drill completed
 - [ ] Sentry, Prometheus and uptime alerting receiving data from production

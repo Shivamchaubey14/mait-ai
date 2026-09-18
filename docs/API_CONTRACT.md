@@ -389,7 +389,7 @@ event and the rest of the app names a member by her SAP code, not by her row id.
 | POST | `/payments/{ai_event_id}/cod-confirm/` | Verify second COD confirmation OTP | Mait |
 | GET | `/payments/{ai_event_id}/` | Payment detail & status | JWT |
 
-## 9.8 Indent & Indent Easy integration
+## 9.8 Indent
 
 | Method | Endpoint | Description | Auth |
 | --- | --- | --- | --- |
@@ -400,13 +400,16 @@ event and the rest of the app names a member by her SAP code, not by her row id.
 | POST | `/indents/{id}/reject/` | Decline, with a reason the Mait can read | Admin |
 | POST | `/indents/{id}/issue/` | Record the handover and credit the stock — only where no store serves the Mait | Admin |
 | POST | `/indents/{id}/confirm-collection/` | Mait acknowledges the stock reached them, and it becomes theirs. `{"code"}` for a store handover | Mait |
-| POST | `/integrations/indent-easy/grn-callback/` | Webhook — Indent Easy notifies GRN/issue completion | HMAC API key |
-| GET | `/integrations/indent-easy/status/` | Integration health check | Admin |
+**An indent is now approved and issued inside this platform.** The zonal manager approves on
+the portal, the store keeper hands the stock over from their app and reads the Mait a code,
+and `confirm-collection` with that code is what moves the stock. The portal's own `issue` is
+the fallback for Maits no store serves yet.
 
-**Approve, reject and issue are the manual stand-in for the GRN callback**, added because
-that integration is not built (ROADMAP phase 5, days 20–22) and without them an indent raised
-in the app can never leave `requested`. They were deliberately absent from the original
-contract: an admin marking stock issued asserts a handover this platform cannot verify.
+The two `/integrations/indent-easy/` routes that used to close this section — a GRN callback
+and a health check — were **dropped on 2026-09-18** along with the rest of that integration.
+Indent Easy is a separate web application; this platform no longer talks to it, and the
+indent's `sync_status`, `sync_attempts`, `last_sync_error` and `indent_easy_ref_no` fields
+went with it.
 
 `issue` takes either shape for straws:
 

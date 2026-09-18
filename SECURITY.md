@@ -31,7 +31,6 @@ Implements SRS §16.
 | PII full access | One restricted admin endpoint, every read written to `audit_log` |
 | OTP abuse | Rate-limited per mobile number and per IP; 5-minute expiry; 3 attempts before forced resend |
 | Cross-Mait tampering | Straw and photo endpoints verify the acting Mait is actually assigned to the MPP in the request |
-| Webhooks | Indent Easy callback authenticated by HMAC signature — never open unauthenticated |
 | Audit | Immutable trail on every master-data change, AI event transition and payment verification |
 | Dependencies | `pip-audit` and `npm audit` on every PR; Dependabot for updates |
 | Containers | Trivy image scan in CI; non-root runtime user; HIGH/CRITICAL blocks the deploy |

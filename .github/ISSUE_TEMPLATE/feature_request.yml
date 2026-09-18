@@ -6,7 +6,7 @@ body:
     id: workstream
     attributes:
       label: Workstream
-      options: [Backend API, Mobile app, Admin web portal, Indent Easy integration, Infra / CI, Docs]
+      options: [Backend API, Mobile app, Admin web portal, Store keeper app, Infra / CI, Docs]
     validations:
       required: true
 

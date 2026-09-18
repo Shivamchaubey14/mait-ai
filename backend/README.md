@@ -47,8 +47,9 @@ apps/
 ├── inventory/      semen batches, Mait stock, immutable ledger  ← the invariant lives here
 ├── ai_events/      the state machine
 ├── payments/       payment records, OTP issue/verify
-├── indents/        stock requests
-├── integrations/   Indent Easy client, webhook, reconciliation
+├── indents/        stock requests and the handovers that close them
+├── stores/         the counters they are handed over at, and their keepers
+├── pregnancy/      pregnancy checks and the route that plans them
 └── dashboard/      pre-aggregated reporting
 ```
 

@@ -4,10 +4,10 @@
 
 ```
 ┌──────────────┐   ┌───────────────────┐   ┌──────────────────┐
-│ Mait Mobile  │   │ Admin Web Portal  │   │   Indent Easy    │
-│ React Native │   │ HTML/JS + jQuery  │   │ (existing app)   │
+│ Mait Mobile  │   │ Admin Web Portal  │   │ Store Keeper app │
+│ React Native │   │ HTML/JS + jQuery  │   │ (same RN build)  │
 └──────┬───────┘   └─────────┬─────────┘   └────────┬─────────┘
-       │ HTTPS/JWT           │ HTTPS/JWT            │ HMAC webhook
+       │ HTTPS/JWT           │ HTTPS/JWT            │ HTTPS/JWT
        └─────────────┬───────┴──────────────────────┘
                      ▼
           ┌─────────────────────┐
@@ -27,10 +27,13 @@
   │ primary  │ │ (reports)│  │ photos/UTR │ │ workers      │
   └──────────┘ └──────────┘  └────────────┘ └──────────────┘
                                                    │
-                                       ┌───────────┴──────────┐
-                                       ▼                      ▼
-                                 SMS/OTP gateway      Indent Easy sync
+                                       ▼
+                                 SMS/OTP gateway
 ```
+
+The Indent Easy connector sat on the right of this diagram until 2026-09-18. That
+application is a separate web system; indents are now approved on the portal and handed over
+by a store keeper in the app, so nothing here talks to it.
 
 Clients never touch the database. The DRF layer is the only writer, which is what makes the
 inventory invariant enforceable.
@@ -49,8 +52,8 @@ cycle.
 | `inventory` | Semen batches, Mait stock balance and immutable ledger | `SemenBatch`, `MaitInventory`, `MaitInventoryLedger` |
 | `ai_events` | The AI event state machine — the heart of the system | `AIEvent` |
 | `payments` | Payment records, OTP issuance/verification, UTR proof | `Payment`, `OTPLog` |
-| `indents` | Stock requests and their lifecycle | `IndentRequest` |
-| `integrations` | Indent Easy connector, webhook receiver, reconciliation job | — |
+| `indents` | Stock requests and their lifecycle | `IndentRequest`, `IndentHandover` |
+| `stores` | The counters indents are handed over at, and their keepers | `Store`, `StorePlant` |
 | `dashboard` | Pre-aggregated reporting and exports | `DailyAIAggregate` |
 
 ### Dependency direction
@@ -146,8 +149,6 @@ Mobile keeps a local SQLite queue. Steps 1–6 of the capture flow work with no 
 | --- | --- | --- |
 | `process_master_upload` | On upload | Chunked bulk-upsert of 100k+ SAP rows with progress reporting |
 | `send_otp` | On payment initiate / login | Dispatch via SMS gateway, log the attempt |
-| `push_indent_to_indent_easy` | On indent create | Outbound API call with retry/backoff |
-| `reconcile_indent_easy_grn` | Celery Beat, every 15 min | Poll for GRNs whose webhook never arrived |
 | `aggregate_daily_ai_counts` | Celery Beat, hourly + nightly | Pre-compute dashboard series so reads never scan raw events |
 | `expire_stale_otps` | Celery Beat, every 5 min | Housekeeping on the OTP store |
 
