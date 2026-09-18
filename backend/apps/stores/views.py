@@ -326,21 +326,22 @@ class StoreStockViewSet(viewsets.ViewSet):
 @api_view(["GET"])
 @permission_classes([IsStoreKeeper])
 def store_catalogue(request):
-    breeds = (
+    # Every active breed the admin has configured, cow and buffalo alike, in the order they set
+    # — the keeper picks the animal first and then its breeds, the same two steps the portal's
+    # own breed list is arranged in.
+    #
+    # Deduped per *animal type and code*, which is the model's own uniqueness. It used to be by
+    # code alone, so a breed an admin added under the second animal type with a code the first
+    # already used never reached this list at all — the keeper could not record a delivery of
+    # something the portal said existed. Both are shelved under the one code, which is what the
+    # shelf and the indent both key on.
+    breeds = list(
         BreedConfig.objects.filter(is_active=True)
-        .order_by("display_order", "name")
+        .order_by("animal_type", "display_order", "name")
         .values("code", "name", "name_hi", "animal_type")
     )
-    seen: set[str] = set()
-    unique = []
-    for breed in breeds:
-        # A breed code is per animal type; the store shelves it once.
-        if breed["code"] in seen:
-            continue
-        seen.add(breed["code"])
-        unique.append(breed)
     products = Consumable.objects.filter(is_active=True).values("id", "name", "unit", "category")
-    return Response({"breeds": unique, "products": list(products)})
+    return Response({"breeds": breeds, "products": list(products)})
 
 
 # --------------------------------------------------------------------------------------

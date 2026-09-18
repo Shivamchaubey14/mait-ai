@@ -691,3 +691,60 @@ class TestSetup:
 
     def test_without_the_section_there_is_no_screen(self, manager):
         assert auth(manager).get("/api/v1/admin/stores/").status_code == 403
+
+
+# --------------------------------------------------------------------------------------
+# The catalogue a delivery is recorded from
+# --------------------------------------------------------------------------------------
+class TestCatalogue:
+    """
+    What the keeper picks from when stock lands.
+
+    It is the office's list: a breed added on the portal has to reach the counter, or the
+    keeper cannot record a delivery of something the portal says exists.
+    """
+
+    def test_it_carries_every_active_breed_with_its_animal(self, keeper):
+        BreedConfig.objects.create(animal_type="COW", code="GIR", name="Gir", display_order=1)
+        BreedConfig.objects.create(
+            animal_type="BUFF", code="MURRAH", name="Murrah", display_order=2
+        )
+
+        body = auth(keeper).get("/api/v1/store/catalogue/").json()
+
+        assert [(b["animal_type"], b["code"]) for b in body["breeds"]] == [
+            ("BUFF", "MURRAH"),
+            ("COW", "GIR"),
+        ]
+
+    def test_a_breed_added_today_is_pickable_today(self, keeper):
+        """No cached list to invalidate: the keeper's next open asks the office's own table."""
+        before = auth(keeper).get("/api/v1/store/catalogue/").json()["breeds"]
+        BreedConfig.objects.create(animal_type="COW", code="SAHIWAL", name="Sahiwal")
+
+        after = auth(keeper).get("/api/v1/store/catalogue/").json()["breeds"]
+
+        assert len(after) == len(before) + 1
+        assert "SAHIWAL" in [b["code"] for b in after]
+
+    def test_the_same_code_under_both_animals_keeps_both(self, keeper):
+        """
+        The bug this replaced: the list was deduped by code alone, so the second one never
+        reached the keeper. They are one line on the shelf — which keys on the code — but two
+        rows in the office's list, and the keeper picks from the office's list.
+        """
+        BreedConfig.objects.create(animal_type="COW", code="CROSS", name="Cross (cow)")
+        BreedConfig.objects.create(animal_type="BUFF", code="CROSS", name="Cross (buffalo)")
+
+        breeds = auth(keeper).get("/api/v1/store/catalogue/").json()["breeds"]
+
+        assert sorted(b["animal_type"] for b in breeds if b["code"] == "CROSS") == ["BUFF", "COW"]
+
+    def test_an_inactive_breed_is_left_out(self, keeper):
+        BreedConfig.objects.create(
+            animal_type="COW", code="RETIRED", name="Retired", is_active=False
+        )
+
+        breeds = auth(keeper).get("/api/v1/store/catalogue/").json()["breeds"]
+
+        assert "RETIRED" not in [b["code"] for b in breeds]
