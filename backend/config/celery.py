@@ -15,11 +15,6 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 app.conf.beat_schedule = {
-    # Catches GRNs whose webhook never arrived — at-least-once delivery (SRS §6.6.5).
-    "reconcile-indent-easy-grn": {
-        "task": "apps.integrations.tasks.reconcile_indent_easy_grn",
-        "schedule": crontab(minute="*/15"),
-    },
     # Dashboards read pre-aggregated rows, never raw events (SRS §7 Performance).
     "aggregate-daily-ai-counts": {
         "task": "apps.dashboard.tasks.aggregate_daily_ai_counts",

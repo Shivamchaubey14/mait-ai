@@ -57,7 +57,6 @@ LOCAL_APPS = [
     "apps.payments",
     "apps.indents",
     "apps.stores",
-    "apps.integrations",
     "apps.pregnancy",
     "apps.dashboard",
 ]
@@ -224,8 +223,8 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Mait AI Platform API",
     "DESCRIPTION": (
         "Artificial Insemination field operations platform for Shwetdhara Milk Producer "
-        "Company. Serves the Mait mobile app, the admin web portal and the Indent Easy "
-        "integration."
+        "Company. Serves the Mait mobile app, the store keeper's app and the admin web "
+        "portal."
     ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
@@ -247,7 +246,7 @@ SPECTACULAR_SETTINGS = {
         {"name": "inventory", "description": "Semen batches and Mait stock"},
         {"name": "ai-events", "description": "The AI event capture state machine"},
         {"name": "payments", "description": "Payment collection and OTP verification"},
-        {"name": "indents", "description": "Stock requests and Indent Easy integration"},
+        {"name": "indents", "description": "Stock requests and the counter they are collected at"},
         {"name": "dashboard", "description": "Aggregated reporting and exports"},
     ],
 }
@@ -308,13 +307,6 @@ SMS_GATEWAY = {
     "PROVIDER": env("SMS_GATEWAY_PROVIDER", default="console"),
     "API_KEY": env("SMS_GATEWAY_API_KEY", default=""),
     "SENDER_ID": env("SMS_GATEWAY_SENDER_ID", default="MAITAI"),
-}
-
-INDENT_EASY = {
-    "BASE_URL": env("INDENT_EASY_BASE_URL", default=""),
-    "API_KEY": env("INDENT_EASY_API_KEY", default=""),
-    "WEBHOOK_SECRET": env("INDENT_EASY_WEBHOOK_SECRET", default=""),
-    "TIMEOUT_SECONDS": env.int("INDENT_EASY_TIMEOUT", default=15),
 }
 
 # --------------------------------------------------------------------------------------

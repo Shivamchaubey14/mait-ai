@@ -28,7 +28,6 @@ api_v1 = [
     path("indents/", include("apps.indents.urls")),
     path("", include("apps.stores.urls")),
     path("", include("apps.pregnancy.urls")),
-    path("integrations/", include("apps.integrations.urls")),
     path("", include("apps.dashboard.urls")),
     path("", include("apps.core.urls")),
 ]
