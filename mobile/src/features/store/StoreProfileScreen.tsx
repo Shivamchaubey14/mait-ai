@@ -98,11 +98,7 @@ export default function StoreProfileScreen(): React.JSX.Element {
           testID="profile-language"
         />
 
-        <SignOutButton
-          label={t('settings.signOut')}
-          onPress={signOut}
-          testID="profile-sign-out"
-        />
+        <SignOutButton label={t('settings.signOut')} onPress={signOut} testID="profile-sign-out" />
       </ScrollView>
     </View>
   );
