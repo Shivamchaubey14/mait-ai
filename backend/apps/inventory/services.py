@@ -324,7 +324,7 @@ def credit_stock(
     note: str = "",
 ) -> MaitInventory:
     """
-    Add stock to a Mait, normally when Indent Easy reports goods issued (SRS §6.6.3).
+    Add stock to a Mait, normally when they collect an indent at a store (SRS §6.6.8).
 
     Idempotency is the caller's responsibility: the webhook handler dedupes on the Indent
     Easy reference before calling this, so a redelivered callback does not double-credit.

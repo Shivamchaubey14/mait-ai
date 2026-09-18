@@ -1,7 +1,7 @@
 """
 Issue consumables and equipment to a Mait for local testing.
 
-The companion to ``seed_straws``. Stock normally arrives from Indent Easy reporting goods
+The companion to ``seed_straws``. Stock normally arrives from a store handing goods
 issued (SRS §6.6.3), which is Phase 5 — until then a development handset shows empty
 Consumables and Equipment sections, and it is impossible to tell "the screen is broken" from
 "this Mait has none".

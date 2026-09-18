@@ -1,7 +1,7 @@
 """
 Issue straws to a Mait so the capture flow can be walked end to end locally.
 
-Stock normally arrives from Indent Easy reporting goods issued (SRS §6.6.3), which is not
+Stock normally arrives from a store handing goods over (SRS §6.6.7), which is not
 wired up until Phase 5. Until then there is no way to reach step 4 on a development machine
 without inventing rows by hand — and a hand-written row is exactly the thing that breaks the
 guarantee this platform sells, because it credits a balance without a matching ledger entry.

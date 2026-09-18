@@ -1,11 +1,10 @@
 """
 Admin fulfilment of an indent (SRS §6.6, §9.8).
 
-These endpoints are the manual stand-in for the Indent Easy GRN callback, so they are the
-only place outside that webhook where stock appears from nowhere. The tests worth having are
-therefore about what they refuse: a straw issued twice would put one physical object in two
-Maits' stock and let both scan it, which is the single invariant this platform exists to
-protect (ADR 0002).
+These endpoints and a store's own handover are the only places where stock appears from
+nowhere, so the tests worth having are about what they refuse: a straw issued twice would
+put one physical object in two Maits' stock and let both scan it, which is the single
+invariant this platform exists to protect (ADR 0002).
 """
 
 from __future__ import annotations

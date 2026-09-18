@@ -2,14 +2,11 @@
 Fulfilment of an indent by a back-office admin.
 
 **Read this before changing anything here.** The original design deliberately had no way to
-issue an indent from this platform: fulfilment belongs to Indent Easy, which reports goods
-issued through the GRN callback (SRS §6.6.2–6.6.3), and an admin who could mark stock issued
-would be creating straws no depot ever handed over.
-
-That integration is not built (ROADMAP phase 5, days 20–22), so today an indent raised in the
-app can never leave ``requested`` and every Mait waits forever. These services are the manual
-path in the meantime, written so that the guarantee the original note was protecting still
-holds:
+issue an indent from this platform: fulfilment was to happen in Indent Easy, a separate web
+application that reported goods issued through a GRN callback, and an admin who could mark
+stock issued would be creating straws no depot ever handed over. That integration was dropped
+on 2026-09-18 — the store keeper's app replaced it — but the guarantee the original note was
+protecting still holds here:
 
 * Straws are issued **by number**, never by quantity. A straw is a physical object with a
   number printed on it, and the ledger has to name the ones that changed hands — otherwise
@@ -17,7 +14,7 @@ holds:
 * Nothing is credited twice. A straw already held by a Mait, already set aside for another
   indent, or already consumed by an AI event, is refused rather than re-issued.
 * Every movement goes through ``credit_stock``, so the ledger stays summable to the balance
-  exactly as it does for the GRN callback.
+  exactly as it does for a store's handover.
 
 **Issuing sets stock aside; collecting is what credits it.** Between the two the straws are
 at the depot, and a balance claiming otherwise would tell a Mait they can start an AI whose
@@ -25,7 +22,8 @@ straw is miles away. So ``issue_indent`` records the numbers on the indent and
 ``confirm_collection`` moves them into stock.
 
 What this cannot do is prove a physical handover happened. The audit trail names the admin
-who recorded it; that is the control, and it is a weaker one than a depot callback.
+who recorded it; that is the control, and it is weaker than a store handover, where the Mait
+types a code at the counter.
 
 **Where a store serves the Mait, the store issues — not this.** ``apps.stores`` is the
 counter an approved indent is handed over at, by a keeper using the app, and a handover there
