@@ -39,6 +39,7 @@ from apps.indents.models import STALE_AFTER_DAYS, IndentRequest
 from apps.inventory.models import Consumable, MaitInventory, ProductType
 from apps.payments.models import Payment
 from apps.pregnancy.models import PregnancyCheck
+from apps.stores.models import Store
 
 pytestmark = pytest.mark.django_db
 
@@ -263,19 +264,12 @@ def test_the_card_and_the_dialog_count_the_same_indents(admin_client, mait):
     [
         ({"status": IndentRequest.Status.REQUESTED}, "awaiting_approval"),
         ({"status": IndentRequest.Status.APPROVED}, "approved_not_issued"),
-        (
-            {
-                "status": IndentRequest.Status.REQUESTED,
-                "sync_status": IndentRequest.SyncStatus.FAILED,
-            },
-            "never_pushed",
-        ),
     ],
 )
 def test_an_indent_says_where_it_is_stuck(admin_client, mait, fields, bucket):
     """
-    Three different desks. Awaiting approval is this office's; approved-not-issued is the
-    depot's; a failed push never left this platform and is ours.
+    Two different desks. Awaiting approval is this office's; approved-not-issued is the
+    counter's — the keeper has it and has not handed it over.
     """
     an_indent(mait, product_type=ProductType.STRAW, breed="MURRAH", **fields)
 
@@ -283,19 +277,20 @@ def test_an_indent_says_where_it_is_stuck(admin_client, mait, fields, bucket):
     assert row["bucket"] == bucket
 
 
-def test_a_failed_push_carries_the_error_that_caused_it(admin_client, mait):
-    """The field that turns "never reached Indent Easy" into something actionable."""
+def test_a_stale_indent_names_the_counter_it_is_waiting_at(admin_client, mait):
+    """Where to chase it: the store the approval routed it to."""
+    store = Store.objects.create(code="BARSANA", name="Barsana depot")
     an_indent(
         mait,
         product_type=ProductType.STRAW,
         breed="MURRAH",
-        sync_status=IndentRequest.SyncStatus.FAILED,
-        last_sync_error="502 from Indent Easy",
+        status=IndentRequest.Status.APPROVED,
+        store=store,
     )
 
     row = rows_of(admin_client.get(url("stale-indents")))[0]
     facts = {f["label"]: f["value"] for f in row["facts"]}
-    assert facts["Last push error"] == "502 from Indent Easy"
+    assert facts["Store"] == "Barsana depot"
 
 
 def test_a_request_names_what_was_asked_for(admin_client, mait):

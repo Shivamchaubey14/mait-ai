@@ -315,19 +315,18 @@ def _low_stock_rows(queryset):
 # --------------------------------------------------------------------------------------
 # Stale indents
 # --------------------------------------------------------------------------------------
-NEVER_PUSHED = "never_pushed"
 AWAITING_APPROVAL = "awaiting_approval"
 APPROVED_NOT_ISSUED = "approved_not_issued"
 
+# A third bucket sat here until 2026-09-18 — anything whose push to Indent Easy had failed.
+# It went with that integration: an indent is now approved and issued inside this platform,
+# so there is no longer a way for one to be stuck outside it.
 INDENT_BUCKETS = [
-    (NEVER_PUSHED, "Never reached Indent Easy", "bad"),
     (AWAITING_APPROVAL, "Awaiting approval", "warn"),
     (APPROVED_NOT_ISSUED, "Approved, not issued", "warn"),
 ]
 
 INDENT_GUIDANCE = {
-    NEVER_PUSHED: "The push to Indent Easy failed, so the request never left this platform. "
-    "Nobody at the depot has seen it and nobody is going to — this one is ours to fix.",
     AWAITING_APPROVAL: "Sitting in this office, not at the depot. Approve or reject it; a "
     "Mait cannot chase what nobody has looked at.",
     APPROVED_NOT_ISSUED: "Approved here and not issued at the depot. This is the one to "
@@ -336,15 +335,13 @@ INDENT_GUIDANCE = {
 
 
 def _indent_bucket(indent) -> str:
-    if indent.sync_status == IndentRequest.SyncStatus.FAILED:
-        return NEVER_PUSHED
     if indent.status == IndentRequest.Status.APPROVED:
         return APPROVED_NOT_ISSUED
     return AWAITING_APPROVAL
 
 
 def _stale_indent_rows(queryset):
-    queryset = queryset.select_related("mait").order_by("requested_at")
+    queryset = queryset.select_related("mait", "store").order_by("requested_at")
     indents = list(queryset[:MAX_ROWS])
 
     # One lookup for every consumable named on the page, so a request reads as "40 × Gloves"
@@ -383,11 +380,7 @@ def _stale_indent_rows(queryset):
                     fact("Requested", f"{days} day{'' if days == 1 else 's'} ago"),
                     fact("Stale after", f"{STALE_AFTER_DAYS} days"),
                     fact("Status", indent.get_status_display()),
-                    fact("Push to Indent Easy", indent.get_sync_status_display()),
-                    fact("Indent Easy reference", indent.indent_easy_ref_no),
-                    # The reason the push failed, where there is one. This is the field that
-                    # turns "never reached Indent Easy" into something somebody can act on.
-                    fact("Last push error", indent.last_sync_error),
+                    fact("Store", indent.store.name if indent.store_id else ""),
                     fact("Note", indent.note),
                 ],
                 link={"href": "indents.html", "label": "Open Indents"},

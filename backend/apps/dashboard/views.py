@@ -247,7 +247,6 @@ def _exceptions() -> dict:
     stale = stale_indents()
     approved_not_issued = stale.filter(status=IndentRequest.Status.APPROVED).count()
     awaiting = stale.filter(status=IndentRequest.Status.REQUESTED).count()
-    never_pushed = stale.filter(sync_status=IndentRequest.SyncStatus.FAILED).count()
     stale_rows = []
     if approved_not_issued:
         stale_rows.append(
@@ -263,17 +262,6 @@ def _exceptions() -> dict:
                 "label": "Awaiting approval",
                 "meta": f"{awaiting} older than {STALE_AFTER_DAYS} days",
                 "severity": "warning",
-            }
-        )
-    # A different failure from the two above, and the only one where the request never left
-    # this platform at all. It counted towards the total already; without a row of its own the
-    # total could exceed everything the card lists and look like an arithmetic bug.
-    if never_pushed:
-        stale_rows.append(
-            {
-                "label": "Never reached Indent Easy",
-                "meta": f"{never_pushed} push failed",
-                "severity": "error",
             }
         )
 
@@ -345,8 +333,8 @@ def _exceptions() -> dict:
             "more": 0,
         },
         "stale_indents": {
-            # Rows are categories, not indents: the three between them cover every stale one,
-            # which is why "Never reached Indent Easy" was given a row of its own.
+            # Rows are categories, not indents: the two between them cover every stale one —
+            # nobody has looked at it yet, or the office agreed and the depot has not moved.
             "count": stale.count(),
             "rows": stale_rows,
             "more": 0,
@@ -650,9 +638,9 @@ def mait_performance(request):
         else []
     )
     for row in live_events:
-        slot(row["mait_id"], row["mait__name"], row["mait__sahayak_vendor_code"])[
-            "ai_count"
-        ] += row["n"]
+        slot(row["mait_id"], row["mait__name"], row["mait__sahayak_vendor_code"])["ai_count"] += (
+            row["n"]
+        )
 
     # The same split the aggregate keeps, computed the same way as `_money_for_slice`: only
     # verified payments count, because an unconfirmed one is money nobody has yet agreed
