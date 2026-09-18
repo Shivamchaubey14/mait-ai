@@ -15,6 +15,7 @@ import { jsonResponse, problemResponse, renderWithStore } from '@/test-utils';
 
 import IssueScreen, { mostThatCanGo } from '../IssueScreen';
 import IssuedScreen from '../IssuedScreen';
+import StoreStockScreen from '../StoreStockScreen';
 import ToIssueScreen, { matches } from '../ToIssueScreen';
 
 function indent(overrides: Partial<StoreIndent> = {}): StoreIndent {
@@ -410,5 +411,110 @@ describe('IssuedScreen', () => {
     expect(screen.getByTestId('issued-locked')).toBeTruthy();
     expect(screen.getByTestId('issued-new-code')).toBeTruthy();
     await act(async () => undefined);
+  });
+});
+
+/**
+ * The delivery sheet.
+ *
+ * Three cards, one question each. What is under test is the answer the keeper is committing —
+ * the figure and the item beside it — because that is the thing that is wrong if anything is,
+ * and it used to be a loose stepper with nothing naming what it counted.
+ */
+describe('StoreStockScreen · record a delivery', () => {
+  const CATALOGUE = {
+    breeds: [
+      { code: 'MURRAH', name: 'Murrah', name_hi: 'मुर्रा', animal_type: 'BUFF' },
+      { code: 'GIR', name: 'Gir', name_hi: 'गिर', animal_type: 'COW' },
+    ],
+    products: [{ id: 7, name: 'Gloves', unit: 'pair', category: 'consumable' as const }],
+  };
+
+  const STOCK = [
+    {
+      product_type: 'straw' as const,
+      breed: 'MURRAH',
+      product_ref_id: null,
+      item_name: 'Murrah',
+      item_name_hi: 'मुर्रा',
+      unit: 'straw',
+      on_hand: 40,
+      set_aside: 18,
+      available: 22,
+    },
+  ];
+
+  const mockStock = (route: Route = () => undefined) =>
+    mockApi(request => {
+      const answer = route(request);
+      if (answer) {
+        return answer;
+      }
+      if (request.url.includes('/store/catalogue/')) {
+        return jsonResponse(CATALOGUE);
+      }
+      if (request.url.includes('/store/stock/')) {
+        return jsonResponse(STOCK);
+      }
+      return undefined;
+    });
+
+  const open = async () => {
+    renderWithStore(<StoreStockScreen storeName="Barsana depot" />);
+    await waitFor(() => screen.getByTestId('stock-record'));
+    fireEvent.press(screen.getByTestId('stock-record'));
+    await waitFor(() => screen.getByTestId('receive-sheet'));
+  };
+
+  it('names the shelf it is writing onto', async () => {
+    mockStock();
+    await open();
+
+    expect(screen.getByTestId('receive-sheet')).toHaveTextContent(/Onto Barsana depot.s shelf/);
+  });
+
+  it('shows the figure with the item beside it once one is picked', async () => {
+    mockStock();
+    await open();
+
+    // Before anything is picked the figure stands alone, and the button says to pick.
+    expect(screen.getByTestId('receive-qty-figure')).toHaveTextContent('10');
+    expect(screen.getByTestId('receive-qty-figure')).not.toHaveTextContent('Murrah');
+
+    fireEvent.press(await screen.findByTestId('receive-item-MURRAH'));
+    expect(screen.getByTestId('receive-qty-figure')).toHaveTextContent(/10\s+Murrah/);
+  });
+
+  it('sets the count from a quick jump, and from the stepper', async () => {
+    mockStock();
+    await open();
+
+    fireEvent.press(screen.getByTestId('receive-qty-50'));
+    expect(screen.getByTestId('receive-qty-figure')).toHaveTextContent('50');
+
+    fireEvent.press(screen.getByTestId('receive-qty-more'));
+    expect(screen.getByTestId('receive-qty-value')).toHaveTextContent('51');
+  });
+
+  it('records the delivery against the picked item', async () => {
+    // The body is read off a clone: the request itself is consumed by the client.
+    const sent: Request[] = [];
+    mockStock(request => {
+      if (request.url.includes('/store/stock/receive/')) {
+        sent.push(request.clone());
+        return jsonResponse({ ok: true });
+      }
+      return undefined;
+    });
+    await open();
+
+    fireEvent.press(await screen.findByTestId('receive-item-GIR'));
+    fireEvent.press(screen.getByTestId('receive-qty-25'));
+    fireEvent.press(screen.getByTestId('receive-save'));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    const [request] = sent;
+    const body = JSON.parse(await request!.text());
+    expect(body).toMatchObject({ product_type: 'straw', breed: 'GIR', qty: 25 });
   });
 });
