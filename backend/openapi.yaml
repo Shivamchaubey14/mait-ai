@@ -3,8 +3,8 @@ info:
   title: Mait AI Platform API
   version: 1.0.0
   description: Artificial Insemination field operations platform for Shwetdhara Milk
-    Producer Company. Serves the Mait mobile app, the admin web portal and the Indent
-    Easy integration.
+    Producer Company. Serves the Mait mobile app, the store keeper's app and the admin
+    web portal.
 paths:
   /api/v1/admin/audit/:
     get:
@@ -3216,7 +3216,7 @@ paths:
     get:
       operationId: indents_list
       description: A Mait sees their own; an admin sees all. Filter with `status`,
-        `sync_status`, `mait`, `search`, and `stale=true` for the ones nobody is moving.
+        `mait`, `search`, and `stale=true` for the ones nobody is moving.
       summary: List indents
       parameters:
       - name: limit
@@ -3265,18 +3265,6 @@ paths:
           * `approved` - Approved
           * `issued` - Issued
           * `rejected` - Rejected
-      - in: query
-        name: sync_status
-        schema:
-          type: string
-          enum:
-          - failed
-          - pending
-          - synced
-        description: |-
-          * `pending` - Not yet pushed
-          * `synced` - Pushed to Indent Easy
-          * `failed` - Push failed
       tags:
       - indents
       security:
@@ -6586,11 +6574,9 @@ components:
       description: |-
         Read shape for an indent.
 
-        Carries both statuses because they answer different questions and routinely disagree:
-        ``status`` is where the request has got to in Indent Easy, ``sync_status`` is whether
-        Indent Easy has even heard about it. An indent approved a week ago that never synced is
-        the failure mode the admin screen exists to catch — it looks fine on one field and is
-        stuck on the other.
+        ``status`` is where the request has got to: requested, approved by the zonal manager,
+        issued over a store's counter, or rejected. It used to carry a second status saying
+        whether Indent Easy had heard about it; that integration was dropped on 2026-09-18.
       properties:
         id:
           type: integer
@@ -6638,24 +6624,6 @@ components:
         status_display:
           type: string
           readOnly: true
-        sync_status:
-          allOf:
-          - $ref: '#/components/schemas/SyncStatusEnum'
-          readOnly: true
-        sync_status_display:
-          type: string
-          readOnly: true
-        sync_attempts:
-          type: integer
-          readOnly: true
-        last_sync_error:
-          type: string
-          readOnly: true
-        indent_easy_ref_no:
-          type: string
-          readOnly: true
-          description: Reference returned by Indent Easy; dedupes GRN callbacks (SRS
-            §6.6.5).
         requested_at:
           type: string
           format: date-time
@@ -6733,10 +6701,8 @@ components:
       - breed
       - handovers
       - id
-      - indent_easy_ref_no
       - issued_at
       - item
-      - last_sync_error
       - mait
       - mait_code
       - mait_name
@@ -6753,9 +6719,6 @@ components:
       - status_display
       - store
       - store_name
-      - sync_attempts
-      - sync_status
-      - sync_status_display
     IndentCollectRequest:
       type: object
       description: The code a store keeper read out. Not needed for stock the portal
@@ -9586,16 +9549,6 @@ components:
         * `used` - Used to sign in
         * `declined` - Declined
         * `revoked` - Replaced by a newer code
-    SyncStatusEnum:
-      enum:
-      - pending
-      - synced
-      - failed
-      type: string
-      description: |-
-        * `pending` - Not yet pushed
-        * `synced` - Pushed to Indent Easy
-        * `failed` - Push failed
     TokenPair:
       type: object
       description: The JWT pair every successful login returns.
@@ -9777,6 +9730,6 @@ tags:
 - name: payments
   description: Payment collection and OTP verification
 - name: indents
-  description: Stock requests and Indent Easy integration
+  description: Stock requests and the counter they are collected at
 - name: dashboard
   description: Aggregated reporting and exports
