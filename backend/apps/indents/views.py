@@ -1,14 +1,13 @@
 """
 Indent endpoints (SRS §9.8).
 
-Fulfilment belongs to Indent Easy: this platform pushes the request out and credits stock
-when the GRN callback arrives (SRS §6.6.2–6.6.3). That integration is not built yet
-(ROADMAP phase 5, days 20–22), and until it is, an indent raised in the app can never leave
-``requested``.
+Fulfilment happens here: the zonal manager approves, a store keeper hands the stock over and
+reads the Mait a code, and the Mait typing that code credits their balance. (Until 2026-09-18
+this was to be an integration with Indent Easy, a separate web application; it was dropped
+when the keeper's app replaced it.)
 
-So approve/reject/issue exist here as the manual back-office path, admin-only. They were
-deliberately absent before, and the reason still stands — an admin marking stock issued is
-asserting a handover the platform cannot verify. What keeps that honest is in
+Approve/reject/issue are the back-office path, admin-only. An admin marking stock issued is
+asserting a handover the platform cannot verify, so what keeps that honest is in
 ``services.py``: straws are issued by their printed numbers, never as a bare quantity, and a
 straw already held or already consumed is refused. Read that module before changing this one.
 
@@ -53,7 +52,7 @@ class IndentFilter(django_filters.FilterSet):
 
     class Meta:
         model = IndentRequest
-        fields = ["status", "sync_status", "mait", "search", "stale"]
+        fields = ["status", "mait", "search", "stale"]
 
     def filter_search(self, queryset, name, value):
         term = (value or "").strip()
@@ -61,7 +60,6 @@ class IndentFilter(django_filters.FilterSet):
             return queryset
         match = (
             Q(mait__name__icontains=term)
-            | Q(indent_easy_ref_no__icontains=term)
             | Q(breed__icontains=term)
             | Q(store__name__icontains=term)
         )
@@ -171,8 +169,8 @@ class IndentViewSet(
     @extend_schema(
         summary="List indents",
         description=(
-            "A Mait sees their own; an admin sees all. Filter with `status`, `sync_status`, "
-            "`mait`, `search`, and `stale=true` for the ones nobody is moving."
+            "A Mait sees their own; an admin sees all. Filter with `status`, `mait`, "
+            "`search`, and `stale=true` for the ones nobody is moving."
         ),
     )
     def list(self, request, *args, **kwargs):

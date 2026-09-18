@@ -35,15 +35,12 @@ class IndentSerializer(serializers.ModelSerializer):
     """
     Read shape for an indent.
 
-    Carries both statuses because they answer different questions and routinely disagree:
-    ``status`` is where the request has got to in Indent Easy, ``sync_status`` is whether
-    Indent Easy has even heard about it. An indent approved a week ago that never synced is
-    the failure mode the admin screen exists to catch — it looks fine on one field and is
-    stuck on the other.
+    ``status`` is where the request has got to: requested, approved by the zonal manager,
+    issued over a store's counter, or rejected. It used to carry a second status saying
+    whether Indent Easy had heard about it; that integration was dropped on 2026-09-18.
     """
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
-    sync_status_display = serializers.CharField(source="get_sync_status_display", read_only=True)
     mait_name = serializers.CharField(source="mait.name", read_only=True)
     mait_code = serializers.CharField(source="mait.sahayak_vendor_code", read_only=True)
     item = serializers.SerializerMethodField()
@@ -69,11 +66,6 @@ class IndentSerializer(serializers.ModelSerializer):
             "qty_issued",
             "status",
             "status_display",
-            "sync_status",
-            "sync_status_display",
-            "sync_attempts",
-            "last_sync_error",
-            "indent_easy_ref_no",
             "requested_at",
             "issued_at",
             "received_at",

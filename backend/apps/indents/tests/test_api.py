@@ -3,8 +3,8 @@ Indent API tests (SRS §9.8).
 
 The cases that matter are the boundary — a Mait must not see another's requests — and the
 stale filter, which is the whole reason an admin opens this screen: an indent approved a week
-ago that nobody issued, or one that never reached Indent Easy at all, is a Mait waiting on
-stock that is not coming.
+ago that nobody issued, or one nobody has even looked at, is a Mait waiting on stock that is
+not coming.
 """
 
 from __future__ import annotations
@@ -172,19 +172,6 @@ class TestReading:
             )
 
         assert admin_client.get(f"{BASE}/?stale=true").json()["count"] == 0
-
-    def test_stale_also_finds_one_that_never_reached_indent_easy(self, admin_client, mait):
-        """Synced and approved are different failures, and both leave a Mait waiting."""
-        never_pushed = IndentRequest.objects.create(
-            mait=mait,
-            product_type=ProductType.STRAW,
-            breed="GIR",
-            qty_requested=10,
-            sync_status=IndentRequest.SyncStatus.FAILED,
-        )
-
-        results = admin_client.get(f"{BASE}/?stale=true").json()["results"]
-        assert [row["id"] for row in results] == [never_pushed.id]
 
     def test_anonymous_is_rejected(self):
         assert APIClient().get(f"{BASE}/").status_code == 401
