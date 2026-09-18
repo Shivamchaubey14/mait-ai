@@ -584,8 +584,6 @@ export interface Indent {
   qty_issued: number;
   status: IndentStatus;
   status_display: string;
-  sync_status: 'pending' | 'synced' | 'failed';
-  sync_status_display: string;
   requested_at: string;
   issued_at: string | null;
   /** Set when the Mait confirms they collected it. This is when the stock becomes theirs. */

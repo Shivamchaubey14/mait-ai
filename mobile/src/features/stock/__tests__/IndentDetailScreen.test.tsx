@@ -22,8 +22,6 @@ function indent(overrides: Partial<Indent> = {}): Indent {
     qty_issued: 0,
     status: 'requested',
     status_display: 'Requested',
-    sync_status: 'synced',
-    sync_status_display: 'Pushed to Indent Easy',
     requested_at: '2026-08-04T09:12:00Z',
     issued_at: null,
     received_at: null,
@@ -233,13 +231,6 @@ describe('IndentDetailScreen', () => {
 
     await waitFor(() => screen.getByTestId('indent-qty-issued'));
     expect(screen.getByTestId('indent-qty-issued')).toHaveTextContent(/Nothing will be issued/);
-  });
-
-  it('flags an indent Indent Easy never received', async () => {
-    mockIndent(indent({ sync_status: 'failed', sync_status_display: 'Push failed' }));
-    renderScreen();
-
-    await waitFor(() => expect(screen.getByTestId('indent-not-synced')).toBeTruthy());
   });
 
   describe('stock handed over at a store', () => {

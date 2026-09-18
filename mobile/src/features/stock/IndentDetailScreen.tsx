@@ -526,15 +526,6 @@ export default function IndentDetailScreen({
             testID="indent-part-open"
           />
         )}
-
-        {indent.sync_status === 'failed' && (
-          <FlowNotice
-            tone="error"
-            title={t('indents.notSyncedTitle')}
-            body={t('indents.notSyncedBody')}
-            testID="indent-not-synced"
-          />
-        )}
       </ScrollView>
 
       {/* Pinned rather than left at the end of the scroll: the step that is the Mait's own

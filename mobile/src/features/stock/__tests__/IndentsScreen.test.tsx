@@ -26,8 +26,6 @@ function indent(overrides: Partial<Indent> & Pick<Indent, 'id'>): Indent {
     qty_issued: 0,
     status: 'requested',
     status_display: 'Requested',
-    sync_status: 'synced',
-    sync_status_display: 'Pushed to Indent Easy',
     requested_at: '2026-08-04T09:12:00Z',
     issued_at: null,
     received_at: null,

@@ -89,8 +89,6 @@ const INDENT = {
   qty_issued: 0,
   status: 'approved',
   status_display: 'Approved',
-  sync_status: 'synced',
-  sync_status_display: 'Synced',
   requested_at: '2026-08-14T09:00:00Z',
   issued_at: null,
   received_at: null,
