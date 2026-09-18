@@ -30,8 +30,8 @@
             class="input filters__search"
             id="search"
             type="search"
-            placeholder="Search Mait, breed or Indent Easy reference"
-            aria-label="Search Mait, breed or Indent Easy reference"
+            placeholder="Search Mait, breed, store or indent number"
+            aria-label="Search Mait, breed, store or indent number"
           />
           <button class="chip" id="filter-stale" type="button" aria-pressed="false">
             Stale first
@@ -42,12 +42,6 @@
             <option value="approved">Approved</option>
             <option value="issued">Issued</option>
             <option value="rejected">Rejected</option>
-          </select>
-          <select class="select" id="filter-sync" aria-label="Indent Easy sync">
-            <option value="">Sync: all</option>
-            <option value="pending">Not yet pushed</option>
-            <option value="synced">Pushed</option>
-            <option value="failed">Push failed</option>
           </select>
         </section>
 
@@ -219,7 +213,6 @@
                   <th scope="col">Mait</th>
                   <th scope="col">Item</th>
                   <th scope="col">Raised</th>
-                  <th scope="col">Indent Easy</th>
                   <th scope="col">Status</th>
                   <th scope="col">Action</th>
                 </tr>
@@ -232,19 +225,8 @@
                   <td></td>
                   <td></td>
                   <td></td>
-                  <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                </tr>
-                <tr class="skeleton-row" aria-hidden="true">
-                  <td></td>
                   <td></td>
                   <td></td>
                   <td></td>
@@ -259,10 +241,16 @@
                   <td></td>
                   <td></td>
                   <td></td>
-                  <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
                   <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
                   <td></td>
                   <td></td>
                   <td></td>
@@ -283,9 +271,9 @@
           <div>
             <p class="notice__title">Approved is not the same as delivered</p>
             <p class="notice__body">
-              Status is where the request reached in Indent Easy; sync is whether Indent Easy heard
-              about it at all. An indent approved days ago that never synced is a Mait waiting on
-              stock nobody is bringing.
+              Approving records that the office agrees; the stock moves when the store keeper hands
+              it over and the Mait types their code in. An indent approved days ago and still
+              sitting here is a Mait waiting on stock nobody is bringing.
             </p>
           </div>
         </div>

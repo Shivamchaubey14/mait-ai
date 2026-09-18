@@ -1,13 +1,12 @@
 /**
  * Indents (W13).
  *
- * Two jobs. Watching: surface the failure nothing else will — a request that looks approved
- * but never reached Indent Easy, or was approved a week ago and never issued. Either way a
- * Mait is out of straws and waiting on stock nobody is bringing.
+ * Two jobs. Watching: surface the failure nothing else will — a request approved a week ago
+ * and never issued, or one nobody has even looked at. Either way a Mait is out of straws and
+ * waiting on stock nobody is bringing.
  *
- * And fulfilling. Approve, reject and issue are the manual stand-in for the Indent Easy GRN
- * callback (SRS §6.6.2–6.6.3), which is not built yet — without them an indent raised in the
- * app never leaves `requested`.
+ * And fulfilling. Approve, reject and issue are how an indent moves: without them one raised
+ * in the app never leaves `requested`.
  *
  * The panel says what each button will actually do, because they do very different things.
  * Approving records that the office agrees and moves nothing. Issuing sets stock aside
@@ -40,29 +39,6 @@
     rejected: 'bad',
   };
 
-  const SYNC_TONE = { synced: 'good', pending: 'warn', failed: 'bad' };
-
-  /** The status pill's quieter companion: pushed, or not, and whether that failed. */
-  function syncPill(indent) {
-    return ui.pill(
-      indent.sync_status === 'synced' ? 'Synced' : indent.sync_status_display,
-      SYNC_TONE[indent.sync_status]
-    );
-  }
-
-  function syncCell(indent) {
-    const label =
-      indent.sync_status === 'synced'
-        ? 'Synced' + (indent.indent_easy_ref_no ? ' · ' + indent.indent_easy_ref_no : '')
-        : indent.sync_status_display;
-    return (
-      ui.pill(label, SYNC_TONE[indent.sync_status]) +
-      (indent.sync_status === 'failed' && indent.last_sync_error
-        ? '<span class="table__sub">' + ui.escapeHtml(indent.last_sync_error) + '</span>'
-        : '')
-    );
-  }
-
   function ageCell(indent) {
     const days = ui.daysAgo(indent.requested_at);
     return (
@@ -82,9 +58,6 @@
    * request that has sat for days is stock nobody is bringing, exactly like an approved one.
    */
   function isStale(indent) {
-    if (indent.sync_status === 'failed') {
-      return true;
-    }
     if (indent.status === 'issued' || indent.status === 'rejected') {
       return false;
     }
@@ -184,9 +157,6 @@
       ageCell(indent) +
       '</td>' +
       '<td>' +
-      syncCell(indent) +
-      '</td>' +
-      '<td>' +
       statusPill(indent) +
       '</td>' +
       '<td>' +
@@ -230,7 +200,7 @@
     $('#fulfil').prop('hidden', false);
     $('#fulfil-title').text('IND-' + indent.id);
     $('#fulfil-who').text(indent.mait_name + ' · ' + indent.mait_code);
-    $('#fulfil-status').html(statusPill(indent) + ' ' + syncPill(indent));
+    $('#fulfil-status').html(statusPill(indent));
     // The mark takes the colour of the stage, so the panel reads as "a decision" or "a
     // handover" before a word of it has been read.
     $('#fulfil-mark')
@@ -372,16 +342,12 @@
     const params = { limit: LIMIT, offset: state.offset };
     const search = ($('#search').val() || '').trim();
     const status = $('#filter-status').val();
-    const sync = $('#filter-sync').val();
 
     if (search) {
       params.search = search;
     }
     if (status) {
       params.status = status;
-    }
-    if (sync) {
-      params.sync_status = sync;
     }
     if (state.staleOnly) {
       params.stale = 'true';
@@ -406,7 +372,7 @@
             ' awaiting you on this page' +
             (stale ? ' · ' + stale + ' stale' : '')
         );
-        ui.rows($('#rows'), state.rows, row, 'No indents match these filters.', 7);
+        ui.rows($('#rows'), state.rows, row, 'No indents match these filters.', 6);
         ui.pager(
           $('#pager'),
           { count: page.count, limit: LIMIT, offset: state.offset },
@@ -418,7 +384,7 @@
       })
       .fail(function (problem) {
         MaitAI.shell.alert(problem.detail);
-        ui.rows($('#rows'), [], row, 'Could not load indents.', 7);
+        ui.rows($('#rows'), [], row, 'Could not load indents.', 6);
       });
   }
 
@@ -451,7 +417,7 @@
       }, 350);
     });
 
-    $('#filter-status, #filter-sync').on('change', function () {
+    $('#filter-status').on('change', function () {
       state.offset = 0;
       closePanel();
       load();
