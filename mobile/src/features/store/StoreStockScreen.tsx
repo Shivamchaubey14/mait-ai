@@ -22,6 +22,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import { newClientUuid } from '@api/client';
@@ -51,10 +52,13 @@ type Kind = 'straw' | 'consumable';
  */
 function ReceiveSheet({
   visible,
+  storeName,
   onClose,
   onReceived,
 }: {
   visible: boolean;
+  /** Named on the sheet, because this writes onto that shelf and no other. */
+  storeName: string;
   onClose: () => void;
   onReceived: (message: string) => void;
 }): React.JSX.Element {
@@ -118,6 +122,7 @@ function ReceiveSheet({
     <Sheet
       visible={visible}
       title={t('store.record')}
+      subtitle={t('store.receiveOnto', { store: storeName })}
       onClose={onClose}
       testID="receive-sheet"
       footer={
@@ -134,74 +139,99 @@ function ReceiveSheet({
         </View>
       }
     >
-      <Segmented<Kind>
-        options={[
-          { value: 'straw', label: t('store.straws') },
-          { value: 'consumable', label: t('store.consumables') },
-        ]}
-        value={kind}
-        onChange={next => {
-          setKind(next);
-          setPicked(null);
-        }}
-        testID="receive-kind"
-      />
+      {/* Three cards, one question each, in the order a keeper answers them standing at the
+          van: what it is, how many, and what the challan says. The labels used to float on
+          the sheet's own surface with the chips loose beneath them, so nothing said where one
+          question stopped and the next began. */}
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>{t('store.whatArrived')}</Text>
+        <Segmented<Kind>
+          options={[
+            { value: 'straw', label: t('store.straws') },
+            { value: 'consumable', label: t('store.consumables') },
+          ]}
+          value={kind}
+          onChange={next => {
+            setKind(next);
+            setPicked(null);
+          }}
+          testID="receive-kind"
+        />
 
-      <Text style={styles.sheetLabel}>
-        {kind === 'straw' ? t('store.breed') : t('store.product')}
-      </Text>
-      <View style={styles.chips}>
-        {catalogue.isLoading ? (
-          <SkeletonList rows={1} />
-        ) : (
-          options.map(option => {
-            const on = option.value === picked;
-            return (
-              <Pressable
-                key={option.value}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                onPress={() => setPicked(option.value)}
-                style={[styles.chip, on && styles.chipOn]}
-                testID={`receive-item-${option.value}`}
-              >
-                <Text style={[styles.chipLabel, on && styles.chipLabelOn]}>{option.label}</Text>
-              </Pressable>
-            );
-          })
-        )}
+        <Text style={styles.cardHint}>
+          {kind === 'straw' ? t('store.breed') : t('store.product')}
+        </Text>
+        <View style={styles.chips}>
+          {catalogue.isLoading ? (
+            <SkeletonList rows={1} />
+          ) : (
+            options.map(option => {
+              const on = option.value === picked;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  onPress={() => setPicked(option.value)}
+                  style={[styles.chip, on && styles.chipOn]}
+                  testID={`receive-item-${option.value}`}
+                >
+                  {on && <Ionicons name="checkmark" size={14} color={colors.surface} />}
+                  <Text style={[styles.chipLabel, on && styles.chipLabelOn]}>{option.label}</Text>
+                </Pressable>
+              );
+            })
+          )}
+        </View>
       </View>
 
-      <View style={styles.qtyRow}>
-        <Text style={[styles.sheetLabel, styles.qtyLabel]}>{t('store.qtyArrived')}</Text>
-        <Stepper value={qty} min={1} max={100000} onChange={setQty} testID="receive-qty" />
-      </View>
-      {/* Tens as well as ones, because deliveries come in canisters of fifty and a stepper
-          that only counts in ones is fifty taps. */}
-      <View style={styles.jumps}>
-        {[10, 25, 50, 100].map(step => (
-          <Pressable
-            key={step}
-            accessibilityRole="button"
-            onPress={() => setQty(step)}
-            style={[styles.jump, qty === step && styles.chipOn]}
-            testID={`receive-qty-${step}`}
-          >
-            <Text style={[styles.chipLabel, qty === step && styles.chipLabelOn]}>{step}</Text>
-          </Pressable>
-        ))}
+      {/* Green, and the one figure on the sheet drawn large: it is what the keeper is
+          committing, and it is the thing that is wrong if anything is. */}
+      <View style={styles.qtyCard}>
+        <View style={styles.qtyHead}>
+          <View style={styles.qtyText}>
+            <Text style={styles.qtyLabel}>{t('store.qtyArrived')}</Text>
+            <Text style={styles.qtyValue} testID="receive-qty-figure">
+              {qty}
+              {!!label && <Text style={styles.qtyItem}>{`  ${label}`}</Text>}
+            </Text>
+          </View>
+          <Stepper value={qty} min={1} max={100000} onChange={setQty} testID="receive-qty" />
+        </View>
+
+        {/* Tens as well as ones, because deliveries come in canisters of fifty and a stepper
+            that only counts in ones is fifty taps. */}
+        <View style={styles.jumps}>
+          {[10, 25, 50, 100].map(step => (
+            <Pressable
+              key={step}
+              accessibilityRole="button"
+              accessibilityState={{ selected: qty === step }}
+              onPress={() => setQty(step)}
+              style={[styles.jump, qty === step && styles.jumpOn]}
+              testID={`receive-qty-${step}`}
+            >
+              <Text style={[styles.jumpLabel, qty === step && styles.chipLabelOn]}>{step}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
-      <Text style={styles.sheetLabel}>{t('store.note')}</Text>
-      <TextInput
-        value={note}
-        onChangeText={setNote}
-        placeholder={t('store.notePlaceholder')}
-        placeholderTextColor={colors.textMuted}
-        maxLength={255}
-        style={styles.noteInput}
-        testID="receive-note"
-      />
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>
+          {t('store.note')}
+          <Text style={styles.optional}>{` ${t('store.optional')}`}</Text>
+        </Text>
+        <TextInput
+          value={note}
+          onChangeText={setNote}
+          placeholder={t('store.notePlaceholder')}
+          placeholderTextColor={colors.textMuted}
+          maxLength={255}
+          style={styles.noteInput}
+          testID="receive-note"
+        />
+      </View>
     </Sheet>
   );
 }
@@ -294,6 +324,7 @@ export default function StoreStockScreen({ storeName }: { storeName: string }): 
 
       <ReceiveSheet
         visible={receiving}
+        storeName={storeName}
         onClose={() => setReceiving(false)}
         onReceived={setNotice}
       />
@@ -321,28 +352,54 @@ const styles = StyleSheet.create({
   rowValue: { ...typography.h1, color: colors.ink },
   rowUnit: { ...typography.caption, color: colors.textMuted },
 
-  sheetLabel: {
-    ...typography.label,
-    color: colors.text,
-    marginTop: spacing[4],
-    marginBottom: spacing[2],
+  // One card per question. Grey-washed rather than white, because the sheet itself is white:
+  // a white card on a white sheet is a border and nothing else.
+  card: {
+    gap: spacing[2],
+    padding: spacing[4],
+    marginBottom: spacing[3],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
+  cardLabel: { ...typography.label, color: colors.ink },
+  cardHint: { ...typography.caption, color: colors.textMuted, marginTop: spacing[1] },
+  optional: { ...typography.caption, color: colors.primaryDark },
+
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  // White on the wash, and the chosen one filled — the wash is the card's, so a chip tinted
+  // the same green would be the one thing on the sheet that disappears when chosen.
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
     minHeight: MIN_TOUCH_TARGET - 8,
     paddingHorizontal: spacing[4],
-    justifyContent: 'center',
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  chipOn: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
-  chipLabel: { ...typography.label, color: colors.textMuted },
-  chipLabelOn: { color: colors.primaryDark },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginTop: spacing[2] },
-  qtyLabel: { flex: 1, marginTop: 0, marginBottom: 0 },
-  jumps: { flexDirection: 'row', gap: spacing[2], marginTop: spacing[2] },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipLabel: { ...typography.label, color: colors.text },
+  chipLabelOn: { color: colors.surface },
+
+  qtyCard: {
+    gap: spacing[3],
+    padding: spacing[4],
+    marginBottom: spacing[3],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryWash,
+  },
+  qtyHead: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  qtyText: { flex: 1 },
+  qtyLabel: { ...typography.label, color: colors.primaryDark },
+  qtyValue: { ...typography.h1, color: colors.ink },
+  qtyItem: { ...typography.bodyStrong, color: colors.primaryDark },
+  jumps: { flexDirection: 'row', gap: spacing[2] },
   jump: {
     flex: 1,
     minHeight: MIN_TOUCH_TARGET - 8,
@@ -353,6 +410,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  jumpOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  jumpLabel: { ...typography.bodyStrong, color: colors.text },
   noteInput: {
     ...typography.body,
     color: colors.ink,
