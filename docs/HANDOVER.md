@@ -293,13 +293,18 @@ account holding either.
   Set a location on the emulator, or test outdoors.
 - **The admin portal's Indents screen only has data if the app has raised one.** Same for
   payments columns everywhere — Phase 4.
-- **An admin can now approve, reject and issue indents from the portal**, because the GRN
-  callback that was meant to be the only path does not exist yet — without it an indent never
-  leaves `requested`. Read the docstring in `apps/indents/services.py` before touching it: the
-  original design deliberately had no such path, and what keeps it honest is that issuing only
+- **An admin can approve, reject and issue indents from the portal.** Read the docstring in
+  `apps/indents/services.py` before touching it: what keeps it honest is that issuing only
   *sets stock aside*. The balance moves at `confirm-collection`, which the Mait does from the
-  app once the goods are in their hands. When Indent Easy lands, this becomes the fallback,
-  not the route.
+  app once the goods are in their hands. Where a store serves the Mait this is the fallback,
+  not the route — the keeper issues from their own app and reads the Mait a code.
+- **Indent Easy is gone, as of 2026-09-18.** It is a separate web application and the store
+  keeper's app replaced it, so `apps/integrations` (client, push task, GRN webhook,
+  reconciliation job), the `INDENT_EASY_*` settings, the Celery beat entry, and the indent's
+  `sync_status` / `sync_attempts` / `last_sync_error` / `indent_easy_ref_no` columns were all
+  removed — migration `indents.0006_drop_indent_easy_sync`. The portal's Indents screen lost
+  its Sync column and filter, and the dashboard lost its "Never reached Indent Easy" exception
+  bucket. A stale indent is now simply one nobody has moved for `STALE_AFTER_DAYS`.
 - **Straws issued as a quantity have no numbers until they are used.** They are `SemenBatch`
   rows flagged `is_unnumbered`, and the number a Mait types at the AI step claims one
   (`get_straw_for_mait(..., claim=True)`). Uniqueness is untouched — the number is written

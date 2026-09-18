@@ -52,17 +52,19 @@ phase — everything else assumes it.
 
 **Dependency:** SMS gateway credentials must be procured before Day 15 (SRS §17.1).
 
-## Phase 5 — Days 19–22 · Indent & Indent Easy integration
+## Phase 5 — Days 19–22 · Indent, and the counter it is collected at
 
 | Day | Deliverables |
 | --- | --- |
 | 19 | Indent request API + mobile "Request Stock" screen |
-| 20 | Outbound integration: push new indents into Indent Easy |
-| 21 | Inbound GRN/issue webhook → inventory credit; reconciliation polling job |
-| 22 | Indent status screens (mobile + admin); integration test against Indent Easy staging |
+| 20 | ~~Outbound integration: push new indents into Indent Easy~~ — **dropped 2026-09-18** |
+| 21 | ~~Inbound GRN/issue webhook → inventory credit; reconciliation polling job~~ — **dropped 2026-09-18** |
+| 22 | Indent status screens (mobile + admin) |
 
-**Risk:** if Indent Easy cannot expose an API in time, fall back to a scheduled file bridge
-(SRS §17.2). Decide by Day 19, not Day 22.
+**Superseded.** Days 20–21 were an integration with Indent Easy, a separate web application
+where a store user performed the GRN. That was replaced on 2026-09-11 by stores inside this
+platform — the zonal manager approves on the portal, the keeper hands over from the app and
+reads the Mait a code — and the integration was removed outright on 2026-09-18.
 
 ## Phase 6 — Days 23–25 · Mobile polish
 

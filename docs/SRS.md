@@ -2,7 +2,7 @@
 
 ## Mait AI — Artificial Insemination Field Operations Platform
 
-Admin Web Portal · Mait Mobile App (React Native) · DRF API Backend · Indent Easy Integration
+Admin Web Portal · Mait Mobile App (React Native) · Store Keeper App · DRF API Backend
 
 **Prepared for:** Shwetdhara Milk Producer Company
 **Document Version:** 1.0
@@ -26,8 +26,8 @@ Mait AI platform — a system that digitises the end-to-end Artificial Inseminat
 service delivered by field agents ("Maits") to dairy members and non-members under the MPP
 (Milk Producer Pool/Parlour) network of Shwetdhara Milk Producer Company. It replaces the
 current fully manual, paper-and-memory driven process with a role-based mobile app for
-Maits, a comprehensive admin web portal, a documented REST API, and a live inventory link
-to the existing Indent Easy web application.
+Maits, an app for the store keepers who hand stock over to them, a comprehensive admin web
+portal, and a documented REST API.
 
 ### 1.2 Scope
 
@@ -38,11 +38,11 @@ The system covers three deliverables built together as one product:
   events, request stock and collect payment.
 - **Admin Web Portal** — HTML/CSS/JS with jQuery + AJAX, for SAP master-data upload,
   user/role management, inventory oversight and analytics dashboards.
-- **Integration with Indent Easy** — the existing GRN/inventory web app, so Mait stock
-  requests appear as indents there, and goods issued there sync back as the Mait's usable
-  AI inventory.
+- **Stores** — the counters a Mait collects at, with an app for the keeper who works one.
+  This replaced a planned integration with Indent Easy, the existing GRN/inventory web app;
+  that integration was withdrawn on 2026-09-18 (see §6.6).
 
-**Out of scope:** replacement of Indent Easy itself, a farmer-facing member app, and
+**Out of scope:** a farmer-facing member app, and
 milk procurement/payment modules (handled by existing SAP/ERP systems).
 
 ### 1.3 Definitions, acronyms & abbreviations
@@ -56,8 +56,8 @@ milk procurement/payment modules (handled by existing SAP/ERP systems).
 | Member     | A registered dairy producer in the SAP Member Master (has Member Code, Folio No.)           |
 | Non-Member | A farmer without SAP membership who still avails AI service; captured directly in-app       |
 | Straw      | Single-use frozen semen unit identified by a unique number, consumed per AI                 |
-| GRN        | Goods Receipt Note — inventory receipt entry recorded in Indent Easy                        |
-| Indent     | A stock request raised by a Mait for straws/consumables, fulfilled via Indent Easy          |
+| GRN        | Goods Receipt Note — inventory receipt entry. Recorded in Indent Easy until 2026-09-18       |
+| Indent     | A stock request raised by a Mait for straws/consumables, handed over at a store counter     |
 | UTR        | Unique Transaction Reference — bank reference number for a successful online payment        |
 | COD        | Cash on Delivery — cash payment collected in person, confirmed by OTP                       |
 | JWT        | JSON Web Token — used for stateless API authentication                                      |
@@ -70,7 +70,7 @@ milk procurement/payment modules (handled by existing SAP/ERP systems).
 | Mait (Field Agent)       | Primary mobile app user — records AI, requests stock, collects payment           |
 | Admin / Back-office      | Uploads SAP master data, manages users, monitors dashboards, resolves exceptions |
 | Company Management       | Consumes dashboards/reports for AI volume, coverage and revenue trends           |
-| Indent Easy (Store User) | Issues goods against Mait indents; existing system, integrated not replaced      |
+| Store Keeper | Issues goods against approved Mait indents from the app, and reads the Mait a code        |
 
 ---
 
@@ -110,7 +110,7 @@ to real inventory so a Mait physically cannot record more AIs than they have str
 | Backend API            | Django REST Framework + MySQL, JWT, OpenAPI | All clients                      | Single source of truth: master data, AI events, inventory, payments              |
 | Mait Mobile App        | React Native (Android/iOS)                  | Maits                            | Guided AI capture flow, stock indent, payment collection, offline-tolerant queue |
 | Admin Web Portal       | HTML/CSS/JS + jQuery/AJAX                   | Admin / back-office / management | SAP data upload, user & MPP management, dashboards, reports                      |
-| Indent Easy (existing) | Existing web app                            | Store users                      | GRN entry and goods issue against Mait indents — integrated via API/webhook      |
+| Store Keeper App       | This platform (same RN build)               | Store keepers                    | Issues approved indents over the counter; the Mait's code moves the stock       |
 
 ### 3.2 High-level architecture
 
@@ -118,12 +118,12 @@ Layered architecture; all client apps talk only to the DRF API layer over HTTPS/
 
 | Layer              | Contents                                                                                                        |
 | ------------------ | --------------------------------------------------------------------------------------------------------------- |
-| Client             | Mait Mobile App (React Native) · Admin Web Portal (HTML/CSS/JS/jQuery) · Indent Easy (external)                 |
+| Client             | Mait Mobile App (React Native, store keepers included) · Admin Web Portal (HTML/CSS/JS/jQuery)                  |
 | API gateway / edge | Nginx reverse proxy · TLS termination · rate limiting · gzip                                                    |
 | Application        | Django + DRF services: Auth, Master Data, AI Event, Inventory, Payment, Indent, Dashboard, Notification         |
-| Async / jobs       | Celery + Redis — SAP bulk import, SMS/OTP dispatch, report generation, Indent Easy sync                         |
+| Async / jobs       | Celery + Redis — SAP bulk import, SMS/OTP dispatch, report generation                                          |
 | Data               | MySQL 8 (primary OLTP) · Redis (cache, OTP, Celery broker) · S3-compatible object storage (photos, screenshots) |
-| Integration        | Indent Easy REST/webhook connector · SMS/OTP gateway (MSG91/Twilio) · Payment gateway webhook (optional)        |
+| Integration        | SMS/OTP gateway (MSG91/Twilio) · Payment gateway webhook (optional)                                            |
 
 ### 3.3 Guiding principles
 
@@ -163,7 +163,7 @@ Layered architecture; all client apps talk only to the DRF API layer over HTTPS/
 | Super Admin            | Full system access: user management, SAP uploads, all dashboards, system configuration                    |
 | Admin / Back-office    | SAP uploads, MPP/Mait management, dashboards, exception handling; cannot change system config             |
 | Mait                   | Mobile app only: record AI events at their assigned MPP(s), raise indents, view own inventory and history |
-| Indent Easy Store User | Existing role, unchanged — sees Mait indents inside Indent Easy and performs GRN/issue                    |
+| Store Keeper           | Signs into the app; sees their counter's queue only, issues against it, and nothing else                 |
 
 ---
 
@@ -248,18 +248,31 @@ Mirrors the manual flow, made mandatory and validated at each step:
 - **FR-6.5.2** — All OTP sends/verifies are logged for audit and fraud review.
 - **FR-6.5.3** — An AI event cannot be marked Completed while Payment status is Pending or Failed.
 
-### 6.6 Indent (stock request) & Indent Easy integration
+### 6.6 Indent (stock request) and the counter it is collected at
+
+> **Changed 2026-09-18.** FR-6.6.2, FR-6.6.3 and FR-6.6.5 specified an integration with Indent
+> Easy, a separate web application where a store user performed the GRN. The business decided
+> the store user gets this platform's own app instead, so those three are withdrawn and
+> replaced by FR-6.6.6 to FR-6.6.8 below. The code, settings and database columns behind them
+> were removed on the same day.
 
 - **FR-6.6.1** — A Mait can raise an indent for straws (by breed) or consumables (gloves,
   sheaths, liquid nitrogen), specifying quantity.
-- **FR-6.6.2** — The indent is pushed to Indent Easy via API/webhook and appears there as a
-  pending request against that Mait.
-- **FR-6.6.3** — When the Indent Easy store user performs GRN/issues goods, Indent Easy calls
-  back this platform's webhook and the Mait's inventory is credited automatically.
+- ~~**FR-6.6.2**~~ — *Withdrawn 2026-09-18.* The indent was pushed to Indent Easy via
+  API/webhook and appeared there as a pending request against that Mait.
+- ~~**FR-6.6.3**~~ — *Withdrawn 2026-09-18.* An Indent Easy GRN called back this platform's
+  webhook and credited the Mait's inventory automatically.
 - **FR-6.6.4** — The Mait can see indent status in-app: Requested → Approved → Issued (with
   quantities), and their live stock balance at all times.
-- **FR-6.6.5** — If the callback is delayed or fails, a scheduled reconciliation job polls
-  Indent Easy's GRN endpoint to catch up (at-least-once delivery, idempotent by indent reference).
+- ~~**FR-6.6.5**~~ — *Withdrawn 2026-09-18.* A scheduled job reconciled GRNs whose callback
+  never arrived.
+- **FR-6.6.6** — An indent is routed to the store serving the Mait's BMC/MCCs, and the zonal
+  manager for that zone approves or rejects it on the portal. Approval moves no stock.
+- **FR-6.6.7** — The store keeper issues against an approved indent from their own app, in
+  part if that is all the shelf holds, and reads the Mait a four-digit collection code. The
+  stock is set aside on the shelf, not yet credited.
+- **FR-6.6.8** — The Mait typing that code into the app is what credits their inventory and
+  debits the store's. Until then the handover stays open and the depot still holds the count.
 
 ### 6.7 Admin dashboard & reporting
 
@@ -434,7 +447,7 @@ introduces. See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the ERD.
 
 | Table           | Key columns                                                                                                                                                 |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| indent_request  | id, mait_id, product_type, qty_requested, qty_issued, status ENUM('requested','approved','issued','rejected'), indent_easy_ref_no, requested_at, updated_at |
+| indent_request  | id, mait_id, product_type, qty_requested, qty_issued, status ENUM('requested','approved','issued','rejected'), store_id, approved_at, requested_at, updated_at |
 | otp_log         | id, purpose ENUM('login','payment_online','payment_cod'), mobile_no, otp_code_hash, is_verified, attempt_count, expires_at, created_at                      |
 | data_upload_log | id, upload_type ENUM('member','mait','mpp'), file_name, uploaded_by, total_rows, success_rows, failed_rows, status, uploaded_at                             |
 | audit_log       | id, actor_id, action, entity_type, entity_id, meta_json, created_at                                                                                         |
@@ -542,7 +555,7 @@ frozen at the end of Phase 1. Tracked in [`docs/ROADMAP.md`](ROADMAP.md).
 | 2     | 4–8   | Master data & auth — SAP upload pipelines, OTP/password login, RBAC, user management                                    |
 | 3     | 9–14  | Core AI event & inventory — animal config, straw validation, state transitions, photo, atomic completion, offline queue |
 | 4     | 15–18 | Payments — OTP service, online UTR path, COD double-OTP path, completion linkage                                        |
-| 5     | 19–22 | Indent & Indent Easy integration — outbound push, inbound GRN webhook, reconciliation                                   |
+| 5     | 19–22 | Indent, and the store counter it is collected at — approve, issue, collection code                                      |
 | 6     | 23–25 | Mobile polish — design system, Hindi toggle, offline/error states, QA pass                                              |
 | 7     | 26–28 | Admin dashboard & reports — pre-aggregation, charts, leaderboards, exports                                              |
 | 8     | 29–30 | Hardening, UAT & go-live — security pass, load test, deploy, hypercare                                                  |
@@ -590,7 +603,7 @@ separate JWT signing keys.
 | Component               | Deployment                                                                                                     |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------- |
 | API (Django + Gunicorn) | Dockerised, behind Nginx, horizontally scaled (2+ replicas) on Kubernetes/Docker Swarm                         |
-| Celery workers & Beat   | Separate Dockerised worker pool for SAP imports, notifications, Indent Easy sync, report pre-aggregation       |
+| Celery workers & Beat   | Separate Dockerised worker pool for SAP imports, notifications, report pre-aggregation       |
 | MySQL                   | Managed MySQL 8 (RDS/Cloud SQL) with daily automated backups and a read replica for dashboards                 |
 | Redis                   | Managed Redis for cache, OTP store and Celery broker                                                           |
 | Object storage          | S3-compatible bucket for AI photos & payment screenshots, lifecycle-archived after N months                    |
@@ -609,7 +622,6 @@ separate JWT signing keys.
 - OTP-gated actions rate-limited per mobile number and per IP.
 - Straw/AI-photo endpoints validate that the acting Mait is actually assigned to the MPP in
   the request, preventing cross-Mait tampering.
-- Indent Easy webhook authenticated via a signed API key/HMAC, never open unauthenticated.
 - Full `audit_log` on every master-data change, AI event transition and payment verification.
 
 ---
@@ -622,8 +634,8 @@ separate JWT signing keys.
   observed during scoping.
 - An SMS/OTP gateway account (MSG91/Twilio) will be procured and credentials made available
   before Phase 4.
-- Indent Easy exposes (or can be extended to expose) an API/webhook for indent intake and GRN
-  callbacks; if not, Phase 5 shifts to polling-only.
+- ~~Indent Easy exposes (or can be extended to expose) an API/webhook for indent intake and
+  GRN callbacks.~~ *Withdrawn 2026-09-18 — the store keeper's app replaced that integration.*
 - Field connectivity is intermittent but not fully absent — the offline queue assumes periodic
   reconnect, not permanent offline operation.
 
@@ -631,7 +643,7 @@ separate JWT signing keys.
 
 | Risk                                                              | Mitigation                                                                                                                                   |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Indent Easy has no exposed API in time for Phase 5                | Fall back to a scheduled export/import file bridge; revisit real-time webhook post-launch                                                    |
+| ~~Indent Easy has no exposed API in time for Phase 5~~ *(withdrawn 2026-09-18)*   | Superseded: stores live in this platform, so there is nothing to integrate with  |
 | Large SAP files (100k+ rows) slow down uploads                    | Async Celery processing with chunked bulk-upsert and progress polling, never a synchronous request                                           |
 | Field users struggle with a fully digital flow                    | Camera-first, large-button UI, Hindi toggle, phased pilot with one district before full scale-up                                             |
 | Duplicate/near-duplicate ear tags or straw numbers across regions | DB-level uniqueness constraints plus a fuzzy-duplicate warning (not a hard block) at data entry                                              |
@@ -661,5 +673,4 @@ export at build time in case of column drift between periods.
 1. Confirm the authoritative breed list per animal type (COW/BUFF) for the config-driven dropdown.
 2. Confirm per-AI service pricing (fixed, per-breed, or per-MPP) to drive the payment amount.
 3. Confirm SMS/OTP gateway vendor and budget.
-4. Confirm whether Indent Easy can expose a webhook, or only file-based exchange is possible.
-5. Confirm data retention period for AI photos and payment screenshots.
+4. Confirm data retention period for AI photos and payment screenshots.
