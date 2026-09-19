@@ -53,7 +53,7 @@ SMS_TRIED_WITHIN = timedelta(hours=1)
 
 
 def _field_user(mobile_no: str) -> User | None:
-    """The active Mait or store keeper behind a number — the same lookup sign-in uses."""
+    """The Mait, keeper or zonal manager behind a number — the same lookup sign-in uses."""
     from .views import OTPSendView
 
     return OTPSendView._resolve_field_user(mobile_no)
@@ -80,12 +80,20 @@ def _open_code(mobile_no: str, purpose: str) -> SuperOTP | None:
 
 
 def _active(user: User) -> bool:
-    """A Mait or an open store's keeper, active — somebody who may use the app at all."""
+    """
+    Somebody who may use the app at all: a Mait, an open store's keeper, or a zonal manager.
+
+    The same three sign-in admits (``OTPSendView._resolve_field_user``). A manager whose zone
+    was deactivated falls out here as well as there, so the office cannot phone a code to an
+    account that would have nothing to open.
+    """
     if not user.is_active:
         return False
     if user.role == Role.MAIT:
         mait = getattr(user, "mait_profile", None)
         return mait is None or mait.is_active
+    if user.role == Role.ADMIN:
+        return user.is_zonal_manager
     return user.role == Role.STORE and bool(user.store_id) and user.store.is_active
 
 

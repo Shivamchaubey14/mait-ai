@@ -85,10 +85,15 @@ class SuperOTPSerializer(serializers.ModelSerializer):
         return obj.purpose != "login"
 
     def get_who(self, obj) -> str:
-        """The line under the name that tells the office which Mait or which store it is."""
+        """The line under the name: which Mait, which store, or which zone it is."""
         user = obj.user
         if user.role == Role.STORE:
             return f"Store keeper · {user.store.name}" if user.store_id else "Store keeper"
+        if user.role == Role.ADMIN:
+            # Their zone, because that is the whole of what the account is: the office is
+            # about to phone somebody, and "Zonal manager" alone names a dozen people.
+            names = ", ".join(user.zone_names)
+            return f"Zonal manager · {names}" if names else "Zonal manager"
         mait = getattr(user, "mait_profile", None)
         return f"Mait · {mait.sahayak_vendor_code}" if mait else "Mait"
 
