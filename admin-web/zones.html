@@ -108,6 +108,29 @@
             <p class="tile__value" data-kpi="members">—</p>
             <p class="tile__foot" data-kpi="members-foot"></p>
           </article>
+
+          <!-- The people, beside the places. A zone is only a line on a map until somebody
+               is standing inside it, and the foot line carries the one thing that stops a
+               manager working: no number, so no code, so no app. -->
+          <article class="tile">
+            <p class="tile__label">
+              <span class="tile__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M7 3h10v18H7zM11 18h2M9 7h6" />
+                </svg>
+              </span>
+              Zonal managers
+            </p>
+            <p class="tile__value" data-kpi="managers">—</p>
+            <p class="tile__foot" data-kpi="managers-foot"></p>
+          </article>
         </section>
 
         <!-- The editor. Same shape as the product and access editors: a head that says which
@@ -289,6 +312,170 @@
               </tbody>
             </table>
           </div>
+        </section>
+
+        <!-- The number editor. One field, because one field is all this screen writes about a
+             person: which zone they see is the table above, which screens they open is Users
+             & roles, and this is the number a sign-in code is sent to. -->
+        <section
+          class="panel editor manager-editor"
+          id="manager-panel"
+          aria-labelledby="mx-name"
+          hidden
+        >
+          <div class="editor__head">
+            <span class="editor__avatar" id="mx-initials" aria-hidden="true">—</span>
+            <div class="editor__who">
+              <h2 class="editor__name" id="mx-name">—</h2>
+              <p class="editor__code" id="mx-username">—</p>
+            </div>
+            <span id="mx-state"></span>
+          </div>
+
+          <div class="form-grid">
+            <div class="field field--iconed">
+              <label class="field__label" for="mx-mobile">
+                <span class="field__icon field__icon--mobile" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M7 2h10v20H7zM11 18h2" />
+                  </svg>
+                </span>
+                Mobile number
+              </label>
+              <input
+                class="input field__control"
+                id="mx-mobile"
+                type="tel"
+                inputmode="numeric"
+                maxlength="10"
+                autocomplete="off"
+                placeholder="9876543210"
+              />
+              <p class="field__hint" id="mx-app">—</p>
+            </div>
+
+            <div class="field field--iconed">
+              <span class="field__label">
+                <span class="field__icon field__icon--pages" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
+                  </svg>
+                </span>
+                Zones they run
+              </span>
+              <p class="field__hint" id="mx-zones">—</p>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn--primary" id="mx-save" type="button">Save number</button>
+            <button class="btn" id="mx-cancel" type="button">Cancel</button>
+            <p class="field__hint" id="mx-status">—</p>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="managers-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="managers-title">Who runs these zones</h2>
+            <span class="panel__count" data-count="managers">—</span>
+          </div>
+
+          <!-- Blue, because this states a rule rather than flagging a backlog: what the
+               number in the table below actually does. -->
+          <div class="notice notice--info">
+            <span class="notice__icon" aria-hidden="true"></span>
+            <div>
+              <p class="notice__title">A zone and a mobile number together make the app open.</p>
+              <p class="notice__body">
+                A zonal manager works away from a desk, so they sign in on a handset with a code
+                sent to this number — the zone is what they see there, and it is the one above.
+                Neither alone is enough: no number means no code, and an account with no zone stays
+                a portal login. Which screens they open is still
+                <a href="users.html">Users &amp; roles</a>.
+              </p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Manager</th>
+                  <th scope="col">Zone</th>
+                  <th scope="col">Mobile</th>
+                  <!-- Beside the number, because it is the answer to it: whether that number
+                       actually opens the app. Six columns rather than seven so this one is
+                       still on screen on a 1280 laptop, where a seventh pushed it off the
+                       edge and left the screen's whole point behind a sideways scroll. -->
+                  <th scope="col">App</th>
+                  <th scope="col">Last sign-in</th>
+                  <th scope="col">Decisions</th>
+                </tr>
+              </thead>
+              <tbody id="manager-rows" aria-busy="true">
+                <tr class="skeleton" aria-hidden="true">
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                  <td><span class="skeleton__bar"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- What they have actually done. The same audit rows the Audit log screen reads,
+             narrowed to these people and written as sentences — so "who runs Bahraich" and
+             "what have they been doing in it" are one screen rather than two. -->
+        <section class="panel" aria-labelledby="activity-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="activity-title">What they have done</h2>
+            <span class="panel__count" data-count="activity">—</span>
+          </div>
+
+          <!-- Built from the managers above rather than from a list in this file, and each
+               chip carries the count it will show — the same bargain the Audit log screen
+               makes with its action chips. -->
+          <section class="filters zone-activity__filters" aria-label="Filter the activity">
+            <select class="select" id="activity-days" aria-label="Window">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+            <!-- Decisions by default. A manager who works in the portal signs in and out
+                 several times a day, and the two approvals somebody came to read are then
+                 buried in ninety sign-ins. The full trail is one tap away, and the Audit log
+                 screen is still where the whole grid lives. -->
+            <span
+              class="zone-activity__who"
+              id="activity-kind"
+              role="group"
+              aria-label="Which actions"
+            >
+              <button class="chip is-active" type="button" data-kind="decisions">Decisions</button>
+              <button class="chip" type="button" data-kind="all">Everything</button>
+            </span>
+            <span class="zone-activity__who" id="activity-who" role="group" aria-label="Manager">
+            </span>
+          </section>
+
+          <div class="zone-activity" id="activity" aria-busy="true"></div>
         </section>
 
         <!-- Whatever is in no zone at all. Its own panel rather than a line on the one above,

@@ -13,6 +13,14 @@
  * What it decides is how much of the network an account sees. That is the same job Users &
  * roles does for screens, which is why the two sit together in the sidebar and why this one
  * borrows that screen's access grid rather than inventing a third way to tick a list.
+ *
+ * **The second half of the screen is the people.** A zone is a line round some chilling
+ * centres until somebody is standing inside it, and since the zonal manager's app landed
+ * (2026-09-19) the mobile number on that person's account decides something operational: it
+ * is where a sign-in code is sent, so a zone with no number on it is a manager who can only
+ * work at a desk. So the managers are listed here with their number, editable in place, and
+ * under them the record of what they have actually been doing in the zone — the same audit
+ * rows the Audit log screen reads, narrowed to these people.
  */
 
 (function (MaitAI, $) {
@@ -27,6 +35,21 @@
     editing: null,
     /** The codes ticked in the editor right now, which is not yet what is saved. */
     chosen: [],
+
+    /* --- the people ----------------------------------------------------------------- */
+    managers: [],
+    /** The manager whose number is open for editing, or null. */
+    editingManager: null,
+    /** Which manager the activity feed is narrowed to — null is all of them. */
+    who: null,
+    activityDays: 30,
+    /**
+     * `decisions` or `all`. Decisions by default, and that is not a detail: a manager who
+     * works in the portal signs in and out several times a day, so the unfiltered trail is
+     * ninety sign-ins with the two approvals somebody came to read buried inside them.
+     */
+    activityKind: 'decisions',
+    activity: [],
   };
 
   /* --- the list ---------------------------------------------------------------------- */
@@ -101,6 +124,8 @@
     $('[data-kpi="members"]').text(ui.number(members));
     $('[data-kpi="members-foot"]').text('Across every zone');
 
+    renderManagerTile();
+
     $('#zone-count').text(state.zones.length + (state.zones.length === 1 ? ' zone' : ' zones'));
 
     ui.rows(
@@ -150,6 +175,394 @@
           .join('') +
         '</div>'
     );
+  }
+
+  /* --- the people who run the zones ---------------------------------------------------
+   * Drawn from `/admin/zones/managers/`, which is the zone-scoped accounts and nothing else:
+   * a head-office Admin has no zone and is not the manager of one, so listing them here would
+   * turn this panel into a second copy of Users & roles.
+   */
+
+  function renderManagerTile() {
+    const managers = state.managers;
+    const missing = managers.filter(function (manager) {
+      return !manager.mobile_no;
+    }).length;
+
+    $('[data-kpi="managers"]').text(ui.number(managers.length));
+    // The foot line carries the colour, as every stat tile on this portal does: red for a
+    // figure somebody has to act on, green for one that is simply fine.
+    $('[data-kpi="managers-foot"]')
+      .text(
+        !managers.length
+          ? 'Nobody is scoped to a zone yet'
+          : missing
+            ? missing + (missing === 1 ? ' has no number — no app' : ' have no number — no app')
+            : 'All of them can sign in to the app'
+      )
+      .removeClass('tile__foot--good tile__foot--bad')
+      .addClass(
+        managers.length && !missing ? 'tile__foot--good' : missing ? 'tile__foot--bad' : ''
+      );
+  }
+
+  /** Initials, for the disc that makes a column of names scannable. */
+  function initials(name) {
+    const parts = String(name || '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (!parts.length) {
+      return '—';
+    }
+    return parts
+      .slice(0, 2)
+      .map(function (word) {
+        return word.charAt(0).toUpperCase();
+      })
+      .join('');
+  }
+
+  /**
+   * The number cell, which is also the control that changes it.
+   *
+   * The same bargain Users & roles makes with its Pages and Zones columns: clicking the thing
+   * you want to change is a shorter sentence than finding a button for it, and this table has
+   * no Action column to put one in. A manager with no number says so in amber rather than
+   * leaving an empty cell — a blank here reads as a portal that failed to load a column.
+   */
+  function mobileCell(manager) {
+    const said = manager.mobile_no
+      ? '<span class="table__code">' + ui.escapeHtml(manager.mobile_no) + '</span>'
+      : '<span class="table__sub table__sub--warn">No number</span>';
+    return (
+      '<button class="pages-link" type="button" data-mobile="' +
+      manager.id +
+      '" title="Set the number they sign into the app with">' +
+      said +
+      '</button>'
+    );
+  }
+
+  /**
+   * What this account did in the window, as the two figures a manager is measured by.
+   *
+   * Approvals and rejections rather than a bare action count: an account that signed in
+   * forty times and decided nothing is a different problem from one that decided forty
+   * things, and one number cannot tell them apart.
+   */
+  function decisionCell(manager) {
+    const stats = manager.activity || {};
+    if (!stats.actions) {
+      return '<span class="table__sub">Nothing in ' + state.activityDays + ' days</span>';
+    }
+    const parts = [];
+    if (stats.approved) {
+      parts.push(ui.pill(stats.approved + ' approved', 'good'));
+    }
+    if (stats.rejected) {
+      parts.push(ui.pill(stats.rejected + ' rejected', 'bad'));
+    }
+    if (!parts.length) {
+      parts.push('<span class="table__sub">No indent decisions</span>');
+    }
+    return (
+      parts.join(' ') +
+      '<span class="table__sub">' +
+      ui.number(stats.actions) +
+      ' actions in all</span>'
+    );
+  }
+
+  function appCell(manager) {
+    if (!manager.is_active) {
+      return ui.pill('Deactivated', 'bad');
+    }
+    if (manager.app_access) {
+      return ui.pill('App', 'good');
+    }
+    // Two different reasons, and they need two different people to fix them: a number is
+    // typed on this screen, a switched-off zone is switched back on above it.
+    if (!manager.zone_names.length) {
+      return (
+        ui.pill('Zone off', 'warn') +
+        '<span class="table__sub">' +
+        ui.escapeHtml(manager.inactive_zones.join(', ')) +
+        '</span>'
+      );
+    }
+    return ui.pill('Portal only', 'warn');
+  }
+
+  function managerRow(manager) {
+    return (
+      '<tr' +
+      (manager.is_active ? '' : ' class="is-blocked"') +
+      '>' +
+      '<td>' +
+      ui.identity(manager.full_name, manager.username) +
+      '</td>' +
+      '<td>' +
+      (manager.zone_names.length
+        ? manager.zone_names
+            .map(function (name) {
+              return '<span class="chip chip--static">' + ui.escapeHtml(name) + '</span>';
+            })
+            .join(' ')
+        : '<span class="table__sub">No live zone</span>') +
+      // How big the patch is, under the zone rather than in a column of its own. "Ayodhya
+      // Zone" decides nothing on its own; "Ayodhya Zone — 15 Maits" is the sentence somebody
+      // reads when they are deciding who to ring.
+      '<span class="table__sub">' +
+      (manager.maits ? ui.number(manager.maits) + ' Maits' : 'no Maits yet') +
+      '</span>' +
+      '</td>' +
+      '<td>' +
+      mobileCell(manager) +
+      '</td>' +
+      '<td>' +
+      appCell(manager) +
+      '</td>' +
+      '<td>' +
+      (manager.last_login_at
+        ? ui.dateTime(manager.last_login_at)
+        : '<span class="table__sub">Never</span>') +
+      '</td>' +
+      '<td>' +
+      decisionCell(manager) +
+      '</td>' +
+      '</tr>'
+    );
+  }
+
+  function renderManagers() {
+    $('[data-count="managers"]').text(
+      state.managers.length + (state.managers.length === 1 ? ' account' : ' accounts')
+    );
+    ui.rows(
+      $('#manager-rows'),
+      state.managers,
+      managerRow,
+      'Nobody is scoped to a zone yet. Give an account its zone on Users & roles, ' +
+        'and its number here.',
+      6
+    );
+    renderManagerTile();
+    renderWhoChips();
+  }
+
+  /* --- the number editor ---------------------------------------------------------------- */
+
+  function renderAppHint() {
+    const manager = state.editingManager;
+    const numbered = String($('#mx-mobile').val() || '').trim().length > 0;
+    const zoned = manager && manager.zone_names.length > 0;
+    const $hint = $('#mx-app').removeClass('field__hint--ok field__hint--warn');
+
+    if (numbered && zoned) {
+      $hint.addClass('field__hint--ok').text('A sign-in code will be sent to this number.');
+      return;
+    }
+    if (numbered) {
+      $hint
+        .addClass('field__hint--warn')
+        .text('Their zone is switched off, so the app would open onto nothing.');
+      return;
+    }
+    $hint
+      .addClass('field__hint--warn')
+      .text('With no number they can only work in the portal — nothing can send them a code.');
+  }
+
+  function openManagerEditor(manager) {
+    state.editingManager = manager;
+    closeEditor();
+
+    $('#mx-initials').text(initials(manager.full_name));
+    $('#mx-name').text(manager.full_name || manager.username);
+    $('#mx-username').text(manager.username);
+    $('#mx-state').html(appCell(manager));
+    $('#mx-mobile').val(manager.mobile_no || '');
+    $('#mx-zones').text(
+      manager.zone_names.length
+        ? manager.zone_names.join(', ')
+        : manager.inactive_zones.length
+          ? manager.inactive_zones.join(', ') + ' — switched off'
+          : 'None'
+    );
+    $('#mx-status').text('—');
+    renderAppHint();
+
+    $('#manager-panel').prop('hidden', false);
+    $('#manager-panel')[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function closeManagerEditor() {
+    state.editingManager = null;
+    $('#manager-panel').prop('hidden', true);
+  }
+
+  function saveManager() {
+    const manager = state.editingManager;
+    if (!manager) {
+      return;
+    }
+    const mobile = String($('#mx-mobile').val() || '').trim();
+    $('#mx-save').prop('disabled', true);
+    $('#mx-status').text('Saving…');
+
+    api
+      .setZoneManagerMobile(manager.id, mobile)
+      .done(function (updated) {
+        closeManagerEditor();
+        // The response is the row, so the table is rewritten from it rather than reloaded —
+        // which would throw away the operator's place on a long screen to change one cell.
+        state.managers = state.managers.map(function (row_) {
+          return row_.id === updated.id ? updated : row_;
+        });
+        renderManagers();
+        MaitAI.shell.alert(
+          updated.mobile_no
+            ? updated.full_name + ' can sign in to the app on ' + updated.mobile_no + '.'
+            : updated.full_name + ' no longer has the app. Their portal login is unchanged.',
+          'good'
+        );
+      })
+      .fail(function (problem) {
+        $('#mx-status').text('');
+        MaitAI.shell.alert(api.problemToLines(problem).join(' · '));
+      })
+      .always(function () {
+        $('#mx-save').prop('disabled', false);
+      });
+  }
+
+  /* --- what they have done ---------------------------------------------------------------
+   * The audit trail, narrowed to these accounts. A feed rather than a table: every row is one
+   * sentence with a time against it, and four columns of mostly-empty cells would make that
+   * harder to read rather than easier.
+   */
+
+  function relative(iso) {
+    const then = new Date(iso).getTime();
+    if (isNaN(then)) {
+      return '';
+    }
+    const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+    if (seconds < 90) {
+      return 'just now';
+    }
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) {
+      return minutes + ' min ago';
+    }
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) {
+      return hours + (hours === 1 ? ' hour ago' : ' hours ago');
+    }
+    const days = Math.round(hours / 24);
+    return days === 1 ? 'yesterday' : days + ' days ago';
+  }
+
+  function renderWhoChips() {
+    const chips = [
+      '<button class="chip' +
+        (state.who === null ? ' is-active' : '') +
+        '" type="button" data-who="">Everyone<small>' +
+        ui.number(
+          state.managers.reduce(function (total, manager) {
+            return total + ((manager.activity && manager.activity.actions) || 0);
+          }, 0)
+        ) +
+        '</small></button>',
+    ];
+    state.managers.forEach(function (manager) {
+      chips.push(
+        '<button class="chip' +
+          (state.who === manager.id ? ' is-active' : '') +
+          '" type="button" data-who="' +
+          manager.id +
+          '">' +
+          ui.escapeHtml(manager.full_name) +
+          '<small>' +
+          ui.number((manager.activity && manager.activity.actions) || 0) +
+          '</small></button>'
+      );
+    });
+    $('#activity-who').html(chips.join(''));
+  }
+
+  function activityRow(entry) {
+    return (
+      '<article class="zone-act">' +
+      '<span class="zone-act__avatar" aria-hidden="true">' +
+      ui.escapeHtml(entry.actor.initials) +
+      '</span>' +
+      '<div class="zone-act__body">' +
+      '<p class="zone-act__line">' +
+      ui.pill(entry.action_label, entry.tone) +
+      ' <span class="zone-act__summary">' +
+      ui.escapeHtml(entry.summary) +
+      '</span></p>' +
+      '<p class="zone-act__meta">' +
+      ui.escapeHtml(entry.actor.name) +
+      ' · ' +
+      ui.escapeHtml(ui.dateTime(entry.when)) +
+      ' · ' +
+      ui.escapeHtml(relative(entry.when)) +
+      '</p>' +
+      '</div>' +
+      '</article>'
+    );
+  }
+
+  function renderActivity() {
+    const $feed = $('#activity').removeAttr('aria-busy');
+    $('[data-count="activity"]').text(
+      state.activity.length
+        ? state.activity.length + (state.activity.length === 1 ? ' action' : ' actions')
+        : 'nothing yet'
+    );
+    if (!state.activity.length) {
+      // Written out rather than left blank: an empty feed is a real answer here — a manager
+      // who has decided nothing in thirty days is exactly what somebody opens this to find.
+      $feed.html(
+        '<p class="empty-state">Nothing in the last ' +
+          state.activityDays +
+          ' days. ' +
+          (state.activityKind === 'decisions'
+            ? 'Every approval, rejection and edit shows up here as it happens — sign-ins are ' +
+              'under Everything.'
+            : 'Every action shows up here as it happens.') +
+          '</p>'
+      );
+      return;
+    }
+    $feed.html(state.activity.map(activityRow).join(''));
+  }
+
+  function loadPeople() {
+    const query = { days: state.activityDays, kind: state.activityKind };
+    if (state.who !== null) {
+      query.manager = state.who;
+    }
+
+    $.when(api.zoneManagers(state.activityDays), api.zoneActivity(query))
+      .done(function (managers, activity) {
+        state.managers = managers[0].results || [];
+        state.activity = activity[0].results || [];
+        renderManagers();
+        renderActivity();
+      })
+      .fail(function () {
+        // Not an alert over the whole screen. Zones are what this page is for; the people are
+        // the half below, and a red banner over a working table because one panel failed is
+        // the loudest thing on screen for the least important reason.
+        ui.rows($('#manager-rows'), [], managerRow, 'Could not load the managers.', 6);
+        $('#activity')
+          .removeAttr('aria-busy')
+          .html('<p class="empty-state">Could not load what they have done.</p>');
+      });
   }
 
   /* --- the editor -------------------------------------------------------------------- */
@@ -393,6 +806,10 @@
 
   function load() {
     MaitAI.shell.clearAlert();
+    // Its own request rather than part of the `$.when` below: the people are a second
+    // question about the same screen, and a zone table that waited on the audit trail to
+    // paint would be slower for the operator who only came to move a chilling centre.
+    loadPeople();
     // Both, because neither screen state is readable without the other: a zone's row lists
     // centre names, and the editor's grid needs every centre's current holder.
     $.when(api.zones(), api.zonePlants())
@@ -486,5 +903,46 @@
     $('#save').on('click', save);
     $('#remove').on('click', remove);
     $('#cancel').on('click', closeEditor);
+
+    /* --- the people ------------------------------------------------------------------- */
+
+    $('#manager-rows').on('click', '[data-mobile]', function () {
+      const id = Number($(this).data('mobile'));
+      const manager = state.managers.filter(function (row_) {
+        return row_.id === id;
+      })[0];
+      if (manager) {
+        openManagerEditor(manager);
+      }
+    });
+
+    // Digits only, and the sentence under it keeps up as they are typed — the field decides
+    // whether an app opens, so it should not wait for a save to say so.
+    $('#mx-mobile').on('input', function () {
+      this.value = this.value.replace(/\D/g, '').slice(0, 10);
+      renderAppHint();
+    });
+
+    $('#mx-save').on('click', saveManager);
+    $('#mx-cancel').on('click', closeManagerEditor);
+
+    $('#activity-who').on('click', '.chip', function () {
+      const raw = String($(this).data('who'));
+      state.who = raw === '' ? null : Number(raw);
+      renderWhoChips();
+      loadPeople();
+    });
+
+    $('#activity-days').on('change', function () {
+      state.activityDays = Number($(this).val()) || 30;
+      loadPeople();
+    });
+
+    $('#activity-kind').on('click', '.chip', function () {
+      state.activityKind = String($(this).data('kind'));
+      $('#activity-kind .chip').removeClass('is-active');
+      $(this).addClass('is-active');
+      loadPeople();
+    });
   });
 })(window.MaitAI, jQuery);

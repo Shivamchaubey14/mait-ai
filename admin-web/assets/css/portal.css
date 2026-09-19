@@ -1274,6 +1274,15 @@ a.btn:hover {
   color: var(--color-text-muted);
 }
 
+/* A sub-line that is a backlog rather than a detail — a store no keeper can sign in to, a
+   zonal manager with no number and therefore no app. Amber text rather than a pill: the row
+   already carries one pill for its status, and two would compete for the eye. Shared,
+   because three screens now say this kind of thing about a row. */
+.table__sub--warn {
+  color: var(--color-secondary-pressed);
+  font-weight: 600;
+}
+
 /* A row that is waiting or blocked says so in its own background, so a screenful of rows can
    be triaged without reading every status cell. */
 .table tbody tr.is-waiting {

@@ -119,3 +119,125 @@
   color: var(--color-text-muted);
   font-size: var(--text-caption);
 }
+
+/* --- the people who run the zones ----------------------------------------------------------
+   The second half of the screen. A zone is a line round some chilling centres until somebody
+   is standing inside it, and since the zonal manager's app landed the number on that person's
+   account decides whether they can work away from a desk at all.
+
+   Almost nothing here is new: the table, the tiles, the editor panel and the chips are the
+   portal's own. What follows is the number cell — borrowed from Users & roles, where the same
+   bargain is already struck — and the feed underneath. */
+
+/* Clicking the value is how it is changed, the same way the Pages and Zones columns work on
+   Users & roles. Lifted from users.css rather than shared, because a third caller is the
+   point at which a rule earns a move into portal.css and this is only the second. */
+.pages-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pages-link:hover .table__code,
+.pages-link:focus-visible .table__code,
+.pages-link:hover .table__sub,
+.pages-link:focus-visible .table__sub {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+/* --- what they have done -------------------------------------------------------------------
+   A feed, not a table. Every row is one sentence with a time against it, and four columns of
+   mostly-empty cells would make that harder to read rather than easier — the Audit log screen
+   is the place for the full grid, and this is the same rows narrowed to these people. */
+.zone-activity__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.zone-activity__who {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The count each chip will show, so "Everyone · 41" is a choice rather than a guess. Muted
+   beside the name, and inheriting once the chip is on — the same treatment the Audit log's
+   action chips get. */
+.zone-activity__who .chip small {
+  margin-left: var(--space-1);
+  font-family: var(--font-heading);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.zone-activity__who .chip.is-active small {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.zone-activity {
+  display: flex;
+  flex-direction: column;
+}
+
+.zone-act {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.zone-act:first-child {
+  border-top: 0;
+}
+
+/* A disc of initials, as on the Audit log: a feed is scanned down its left edge looking for
+   one person, and a column of names in one weight has to be read word by word. */
+.zone-act__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+}
+
+.zone-act__body {
+  min-width: 0;
+}
+
+.zone-act__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.zone-act__summary {
+  font-family: var(--font-body);
+  color: var(--color-text);
+}
+
+.zone-act__meta {
+  margin: 2px 0 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
