@@ -148,6 +148,40 @@
             </div>
 
             <div class="field field--iconed">
+              <label class="field__label" for="new-mobile">
+                <span class="field__icon field__icon--mobile" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M7 2h10v20H7zM11 18h2" />
+                  </svg>
+                </span>
+                Mobile number
+              </label>
+              <input
+                class="input field__control"
+                id="new-mobile"
+                type="tel"
+                inputmode="numeric"
+                maxlength="10"
+                autocomplete="off"
+                placeholder="9876543210"
+              />
+              <!-- Said here rather than left to be discovered: this box is the difference
+                   between an account that works at a desk and one that also works in a yard.
+                   An office admin needs no number at all. -->
+              <p class="field__hint">
+                Optional. For a zonal manager it is the number they sign into the app with — give
+                them a zone as well, and the app opens for them.
+              </p>
+            </div>
+
+            <div class="field field--iconed">
               <label class="field__label" for="new-role">
                 <span class="field__icon field__icon--role" aria-hidden="true">
                   <svg

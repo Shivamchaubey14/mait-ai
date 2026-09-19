@@ -133,7 +133,7 @@
             .map(function (name) {
               return '<span class="chip chip--static">' + ui.escapeHtml(name) + '</span>';
             })
-            .join(' ')
+            .join(' ') + appLine(user)
         : '<span class="table__sub">Whole network</span>';
       // The cell is the control, the same bargain the Pages column makes: clicking the thing
       // you want to change is shorter than finding a second button for it, and the Action
@@ -154,6 +154,22 @@
       return '<span class="table__sub">No MPPs assigned</span>';
     }
     return ui.number(user.assigned_mpp_count) + ' MPPs';
+  }
+
+  /**
+   * Whether this zone-scoped account can also sign in on a handset.
+   *
+   * A zone is what makes somebody a zonal manager, and a zonal manager is the one office
+   * account that works away from a desk — so the moment a zone is ticked, the number becomes
+   * an operational fact rather than a contact detail. Shown under the zone chips because
+   * that is where the decision was made; missing, it says so, since an account waiting on a
+   * number looks identical to one that never needed one.
+   */
+  function appLine(user) {
+    if (user.mobile_no) {
+      return '<span class="table__sub">App · ' + ui.escapeHtml(user.mobile_no) + '</span>';
+    }
+    return '<span class="table__sub table__sub--warn">No number — no app</span>';
   }
 
   /* Role decides what an account can reach, so it is a pill rather than one more word in a
@@ -561,8 +577,24 @@
       '<p class="field__hint" id="zx-diff">—</p>',
       '</div>',
 
+      // The number sits in the zone panel rather than beside the email, and that is the
+      // whole argument for where it lives: on a head-office account it is a contact detail
+      // nobody uses, and on a zoned one it is the thing that opens the app. It is decided
+      // in the same breath as the zone, so it is saved in the same breath too.
+      '<div class="field field--iconed">',
+      '<label class="field__label" for="zx-mobile">',
+      '<span class="field__icon field__icon--mobile" aria-hidden="true">',
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ',
+      'stroke-linecap="round" stroke-linejoin="round">',
+      '<path d="M7 2h10v20H7zM11 18h2"/></svg>',
+      '</span>Mobile number</label>',
+      '<input class="input field__control" id="zx-mobile" type="tel" inputmode="numeric" ',
+      'maxlength="10" autocomplete="off" placeholder="9876543210" />',
+      '<p class="field__hint" id="zx-app">—</p>',
+      '</div>',
+
       '<div class="form-actions">',
-      '<button class="btn btn--primary" type="button" id="zx-save">Save zones</button>',
+      '<button class="btn btn--primary" type="button" id="zx-save">Save zone &amp; number</button>',
       '<button class="btn" type="button" id="zx-cancel">Cancel</button>',
       '<p class="field__hint" id="zx-status">—</p>',
       '</div>',
@@ -600,6 +632,37 @@
     );
   }
 
+  /**
+   * What the two fields together decide, in one sentence under the number.
+   *
+   * Both are needed and neither is enough: a zone with no number is a manager nobody can
+   * send a code to, and a number with no zone is an office account that would open an app
+   * scoped to the whole network — which is why sign-in refuses it.
+   */
+  function renderAppLine() {
+    const zoned = state.zonesChosen.length > 0;
+    const numbered = String($('#zx-mobile').val() || '').trim().length > 0;
+    const $hint = $('#zx-app').removeClass('field__hint--ok field__hint--warn');
+
+    if (zoned && numbered) {
+      $hint
+        .addClass('field__hint--ok')
+        .text('They can sign in to the zonal manager app on this number.');
+      return;
+    }
+    if (zoned) {
+      $hint
+        .addClass('field__hint--warn')
+        .text('Without a number they can only work in the portal — the app cannot send a code.');
+      return;
+    }
+    if (numbered) {
+      $hint.text('The app needs a zone as well. Without one this is only a contact number.');
+      return;
+    }
+    $hint.text('Only a zonal manager needs one. An office account signs in with its password.');
+  }
+
   function renderZoneDiff() {
     const chosen = state.zonesChosen;
     $('#zx-count').text(chosen.length ? chosen.length + ' zone(s)' : 'None — whole network');
@@ -612,6 +675,7 @@
             'the leaderboard and every export.'
         : 'No zone ticked means the whole network, which is what most accounts hold.'
     );
+    renderAppLine();
   }
 
   function openZoneEditor(user) {
@@ -626,6 +690,7 @@
     $('#zx-username').text(user.username);
     $('#zx-role').html(rolePill(user));
     $('#zx-status').text('—');
+    $('#zx-mobile').val(user.mobile_no || '');
 
     $('#zx-grid').html(
       state.zones.length
@@ -653,11 +718,20 @@
       return;
     }
     const id = state.zoning.id;
+    const mobile = String($('#zx-mobile').val() || '').trim();
     $('#zx-save').prop('disabled', true);
     $('#zx-status').text('Saving…');
 
+    // Sent only when it actually changed. The zone panel is opened to move somebody between
+    // regions far more often than to give them a handset, and a PATCH that always carried
+    // the number would re-validate it — refusing the save over a clash nobody touched.
+    const body = { zones: state.zonesChosen };
+    if (mobile !== String(state.zoning.mobile_no || '')) {
+      body.mobile_no = mobile;
+    }
+
     MaitAI.api
-      .updateUser(id, { zones: state.zonesChosen })
+      .updateUser(id, body)
       .done(function (user) {
         closeZoneEditor();
         if (user && user.id) {
@@ -821,6 +895,13 @@
       renderZoneDiff();
     });
 
+    // Digits only, and the sentence under it keeps up as they are typed — the field decides
+    // whether an app opens, so it should not wait for a save to say so.
+    $('#access-editor').on('input', '#zx-mobile', function () {
+      this.value = this.value.replace(/\D/g, '').slice(0, 10);
+      renderAppLine();
+    });
+
     $('#zx-cancel').on('click', closeZoneEditor);
     $('#zx-save').on('click', saveZoneEditor);
 
@@ -837,6 +918,7 @@
           username: $('#new-username').val().trim(),
           full_name: $('#new-full-name').val().trim(),
           email: $('#new-email').val().trim(),
+          mobile_no: $('#new-mobile').val().trim(),
           role: $('#new-role').val(),
           password: $('#new-password').val(),
           portal_sections:
