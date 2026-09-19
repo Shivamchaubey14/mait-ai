@@ -7,6 +7,11 @@ Two ways in, deliberately separate:
 * **Mait** — mobile OTP only. A field phone is shared, lost and handed around, so there is
   no password on a Mait account to steal or reuse.
 
+A store keeper and a zonal manager take the OTP door too, for the same reason a Mait does:
+the work happens away from a desk. The keeper has no password at all; the manager keeps
+theirs for the portal, and the number on their account is what opens the app. Which accounts
+that admits is ``OTPSendView._resolve_field_user``, and it is narrow on purpose.
+
 Everything here is rate limited. These endpoints are the front door, and the OTP ones are
 the fraud surface (SRS §16).
 """
@@ -124,7 +129,7 @@ class OTPSendView(APIView):
     @staticmethod
     def _resolve_field_user(mobile_no: str) -> User | None:
         """
-        Find the active field login behind a mobile number — a Mait's, or a store keeper's.
+        Find the login behind a mobile number — a Mait's, a store keeper's, or a manager's.
 
         A Mait is matched on the Mait record rather than ``User.mobile_no`` because SAP is the
         source of that number, and an Admin activating an account may set it on either. A
@@ -134,7 +139,24 @@ class OTPSendView(APIView):
 
         A keeper whose store has been closed is not found at all. There is nothing for them to
         sign in to, and a session that opened onto an empty screen would be a fault report.
+
+        **A zonal manager is the third, and the narrowest.** They are an office Admin, and an
+        office Admin has a password — so admitting the role wholesale would put every
+        back-office account, including the ones that run the SAP imports and edit the rate
+        card, behind a six-digit code sent to whatever number happened to be on the row. Two
+        things are required instead, and both are decisions somebody made on purpose: a live
+        zone on the account (``User.is_zonal_manager``), which is what the app's every screen
+        is scoped by, and a mobile number typed into the Zones or Users screen. An admin with
+        no zone has no app and is not found here; neither is a Super Admin, who is never
+        scoped at all.
         """
+        mobile_no = (mobile_no or "").strip()
+        if not mobile_no:
+            # The serializer will not let a blank through the door, but this is a lookup *by*
+            # a number and an empty one matches every row that has none — which, now that
+            # office accounts are in scope, is most of them.
+            return None
+
         mait = (
             Mait.objects.select_related("user")
             .filter(mobile_no=mobile_no, is_active=True, user__isnull=False)
@@ -142,13 +164,22 @@ class OTPSendView(APIView):
         )
         if mait and mait.user and mait.user.is_active:
             return mait.user
-        return (
+        candidate = (
             User.objects.filter(mobile_no=mobile_no, is_active=True)
             .filter(
-                Q(role=Role.MAIT) | Q(role=Role.STORE, store__isnull=False, store__is_active=True)
+                Q(role=Role.MAIT)
+                | Q(role=Role.STORE, store__isnull=False, store__is_active=True)
+                # Narrowed again below by `is_zonal_manager`, which is the authority. The
+                # filter here only keeps the query from dragging back every office account
+                # that shares a number with nobody.
+                | Q(role=Role.ADMIN, zones__is_active=True)
             )
+            .distinct()
             .first()
         )
+        if candidate is not None and candidate.role == Role.ADMIN:
+            return candidate if candidate.is_zonal_manager else None
+        return candidate
 
 
 @extend_schema(tags=["auth"])
