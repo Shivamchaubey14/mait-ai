@@ -181,6 +181,26 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         return self.role in (Role.SUPER_ADMIN, Role.ADMIN)
 
     @property
+    def is_zonal_manager(self) -> bool:
+        """
+        An office Admin narrowed to at least one live zone — the dairy's zonal manager.
+
+        Not a role, and deliberately not one: the business's zonal manager is an ordinary
+        Admin with a zone and a few sections, and every "who" queryset in the product already
+        narrows by ``zone_scope``. Minting a fourth role would fork all of them.
+
+        What it does decide is the **app**. A head-office Admin has a desk, a browser and a
+        password; a zonal manager is out at a depot with a handset, and it is this property —
+        together with a mobile number on the account — that lets them sign in there
+        (``apps.zonal``). A Super Admin is never scoped, so they are never this.
+        """
+        return (
+            self.role == Role.ADMIN
+            and self.is_active
+            and self.zones.filter(is_active=True).exists()
+        )
+
+    @property
     def allowed_sections(self) -> list[str]:
         """
         The portal sections this account may open, in sidebar order.

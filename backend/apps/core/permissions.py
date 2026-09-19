@@ -52,6 +52,28 @@ class IsStoreKeeper(BasePermission):
         return bool(store and store.is_active)
 
 
+class IsZonalManager(BasePermission):
+    """
+    A zonal manager: an office Admin narrowed to at least one live zone.
+
+    There is no ``Role.ZONAL_MANAGER`` and there deliberately is not one — the business's
+    zonal manager is an ordinary Admin with a zone and a handful of sections, and minting a
+    role for them would fork every queryset that already scopes by ``User.zone_scope``.
+
+    What this class settles is the one thing the role cannot: who gets the *app*. A
+    head-office Admin sees the whole network and has a desk, a browser and a password; the
+    zonal manager is the account that is out at a depot with a handset, which is why the
+    zone is part of the check rather than left to each view. A Super Admin is never scoped
+    (``User.zone_scope`` says why), so they are not this either.
+    """
+
+    message = "This account is not a zonal manager."
+
+    def has_permission(self, request, view) -> bool:
+        user = request.user
+        return bool(user and user.is_authenticated and user.is_zonal_manager)
+
+
 class IsKnownRole(_RolePermission):
     """
     Signed in, as one of the roles the product's querysets know how to scope.
