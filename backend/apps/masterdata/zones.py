@@ -1,10 +1,18 @@
 """
 Zones — the dairy's own grouping of chilling centres, and who may see which.
 
-Two things live here: the setup screen's CRUD, and the list of BMC/MCCs it assigns from.
+Three things live here: the setup screen's CRUD, the list of BMC/MCCs it assigns from, and
+the people each zone is run by — their number, and what they have done with it.
+
 The scoping those zones then cause is in ``apps.core.scoping``, deliberately apart — one
 module decides what a zone *is*, another decides what it *hides*, and merging them is how a
 change to the second quietly becomes a change to the first.
+
+The managers half is here rather than on Users & roles for a reason worth keeping. Users &
+roles is the desk that hands out access: it knows an account has a zone the way it knows the
+account has fourteen sections. This screen is the one somebody opens asking *who runs
+Bahraich* — and since 2026-09-19 the answer decides something operational, because the mobile
+number on that account is what signs them into the zonal manager's app (``apps.zonal``).
 """
 
 from __future__ import annotations
@@ -13,20 +21,22 @@ from datetime import timedelta
 
 from django.db import transaction
 from django.db.models import Count, Sum
+from django.http import Http404
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 
-from apps.accounts.models import PortalSection
+from apps.accounts.models import PortalSection, Role, User, mobile_validator
 from apps.core.exceptions import RecordInUse
+from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin, in_section
 from apps.core.scoping import scope_of
 from apps.core.services import record_audit
 from apps.core.timeframe import end_of_day, start_of_day
 
-from .models import MPP, Zone, ZonePlant, plants_with_counts
+from .models import MPP, Mait, Zone, ZonePlant, plants_with_counts
 
 
 class ZoneSerializer(serializers.ModelSerializer):
@@ -176,6 +186,177 @@ class ZoneSerializer(serializers.ModelSerializer):
         return instance
 
 
+# --------------------------------------------------------------------------------------
+# The people who run a zone
+# --------------------------------------------------------------------------------------
+#: How far back the managers panel counts by default. A working window; the trail itself is
+#: append-only and a lifetime total would only ever grow.
+MANAGER_ACTIVITY_DAYS = 30
+
+#: The ceiling on one page of the activity feed.
+MANAGER_ACTIVITY_MAX = 200
+
+
+def _activity_days(request) -> int:
+    try:
+        return min(365, max(1, int(request.query_params.get("days", MANAGER_ACTIVITY_DAYS))))
+    except (TypeError, ValueError):
+        return MANAGER_ACTIVITY_DAYS
+
+
+def _scoped_managers(request):
+    """
+    Every account narrowed to a zone, within what the caller may see.
+
+    Zone-scoped accounts only: a head-office Admin has no zone and is not the manager of one,
+    and listing them here would turn a screen about who runs Bahraich into a second copy of
+    Users & roles. A caller who is themselves scoped sees the managers of the zones they
+    overlap and no others — the panel is a directory, not a way round the scope.
+    """
+    managers = (
+        User.objects.filter(role=Role.ADMIN, zones__isnull=False)
+        .prefetch_related("zones")
+        .distinct()
+        .order_by("full_name")
+    )
+    codes = scope_of(request)
+    if codes is None:
+        return managers
+    mine = set(ZonePlant.objects.filter(plant_code__in=codes).values_list("zone_id", flat=True))
+    return managers.filter(zones__id__in=mine).distinct()
+
+
+def _activity_for(user_ids: list[int], days: int) -> dict[int, dict]:
+    """
+    What each of these accounts has done lately, in one pass over the trail.
+
+    Approvals and rejections are counted from the audit log rather than from the indents.
+    Approval is stamped on the indent (``approved_by``); a rejection is not — the reason goes
+    on the indent and the actor only into the log — so the log is the single place both
+    answers exist, and taking each from a different source is how two figures on one screen
+    come to disagree.
+    """
+    if not user_ids:
+        return {}
+
+    since = start_of_day(timezone.localdate() - timedelta(days=days - 1))
+    rows = (
+        AuditLog.objects.filter(actor_id__in=user_ids, created_at__gte=since)
+        .order_by("-created_at", "-id")
+        .values("actor_id", "action", "entity_type", "meta_json", "created_at")
+    )
+
+    activity: dict[int, dict] = {
+        user_id: {"actions": 0, "approved": 0, "rejected": 0, "last": None} for user_id in user_ids
+    }
+    for row in rows:
+        stats = activity[row["actor_id"]]
+        stats["actions"] += 1
+        if stats["last"] is None:
+            stats["last"] = row["created_at"]
+        if row["action"] == AuditLog.Action.STATE_CHANGE and row["entity_type"] == "indent":
+            to = (row["meta_json"] or {}).get("to")
+            if to in ("approved", "rejected"):
+                stats[to] += 1
+    return activity
+
+
+def _maits_under(zones) -> int:
+    """How many Maits this account's live zones actually cover — the size of their patch."""
+    codes = list(ZonePlant.objects.filter(zone__in=zones).values_list("plant_code", flat=True))
+    if not codes:
+        return 0
+    return Mait.objects.filter(is_active=True, mpps__plant_code__in=codes).distinct().count()
+
+
+def manager_row(user: User, activity: dict[int, dict]) -> dict:
+    """One account, as the Zones screen reads it."""
+    stats = activity.get(user.id) or {"actions": 0, "approved": 0, "rejected": 0, "last": None}
+    zones = list(user.zones.all())
+    live = [zone for zone in zones if zone.is_active]
+    return {
+        "id": user.id,
+        "full_name": user.full_name,
+        "username": user.username,
+        "email": user.email,
+        "mobile_no": user.mobile_no,
+        "is_active": user.is_active,
+        "zone_codes": [zone.code for zone in zones],
+        "zone_names": [zone.name for zone in live],
+        # Named rather than counted: a manager whose only zone was switched off sees an empty
+        # app and an empty dashboard, and "Ayodhya Zone (inactive)" is the sentence that
+        # explains it. A bare count explains nothing.
+        "inactive_zones": [zone.name for zone in zones if not zone.is_active],
+        "sections": user.allowed_sections,
+        "last_login_at": user.last_login_at,
+        # Whether the handset app opens for them at all: a live zone and a number to send the
+        # code to. Both, and nothing else — see `User.is_zonal_manager`.
+        "app_access": bool(user.mobile_no) and user.is_zonal_manager,
+        "maits": _maits_under(live),
+        "activity": {
+            "actions": stats["actions"],
+            "approved": stats["approved"],
+            "rejected": stats["rejected"],
+            "last_action_at": stats["last"],
+        },
+    }
+
+
+def manager_rows(request) -> dict:
+    """The managers panel: who runs each zone, and what they have been doing in it."""
+    days = _activity_days(request)
+    managers = list(_scoped_managers(request))
+    activity = _activity_for([user.id for user in managers], days)
+    rows = [manager_row(user, activity) for user in managers]
+    return {
+        "days": days,
+        "count": len(rows),
+        # The two figures the panel is read for: who cannot be reached on a handset, and who
+        # has done nothing at all in the window. Counted here so the screen does not have to
+        # decide for itself what "no number" means.
+        "without_mobile": sum(1 for row in rows if not row["mobile_no"]),
+        "idle": sum(1 for row in rows if row["activity"]["actions"] == 0),
+        "results": rows,
+    }
+
+
+class ManagerMobileSerializer(serializers.Serializer):
+    """
+    The one field this screen writes: the number a zonal manager signs into the app with.
+
+    It has to be free. Sign-in resolves an account *by its mobile number*, so a manager
+    sharing one with a Mait or a store keeper would sign in as whichever the lookup found
+    first — the same rule, and very nearly the same sentence, the Stores screen applies to a
+    keeper.
+
+    Blank is allowed and means "no app": the account keeps its portal password and simply
+    cannot sign in on a handset. That is not the same as a number nobody has got round to
+    typing, which is why the panel counts those separately.
+    """
+
+    mobile_no = serializers.CharField(required=True, allow_blank=True)
+
+    def validate_mobile_no(self, value):
+        value = (value or "").strip()
+        if not value:
+            return ""
+        mobile_validator(value)
+        if Mait.objects.filter(mobile_no=value, is_active=True).exists():
+            raise serializers.ValidationError(
+                "A Mait signs in with this number. A manager needs a number of their own."
+            )
+        clash = (
+            User.objects.filter(mobile_no=value, is_active=True)
+            .exclude(pk=self.context["user"].pk)
+            .first()
+        )
+        if clash is not None:
+            raise serializers.ValidationError(
+                f"{clash.full_name} already signs in with this number."
+            )
+        return value
+
+
 @extend_schema(tags=["zones"])
 class ZoneViewSet(viewsets.ModelViewSet):
     """
@@ -248,6 +429,139 @@ class ZoneViewSet(viewsets.ModelViewSet):
             meta={"code": instance.code, "name": instance.name, "plants": instance.plant_codes},
         )
         instance.delete()
+
+    # -- the people in a zone ------------------------------------------------------------
+    #
+    # A zone is a line drawn round some chilling centres; a zonal manager is the person who
+    # works inside it. Until the app existed the two were only ever joined on Users & roles,
+    # which is the desk that hands out access rather than the desk that runs the network — so
+    # the question "who runs Ayodhya, what is their number, and what have they done with it"
+    # had no screen at all. It does now, and this answers it.
+
+    @action(detail=False, methods=["get"], url_path="managers")
+    def managers(self, request):
+        """
+        The accounts narrowed to a zone, with their number and what they have been doing.
+
+        Anyone scoped to a zone is here, whether or not they hold Indents: a zone with an
+        account on it that does nothing is exactly as worth knowing as one with a busy
+        manager. `app_access` is whether they can sign in to the handset app at all, which
+        is a mobile number and a live zone and nothing else (``User.is_zonal_manager``).
+        """
+        return Response(manager_rows(request))
+
+    @action(
+        detail=False,
+        methods=["patch"],
+        url_path=r"managers/(?P<user_id>[0-9]+)",
+    )
+    def manager(self, request, user_id=None):
+        """
+        Set a zonal manager's mobile number, from the screen where their zone is decided.
+
+        Here as well as on Users & roles, because this is the number that decides whether the
+        manager has the app, and the desk that gives somebody a zone is the desk that is
+        asked for it. Only the number: role, sections and zones are the other screen's, and a
+        second way to change them is a second way for the two to disagree.
+        """
+        user = _scoped_managers(request).filter(pk=user_id).first()
+        if user is None:
+            raise Http404("No zonal manager with that id in a zone you can see.")
+
+        serializer = ManagerMobileSerializer(data=request.data, context={"user": user})
+        serializer.is_valid(raise_exception=True)
+        before = user.mobile_no
+        user.mobile_no = serializer.validated_data["mobile_no"]
+        user.save(update_fields=["mobile_no", "updated_at"])
+
+        record_audit(
+            action="update",
+            entity_type="user",
+            entity_id=user.id,
+            request=request,
+            meta={
+                "field": "mobile_no",
+                "before": {"mobile_no": before},
+                "after": {"mobile_no": user.mobile_no},
+                "zones": user.zone_names,
+            },
+        )
+        return Response(manager_row(user, _activity_for([user.id], _activity_days(request))))
+
+    @extend_schema(
+        summary="What the zone's managers have done",
+        parameters=[
+            OpenApiParameter("manager", description="One manager's account id", type=int),
+            OpenApiParameter(
+                "days", description=f"Window, default {MANAGER_ACTIVITY_DAYS}", type=int
+            ),
+            OpenApiParameter(
+                "kind",
+                description="`decisions` (the default) drops sign-ins; `all` is the whole trail",
+                type=str,
+            ),
+            OpenApiParameter(
+                "limit", description=f"Default 50, max {MANAGER_ACTIVITY_MAX}", type=int
+            ),
+            OpenApiParameter("offset", type=int),
+        ],
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"], url_path="activity")
+    def activity(self, request):
+        """
+        What the zone's managers have actually done, newest first.
+
+        The audit trail this platform has always written, filtered to the people on the
+        screen above it and turned into sentences by the same code the Audit log screen uses
+        — one implementation, because a second would read the same rows differently and an
+        office comparing the two screens would have no way to tell which was lying.
+
+        `manager` narrows it to one of them; `days` sets the window; `limit`/`offset` page it.
+
+        `kind` is the one that matters in practice, and it defaults to `decisions`. A manager
+        who works in the portal signs in and out several times a day, so the unfiltered trail
+        is ninety sign-ins with the two approvals somebody came to read buried inside them —
+        which is a feed nobody scrolls twice. `kind=all` is the whole trail, and the Audit log
+        screen remains the place for the full grid.
+        """
+        from apps.core.audit_api import serialise
+
+        days = _activity_days(request)
+        managers = _scoped_managers(request)
+        wanted = request.query_params.get("manager")
+        if wanted and str(wanted).isdigit():
+            managers = managers.filter(pk=int(wanted))
+
+        ids = list(managers.values_list("id", flat=True))
+        since = start_of_day(timezone.localdate() - timedelta(days=days - 1))
+        trail = (
+            AuditLog.objects.select_related("actor")
+            .filter(actor_id__in=ids, created_at__gte=since)
+            .order_by("-created_at", "-id")
+        )
+        if request.query_params.get("kind", "decisions") != "all":
+            # Everything that changed a record, which is everything a manager is answerable
+            # for. Signing in is not one of those.
+            trail = trail.exclude(action__in=[AuditLog.Action.LOGIN, AuditLog.Action.LOGOUT])
+
+        try:
+            limit = min(MANAGER_ACTIVITY_MAX, max(1, int(request.query_params.get("limit", 50))))
+        except (TypeError, ValueError):
+            limit = 50
+        try:
+            offset = max(0, int(request.query_params.get("offset", 0)))
+        except (TypeError, ValueError):
+            offset = 0
+
+        total = trail.count()
+        return Response(
+            {
+                "days": days,
+                "count": total,
+                "results": [serialise(entry) for entry in trail[offset : offset + limit]],
+            }
+        )
 
     @action(detail=False, methods=["get"], url_path="plants")
     def plants(self, request):
