@@ -1182,6 +1182,71 @@ paths:
               schema:
                 $ref: '#/components/schemas/StoreAdmin'
           description: ''
+  /api/v1/admin/stores/{id}/stock/:
+    get:
+      operationId: admin_stores_stock_retrieve
+      description: |-
+        `GET` is the shelf — every item with `on_hand`, `set_aside` (packed for a Mait who has not collected) and `available`, each with its `category` (`straw`, `consumable`, `asset`) — and `catalogue`, everything a store can be stocked with.
+
+        `POST` changes one item. `mode: receive` adds a delivery, exactly as the keeper's app records one. `mode: count` sets the shelf to what was physically counted and writes the difference to the ledger as an adjustment; it is refused below what is already packed for Maits. Both are audited.
+      summary: A store's shelf, and changing it from the office
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this store.
+        required: true
+      tags:
+      - stores
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    post:
+      operationId: admin_stores_stock_create
+      description: |-
+        `GET` is the shelf — every item with `on_hand`, `set_aside` (packed for a Mait who has not collected) and `available`, each with its `category` (`straw`, `consumable`, `asset`) — and `catalogue`, everything a store can be stocked with.
+
+        `POST` changes one item. `mode: receive` adds a delivery, exactly as the keeper's app records one. `mode: count` sets the shelf to what was physically counted and writes the difference to the ledger as an adjustment; it is refused below what is already packed for Maits. Both are audited.
+      summary: A store's shelf, and changing it from the office
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this store.
+        required: true
+      tags:
+      - stores
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StockUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StockUpdateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/admin/stores/plants/:
     get:
       operationId: admin_stores_plants_retrieve
@@ -2197,6 +2262,123 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/admin/zones/activity/:
+    get:
+      operationId: admin_zones_activity_retrieve
+      description: |-
+        What the zone's managers have actually done, newest first.
+
+        The audit trail this platform has always written, filtered to the people on the
+        screen above it and turned into sentences by the same code the Audit log screen uses
+        — one implementation, because a second would read the same rows differently and an
+        office comparing the two screens would have no way to tell which was lying.
+
+        `manager` narrows it to one of them; `days` sets the window; `limit`/`offset` page it.
+
+        `kind` is the one that matters in practice, and it defaults to `decisions`. A manager
+        who works in the portal signs in and out several times a day, so the unfiltered trail
+        is ninety sign-ins with the two approvals somebody came to read buried inside them —
+        which is a feed nobody scrolls twice. `kind=all` is the whole trail, and the Audit log
+        screen remains the place for the full grid.
+      summary: What the zone's managers have done
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: Window, default 30
+      - in: query
+        name: kind
+        schema:
+          type: string
+        description: '`decisions` (the default) drops sign-ins; `all` is the whole
+          trail'
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Default 50, max 200
+      - in: query
+        name: manager
+        schema:
+          type: integer
+        description: One manager's account id
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      tags:
+      - zones
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/admin/zones/managers/:
+    get:
+      operationId: admin_zones_managers_retrieve
+      description: |-
+        The accounts narrowed to a zone, with their number and what they have been doing.
+
+        Anyone scoped to a zone is here, whether or not they hold Indents: a zone with an
+        account on it that does nothing is exactly as worth knowing as one with a busy
+        manager. `app_access` is whether they can sign in to the handset app at all, which
+        is a mobile number and a live zone and nothing else (``User.is_zonal_manager``).
+      tags:
+      - zones
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+          description: ''
+  /api/v1/admin/zones/managers/{user_id}/:
+    patch:
+      operationId: admin_zones_managers_partial_update
+      description: |-
+        Set a zonal manager's mobile number, from the screen where their zone is decided.
+
+        Here as well as on Users & roles, because this is the number that decides whether the
+        manager has the app, and the desk that gives somebody a zone is the desk that is
+        asked for it. Only the number: role, sections and zones are the other screen's, and a
+        second way to change them is a second way for the two to disagree.
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          pattern: ^[0-9]+$
+        required: true
+      tags:
+      - zones
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedZoneRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedZoneRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedZoneRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+          description: ''
   /api/v1/admin/zones/plants/:
     get:
       operationId: admin_zones_plants_retrieve
@@ -4854,6 +5036,214 @@ paths:
       - jwtAuth: []
       responses:
         '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/zonal/:
+    get:
+      operationId: zonal_retrieve
+      description: |-
+        The small answer every screen in the app needs, and the one the tab bar's badge reads: the manager, their zones, and the counts that decide whether anything is owed. The zone's actual figures are `/zonal/dashboard/`.
+
+        Narrowed to the account's own zones, always. `scope` says what the figures cover, so a number read off this screen is never repeated as a network total.
+      summary: Who this is, and what is waiting on them
+      tags:
+      - zonal
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/zonal/approvals/:
+    get:
+      operationId: zonal_approvals_retrieve
+      description: |-
+        Oldest first — the Mait who has waited longest is the one to answer. Each row carries what the decision turns on: what that Mait already holds of the item, what the depot serving them can still promise (`in_store`, or `-1` where no depot serves them yet), and how long it has sat.
+
+        `coverage` is that in one word: `ready`, `short`, `empty`, `no-store`.
+
+        Read-only. Approve and reject are `POST /indents/{id}/approve/` and `/reject/`, which is where the state machine and the audit entry live.
+      summary: The indents awaiting this manager's decision
+      parameters:
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Mait name, vendor code, or IND-13
+      tags:
+      - zonal
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/zonal/dashboard/:
+    get:
+      operationId: zonal_dashboard_retrieve
+      description: |-
+        What a manager opens the app to see: how many inseminations happened today and how that compares with yesterday, the week and the month, a day-by-day trend, who and where the work is coming from, and the last few captures as they land.
+
+        Counted off the events themselves rather than the pre-aggregated table — this is one zone over a week, and the aggregate's hourly job does not run on the no-Docker dev path at all, so reading it would report zero on a database full of events.
+      summary: The zone's work, live
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: Trend window, default 7
+      tags:
+      - zonal
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/zonal/events/:
+    get:
+      operationId: zonal_events_retrieve
+      description: |-
+        Newest first, one page at a time — never the whole table. Every status, not only completed: a capture stopped at payment is exactly the row somebody comes looking for. Each row names the farmer and whether they are a member, the collection point and the Mait with their codes.
+
+        `date_from` and `date_to` are local days, both included; either may be left out. `count` is the whole range, so the screen can say how many before anybody scrolls, and `has_more` says whether another page follows.
+
+        Narrowed to the manager's own zones through the collection point.
+      summary: Every insemination in the zone, by date
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: YYYY-MM-DD, included
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: YYYY-MM-DD, included
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Default 30, max 100
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      tags:
+      - zonal
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/zonal/events/{event_id}/:
+    get:
+      operationId: zonal_events_retrieve_2
+      description: |-
+        The record a dispute is settled from, for a manager standing in the village it happened in: the straw and the doses, what was charged and whether it cleared, the proof photo, where the handset was when it was taken, the animal and her owner, every consumable the visit used, whether it took, and the step-by-step trail.
+
+        **One request, not three.** The portal fetches the event and its trail separately because it has a desk connection and two panels that fail independently; a manager opening this on one bar of signal in a yard wants one spinner and one answer, and there is no offline cache here for the halves to arrive into separately.
+
+        Narrowed to the manager's own zones through the collection point. An event outside them is a `404`, not a `403`: whether a record exists elsewhere in the network is not this account's to learn.
+      summary: One insemination, whole
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - zonal
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/zonal/history/:
+    get:
+      operationId: zonal_history_retrieve
+      description: |-
+        Their own decisions, newest first, each with the request behind it and **where it got to since** — approved three weeks ago and still sitting at a depot is the row somebody opens this to find. A rejection carries the reason the Mait was given.
+
+        Read off the audit trail, because only half the answer is on the indent: approval is stamped on the row and a rejection is not.
+
+        Their own and nobody else's: the actor is fixed to the signed-in account and is not a parameter.
+      summary: Every approval and rejection this manager has made
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: Default 30
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Default 50, max 200
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: outcome
+        schema:
+          type: string
+        description: '`all`, `approved` or `rejected`'
+      tags:
+      - zonal
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/zonal/stock/:
+    get:
+      operationId: zonal_stock_retrieve
+      description: |-
+        Grouped by BMC/MCC first, because a manager works out which way to drive before they work out who to ring. `locations` carries each centre with the Maits under it, how many are at zero or low, and the depots that could restock them; `maits` is the flat list, emptiest first; `stores` is every depot in reach with its shelf.
+
+        **Each Mait lands in exactly one location** — the centre most of their collection points report into — so the location rows sum to the tile above them. The centres they also cover are named on the row.
+
+        The figures are read exactly as the portal's Inventory screen reads them, so the two cannot disagree about who is at zero.
+      summary: The zone's stock, by place
+      tags:
+      - zonal
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
           content:
             application/json:
               schema:
@@ -9039,6 +9429,43 @@ components:
         * `payment_pending` - Payment pending
         * `completed` - Completed
         * `cancelled` - Cancelled
+    StockUpdateModeEnum:
+      enum:
+      - receive
+      - count
+      type: string
+      description: |-
+        * `receive` - receive
+        * `count` - count
+    StockUpdateRequest:
+      type: object
+      description: |-
+        The office changing a store's shelf: a delivery that adds, or a count that replaces.
+
+        The item is chosen exactly as a keeper's delivery chooses it. Only the quantity differs: a
+        delivery needs at least one, a count may be zero — an empty shelf is a count too.
+      properties:
+        product_type:
+          $ref: '#/components/schemas/ProductTypeEnum'
+        breed:
+          type: string
+          maxLength: 30
+        product_ref_id:
+          type: integer
+          nullable: true
+        qty:
+          type: integer
+          maximum: 100000
+          minimum: 0
+        note:
+          type: string
+          maxLength: 255
+        mode:
+          $ref: '#/components/schemas/StockUpdateModeEnum'
+      required:
+      - mode
+      - product_type
+      - qty
     StoreAdmin:
       type: object
       description: |-
@@ -9439,8 +9866,8 @@ components:
           readOnly: true
         who:
           type: string
-          description: The line under the name that tells the office which Mait or
-            which store it is.
+          description: 'The line under the name: which Mait, which store, or which
+            zone it is.'
           readOnly: true
         mobile_no:
           type: string
