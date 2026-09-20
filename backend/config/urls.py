@@ -27,6 +27,7 @@ api_v1 = [
     path("payments/", include("apps.payments.urls")),
     path("indents/", include("apps.indents.urls")),
     path("", include("apps.stores.urls")),
+    path("", include("apps.zonal.urls")),
     path("", include("apps.pregnancy.urls")),
     path("", include("apps.dashboard.urls")),
     path("", include("apps.core.urls")),

@@ -57,6 +57,7 @@ LOCAL_APPS = [
     "apps.payments",
     "apps.indents",
     "apps.stores",
+    "apps.zonal",
     "apps.pregnancy",
     "apps.dashboard",
 ]
