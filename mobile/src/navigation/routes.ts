@@ -40,7 +40,18 @@ export type RouteKey =
   | 'storeProfile'
   | 'storeHistory'
   | 'storeIssue'
-  | 'storeIssued';
+  | 'storeIssued'
+  // The zonal manager's shell. Its own names again, for the reason above: "Your figures, MPPs
+  // and indents" under a manager's Profile would be describing one of their Maits — and their
+  // Indents tab is the other side of the Mait's, so it cannot borrow that key either.
+  | 'zonalHome'
+  | 'zonalIndents'
+  | 'approval'
+  | 'zoneStock'
+  | 'zonalHistory'
+  | 'zonalEvent'
+  | 'zonalEvents'
+  | 'zonalProfile';
 
 export interface RouteMeta {
   /** Ionicons, because that is the set this app draws. The spec's Lucide is not installed. */
@@ -84,6 +95,30 @@ export const ROUTES: Record<RouteKey, RouteMeta> = {
     title: 'route.storeIssued',
     context: 'route.storeIssuedContext',
   },
+  zonalHome: { icon: 'stats-chart', title: 'nav.zonalHome', context: 'route.zonalHomeContext' },
+  zonalIndents: {
+    icon: 'file-tray-full',
+    title: 'nav.zonalIndents',
+    context: 'route.zonalIndentsContext',
+  },
+  approval: { icon: 'checkmark-circle', title: 'route.approval', context: 'route.approvalContext' },
+  zoneStock: { icon: 'cube', title: 'nav.zoneStock', context: 'route.zoneStockContext' },
+  zonalHistory: {
+    icon: 'time',
+    title: 'nav.zonalHistory',
+    context: 'route.zonalHistoryContext',
+  },
+  zonalEvent: {
+    icon: 'document-text',
+    title: 'route.zonalEvent',
+    context: 'route.zonalEventContext',
+  },
+  zonalEvents: {
+    icon: 'list',
+    title: 'route.zonalEvents',
+    context: 'route.zonalEventsContext',
+  },
+  zonalProfile: { icon: 'person', title: 'nav.settings', context: 'route.zonalProfileContext' },
 };
 
 /**
@@ -119,6 +154,19 @@ const ANNOUNCED: readonly RouteKey[] = [
   'storeProfile',
   'storeHistory',
   'storeIssue',
+  // A tab change, and a record opened from a list row — the same two again. The decision
+  // screen announces because it is opened from a queue row; nothing after it does, because
+  // what follows an Approve is the answer to the button that was just pressed.
+  'zonalHome',
+  'zonalIndents',
+  'zoneStock',
+  'zonalHistory',
+  'zonalProfile',
+  'approval',
+  // A record opened from a list row, like the Mait's own AI event detail.
+  'zonalEvent',
+  // The list of every event, opened from Profile.
+  'zonalEvents',
 ];
 
 export function announces(key: RouteKey): boolean {

@@ -32,6 +32,15 @@ export interface AuthUser {
    * reading it back must not make every Mait's stored session invalid.
    */
   storeName?: string | null;
+  /**
+   * The zones this account sees, by name. Empty for everyone but a zonal manager.
+   *
+   * What decides which shell opens for an office account, and what the manager's own screens
+   * print under their name — "Ayodhya Zone" is the whole of what their app is about. Optional
+   * for the same reason `storeName` is: a session written to disk before the zonal app
+   * existed has no such field, and reading it back must not sign that person out.
+   */
+  zones?: string[];
 }
 
 interface AuthState {

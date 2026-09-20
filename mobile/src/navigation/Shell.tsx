@@ -17,6 +17,10 @@
  * sign-in does. That cannot rot the way a list of things-to-reset would — the twenty-sixth
  * piece of state somebody adds to the navigator is covered without them ever learning this
  * rule exists.
+ *
+ * There are three navigators now — a Mait's, a store keeper's and a zonal manager's — and all
+ * three are siblings for the same reason. One sign-in screen leads to whichever the account
+ * is for; none of them is a mode of another.
  */
 
 import React from 'react';
@@ -25,6 +29,7 @@ import LoginScreen from '@/features/auth/LoginScreen';
 import SplashScreen from '@/features/auth/SplashScreen';
 import RootNavigator from '@/navigation';
 import StoreNavigator from '@/navigation/store';
+import ZonalNavigator from '@/navigation/zonal';
 import { useAppSelector } from '@/store';
 
 export default function Shell({ fontsLoaded }: { fontsLoaded: boolean }): React.JSX.Element {
@@ -34,12 +39,22 @@ export default function Shell({ fontsLoaded }: { fontsLoaded: boolean }): React.
   // counter rather than a round of villages. Siblings, like login and the Mait's navigator,
   // so nothing of one is ever mounted under the other.
   const keeper = useAppSelector(state => state.auth.user?.role === 'store');
+  // And a zonal manager gets a third: the decisions waiting on them, and the zone behind
+  // those. An office account with a zone is what a zonal manager *is* — there is no role for
+  // it, deliberately (see the server's `User.is_zonal_manager`) — and sign-in admits no other
+  // kind of admin to a handset, so reading it off the session here is reading the same rule.
+  const manager = useAppSelector(
+    state => state.auth.user?.role === 'admin' && (state.auth.user?.zones?.length ?? 0) > 0,
+  );
 
   if (fontsLoaded && restored) {
     if (!signedIn) {
       return <LoginScreen />;
     }
-    return keeper ? <StoreNavigator /> : <RootNavigator />;
+    if (keeper) {
+      return <StoreNavigator />;
+    }
+    return manager ? <ZonalNavigator /> : <RootNavigator />;
   }
 
   // Two things are being waited on, so the bar can report which of them have landed rather

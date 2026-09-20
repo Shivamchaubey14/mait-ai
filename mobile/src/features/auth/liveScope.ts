@@ -68,6 +68,7 @@ export function toAuthUser(user: CurrentUser): AuthUser {
     maitId: user.mait_id,
     sahayakVendorCode: user.sahayak_vendor_code,
     storeName: user.store?.name ?? null,
+    zones: user.zones?.names ?? [],
   };
 }
 

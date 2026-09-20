@@ -37,6 +37,16 @@ export type Tab = 'home' | 'stock' | 'history' | 'settings';
  */
 export type StoreTab = 'toIssue' | 'storeStock' | 'storeHistory' | 'settings';
 
+/**
+ * A zonal manager's five.
+ *
+ * One more than the other two shells carry, and the extra one earns its place: a manager's
+ * first question is *is my zone working* and their second is *what is waiting on me*, and
+ * those are two screens, not one. Profile keeps the Mait's `settings` key again — it is the
+ * same place under the same name, whoever is signed in.
+ */
+export type ZonalTab = 'zonalHome' | 'zonalIndents' | 'zoneStock' | 'zonalHistory' | 'settings';
+
 export interface NavItem<T extends string> {
   key: T;
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -57,6 +67,21 @@ export const STORE_TABS: NavItem<StoreTab>[] = [
   // What went over the counter, and when. The same clock the Mait's AI events tab is not —
   // that one is a document — because this is a record of times, not of paperwork.
   { key: 'storeHistory', icon: 'time-outline', activeIcon: 'time' },
+  { key: 'settings', icon: 'person-outline', activeIcon: 'person' },
+];
+
+/**
+ * The zone, the paperwork, the goods, the record, and the person.
+ *
+ * *Indents* is a tray rather than a tick — the same glyph the Mait's own indent screens wear,
+ * because it is the same object seen from the other side of the decision. The box beside it
+ * is stock, which is where the goods actually are.
+ */
+export const ZONAL_TABS: NavItem<ZonalTab>[] = [
+  { key: 'zonalHome', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
+  { key: 'zonalIndents', icon: 'file-tray-full-outline', activeIcon: 'file-tray-full' },
+  { key: 'zoneStock', icon: 'cube-outline', activeIcon: 'cube' },
+  { key: 'zonalHistory', icon: 'time-outline', activeIcon: 'time' },
   { key: 'settings', icon: 'person-outline', activeIcon: 'person' },
 ];
 
@@ -131,7 +156,12 @@ export default function BottomNav<T extends string = Tab>({
                 )}
               </View>
 
-              <Text style={[styles.label, isActive && styles.labelActive]} numberOfLines={1}>
+              <Text
+                style={[styles.label, isActive && styles.labelActive]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
                 {t(`nav.${key}`)}
               </Text>
             </Pressable>
@@ -173,7 +203,10 @@ const styles = StyleSheet.create({
     gap: spacing[1],
     minHeight: MIN_TOUCH_TARGET,
   },
-  label: { ...typography.caption, color: colors.textMuted },
+  // Two lines at most, and shrinking rather than truncating: with five tabs a Hindi label
+  // like "स्वीकृतियाँ" has less room than its English twin, and an ellipsis in a tab bar is
+  // a label that has stopped naming anything.
+  label: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
   labelActive: {
     color: colors.primary,
     fontFamily: typography.bodyStrong.fontFamily,
