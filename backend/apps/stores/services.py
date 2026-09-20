@@ -237,6 +237,89 @@ def receive_stock(
     return stock
 
 
+@transaction.atomic
+def correct_stock(
+    *,
+    store: Store,
+    product_type: str,
+    counted: int,
+    breed: str = "",
+    product_ref_id: int = 0,
+    actor=None,
+    note: str = "",
+    request=None,
+) -> StoreStock:
+    """
+    Set the shelf to what was physically counted — the office's correction, not a delivery.
+
+    A delivery adds; a count *replaces*, because the one thing an office knows after a stock
+    take is the number on the shelf, not the difference. The difference is what the ledger
+    records, as an adjustment, so the shelf stays the sum of its rows.
+
+    Never below what is set aside. Those straws are packed for a Mait who has been read a
+    code; a count under them would promise the same straws to nobody and leave that Mait's
+    code unable to credit anything.
+    """
+    if counted < 0:
+        raise serializers.ValidationError({"qty": ["A count cannot be below nothing."]})
+
+    if product_type == ProductType.STRAW:
+        breed = (breed or "").strip().upper()
+        product_ref_id = 0
+    else:
+        breed = ""
+
+    stock, _ = StoreStock.objects.select_for_update().get_or_create(
+        store=store,
+        product_type=product_type,
+        breed=breed,
+        product_ref_id=product_ref_id,
+        defaults={"qty_on_hand": 0},
+    )
+    item = (product_type, breed, int(product_ref_id or 0))
+    packed = availability(store).get(item, {}).get("set_aside", 0)
+    if counted < packed:
+        raise serializers.ValidationError(
+            {
+                "qty": [
+                    f"{packed} are packed for Maits who have not collected them yet, so the "
+                    f"shelf cannot hold fewer than {packed}."
+                ]
+            }
+        )
+    change = counted - stock.qty_on_hand
+    if change == 0:
+        raise serializers.ValidationError(
+            {"qty": [f"The shelf already holds {counted} — nothing to change."]}
+        )
+
+    stock.qty_on_hand = counted
+    stock.save(update_fields=["qty_on_hand", "updated_at"])
+    StoreLedger.objects.create(
+        stock=stock,
+        txn_type=StoreLedger.TxnType.ADJUSTMENT,
+        qty=change,
+        balance_after=counted,
+        note=(note or "")[:255],
+        created_by=actor,
+    )
+    record_audit(
+        action=AuditLog.Action.UPDATE,
+        entity_type="store_stock",
+        entity_id=stock.id,
+        actor=actor,
+        request=request,
+        meta={
+            "store": store.code,
+            "item": breed or product_ref_id,
+            "before": counted - change,
+            "after": counted,
+            "note": (note or "")[:255],
+        },
+    )
+    return stock
+
+
 def release_to_mait(handover: IndentHandover, actor=None) -> None:
     """
     Take a collected handover off the store's shelf.

@@ -33,6 +33,7 @@ class ItemNames:
             pk: (name, unit)
             for pk, name, unit in Consumable.objects.values_list("id", "name", "unit")
         }
+        self.categories = dict(Consumable.objects.values_list("id", "category"))
 
     def name(self, product_type: str, breed: str, ref: int) -> str:
         if product_type == ProductType.STRAW:
@@ -43,6 +44,12 @@ class ItemNames:
         if product_type == ProductType.STRAW:
             return self.breeds.get(breed, ("", ""))[1]
         return ""
+
+    def category(self, product_type: str, ref: int) -> str:
+        """`straw`, `consumable` or `asset` — the three kinds a store's shelf is read in."""
+        if product_type == ProductType.STRAW:
+            return "straw"
+        return self.categories.get(int(ref or 0), "consumable")
 
     def unit(self, product_type: str, ref: int) -> str:
         if product_type == ProductType.STRAW:
@@ -263,6 +270,24 @@ class ReceiveSerializer(serializers.Serializer):
         return attrs
 
 
+class StockUpdateSerializer(ReceiveSerializer):
+    """
+    The office changing a store's shelf: a delivery that adds, or a count that replaces.
+
+    The item is chosen exactly as a keeper's delivery chooses it. Only the quantity differs: a
+    delivery needs at least one, a count may be zero — an empty shelf is a count too.
+    """
+
+    mode = serializers.ChoiceField(choices=["receive", "count"])
+    qty = serializers.IntegerField(min_value=0, max_value=100000)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs["mode"] == "receive" and attrs["qty"] < 1:
+            raise serializers.ValidationError({"qty": ["A delivery is at least one."]})
+        return attrs
+
+
 def stock_lines(store: Store, names: ItemNames | None = None) -> list[dict]:
     """
     The shelf, one line per item: on hand, set aside for a Mait, and free to promise.
@@ -284,6 +309,7 @@ def stock_lines(store: Store, names: ItemNames | None = None) -> list[dict]:
                 "item_name": names.name(product_type, breed, ref),
                 "item_name_hi": names.name_hi(product_type, breed),
                 "unit": names.unit(product_type, ref),
+                "category": names.category(product_type, ref),
                 **count,
             }
         )
@@ -396,7 +422,11 @@ class StoreAdminSerializer(serializers.ModelSerializer):
 
     def get_stock(self, store) -> list[dict]:
         return [
-            {"item_name": line["item_name"], "on_hand": line["on_hand"]}
+            {
+                "item_name": line["item_name"],
+                "on_hand": line["on_hand"],
+                "category": line["category"],
+            }
             for line in stock_lines(store, _names(self.context))
         ]
 

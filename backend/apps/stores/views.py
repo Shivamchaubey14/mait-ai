@@ -36,6 +36,7 @@ from .serializers import (
     IssueSerializer,
     ItemNames,
     ReceiveSerializer,
+    StockUpdateSerializer,
     StoreAdminSerializer,
     StoreHandoverSerializer,
     StoreIndentSerializer,
@@ -44,6 +45,7 @@ from .serializers import (
 from .services import (
     availability,
     cancel_handover,
+    correct_stock,
     issue_from_store,
     open_indents,
     receive_stock,
@@ -412,6 +414,61 @@ class StoreAdminViewSet(viewsets.ModelViewSet):
         )
         User.objects.filter(store=instance, role=Role.STORE).update(is_active=False)
         instance.delete()
+
+    @extend_schema(
+        summary="A store's shelf, and changing it from the office",
+        description=(
+            "`GET` is the shelf — every item with `on_hand`, `set_aside` (packed for a Mait "
+            "who has not collected) and `available`, each with its `category` (`straw`, "
+            "`consumable`, `asset`) — and `catalogue`, everything a store can be stocked with.\n\n"
+            "`POST` changes one item. `mode: receive` adds a delivery, exactly as the keeper's "
+            "app records one. `mode: count` sets the shelf to what was physically counted and "
+            "writes the difference to the ledger as an adjustment; it is refused below what "
+            "is already packed for Maits. Both are audited."
+        ),
+        request=StockUpdateSerializer,
+        responses=OpenApiTypes.OBJECT,
+    )
+    @action(detail=True, methods=["get", "post"], url_path="stock")
+    def stock(self, request, pk=None):
+        store = self.get_object()
+        if request.method == "POST":
+            payload = StockUpdateSerializer(data=request.data)
+            payload.is_valid(raise_exception=True)
+            data = payload.validated_data
+            common = {
+                "store": store,
+                "product_type": data["product_type"],
+                "breed": data.get("breed", ""),
+                "product_ref_id": data.get("product_ref_id") or 0,
+                "note": data.get("note", ""),
+                "actor": request.user,
+                "request": request,
+            }
+            if data["mode"] == "receive":
+                receive_stock(qty=data["qty"], **common)
+            else:
+                correct_stock(counted=data["qty"], **common)
+
+        names = ItemNames()
+        breeds = list(
+            BreedConfig.objects.filter(is_active=True)
+            .order_by("animal_type", "display_order", "name")
+            .values("code", "name", "name_hi", "animal_type")
+        )
+        products = list(
+            Consumable.objects.filter(is_active=True)
+            .order_by("category", "display_order", "name")
+            .values("id", "name", "unit", "category")
+        )
+        return Response(
+            {
+                "store": self.get_serializer(store).data,
+                "lines": stock_lines(store, names),
+                "catalogue": {"breeds": breeds, "products": products},
+            },
+            status=status.HTTP_201_CREATED if request.method == "POST" else status.HTTP_200_OK,
+        )
 
     @extend_schema(summary="Every BMC/MCC, and the store that serves it")
     @action(detail=False, methods=["get"], url_path="plants")
