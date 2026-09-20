@@ -3,169 +3,34 @@
  *
  * The keeper's app is the Mait's app with a different job, so it wears the same frame: the Ink
  * hero welded to the top with its bottom corners rounded, white cards outlined on the grey
- * page, one green action at the foot. What is particular to the store is small — the pill that
- * says which store this is, a green hero for a handover that has happened, and the stepper a
- * keeper counts straws out with.
+ * page, one green action at the foot. That frame moved to `components/frame.tsx` the day the
+ * zonal manager's shell needed it too — the names here are unchanged and re-exported, because
+ * a rename across six screens and their tests would be a diff about nothing.
+ *
+ * What is left in this file is genuinely the store's: the word a shelf puts on an indent, the
+ * stepper a keeper counts straws out with, and the flask toggle.
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { StatusBar } from 'expo-status-bar';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTranslation } from 'react-i18next';
 
-import { fitTitleSize } from '@/components/hero';
-import {
-  colors,
-  MIN_TOUCH_TARGET,
-  radius,
-  shadows,
-  spacing,
-  typography,
-  yolk,
-} from '@theme/tokens';
+import { AppHero, FooterAction, frameStyles } from '@/components/frame';
+import { colors, radius, shadows, spacing, typography } from '@theme/tokens';
 
 import type { StoreIndent } from '@api/types';
 
-/** The breed or product as the keeper reads it, in the language the app is in. */
-export function itemLabel(
-  item: { item_name: string; item_name_hi: string },
-  language: string,
-): string {
-  return (language.startsWith('hi') && item.item_name_hi) || item.item_name;
-}
+export { clock, itemLabel, Pill } from '@/components/frame';
+export type { PillTone } from '@/components/frame';
 
-/** 24-hour and local: the keeper is matching a slip against a clock on the wall. */
-export function clock(iso: string | null | undefined): string {
-  if (!iso) {
-    return '';
-  }
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) {
-    return '';
-  }
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-// --------------------------------------------------------------------------------------
-// Hero
-// --------------------------------------------------------------------------------------
-/**
- * The top of every store screen.
- *
- * Ink for a place and a question, green for a handover that has just happened — the same
- * split the capture flow makes between a step and *Recorded*, so green keeps meaning "done"
- * across both halves of the product. The back control sits on the right, where the mockup
- * puts it, so the left edge always starts with the words.
- */
-export function StoreHero({
-  eyebrow,
-  title,
-  subtitle,
-  pill,
-  onBack,
-  done = false,
-  testID,
-}: {
-  eyebrow?: string;
-  title: string;
-  subtitle?: string;
-  /** The store's name, in the corner. */
-  pill?: string;
-  onBack?: () => void;
-  /** Green, with the tick in place of the top row. */
-  done?: boolean;
-  testID?: string;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const fontSize = fitTitleSize(title, width - spacing[5] * 2);
-
-  return (
-    <View
-      style={[styles.hero, done && styles.heroDone, { paddingTop: insets.top + spacing[4] }]}
-      testID={testID}
-    >
-      <StatusBar style="light" backgroundColor={done ? colors.primaryDark : colors.ink} />
-
-      {done ? (
-        <View style={styles.doneRow}>
-          <View style={styles.doneDisc}>
-            <Ionicons name="checkmark" size={30} color={colors.surface} />
-          </View>
-        </View>
-      ) : (
-        <View style={styles.top}>
-          {!!eyebrow && <Text style={styles.eyebrow}>{eyebrow}</Text>}
-          <View style={styles.topRight}>
-            {!!pill && (
-              <View style={styles.storePill} testID="store-pill">
-                <Text style={styles.storePillLabel} numberOfLines={1}>
-                  {pill}
-                </Text>
-              </View>
-            )}
-            {!!onBack && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('common.back')}
-                onPress={onBack}
-                style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
-                testID="store-back"
-              >
-                <Ionicons name="arrow-back" size={20} color={colors.surface} />
-              </Pressable>
-            )}
-          </View>
-        </View>
-      )}
-
-      <Text
-        style={[
-          styles.title,
-          { fontSize, lineHeight: Math.round(fontSize * 1.3) },
-          done && styles.centred,
-        ]}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.75}
-      >
-        {title}
-      </Text>
-      {!!subtitle && (
-        <Text style={[styles.subtitle, done && styles.subtitleDone, done && styles.centred]}>
-          {subtitle}
-        </Text>
-      )}
-    </View>
-  );
-}
+/** The store's hero and its one green action, under the names the keeper's screens use. */
+export const StoreHero = AppHero;
+export const StoreAction = FooterAction;
+export const storeStyles = frameStyles;
 
 // --------------------------------------------------------------------------------------
 // Readiness pill
 // --------------------------------------------------------------------------------------
-export type PillTone = 'good' | 'waiting' | 'bad' | 'plain';
-
-export function Pill({
-  label,
-  tone,
-  testID,
-}: {
-  label: string;
-  tone: PillTone;
-  testID?: string;
-}): React.JSX.Element {
-  return (
-    <View style={[styles.pill, styles[`pill_${tone}`]]} testID={testID}>
-      <Text style={[styles.pillLabel, styles[`pillLabel_${tone}`]]} numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 /**
  * What the shelf can do about an indent, as the word on its row.
  *
@@ -176,7 +41,7 @@ export function Pill({
 export function readinessPill(
   indent: StoreIndent,
   t: (key: string, options?: Record<string, unknown>) => string,
-): { label: string; tone: PillTone } {
+): { label: string; tone: 'good' | 'waiting' | 'bad' | 'plain' } {
   if (indent.readiness === 'ready') {
     return { label: t('store.pillReady'), tone: 'good' };
   }
@@ -298,148 +163,7 @@ export function Toggle({
   );
 }
 
-// --------------------------------------------------------------------------------------
-// Footer action
-// --------------------------------------------------------------------------------------
-/** The one green action at the foot of a store screen. */
-export function StoreAction({
-  label,
-  onPress,
-  disabled = false,
-  busy = false,
-  icon,
-  tone = 'primary',
-  testID,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  busy?: boolean;
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
-  /** `outline` for the quiet second action — *Find*, *Print slip*. */
-  tone?: 'primary' | 'outline';
-  testID?: string;
-}): React.JSX.Element {
-  const inert = disabled || busy;
-  const outline = tone === 'outline';
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: inert, busy }}
-      onPress={onPress}
-      disabled={inert}
-      style={({ pressed }) => [
-        styles.action,
-        outline ? styles.actionOutline : inert ? styles.actionInert : styles.actionPrimary,
-        pressed && !inert && (outline ? styles.actionOutlinePressed : styles.actionPressed),
-      ]}
-      testID={testID}
-    >
-      {!!icon && (
-        <Ionicons
-          name={icon}
-          size={18}
-          color={outline ? colors.ink : inert ? colors.textDisabled : colors.surface}
-        />
-      )}
-      <Text
-        style={[
-          styles.actionLabel,
-          outline && styles.actionLabelOutline,
-          inert && !outline && styles.actionLabelInert,
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-export const storeStyles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
-  body: { padding: spacing[4], paddingBottom: spacing[5] },
-  footer: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[3],
-    paddingBottom: spacing[2],
-    backgroundColor: colors.background,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing[4],
-    marginBottom: spacing[3],
-  },
-  cardTitle: { ...typography.h3, color: colors.ink },
-  cardMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-});
-
 const styles = StyleSheet.create({
-  hero: {
-    backgroundColor: colors.ink,
-    borderBottomLeftRadius: radius.xl,
-    borderBottomRightRadius: radius.xl,
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[5],
-  },
-  heroDone: { backgroundColor: colors.primaryDark },
-  top: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 38,
-    marginBottom: spacing[3],
-  },
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginLeft: 'auto' },
-  eyebrow: { ...typography.label, color: colors.surface, opacity: 0.8 },
-  storePill: {
-    maxWidth: 180,
-    paddingHorizontal: spacing[3],
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.88)',
-  },
-  storePillLabel: {
-    ...typography.caption,
-    fontFamily: typography.label.fontFamily,
-    color: colors.ink,
-  },
-  back: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  backPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
-  doneRow: { alignItems: 'center', marginBottom: spacing[3] },
-  doneDisc: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { ...typography.display, color: colors.surface },
-  subtitle: { ...typography.body, color: colors.surface, opacity: 0.72, marginTop: spacing[1] },
-  subtitleDone: { ...typography.label, opacity: 0.85 },
-  centred: { textAlign: 'center' },
-
-  pill: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.pill },
-  pill_plain: { backgroundColor: colors.background },
-  pill_good: { backgroundColor: colors.primaryWash },
-  pill_waiting: { backgroundColor: colors.secondaryWash },
-  pill_bad: { backgroundColor: colors.errorWash },
-  pillLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
-  pillLabel_plain: { color: colors.textMuted },
-  pillLabel_good: { color: colors.primaryDark },
-  pillLabel_waiting: { color: yolk[800] },
-  pillLabel_bad: { color: colors.error },
-
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -479,27 +203,4 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   thumbOn: { alignSelf: 'flex-end' },
-
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    minHeight: 54,
-    paddingHorizontal: spacing[4],
-    borderRadius: radius.lg,
-  },
-  actionPrimary: { backgroundColor: colors.primary },
-  actionPressed: { backgroundColor: colors.primaryPressed },
-  actionInert: { backgroundColor: colors.disabledFill },
-  actionOutline: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    minHeight: MIN_TOUCH_TARGET + 6,
-  },
-  actionOutlinePressed: { backgroundColor: colors.background },
-  actionLabel: { ...typography.bodyStrong, fontSize: 16, color: colors.surface },
-  actionLabelOutline: { color: colors.ink },
-  actionLabelInert: { color: colors.textDisabled },
 });
