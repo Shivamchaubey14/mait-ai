@@ -40,6 +40,13 @@ import type {
   StoreIndent,
   StoreReceipt,
   StoreStockLine,
+  ZonalApproval,
+  ZonalDashboard,
+  ZonalHistory,
+  ZonalEvent,
+  ZonalEventPage,
+  ZonalHome,
+  ZoneStock,
   Paginated,
   StrawValidation,
   TokenPair,
@@ -629,6 +636,115 @@ export const maitaiApi = api.injectEndpoints({
       invalidatesTags: ['Pregnancy', 'AIEvent'],
     }),
 
+    // ---- zonal manager -----------------------------------------------------------------
+    /**
+     * The zonal manager's side of the same product: the zone's work, what is waiting on their
+     * decision, the stock behind it, and every decision they have already taken.
+     *
+     * Five reads under `/zonal/`, which answers a manager and nobody else, plus two writes
+     * that are deliberately *not* theirs. The decision posts to
+     * `/indents/{id}/approve|reject/` — where the state machine, the store routing and the
+     * audit entry already live. A second copy would be a second answer for the portal to
+     * disagree with.
+     *
+     * Everything is tagged `Zonal` and a decision invalidates the lot: approving an indent
+     * changes the queue, the badge on the tab bar and the history at once, and three screens
+     * disagreeing about the same request is worse than one refetch. `Indent` goes with it,
+     * because that is what actually changed.
+     */
+    getZonalHome: builder.query<ZonalHome, void>({
+      query: () => '/zonal/',
+      providesTags: ['Zonal'],
+    }),
+
+    /** The zone's work, live. `days` is the trend window the chart draws. */
+    getZonalDashboard: builder.query<ZonalDashboard, { days?: number } | void>({
+      query: args => ({ url: '/zonal/dashboard/', params: { days: args?.days ?? 7 } }),
+      providesTags: ['Zonal'],
+    }),
+
+    listZonalApprovals: builder.query<{ count: number; results: ZonalApproval[] }, void>({
+      query: () => '/zonal/approvals/',
+      providesTags: ['Zonal'],
+    }),
+
+    /** The zone's stock, grouped by chilling centre — and flat, by Mait and by depot. */
+    getZoneStock: builder.query<ZoneStock, void>({
+      query: () => '/zonal/stock/',
+      providesTags: ['Zonal', 'Inventory'],
+    }),
+
+    /** Every approval and rejection they have made, with where each one got to since. */
+    getZonalHistory: builder.query<
+      ZonalHistory,
+      { days?: number; outcome?: 'all' | 'approved' | 'rejected' } | void
+    >({
+      query: args => ({
+        url: '/zonal/history/',
+        params: { days: args?.days ?? 30, outcome: args?.outcome ?? 'all' },
+      }),
+      providesTags: ['Zonal'],
+    }),
+
+    /**
+     * One insemination, whole — the record behind a row in the zone's feed.
+     *
+     * Its own tag rather than `Zonal`, so approving an indent does not throw away a record
+     * somebody is reading: nothing a manager can do from this app changes an AI event, and a
+     * refetch mid-dispute is a screen that blanks while somebody is being argued with.
+     */
+    /**
+     * The zone's inseminations, a page at a time, narrowed by dates.
+     *
+     * Each page is its own cache entry, keyed on its offset; the screen holds the pages it has
+     * asked for and joins them, so "Load more" never refetches what is already on screen.
+     */
+    listZonalEvents: builder.query<
+      ZonalEventPage,
+      { dateFrom?: string; dateTo?: string; offset?: number; limit?: number }
+    >({
+      query: ({ dateFrom, dateTo, offset = 0, limit = 30 }) => ({
+        url: '/zonal/events/',
+        params: {
+          ...(dateFrom ? { date_from: dateFrom } : {}),
+          ...(dateTo ? { date_to: dateTo } : {}),
+          offset,
+          limit,
+        },
+      }),
+      providesTags: ['Zonal'],
+    }),
+
+    getZonalEvent: builder.query<ZonalEvent, number>({
+      query: id => `/zonal/events/${id}/`,
+      providesTags: (result, error, id) => [{ type: 'AIEvent', id }],
+    }),
+
+    /**
+     * Agree to a request. Moves no stock — the depot hands it over and the Mait's code
+     * credits it, which is the same chain whoever pressed this.
+     */
+    approveIndent: builder.mutation<unknown, number>({
+      query: id => ({ url: `/indents/${id}/approve/`, method: 'POST' }),
+      invalidatesTags: ['Zonal', 'Indent'],
+    }),
+
+    /**
+     * Decline it, with the reason.
+     *
+     * The reason is not optional in the app even though the API allows a blank one: the Mait
+     * reads the indent, not the audit log, and "rejected" with nothing under it is a phone
+     * call to the office that somebody has to take.
+     */
+    rejectIndent: builder.mutation<unknown, { id: number; reason: string }>({
+      query: ({ id, reason }) => ({
+        url: `/indents/${id}/reject/`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: ['Zonal', 'Indent'],
+    }),
+
     getAiEvent: builder.query<AIEvent, number>({
       query: id => `/ai-events/${id}/`,
       providesTags: ['AIEvent'],
@@ -697,4 +813,13 @@ export const {
   useGetStoreStockQuery,
   useGetStoreCatalogueQuery,
   useReceiveStoreStockMutation,
+  useGetZonalHomeQuery,
+  useGetZonalDashboardQuery,
+  useListZonalApprovalsQuery,
+  useGetZoneStockQuery,
+  useGetZonalHistoryQuery,
+  useGetZonalEventQuery,
+  useListZonalEventsQuery,
+  useApproveIndentMutation,
+  useRejectIndentMutation,
 } = maitaiApi;

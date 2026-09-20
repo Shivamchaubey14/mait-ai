@@ -226,6 +226,7 @@ export const api = createApi({
     'Payment',
     'Pregnancy',
     'Store',
+    'Zonal',
   ],
   // Endpoints are injected per feature slice so this module never becomes a dumping ground.
   endpoints: () => ({}),

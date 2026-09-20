@@ -30,6 +30,15 @@ export interface CurrentUser {
   assigned_mpp_codes: string[];
   /** The store a keeper works. Null for everyone else — and what decides which shell opens. */
   store?: { id: number; code: string; name: string } | null;
+  /**
+   * How much of the network this account sees, by name.
+   *
+   * `scoped` on an office account is what makes them a zonal manager rather than head
+   * office, and it is the other half of what decides which shell opens. Optional because a
+   * session written to disk before the zonal app existed has no such field, and reading one
+   * back must not invalidate it.
+   */
+  zones?: { scoped: boolean; names: string[] };
 }
 
 export interface Paginated<T> {
@@ -830,4 +839,287 @@ export interface PdRoute {
   options: { shortest: RouteOption; late_first: RouteOption };
   /** Checks with no recorded position. They cannot be placed, so they go last. */
   without_location: number;
+}
+
+// --------------------------------------------------------------------------------------
+// The zonal manager's app
+// --------------------------------------------------------------------------------------
+/**
+ * Who this is, and what is waiting on them.
+ *
+ * The small answer every screen needs and the tab bar's badge reads. `waiting` is what is
+ * waiting on *them*; `at_depot` is what is waiting on a store keeper, which is a different
+ * phone call. The zone's actual figures are `ZonalDashboard`.
+ */
+export interface ZonalHome {
+  manager: { name: string; mobile_no: string; zones: string[]; sections: string[] };
+  waiting: number;
+  oldest_waiting_days: number;
+  at_depot: number;
+  maits: number;
+  stores: number;
+  scope: { scoped: boolean; zones: string[]; plant_codes: string[] | null };
+}
+
+/** One day of the trend, already bucketed by the server so the chart does no arithmetic. */
+export interface ZonalTrendDay {
+  date: string;
+  label: string;
+  short_label: string;
+  completed: number;
+}
+
+/** A row in one of the two "busiest" panels. `share` is against the leader, not a target. */
+export interface ZonalRanked {
+  name: string;
+  events: number;
+  share: number;
+  /** Maits carry their vendor code here; villages carry their chilling centre. */
+  code?: string;
+  mait_id?: number;
+  mpp_code?: string;
+  plant_name?: string;
+}
+
+/** One capture, as it lands — the feed that makes the zone feel live. */
+export interface ZonalCapture {
+  id: number;
+  mait_name: string;
+  mait_code: string;
+  mpp_name: string;
+  mpp_code: string;
+  plant_name: string;
+  breed: string;
+  doses: number;
+  when: string;
+}
+
+/** One row of `GET /zonal/events/` — every status, not only completed. */
+export interface ZonalEventRow {
+  id: number;
+  status: string;
+  status_display: string;
+  owner_type: 'member' | 'non_member';
+  owner_name: string;
+  mpp_name: string;
+  mpp_code: string;
+  mait_name: string;
+  mait_code: string;
+  breed: string;
+  doses: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
+/** A page of the zone's events. `count` is the whole range, never the page. */
+export interface ZonalEventPage {
+  count: number;
+  results: ZonalEventRow[];
+  date_from: string | null;
+  date_to: string | null;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
+/** The zone's work: what a manager opens the app to see. */
+export interface ZonalDashboard {
+  days: number;
+  today: number;
+  yesterday: number;
+  on_yesterday: number;
+  week: number;
+  month: number;
+  maits_working_today: number;
+  in_progress: number;
+  payment_pending: number;
+  trend: ZonalTrendDay[];
+  best_day: ZonalTrendDay | null;
+  busiest_maits: ZonalRanked[];
+  busiest_villages: ZonalRanked[];
+  happening: ZonalCapture[];
+  scope: { scoped: boolean; zones: string[]; plant_codes: string[] | null };
+}
+
+/**
+ * One indent awaiting a decision, with the facts the decision turns on.
+ *
+ * `in_store` is what the depot serving this Mait can still promise — and `-1` means no depot
+ * serves them at all, which is a different answer from a depot holding nothing. `coverage`
+ * says the same thing in one word, which is what the row wears.
+ */
+export interface ZonalApproval {
+  id: number;
+  mait: number;
+  mait_name: string;
+  mait_code: string;
+  mpp_names: string[];
+  product_type: 'straw' | 'consumable';
+  breed: string;
+  item_name: string;
+  item_name_hi: string;
+  unit: string;
+  qty_requested: number;
+  note: string;
+  requested_at: string;
+  waiting_days: number;
+  status: string;
+  store: number | null;
+  store_name: string;
+  in_store: number;
+  mait_holds: number;
+  coverage: 'ready' | 'short' | 'empty' | 'no-store';
+}
+
+/** What a Mait is holding, and which chilling centre they are counted under. */
+export interface ZoneStockMait {
+  mait_id: number;
+  name: string;
+  code: string;
+  mobile_no: string;
+  plant_code: string;
+  plant_name: string;
+  /** The other centres they cover — named, so an empty Mait can be placed on a map. */
+  also_covers: string[];
+  mpps: number;
+  total: number;
+  by_breed: Record<string, number>;
+  state: 'at_zero' | 'low' | 'ok';
+}
+
+/** A depot's shelf, as the zone sees it. */
+export interface ZoneStockStore {
+  id: number;
+  code: string;
+  name: string;
+  plant_codes: string[];
+  plant_names: string[];
+  straws_on_hand: number;
+  straws_set_aside: number;
+  straws_available: number;
+  by_breed: Record<string, number>;
+  open_indents: number;
+}
+
+/**
+ * One chilling centre, with everything held under it.
+ *
+ * Each Mait appears at exactly one location — the centre most of their collection points
+ * report into — so these rows sum to the figure in the tile above them.
+ */
+export interface ZoneStockLocation {
+  plant_code: string;
+  name: string;
+  maits: number;
+  at_zero: number;
+  low: number;
+  straws: number;
+  by_breed: Record<string, number>;
+  stores: { id: number; name: string; straws_available: number; open_indents: number }[];
+}
+
+/**
+ * One item in the zone — a breed of straw, a consumable, a piece of equipment — with where it
+ * is and what is on its way. `requested` waits on the manager, `approved` waits at a depot,
+ * `set_aside` is packed and waiting to be collected.
+ */
+export interface ZoneStockProduct {
+  key: string;
+  category: 'straw' | 'consumable' | 'asset';
+  name: string;
+  name_hi: string;
+  unit: string;
+  with_maits: number;
+  maits_holding: number;
+  at_depots: number;
+  set_aside: number;
+  free: number;
+  requested: number;
+  approved: number;
+}
+
+export interface ZoneStock {
+  summary: {
+    total_straws: number;
+    maits: number;
+    at_zero: number;
+    low: number;
+    low_stock_threshold: number;
+    locations: number;
+    stores: number;
+    store_straws: number;
+  };
+  locations: ZoneStockLocation[];
+  maits: ZoneStockMait[];
+  stores: ZoneStockStore[];
+  /** Absent from a server older than the product view. */
+  products?: Record<'straw' | 'consumable' | 'asset', ZoneStockProduct[]>;
+  scope: { scoped: boolean; zones: string[]; plant_codes: string[] | null };
+}
+
+/**
+ * One decision, with the request behind it and where it got to since.
+ *
+ * `status_label` is that last part in words — *Waiting at the depot* against something
+ * approved three weeks ago is the row somebody opens their own history to find.
+ */
+export interface ZonalDecision {
+  id: number;
+  when: string;
+  outcome: 'approved' | 'rejected';
+  indent_id: number | null;
+  mait_name: string;
+  mait_code: string;
+  item_name: string;
+  item_name_hi: string;
+  qty: number;
+  status: string;
+  status_label: string;
+  status_tone: 'good' | 'waiting' | 'bad' | 'plain';
+  store_name: string;
+  /** The words the Mait was given. Only on a rejection. */
+  reason: string;
+  /** What it was for — absent from a server older than the coloured history. */
+  product_type?: 'straw' | 'consumable' | '';
+  unit?: string;
+  /** How much has been handed over since, of `qty`. */
+  qty_issued?: number;
+}
+
+export interface ZonalHistory {
+  summary: {
+    days: number;
+    approved: number;
+    rejected: number;
+    total: number;
+    last_signed_in: string | null;
+  };
+  outcome: 'all' | 'approved' | 'rejected';
+  count: number;
+  results: ZonalDecision[];
+}
+
+/**
+ * One insemination, whole — what `/zonal/events/{id}/` answers.
+ *
+ * The same record the portal's AI event detail screen draws, in one response rather than
+ * three: a manager opening this in a yard on one bar of signal wants one spinner, and there
+ * is no offline cache here for the halves to arrive into separately.
+ *
+ * Extends the event the Mait's own screens read, and adds the three things a manager needs
+ * that a Mait does not: **whose** capture it was, whether it took, and the trail.
+ */
+export interface ZonalEvent extends AIEvent {
+  /**
+   * Whose capture it was.
+   *
+   * The server has always sent these three; the Mait's own screens have never needed them,
+   * because every event they open is theirs. A manager's always does.
+   */
+  mait: number;
+  mait_name: string;
+  mait_code: string;
+  /** Whether it took. An insemination is finished ninety days later, not at the straw. */
+  pregnancy_checks: PregnancyCheck[];
+  timeline: AIEventTimelineEntry[];
 }
