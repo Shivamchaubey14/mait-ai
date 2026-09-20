@@ -339,6 +339,169 @@
           </div>
         </section>
 
+        <!-- A store's shelf, and changing it: the shelf on the left in its three kinds, the
+             change on the right as four short steps. Opened from the Stock button on a row. -->
+        <section class="panel stock-editor" id="stock" aria-labelledby="stock-title" hidden>
+          <div class="editor__head">
+            <span class="stock-editor__mark" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8" />
+              </svg>
+            </span>
+            <div class="editor__who">
+              <h2 class="editor__name" id="stock-title">Stock</h2>
+              <p class="editor__code" id="stock-meta">—</p>
+            </div>
+            <button class="btn" id="stock-close" type="button">Close</button>
+          </div>
+
+          <div class="stock-editor__grid">
+            <!-- The shelf as it stands, grouped the way the catalogue is. -->
+            <div class="stock-shelf" aria-labelledby="shelf-title">
+              <div class="stock-shelf__head">
+                <h3 class="stock-shelf__title" id="shelf-title">On the shelf</h3>
+                <div class="stock-shelf__key" aria-hidden="true">
+                  <span class="stock-key stock-key--free">free to give</span>
+                  <span class="stock-key stock-key--packed">packed for a Mait</span>
+                </div>
+              </div>
+              <div id="stock-shelf">
+                <p class="empty-state">Loading the shelf…</p>
+              </div>
+            </div>
+
+            <!-- The change. Every step is a choice made on screen rather than a code typed. -->
+            <form class="stock-form" id="stock-form" novalidate>
+              <p class="stock-form__step">
+                <span class="stock-form__num">1</span>What are you doing?
+              </p>
+              <div class="stock-modes" role="radiogroup" aria-label="What are you doing?">
+                <label class="stock-mode stock-mode--receive">
+                  <input type="radio" name="stock-mode" value="receive" checked />
+                  <span class="stock-mode__icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    >
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </span>
+                  <span class="stock-mode__text">
+                    <span class="stock-mode__name">Add a delivery</span>
+                    <span class="stock-mode__hint">Stock arrived — add it to the shelf</span>
+                  </span>
+                </label>
+                <label class="stock-mode stock-mode--count">
+                  <input type="radio" name="stock-mode" value="count" />
+                  <span class="stock-mode__icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2 2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2M9 14l2 2 4-4"
+                      />
+                    </svg>
+                  </span>
+                  <span class="stock-mode__text">
+                    <span class="stock-mode__name">Correct the count</span>
+                    <span class="stock-mode__hint">Set the shelf to what was counted</span>
+                  </span>
+                </label>
+              </div>
+
+              <p class="stock-form__step">
+                <span class="stock-form__num">2</span>Which kind of stock?
+              </p>
+              <div
+                class="stock-kinds"
+                id="stock-kinds"
+                role="radiogroup"
+                aria-label="Which kind"
+              ></div>
+
+              <div class="field">
+                <label class="stock-form__step" for="stock-item">
+                  <span class="stock-form__num">3</span>Which item?
+                </label>
+                <select class="select field__control" id="stock-item"></select>
+                <p class="field__hint" id="stock-item-hint">—</p>
+              </div>
+
+              <div class="stock-form__pair">
+                <div class="field">
+                  <label class="stock-form__step" for="stock-qty">
+                    <span class="stock-form__num">4</span>
+                    <span id="stock-qty-label">How many arrived?</span>
+                  </label>
+                  <div class="stock-qty">
+                    <button
+                      class="stock-qty__step"
+                      type="button"
+                      data-step="-1"
+                      aria-label="One fewer"
+                    >
+                      −
+                    </button>
+                    <input
+                      class="input stock-qty__input"
+                      id="stock-qty"
+                      type="number"
+                      inputmode="numeric"
+                      min="0"
+                      max="100000"
+                      step="1"
+                    />
+                    <button
+                      class="stock-qty__step"
+                      type="button"
+                      data-step="1"
+                      aria-label="One more"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                <div class="field">
+                  <label class="stock-form__step stock-form__step--quiet" for="stock-note">
+                    Note <span class="field__hint">optional</span>
+                  </label>
+                  <input
+                    class="input field__control"
+                    id="stock-note"
+                    type="text"
+                    maxlength="255"
+                    placeholder="Challan 4417 · stock take, 21 Sep"
+                  />
+                </div>
+              </div>
+
+              <!-- What saving will do, in one sentence, before it is done. -->
+              <div class="stock-preview" id="stock-preview" aria-live="polite"></div>
+
+              <div class="form-actions">
+                <button class="btn btn--primary" id="stock-save" type="submit">Add to stock</button>
+                <button class="btn" id="stock-reset" type="button">Clear</button>
+                <p class="field__hint" id="stock-status"></p>
+              </div>
+            </form>
+          </div>
+        </section>
+
         <!-- Tinted rather than white: the shelf column is a small table of its own inside every
              row, and on a white card those figures floated with nothing behind them. -->
         <section class="panel panel--flush panel--tinted stores-panel" aria-labelledby="list-title">

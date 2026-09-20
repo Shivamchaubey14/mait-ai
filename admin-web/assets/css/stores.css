@@ -134,9 +134,558 @@
   background: var(--color-secondary);
 }
 
-/* A store no keeper can sign in to. Amber text rather than a pill: the row already carries
-   one pill for its status, and two would compete for the eye. */
-.table__sub--warn {
-  color: var(--color-secondary-pressed);
+/* --- the shelf chips, by kind ------------------------------------------------------------------
+   Each chip in its kind's colour, so a row's shelf is read by kind before it is read by name:
+   blue straws, green consumables, yolk equipment — the same three the zonal app draws. */
+.shelf__chip--consumable {
+  background: var(--color-primary-wash);
+}
+
+.shelf__chip--consumable .shelf__item {
+  color: var(--color-primary-dark);
+}
+
+.shelf__chip--consumable .shelf__qty {
+  background: var(--color-primary-dark);
+}
+
+.shelf__chip--asset {
+  background: var(--color-secondary-wash);
+}
+
+.shelf__chip--asset .shelf__item {
+  color: var(--yolk-800);
+}
+
+.shelf__chip--asset .shelf__qty {
+  color: var(--color-ink);
+  background: var(--color-secondary);
+}
+
+/* Stock beside Edit in the row: two actions, one line. */
+.table__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* =============================================================================================
+   The stock panel
+   A store's shelf on the left in its three kinds, and the change on the right as four short
+   steps. Green-washed, because this panel is about stock arriving — the store editor above it
+   keeps its blue, and the two are never open together.
+   ============================================================================================= */
+.stock-editor {
+  background: var(--color-primary-wash);
+  border-color: var(--green-200);
+}
+
+.stock-editor .editor__head {
+  border-bottom-color: var(--green-200);
+}
+
+.stock-editor__mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: var(--radius-md);
+  color: var(--color-surface);
+  background: var(--color-primary);
+}
+
+.stock-editor__mark svg {
+  width: 22px;
+  height: 22px;
+}
+
+.stock-editor .editor__head > .btn {
+  margin-left: auto;
+}
+
+.stock-editor__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+/* Side by side only where both halves get room: the sidebar takes a quarter of a laptop
+   screen, and at 1024px two columns left the form 330px to fit three kinds across. */
+@media (max-width: 1200px) {
+  .stock-editor__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- the shelf ------------------------------------------------------------------------------ */
+.stock-shelf {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.stock-shelf__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.stock-shelf__title {
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  color: var(--color-text);
+}
+
+.stock-shelf__key {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.stock-key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.stock-key::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.stock-key--free::before {
+  background: var(--color-primary);
+}
+
+.stock-key--packed::before {
+  background: var(--color-secondary);
+}
+
+/* One group per kind: a wash and a border in its colour, its glyph on a solid chip. */
+.shelf-group {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.shelf-group--info {
+  background: var(--color-info-wash);
+  border-color: var(--color-info);
+}
+
+.shelf-group--good {
+  background: var(--green-100);
+  border-color: var(--green-300);
+}
+
+.shelf-group--warn {
+  background: var(--color-secondary-wash);
+  border-color: var(--yolk-300);
+}
+
+.shelf-group__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.shelf-group__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-surface);
+}
+
+.shelf-group__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.shelf-group--info .shelf-group__icon {
+  background: var(--color-info);
+}
+
+.shelf-group--good .shelf-group__icon {
+  background: var(--color-primary);
+}
+
+.shelf-group--warn .shelf-group__icon {
+  color: var(--color-ink);
+  background: var(--color-secondary);
+}
+
+.shelf-group__title {
+  font-family: var(--font-heading);
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.shelf-group__count {
+  margin-left: auto;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.shelf-group__lines {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A line is paper on the group's wash: name and split on the left, the count, then Correct. */
+.shelf-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.shelf-line__who {
+  flex: 1;
+  min-width: 0;
+}
+
+.shelf-line__name {
+  margin: 0;
   font-weight: 600;
+  color: var(--color-text);
+}
+
+.shelf-line__meta {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.shelf-line__free {
+  font-weight: 600;
+  color: var(--color-primary-dark);
+}
+
+.shelf-line__packed {
+  font-weight: 600;
+  color: var(--yolk-800);
+}
+
+/* Free as green over a yolk track: the yolk left showing is what is packed for a Mait. */
+.shelf-line__bar {
+  display: block;
+  height: 6px;
+  margin-top: var(--space-1);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-secondary);
+}
+
+.shelf-line__fill {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
+}
+
+.shelf-line__qty {
+  min-width: 48px;
+  font-family: var(--font-heading);
+  font-size: var(--text-h2);
+  font-weight: 700;
+  text-align: right;
+  color: var(--color-text);
+}
+
+.shelf-line--nil .shelf-line__qty {
+  color: var(--color-error);
+}
+
+.shelf-line__fix {
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-caption);
+}
+
+/* --- the change ----------------------------------------------------------------------------- */
+.stock-form {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--green-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+/* Each step numbered on a green disc, so four questions read as one short path. */
+.stock-form__step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-label);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.stock-form__step--quiet {
+  font-weight: 600;
+}
+
+.stock-form__num {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  color: var(--color-surface);
+  background: var(--color-primary);
+  border-radius: 50%;
+}
+
+.stock-form__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+@media (max-width: 560px) {
+  .stock-form__pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Two answers to "what are you doing", as two cards: green adds, yolk corrects. */
+.stock-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--space-2);
+}
+
+.stock-mode {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  cursor: pointer;
+}
+
+.stock-mode input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.stock-mode__icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+}
+
+.stock-mode__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.stock-mode__text {
+  display: grid;
+  min-width: 0;
+}
+
+.stock-mode__name {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.stock-mode__hint {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.stock-mode:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.stock-mode--receive.is-on {
+  border-color: var(--color-primary);
+  background: var(--color-primary-wash);
+}
+
+.stock-mode--receive.is-on .stock-mode__icon {
+  color: var(--color-surface);
+  background: var(--color-primary);
+}
+
+.stock-mode--count.is-on {
+  border-color: var(--color-secondary);
+  background: var(--color-secondary-wash);
+}
+
+.stock-mode--count.is-on .stock-mode__icon {
+  color: var(--color-ink);
+  background: var(--color-secondary);
+}
+
+/* The three kinds, as three buttons in their own colours; the chosen one fills solid. */
+.stock-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-2);
+}
+
+.stock-kind {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 42px;
+  padding: 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  font-weight: 700;
+  border: 1.5px solid;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.stock-kind__icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.stock-kind__count {
+  margin-left: auto;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.stock-kind--info {
+  color: var(--color-info);
+  background: var(--color-info-wash);
+  border-color: var(--color-info);
+}
+
+.stock-kind--good {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+  border-color: var(--color-primary);
+}
+
+.stock-kind--warn {
+  color: var(--yolk-800);
+  background: var(--color-secondary-wash);
+  border-color: var(--color-secondary);
+}
+
+.stock-kind--info.is-on {
+  color: var(--color-surface);
+  background: var(--color-info);
+}
+
+.stock-kind--good.is-on {
+  color: var(--color-surface);
+  background: var(--color-primary);
+}
+
+/* Ink on yolk, never white — yolk fails contrast under white text (see tokens.css). */
+.stock-kind--warn.is-on {
+  color: var(--color-ink);
+  background: var(--color-secondary);
+}
+
+.stock-kind[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* The number, with a step either side for the one-more-one-fewer a count usually is. */
+.stock-qty {
+  display: flex;
+  align-items: stretch;
+}
+
+.stock-qty__input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  font-weight: 700;
+  text-align: center;
+  border-radius: 0;
+}
+
+.stock-qty__step {
+  width: 40px;
+  font-size: var(--text-h3);
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.stock-qty__step:first-child {
+  border-right: 0;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.stock-qty__step:last-child {
+  border-left: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.stock-qty__step:hover {
+  background: var(--green-100);
+}
+
+/* What saving will do: green for a delivery, yolk for a correction, red for a refusal. */
+.stock-preview {
+  padding: var(--space-3);
+  font-size: var(--text-label);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.stock-preview--good {
+  background: var(--color-primary-wash);
+  border-color: var(--color-primary);
+}
+
+.stock-preview--warn {
+  background: var(--color-secondary-wash);
+  border-color: var(--color-secondary);
+}
+
+.stock-preview--bad {
+  color: var(--color-error);
+  background: var(--color-error-wash);
+  border-color: var(--color-error);
+}
+
+.stock-preview--quiet {
+  color: var(--color-text-muted);
 }

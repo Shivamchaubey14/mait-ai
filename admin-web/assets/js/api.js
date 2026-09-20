@@ -824,6 +824,43 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
+     * Who runs each zone — their number, and what they have done with it.
+     *
+     * The zone-scoped accounts only: a head-office Admin has no zone and is not the manager
+     * of one. `days` sets how far back the counts on each row look.
+     */
+    zoneManagers: function (days) {
+      return request({ path: '/admin/zones/managers/', query: days ? { days: days } : null });
+    },
+
+    /**
+     * Set a manager's mobile number from the Zones screen.
+     *
+     * This one field and no other. It is the number that decides whether the handset app
+     * opens for them at all, and the desk that gives somebody a zone is the desk that is
+     * asked for it — so it is settable here as well as on Users & roles. Blank means "no
+     * app"; their portal password is untouched either way.
+     */
+    setZoneManagerMobile: function (id, mobileNo) {
+      return request({
+        path: '/admin/zones/managers/' + id + '/',
+        method: 'PATCH',
+        body: { mobile_no: mobileNo },
+      });
+    },
+
+    /**
+     * What those managers have actually done, newest first.
+     *
+     * The same audit rows the Audit log screen reads, turned into sentences by the same code
+     * — one implementation, because two would read the same table differently and an office
+     * comparing the screens would have no way to tell which was lying.
+     */
+    zoneActivity: function (query) {
+      return request({ path: '/admin/zones/activity/', query: query });
+    },
+
+    /**
      * Every BMC/MCC the master data knows about, with its size and the zone holding it.
      *
      * There is no plant master to read: the code and the name arrive on each MPP row, so this
@@ -868,6 +905,19 @@ window.MaitAI = window.MaitAI || {};
         method: 'POST',
         body: body,
       });
+    },
+
+    /** A store's shelf — every item, on hand, packed and free — and what it can be stocked with. */
+    storeStock: function (storeId) {
+      return request({ path: '/admin/stores/' + storeId + '/stock/' });
+    },
+
+    /**
+     * Change one item on a store's shelf. `mode` is `receive` (a delivery, which adds) or
+     * `count` (what was physically counted, which replaces).
+     */
+    updateStoreStock: function (storeId, body) {
+      return request({ path: '/admin/stores/' + storeId + '/stock/', method: 'POST', body: body });
     },
 
     removeStoreKeeper: function (storeId, userId) {

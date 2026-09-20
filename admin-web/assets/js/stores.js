@@ -11,6 +11,12 @@
  * picker shows who already holds each centre rather than refusing the save afterwards. What
  * a zone does not have is people: the keepers, added here by name and the number they sign in
  * to the app with.
+ *
+ * And the shelf. **Stock** on a row opens that store's shelf beside a four-step change: add a
+ * delivery or correct the count, then the kind (straws, consumables, equipment), the item and
+ * the number — with a sentence saying what saving will do before it is done. A delivery adds;
+ * a count replaces, and the server writes the difference to the store's ledger and refuses a
+ * count below what is already packed for a Mait.
  */
 
 (function (MaitAI, $) {
@@ -28,7 +34,42 @@
     editing: null,
     /** The codes ticked in the editor right now, which is not yet what is saved. */
     chosen: [],
+    /** The store whose shelf is open, its lines, and what it can be stocked with. */
+    stock: { store: null, lines: [], catalogue: { breeds: [], products: [] } },
+    /** The change being written: add or count, and which kind of stock. */
+    mode: 'receive',
+    kind: 'straw',
   };
+
+  /* --- the three kinds of stock ---------------------------------------------------------- */
+
+  /** Each kind in its own colour and glyph, the way the zonal app draws them. */
+  const KINDS = {
+    straw: {
+      label: 'Straws',
+      tone: 'info',
+      icon: '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z" />',
+    },
+    consumable: {
+      label: 'Consumables',
+      tone: 'good',
+      icon: '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3M7.5 15h9" />',
+    },
+    asset: {
+      label: 'Equipment',
+      tone: 'warn',
+      icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z" />',
+    },
+  };
+
+  function glyph(kind) {
+    return (
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+      'stroke-linecap="round" stroke-linejoin="round">' +
+      KINDS[kind].icon +
+      '</svg>'
+    );
+  }
 
   /* --- the list ---------------------------------------------------------------------- */
 
@@ -120,7 +161,8 @@
         .map(function (line) {
           const qty = Number(line.on_hand) || 0;
           return (
-            '<span class="shelf__chip' +
+            '<span class="shelf__chip shelf__chip--' +
+            ui.escapeHtml(line.category || 'straw') +
             (qty ? '' : ' shelf__chip--nil') +
             '">' +
             '<span class="shelf__item">' +
@@ -162,9 +204,16 @@
       '<td>' +
       (store.is_active ? ui.pill('Open', 'good') : ui.pill('Closed', 'bad')) +
       '</td>' +
-      '<td class="table__action"><button class="btn btn--warn" type="button" data-edit="' +
+      '<td class="table__action"><div class="table__actions">' +
+      '<button class="btn btn--good-outline" type="button" data-stock="' +
       store.id +
-      '">Edit</button></td>' +
+      '">' +
+      '<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8" /></svg>Stock</button>' +
+      '<button class="btn btn--warn" type="button" data-edit="' +
+      store.id +
+      '">Edit</button></div></td>' +
       '</tr>'
     );
   }
@@ -605,6 +654,378 @@
       });
   }
 
+  /* --- the shelf ------------------------------------------------------------------------ */
+
+  function kindOf(line) {
+    return line.category || (line.product_type === 'straw' ? 'straw' : 'consumable');
+  }
+
+  function keyOf(line) {
+    return line.product_type === 'straw'
+      ? 'straw:' + line.breed
+      : 'consumable:' + String(line.product_ref_id);
+  }
+
+  /**
+   * One item on the shelf: its name, how many, and — when some are packed for a Mait — the
+   * split, as a bar and two words. "Correct" opens the form on it, already chosen.
+   */
+  function shelfLine(line) {
+    const onHand = Number(line.on_hand) || 0;
+    const packed = Number(line.set_aside) || 0;
+    const free = Number(line.available) || 0;
+    return (
+      '<li class="shelf-line' +
+      (onHand ? '' : ' shelf-line--nil') +
+      '">' +
+      '<div class="shelf-line__who">' +
+      '<p class="shelf-line__name">' +
+      ui.escapeHtml(line.item_name) +
+      '</p>' +
+      '<p class="shelf-line__meta">' +
+      '<span class="shelf-line__free">' +
+      ui.number(free) +
+      ' free</span>' +
+      (packed
+        ? ' · <span class="shelf-line__packed">' + ui.number(packed) + ' packed</span>'
+        : '') +
+      (line.unit ? ' · ' + ui.escapeHtml(line.unit) : '') +
+      '</p>' +
+      (onHand
+        ? '<span class="shelf-line__bar"><span class="shelf-line__fill" style="width:' +
+          Math.round((free / onHand) * 100) +
+          '%"></span></span>'
+        : '') +
+      '</div>' +
+      '<span class="shelf-line__qty">' +
+      ui.number(onHand) +
+      '</span>' +
+      '<button class="btn btn--warn-outline shelf-line__fix" type="button" data-correct="' +
+      ui.escapeHtml(keyOf(line)) +
+      '" data-kind="' +
+      kindOf(line) +
+      '">Correct</button>' +
+      '</li>'
+    );
+  }
+
+  function renderShelf() {
+    const lines = state.stock.lines;
+    const groups = Object.keys(KINDS).map(function (kind) {
+      const mine = lines.filter(function (line) {
+        return kindOf(line) === kind;
+      });
+      const total = mine.reduce(function (sum, line) {
+        return sum + (Number(line.on_hand) || 0);
+      }, 0);
+      return (
+        '<section class="shelf-group shelf-group--' +
+        KINDS[kind].tone +
+        '">' +
+        '<header class="shelf-group__head">' +
+        '<span class="shelf-group__icon" aria-hidden="true">' +
+        glyph(kind) +
+        '</span>' +
+        '<h4 class="shelf-group__title">' +
+        KINDS[kind].label +
+        '</h4>' +
+        '<span class="shelf-group__count">' +
+        (mine.length
+          ? mine.length + (mine.length === 1 ? ' item · ' : ' items · ') + ui.number(total)
+          : 'none on the shelf') +
+        '</span>' +
+        '</header>' +
+        (mine.length
+          ? '<ul class="shelf-group__lines">' + mine.map(shelfLine).join('') + '</ul>'
+          : '') +
+        '</section>'
+      );
+    });
+    $('#stock-shelf').html(groups.join(''));
+  }
+
+  /* --- the change --------------------------------------------------------------------- */
+
+  /** What the chosen kind can be stocked with, from the catalogue. */
+  function itemsOf(kind) {
+    const catalogue = state.stock.catalogue;
+    if (kind === 'straw') {
+      return catalogue.breeds.map(function (breed) {
+        return {
+          key: 'straw:' + breed.code,
+          name: breed.name,
+          group: breed.animal_type === 'BUFF' ? 'Buffalo' : 'Cow',
+        };
+      });
+    }
+    return catalogue.products
+      .filter(function (product) {
+        return product.category === kind;
+      })
+      .map(function (product) {
+        return { key: 'consumable:' + product.id, name: product.name, unit: product.unit };
+      });
+  }
+
+  function lineFor(key) {
+    return (
+      state.stock.lines.filter(function (line) {
+        return keyOf(line) === key;
+      })[0] || null
+    );
+  }
+
+  function renderKinds() {
+    $('#stock-kinds').html(
+      Object.keys(KINDS)
+        .map(function (kind) {
+          const count = itemsOf(kind).length;
+          return (
+            '<button type="button" role="radio" aria-checked="' +
+            (kind === state.kind) +
+            '" class="stock-kind stock-kind--' +
+            KINDS[kind].tone +
+            (kind === state.kind ? ' is-on' : '') +
+            '" data-kind="' +
+            kind +
+            '"' +
+            (count ? '' : ' disabled') +
+            '>' +
+            '<span class="stock-kind__icon" aria-hidden="true">' +
+            glyph(kind) +
+            '</span>' +
+            '<span class="stock-kind__name">' +
+            KINDS[kind].label +
+            '</span>' +
+            '<span class="stock-kind__count">' +
+            count +
+            '</span>' +
+            '</button>'
+          );
+        })
+        .join('')
+    );
+  }
+
+  /**
+   * The item list for the chosen kind.
+   *
+   * No `<optgroup>`: the portal draws its own dropdown over the native select (controls.js),
+   * and that menu is a flat list, so a Cow / Buffalo heading would silently vanish from it.
+   * The animal rides in the label instead. `change` is triggered after every fill so the drawn
+   * dropdown shows the value set here rather than the one before it.
+   */
+  function fillItems(keep) {
+    const items = itemsOf(state.kind);
+    const $item = $('#stock-item').empty();
+    $item.append($('<option></option>').val('').text('Pick the item'));
+    items.forEach(function (item) {
+      $item.append(
+        $('<option></option>')
+          .val(item.key)
+          .text(
+            item.name +
+              (item.group ? ' · ' + item.group : '') +
+              (item.unit ? ' (' + item.unit + ')' : '')
+          )
+      );
+    });
+    const known = items.some(function (item) {
+      return item.key === keep;
+    });
+    $item.val(keep && known ? keep : '').trigger('change');
+  }
+
+  function setMode(mode) {
+    state.mode = mode;
+    $('input[name="stock-mode"][value="' + mode + '"]').prop('checked', true);
+    $('.stock-mode').removeClass('is-on');
+    $('.stock-mode--' + mode).addClass('is-on');
+    $('#stock-qty-label').text(
+      mode === 'receive' ? 'How many arrived?' : 'How many are on the shelf now?'
+    );
+    $('#stock-save').text(mode === 'receive' ? 'Add to stock' : 'Save the count');
+    renderPreview();
+  }
+
+  function setKind(kind, keep) {
+    state.kind = kind;
+    renderKinds();
+    fillItems(keep);
+    renderPreview();
+  }
+
+  /**
+   * What saving will do, in one sentence, coloured by what it is: green for a delivery, yolk for
+   * a correction, red for the change the server would refuse. Said before the button is
+   * pressed, because a count typed into the wrong line is only obvious once it is read back.
+   */
+  function renderPreview() {
+    const key = $('#stock-item').val();
+    const raw = ($('#stock-qty').val() || '').trim();
+    const qty = raw === '' ? null : Number(raw);
+    const $preview = $('#stock-preview');
+    const line = key ? lineFor(key) : null;
+    const now = line ? Number(line.on_hand) || 0 : 0;
+    const packed = line ? Number(line.set_aside) || 0 : 0;
+    const name = key ? $('#stock-item option:selected').text() : '';
+
+    $('#stock-item-hint').text(
+      key
+        ? line
+          ? ui.number(now) +
+            ' on the shelf now' +
+            (packed ? ', ' + ui.number(packed) + ' of them packed for Maits' : '')
+          : 'None of this on the shelf yet'
+        : 'Pick what arrived, or what was counted'
+    );
+
+    let tone = 'quiet';
+    let text = 'Pick the item and the number, and this says what saving will do.';
+    let ok = false;
+    if (key && qty !== null && !isNaN(qty)) {
+      if (qty < 0 || Math.floor(qty) !== qty) {
+        tone = 'bad';
+        text = 'A whole number, please.';
+      } else if (state.mode === 'receive') {
+        if (qty < 1) {
+          tone = 'bad';
+          text = 'A delivery is at least one.';
+        } else {
+          tone = 'good';
+          ok = true;
+          text =
+            '<strong>' +
+            ui.escapeHtml(name) +
+            '</strong>: ' +
+            ui.number(now) +
+            ' → <strong>' +
+            ui.number(now + qty) +
+            '</strong> on the shelf (+' +
+            ui.number(qty) +
+            ')';
+        }
+      } else if (qty < packed) {
+        tone = 'bad';
+        text =
+          ui.number(packed) +
+          ' are packed for Maits who have not collected yet — the count cannot be below ' +
+          ui.number(packed) +
+          '.';
+      } else if (qty === now) {
+        tone = 'quiet';
+        text = 'The shelf already holds ' + ui.number(now) + ' — nothing to change.';
+      } else {
+        tone = 'warn';
+        ok = true;
+        const change = qty - now;
+        text =
+          '<strong>' +
+          ui.escapeHtml(name) +
+          '</strong>: ' +
+          ui.number(now) +
+          ' → <strong>' +
+          ui.number(qty) +
+          '</strong> on the shelf (' +
+          (change > 0 ? '+' : '−') +
+          ui.number(Math.abs(change)) +
+          ', recorded as a correction)';
+      }
+    }
+    $preview.attr('class', 'stock-preview stock-preview--' + tone).html(text);
+    $('#stock-save').prop('disabled', !ok);
+  }
+
+  function openStock(store) {
+    closeEditor();
+    state.stock.store = store;
+    $('#stock').prop('hidden', false);
+    $('#stock-title').text(store.name);
+    $('#stock-meta').text(
+      store.code + (store.zone_name ? ' · ' + store.zone_name : '') + ' · stock'
+    );
+    $('#stock-shelf').html('<p class="empty-state">Loading the shelf…</p>');
+    $('#stock-qty, #stock-note').val('');
+    $('#stock-status').text('');
+    $('#stock')[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    api
+      .storeStock(store.id)
+      .done(function (body) {
+        state.stock.lines = body.lines || [];
+        state.stock.catalogue = body.catalogue || { breeds: [], products: [] };
+        renderShelf();
+        setMode('receive');
+        setKind('straw');
+      })
+      .fail(function (problem) {
+        $('#stock-shelf').html('<p class="empty-state">Could not load this shelf.</p>');
+        MaitAI.shell.alert(problem.detail || 'Could not load the shelf.');
+      });
+  }
+
+  function closeStock() {
+    state.stock.store = null;
+    $('#stock').prop('hidden', true);
+  }
+
+  function saveStock(event) {
+    event.preventDefault();
+    const store = state.stock.store;
+    const key = $('#stock-item').val();
+    if (!store || !key) {
+      return;
+    }
+    const parts = key.split(':');
+    const body = {
+      mode: state.mode,
+      product_type: parts[0],
+      qty: Number($('#stock-qty').val()),
+      note: ($('#stock-note').val() || '').trim(),
+    };
+    if (parts[0] === 'straw') {
+      body.breed = parts[1];
+    } else {
+      body.product_ref_id = Number(parts[1]);
+    }
+    const name = $('#stock-item option:selected').text();
+
+    $('#stock-save, #stock-reset').prop('disabled', true);
+    $('#stock-status').text('Saving…');
+    api
+      .updateStoreStock(store.id, body)
+      .done(function (fresh) {
+        state.stock.lines = fresh.lines || [];
+        renderShelf();
+        $('#stock-qty, #stock-note').val('');
+        $('#stock-status').text('');
+        const after = lineFor(key);
+        MaitAI.shell.alert(
+          name +
+            ' at ' +
+            store.name +
+            ' now ' +
+            ui.number(after ? after.on_hand : 0) +
+            ' on the shelf.',
+          'good'
+        );
+        // The row's own shelf chips, without waiting for the whole list.
+        state.stores = state.stores.map(function (row_) {
+          return row_.id === store.id ? fresh.store : row_;
+        });
+        renderList();
+        renderPreview();
+      })
+      .fail(function (problem) {
+        MaitAI.shell.alert(MaitAI.api.problemToLines(problem).join(' · '));
+        $('#stock-status').text('Not saved.');
+      })
+      .always(function () {
+        $('#stock-reset').prop('disabled', false);
+        renderPreview();
+      });
+  }
+
   /* --- loading ----------------------------------------------------------------------- */
 
   /** `reopen` is the store to leave the editor open on once the list is fresh. */
@@ -650,7 +1071,49 @@
     });
 
     $('#add').on('click', function () {
+      closeStock();
       openEditor(null);
+    });
+
+    $('#rows').on('click', '[data-stock]', function () {
+      const id = Number($(this).data('stock'));
+      const store = state.stores.filter(function (row_) {
+        return row_.id === id;
+      })[0];
+      if (store) {
+        openStock(store);
+      }
+    });
+
+    $('#stock-close').on('click', closeStock);
+    $('#stock-form').on('submit', saveStock);
+    $('input[name="stock-mode"]').on('change', function () {
+      setMode($(this).val());
+    });
+    $('#stock-kinds').on('click', '[data-kind]', function () {
+      setKind($(this).data('kind'));
+    });
+    $('#stock-item').on('change', renderPreview);
+    $('#stock-qty').on('input', renderPreview);
+    $('.stock-qty__step').on('click', function () {
+      const now = Number($('#stock-qty').val()) || 0;
+      $('#stock-qty').val(Math.max(0, now + Number($(this).data('step'))));
+      renderPreview();
+    });
+    $('#stock-reset').on('click', function () {
+      $('#stock-qty, #stock-note').val('');
+      $('#stock-item').val('').trigger('change');
+    });
+    // "Correct" on a shelf line: the count form, on that item, with its count to start from.
+    $('#stock-shelf').on('click', '[data-correct]', function () {
+      const key = String($(this).data('correct'));
+      setMode('count');
+      setKind(String($(this).data('kind')), key);
+      const line = lineFor(key);
+      $('#stock-qty')
+        .val(line ? line.on_hand : 0)
+        .trigger('focus');
+      renderPreview();
     });
 
     $('#rows').on('click', '[data-edit]', function () {
@@ -659,6 +1122,7 @@
         return row_.id === id;
       })[0];
       if (store) {
+        closeStock();
         openEditor(store);
       }
     });
