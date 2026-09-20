@@ -693,6 +693,104 @@ class TestSetup:
         assert auth(manager).get("/api/v1/admin/stores/").status_code == 403
 
 
+class TestOfficeStock:
+    """
+    The office changing a store's shelf from the portal: a delivery adds, a count replaces.
+
+    Held still: both land in the store's own ledger, so the shelf stays the sum of its rows; a
+    count can never drop below what is already packed for a Mait; and the portal's Stores
+    section is what lets somebody do it.
+    """
+
+    def path(self, store):
+        return f"/api/v1/admin/stores/{store.id}/stock/"
+
+    def test_the_shelf_comes_with_what_it_can_be_stocked_with(self, office, store, breeds):
+        stock(store, 30)
+        Consumable.objects.create(code="AI_GUN", name="AI gun", category="asset")
+        body = office.get(self.path(store)).json()
+
+        assert [
+            (line["item_name"], line["on_hand"], line["category"]) for line in body["lines"]
+        ] == [("Murrah", 30, "straw")]
+        assert "MURRAH" in [breed["code"] for breed in body["catalogue"]["breeds"]]
+        assert [p["category"] for p in body["catalogue"]["products"]] == ["asset"]
+
+    def test_a_delivery_adds_to_the_shelf(self, office, store, breeds):
+        stock(store, 30)
+        response = office.post(
+            self.path(store),
+            {"mode": "receive", "product_type": "straw", "breed": "MURRAH", "qty": 20},
+            format="json",
+        )
+        assert response.status_code == 201, response.content
+        assert response.json()["lines"][0]["on_hand"] == 50
+        assert StoreLedger.objects.filter(txn_type=StoreLedger.TxnType.RECEIVE).count() == 2
+
+    def test_a_count_replaces_the_shelf_and_the_ledger_records_the_difference(
+        self, office, store, breeds
+    ):
+        stock(store, 30)
+        response = office.post(
+            self.path(store),
+            {
+                "mode": "count",
+                "product_type": "straw",
+                "breed": "MURRAH",
+                "qty": 26,
+                "note": "Stock take",
+            },
+            format="json",
+        )
+        assert response.status_code == 201, response.content
+        row = StoreStock.objects.get(store=store, breed="MURRAH")
+        assert row.qty_on_hand == 26
+        adjustment = StoreLedger.objects.get(txn_type=StoreLedger.TxnType.ADJUSTMENT)
+        assert (adjustment.qty, adjustment.balance_after) == (-4, 26)
+        # Still the sum of its rows.
+        assert sum(StoreLedger.objects.filter(stock=row).values_list("qty", flat=True)) == 26
+
+    def test_equipment_is_stocked_by_catalogue_id(self, office, store):
+        gun = Consumable.objects.create(code="AI_GUN", name="AI gun", category="asset")
+        response = office.post(
+            self.path(store),
+            {"mode": "count", "product_type": "consumable", "product_ref_id": gun.id, "qty": 4},
+            format="json",
+        )
+        assert response.status_code == 201, response.content
+        line = response.json()["lines"][0]
+        assert (line["item_name"], line["on_hand"], line["category"]) == ("AI gun", 4, "asset")
+
+    def test_a_count_below_what_is_packed_for_a_mait_is_refused(
+        self, office, store, approved, keeper
+    ):
+        stock(store, 30)
+        assert issue(keeper, approved(10), 10).status_code == 201
+        response = office.post(
+            self.path(store),
+            {"mode": "count", "product_type": "straw", "breed": "MURRAH", "qty": 5},
+            format="json",
+        )
+        assert response.status_code == 400
+        assert "packed for Maits" in str(response.json())
+        assert StoreStock.objects.get(store=store, breed="MURRAH").qty_on_hand == 30
+
+    def test_an_unchanged_count_and_an_empty_delivery_are_refused(self, office, store, breeds):
+        stock(store, 30)
+        same = {"mode": "count", "product_type": "straw", "breed": "MURRAH", "qty": 30}
+        empty = {"mode": "receive", "product_type": "straw", "breed": "MURRAH", "qty": 0}
+        assert office.post(self.path(store), same, format="json").status_code == 400
+        assert office.post(self.path(store), empty, format="json").status_code == 400
+
+    def test_without_the_section_the_shelf_cannot_be_changed(self, manager, store, breeds):
+        response = auth(manager).post(
+            self.path(store),
+            {"mode": "receive", "product_type": "straw", "breed": "MURRAH", "qty": 5},
+            format="json",
+        )
+        assert response.status_code == 403
+
+
 # --------------------------------------------------------------------------------------
 # The catalogue a delivery is recorded from
 # --------------------------------------------------------------------------------------
