@@ -9,6 +9,85 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Store stock from the portal.** Stock on any row of the Stores screen opens that store's
+  shelf — straws, consumables and equipment in their own colours, each line with what is free
+  and what is packed for a Mait — beside a four-step change: add a delivery or correct the
+  count, the kind, the item, the number, with a sentence saying what saving will do. A count
+  replaces the shelf and the difference goes to the store ledger as an adjustment, never below
+  what is packed for Maits (`/admin/stores/{id}/stock/`).
+
+- **The zonal manager's app** — a third shell on the same sign-in screen, beside the Mait's and
+  the store keeper's. Five tabs:
+  - **Zone**, a dashboard of the work actually happening, **live like the portal's**: every
+    zonal screen re-reads itself every 30 seconds while the app is on screen, stops in the
+    background, and fetches afresh the moment the app comes back or a screen is opened, with
+    a "Live · updated 10:42" line in the hero that refreshes on a tap. Today, This week and
+    This month as three coloured tiles; the week as bars on a green card with each day's
+    count on a yellow disc; who is working and where, and the last few captures as they land.
+    Who is working and where are coloured cards with every name labelled and coded (Mait
+    name, vendor code; MPP with its code). Each capture opens its whole record: its number on
+    a pill, member or non-member, the MPP and the Mait with their codes in the hero, and the
+    straw, the people, the pregnancy check and the audit trail each in a colour of its own.
+  - **All AI events**, from Profile: the zone's inseminations newest first, a page at a time,
+    narrowed by a From–To range of dates, each row coloured by its state
+    (`GET /zonal/events/`). Counted off the events rather than the pre-aggregated
+    table, so it is never silently zero.
+  - **Indents, as requests.** A Mait's multi-item Request Stock list arrives as one indent per
+    item; the queue groups them back (same Mait, raised within ten minutes) into one card per
+    request — the Mait with their vendor code, where they work, how long they have waited,
+    and every item with its glyph, quantity and depot pill — coloured by its worst item. The
+    decision screen gives each item a card in the colour of its shelf with its own Approve
+    and Reject, and a foot of real buttons: Reject (red outline) beside Approve, or Reject all
+    / Approve all for a list. Each item is still decided through `/indents/{id}/`.
+    Every request waiting on them carries the facts the decision turns on —
+    what that Mait already holds of the item, and what the depot serving them can still promise
+    — because a manager standing in a yard has one screen, and approving blind is a failure
+    nobody notices until the Mait turns up for straws that are not there.
+  - **History in colour**: each decision a green or red card with its verdict on a solid disc,
+    the item's glyph, the Mait with their code and the depot, and for an approval the road it
+    has taken since — Approved → At the depot → Handed over — lit as far as it has got; a
+    rejection reads back the words the Mait was given. All / Approved / Rejected tiles filter.
+  - **Stock by product**: a Products view with Straws / Consumables / Equipment, each item
+    with how much is with the Maits (and how many hold it), how much is in the depots and free
+    to give, and what is on its way — asked, agreed, packed. A depot's straws now read as one
+    bar: what can still be given out and what is packed for Maits waiting to collect it.
+  - **Stock, by place first**: one card per chilling centre with its empty Maits and the depot
+    that could restock them on the same card, because a manager works out which way to drive
+    before they work out who to ring. Each Mait is counted at exactly one centre, so the rows
+    add up to the figure above them.
+  - **History**, every approval and rejection with the request behind it and where it got to
+    since — and, on a rejection, the reason the Mait was given, read back.
+  - **Profile**.
+
+  Tapping any capture in the zone feed opens **the whole record** — the portal's AI event
+  detail on a handset: straw and doses, what was charged and whether it cleared, the proof
+  photo full size with whether it came from the camera or the gallery, where the handset was
+  with a way to drive there, the owner and the animal, every consumable the visit took,
+  whether it took, and the trail the server wrote at each step and has never edited. Read-only
+  throughout. An event outside the manager's zones answers 404 rather than 403 — whether a
+  record exists elsewhere in the network is not that account's to learn.
+
+  Approving and rejecting post to the indent endpoints that already hold the state machine and
+  the audit entry — there is no second write path — and rejecting asks for a reason, because
+  the Mait reads the indent and not the log.
+- **A zonal manager can sign in on a handset**, with the same OTP as a Mait. Two things are
+  required and both are decisions somebody made: a live zone on the account, and a mobile
+  number. An office Admin with no zone is not admitted at all — the role has a password, and
+  opening the OTP door to it wholesale would put the account that runs the SAP imports behind a
+  code sent to whatever number was on the row. Their portal login is untouched either way.
+- **The Zones screen has a second half: the people (W20).** A zone is a line round some
+  chilling centres until somebody is standing inside it. *Who runs these zones* lists every
+  zone-scoped account with its zone and the size of its patch, **its mobile number** — editable
+  in place, since that number is what opens the app — its last sign-in, what it approved and
+  rejected, and an **App** pill that names which of three different things is stopping it. Under
+  it, *What they have done*: the audit trail narrowed to those accounts and written as the same
+  sentences the Audit log prints, filtered by manager and window, and by **decisions** rather
+  than everything by default — a manager signs in and out several times a day, and ninety
+  sign-ins bury the two approvals somebody came to read.
+- **Users & roles takes a mobile number**, on the create form and beside the zones in the scope
+  editor, with a line that says what the two together decide. The Scope column now reads
+  *App · 9876500002* or *No number — no app* under an account's zone chips.
+
 - **Audit log (W19)** — the trail this platform has written since its first commit, readable at
   last. Each row is a sentence rather than a schema dump; opening one shows the metadata
   labelled, a before/after diff where there is one, and the request id, which finds everything

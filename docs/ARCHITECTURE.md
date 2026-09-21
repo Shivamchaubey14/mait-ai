@@ -54,6 +54,7 @@ cycle.
 | `payments` | Payment records, OTP issuance/verification, UTR proof | `Payment`, `OTPLog` |
 | `indents` | Stock requests and their lifecycle | `IndentRequest`, `IndentHandover` |
 | `stores` | The counters indents are handed over at, and their keepers | `Store`, `StorePlant` |
+| `zonal` | What a zonal manager sees on a handset — read-only, and holds no models of its own: their decisions post to `indents` and their stock comes from `inventory` | — |
 | `dashboard` | Pre-aggregated reporting and exports | `DailyAIAggregate` |
 
 ### Dependency direction

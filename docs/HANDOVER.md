@@ -19,7 +19,7 @@ endpoint surface, [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) for both UI patterns, a
 | 3 · Core AI event & inventory | 9–14 | **Done** |
 | 4 · Payments | 15–18 | **Not started** — `apps/payments/urls.py` is empty |
 | 5 · Indent & Indent Easy | 19–22 | Day 19 done (indent API + screens). **Stores added 2026-09-11**: the zonal manager approves on the portal, the store keeper hands over from the app with a code the Mait types in — see *Stores* below. Days 20–22 — the outbound push, the GRN webhook and reconciliation — still not started |
-| 6 · Mobile polish | 23–25 | Substantially done ahead of schedule |
+| 6 · Mobile polish | 23–25 | Substantially done ahead of schedule. **The zonal manager's app was added 2026-09-19** — a third shell on the same sign-in, beside the Mait's and the keeper's |
 | 7 · Admin dashboard & reports | 26–28 | Done — all 16 portal screens built |
 | 8 · Hardening, UAT, go-live | 29–30 | Not started |
 
@@ -183,6 +183,7 @@ anything standing, use `docs/DEPLOYMENT.md`.
 | Portal | `admin` / `MaitAdmin@2026` |
 | Portal, restricted | `rateclerk` / `RateClerk@2026x` — an Admin holding Dashboard, Products and Rates only, for checking per-account portal access |
 | Portal, zonal manager | `zonal-ayodhya` / `ZonalAyodhya@2026` — an Admin with Dashboard, Indents and Inventory, limited to **Ayodhya Zone** (which holds AKBARPUR). Approves that zone's indents and sees its Maits' stock and store shelves, nothing else |
+| App, zonal manager | `9876500002` / `123456` — the same `zonal-ayodhya` account. A zone-scoped Admin with a mobile number signs in on the handset and gets the manager's app (see *The zonal manager's app* below); their portal password still works. Set the number on the portal's Zones screen |
 | App, store keeper | `9876500001` / `123456` — Ramesh Yadav at **Akbarpur depot**, which serves the AKBARPUR BMC the demo Mait's MPPs report into. Made by `seed_store` |
 
 The demo Mait is ROHIT KUMAR (`5500000054`), assigned MPPs 001302, 001308 and 001371, holding
@@ -268,6 +269,17 @@ under it rather than nested. The navigator holds every bit of "where am I" state
 and the next sign-in resumed on whatever tab was last lit — Profile, in practice, because
 that is the only screen with a sign-out on it. Keep them siblings: a session gets a
 navigator, and it goes when the session does. `__tests__/landsOnHome.test.tsx` covers it.
+
+**Mobile, the zonal manager's shell.** Five tabs — Zone (a dashboard of the work happening,
+whose feed rows open the whole AI record), Indents, Stock by place, History of decisions,
+Profile (`mobile/src/features/zonal`,
+`mobile/src/navigation/zonal.tsx`). Signs in with the same OTP screen; the gate in
+`navigation/Shell.tsx` routes an office account holding a zone to it. The frame the three
+shells share moved out of the keeper's `features/store/parts.tsx` into `components/frame.tsx`
+when the second caller arrived; the keeper's names are re-exported, so nothing of theirs
+changed. The trend bars and share meters are plain views, not a charting library — a row of
+rectangles is a row of rectangles, and every kilobyte of JavaScript is a second of cold start
+on these handsets.
 
 **Admin portal.** All 16 screens, W2–W17, on one shared shell (`portal.css`, `shell.js`,
 `ui.js`). Which of them a given account sees is assigned per user on Users & roles —
@@ -360,6 +372,40 @@ account holding either.
   - The zonal manager is an ordinary Admin with a zone and the Indents section. Their Indents
     list is narrowed to their zone through the Mait's MPPs, the same `zone_scope` every other
     "who" screen uses.
+- **The zonal manager's app: a zone *and* a number, and nothing else decides it.** Built
+  2026-09-19 (`apps/zonal`, `mobile/src/features/zonal`, the Zones screen's second half).
+  There is still no zonal-manager *role* — `User.is_zonal_manager` is "an Admin, active, with
+  at least one live zone" — because every "who" queryset in the product already narrows by
+  `zone_scope`, and a fourth role would fork all of them. Four things are true and not
+  obvious:
+  - *Sign-in is narrow on purpose.* An office Admin has a password, so admitting the role
+    wholesale to the OTP door would put the account that runs the SAP imports behind a code
+    sent to whatever number happened to be on the row. `OTPSendView._resolve_field_user`
+    requires the live zone as well as the number, and a Super Admin is never either.
+  - *Deactivating a zone takes the app away with it*, silently and correctly: the account
+    keeps its portal login and stops being a zonal manager. The Zones screen says so —
+    *Zone off*, with the zone named.
+  - *There is no write path under `/zonal/`.* Approve and reject post to
+    `/indents/{id}/…`, where the state machine, the store routing and the audit entry already
+    are; zone stock comes off `/admin/inventory/`. Adding a second one is how the app and the
+    portal come to disagree about the same indent.
+  - *A rejection is not stamped on the indent.* `reject_indent` keeps the reason on the row
+    and the actor only in the audit log, so every "how many did they reject" figure — on the
+    handset, on the Zones screen, in the manager's own History tab — is counted off
+    `AuditLog`. Count one of them from the indents and the two figures will disagree.
+  - *The app's dashboard counts events, not `DailyAIAggregate`.* One zone over a fortnight is
+    a bounded count, and the aggregate's hourly job does not run on the no-Docker dev path —
+    so a dashboard reading it would show zero on a database full of events, which is the trap
+    [[dashboards-need-rebuild-ai-aggregates]] describes. The portal's dashboard still reads
+    the aggregate, and should.
+  - *The AI record is served from `/zonal/events/{id}/`, not by granting the AI events
+    section.* A section grants the whole portal roster; this grants one record inside a zone,
+    and an event outside it answers 404 rather than 403. It returns the trail in the same
+    response because a manager in a yard wants one spinner, not three.
+  - *Stock is grouped by place, and each Mait lands at exactly one.* A Mait covering two
+    centres counted under both would make the location rows sum to more than the zone total.
+    `apps/zonal/stock.py` places them at the centre most of their points report into and names
+    the rest as `also_covers`.
 - **Super OTP — a code from the office at every step, when the SMS does not arrive.** Built
   2026-09-11 (`accounts.SuperOTP`, `apps/accounts/super_otp.py`, portal `super-otp.html`). It
   stands in for **every SMS template**: sign-in, the farmer check, and both payment

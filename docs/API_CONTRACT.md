@@ -61,6 +61,13 @@ returns `429` with `Retry-After`.
 | POST | `/auth/logout/` | Blacklist current refresh token | JWT |
 | GET | `/auth/me/` | Current user's profile & role | JWT |
 
+### Who the OTP door admits
+
+Three kinds of account, and no others: a **Mait**, a **store keeper** whose store is open, and
+a **zonal manager** — an Admin with a live zone *and* a mobile number. An office Admin with no
+zone is not resolved at all, and neither is a Super Admin. The rule lives in one place,
+`OTPSendView._resolve_field_user`, and Super OTP applies the same one.
+
 ### Super OTP — a code from the office when the SMS does not arrive, at every step
 
 Added 2026-09-11 (`accounts.SuperOTP`). Stands in for every SMS template — sign-in, the farmer
@@ -478,6 +485,7 @@ nothing else — every section-gated and default-permission endpoint refuses the
 | GET | `/store/catalogue/` | Breeds and products a delivery can be | Store keeper |
 | GET | `/admin/inventory/?zone=<id>` | Stock with every Mait **and on every store's shelf** (`stores`: `lines`, `straws_on_hand`, `straws_set_aside`, `open_indents`), narrowed to the account's zones and optionally one zone. `/admin/inventory/{mait_id}/` answers `404` outside them | Admin · `inventory` |
 | GET/POST/PATCH/DELETE | `/admin/stores/` | Stores, the BMC/MCCs each serves (`plants`, the whole set on write), keepers and shelf | Admin · `stores` |
+| GET / POST | `/admin/stores/{id}/stock/` | A store's shelf and changing it from the portal. `GET`: `lines` (each item with `on_hand`, `set_aside`, `available`, `category` — `straw` / `consumable` / `asset`) and `catalogue` (breeds and products). `POST` `{mode, product_type, breed | product_ref_id, qty, note}`: `mode: receive` adds a delivery; `mode: count` sets the shelf to what was counted, writes the difference to the store ledger as an adjustment, and is refused below what is packed for Maits. Audited | Admin · `stores` |
 | GET | `/admin/stores/plants/` | Every BMC/MCC and the store serving it | Admin · `stores` |
 | POST | `/admin/stores/{id}/keepers/` | `{"full_name", "mobile_no"}` → a keeper account. A number a Mait or another account signs in with is refused | Admin · `stores` |
 | POST | `/admin/stores/{id}/keepers/{user_id}/remove/` | Deactivate a keeper | Admin · `stores` |
@@ -866,6 +874,9 @@ moves MPPs, their members and the permission to serve them between Maits.
 | PATCH | `/admin/zones/{id}/` | Rename a zone, or change what it covers | Admin · Zones |
 | DELETE | `/admin/zones/{id}/` | Remove a zone nobody is assigned to | Admin · Zones |
 | GET | `/admin/zones/plants/` | Every BMC/MCC in the master data, with its size and its zone | Admin · Zones |
+| GET | `/admin/zones/managers/?days=30` | Who runs each zone: name, username, **mobile number**, zones, how many Maits the patch holds, last sign-in, and what they approved and rejected in the window. `app_access` is whether the handset app opens for them at all | Admin · Zones |
+| PATCH | `/admin/zones/managers/{user_id}/` | `{"mobile_no": "9876500002"}` — the one field this screen writes. Blank means "no app". A number a Mait or another account signs in with is refused | Admin · Zones |
+| GET | `/admin/zones/activity/?manager=&days=30&kind=decisions\|all` | What those managers have done, newest first, as the same sentences the Audit log screen prints. `decisions` is the default and drops sign-ins | Admin · Zones |
 | GET | `/dashboard/zones/` | Zones ranked by the work done in them (`days`, default 30) | Admin · Dashboard |
 
 A **zone** is the dairy's own grouping of chilling centres — Bahraich, Pratapgarh — and it
@@ -888,6 +899,74 @@ an error.
 * A zone with accounts assigned to it cannot be deleted — that would silently widen those
   accounts to the whole network, which fails open in the one direction nobody reports.
   Deactivate it instead.
+
+### Who runs a zone, and what they have done
+
+A zone used to be a line round some chilling centres and nothing else. Since 2026-09-19 the
+mobile number on a zone-scoped account decides something operational — it is where the app's
+sign-in code goes — so the three endpoints above answer *who runs Bahraich, what is their
+number, and what have they done with it* on the screen where the zone itself is decided.
+
+* Only **zone-scoped** accounts are listed. A head-office Admin has no zone and is not the
+  manager of one; listing them would make this a second copy of Users & roles.
+* The number is settable from here as well as from `PATCH /admin/users/{id}/`, and from here
+  it is the **only** field that can be written. Role, sections and zones stay on the other
+  screen, because two ways to change them is two ways for them to disagree.
+* Approvals and rejections are both counted **from the audit trail**. Approval is stamped on
+  the indent (`approved_by`); a rejection is not — `reject_indent` keeps the reason on the
+  indent and the actor only in the log — so the log is the one place both answers exist.
+* A caller who is themselves scoped sees the managers of the zones they overlap and no
+  others. The panel is a directory, not a way round the scope.
+
+### The zonal manager's app
+
+A zonal manager is an ordinary Admin with a zone; there is no fourth role, deliberately, since
+every "who" queryset in the product already narrows by `User.zone_scope`. What is new is that
+they can work from a handset.
+
+**Sign-in.** They take the OTP door, like a Mait and a store keeper. Two things are required
+and both are decisions somebody made on purpose: a **live zone** on the account
+(`User.is_zonal_manager`) and a **mobile number**. An office Admin with no zone is not found by
+`/auth/otp/send/` at all — admitting the role wholesale would put the account that runs the SAP
+imports behind a six-digit code sent to whatever number happened to be on the row. Their portal
+password is untouched either way.
+
+| Method | Endpoint | Description | Auth |
+| --- | --- | --- | --- |
+| GET | `/zonal/` | Who this is and what is owed: `waiting` (on them) with `oldest_waiting_days`, `at_depot` (waiting on a store keeper), and the size of the patch. Cheap on purpose — the app's tab badge reads it. Carries `scope` | Zonal manager |
+| GET | `/zonal/dashboard/?days=7` | The zone's work, live: `today` / `yesterday` / `on_yesterday` / `week` / `month`, `maits_working_today`, `in_progress`, a day-by-day `trend` with `best_day`, `busiest_maits` and `busiest_villages` over the last 7 days, and `happening` — the last 8 completed captures | Zonal manager |
+| GET | `/zonal/approvals/?search=` | The indents awaiting their decision, oldest first, each with what the decision turns on: `mait_holds` (what that Mait already has of the item), `in_store` (what the depot can still promise, `-1` where no depot serves them), `waiting_days`, and `coverage` — `ready` · `short` · `empty` · `no-store` | Zonal manager |
+| GET | `/zonal/stock/` | The zone's stock by place: `locations` (one per BMC/MCC, with its Maits, `at_zero`, `low`, breeds and the depots serving it), `maits` flat and emptiest first, `stores` with each shelf — and `products`, every item by category (`straw`, `consumable`, `asset`) with `with_maits` / `maits_holding`, `at_depots` / `set_aside` / `free`, and what is on its way: `requested` (waiting on the manager) and `approved` (waiting at a depot) | Zonal manager |
+| GET | `/zonal/history/?days=30&outcome=all\|approved\|rejected&limit=&offset=` | Every approval and rejection they have made, with the request behind it and **where it got to since** (`status_label`). A rejection carries the `reason` the Mait was given. Their own only — the actor is not a parameter | Zonal manager |
+| GET | `/zonal/events/?date_from=&date_to=&limit=30&offset=0` | Every insemination in the zone, newest first, **one page at a time**: every status, each row with the farmer and `owner_type`, MPP name and code, Mait name and vendor code, breed and status. `date_from` / `date_to` are local days, both included; `count` is the whole range and `has_more` says whether another page follows | Zonal manager |
+| GET | `/zonal/events/{id}/` | One insemination, whole — the same record the portal's AI event detail (W6) draws: straw and doses, payment, proof photo, GPS with its source, owner and animal, consumables, `pregnancy_checks`, and `timeline`. **One response, not three** | Zonal manager |
+
+**The event detail is one request on purpose.** The portal fetches the event and its trail
+separately because it has a desk connection and two panels that can fail independently; a
+manager opening this in a yard on one bar of signal wants one spinner and one answer, and
+there is no offline cache here for the halves to arrive into separately.
+
+An event outside the manager's zones is a **404, not a 403**: whether a record exists elsewhere
+in the network is not that account's to learn. It is served from `/zonal/` rather than by
+granting the AI events section, because a section grants the whole portal roster and this
+grants one record inside a zone.
+
+**The dashboard counts events, not the aggregate.** `DailyAIAggregate` is what the portal's
+dashboard reads, and rightly: that one answers "this month by district" across the network
+against a 400ms budget. This is a single zone over a fortnight — a bounded count on an indexed
+column — and reading the aggregate would buy nothing while inheriting its sharp edge, that the
+hourly job filling it does not run on the no-Docker dev path at all. A dashboard that is
+silently zero is worse than one that costs a query.
+
+**Each Mait appears at exactly one location.** A Mait covering points in two centres would
+otherwise be counted under both, and the location rows would sum to more than the zone total.
+They are placed at the centre most of their collection points report into — ties to the lower
+code — and the rest are named on the row as `also_covers`. Same rule as `store_for_mait`.
+
+**There is no write path under `/zonal/`.** The decision posts to `/indents/{id}/approve/` and
+`/indents/{id}/reject/`, where the state machine, the store routing and the audit entry already
+live, and the zone's stock comes off `/admin/inventory/`, which narrows itself to the caller's
+zones. A second endpoint for one decision is a second place for the two to drift.
 
 ### What a zone scopes
 
