@@ -12,6 +12,14 @@
  *
  * Days after today are dead. There are no inseminations in the future, and a range reaching
  * into next week is a range that can only disappoint.
+ *
+ * **Drawn in the product's colours rather than as a white form.** The two ends of the range
+ * sit at the top as *From* and *To* boxes that fill in as they are tapped, the one the next
+ * tap will set outlined — so nobody has to remember which tap they are on. Under them, the
+ * ranges people actually ask for as one tap each; then the month on a green bar, the week's
+ * initials on a tinted strip with Sunday in red as a wall calendar prints it, the ends as
+ * green discs and today marked by a yolk dot. Clear and Apply are buttons, and Apply says
+ * the range it will apply.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -20,7 +28,16 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import { Sheet } from '@/components/BottomSheet';
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import {
+  colors,
+  green,
+  ink,
+  MIN_TOUCH_TARGET,
+  radius,
+  spacing,
+  typography,
+  yolk,
+} from '@theme/tokens';
 
 /**
  * `YYYY-MM-DD` in the phone's own timezone.
@@ -87,6 +104,32 @@ export function formatRange(from: string, to: string, months: string[]): string 
   return `${start.getDate()} ${startMonth} – ${end.getDate()} ${endMonth}`;
 }
 
+/** "21 Sep 2026" off a `YYYY-MM-DD`, for the From and To boxes. */
+function longDay(iso: string, months: string[]): string {
+  const date = parseIsoDate(iso);
+  return `${date.getDate()} ${months[date.getMonth()] ?? ''} ${date.getFullYear()}`;
+}
+
+type Preset = 'today' | 'week' | 'month' | 'lastMonth';
+
+const PRESETS: Preset[] = ['today', 'week', 'month', 'lastMonth'];
+
+/** The range each one-tap chip stands for, ending no later than today. */
+function presetRange(preset: Preset, today: Date): { from: string; to: string } {
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  if (preset === 'today') {
+    return { from: isoDate(today), to: isoDate(today) };
+  }
+  if (preset === 'week') {
+    return { from: isoDate(new Date(y, m, today.getDate() - 6)), to: isoDate(today) };
+  }
+  if (preset === 'month') {
+    return { from: isoDate(new Date(y, m, 1)), to: isoDate(today) };
+  }
+  return { from: isoDate(new Date(y, m - 1, 1)), to: isoDate(new Date(y, m, 0)) };
+}
+
 export default function DateRangeSheet({
   visible,
   from,
@@ -147,6 +190,20 @@ export default function DateRangeSheet({
     setDraftTo(iso);
   };
 
+  const choosePreset = (preset: Preset): void => {
+    const range = presetRange(preset, today);
+    setDraftFrom(range.from);
+    setDraftTo(range.to);
+    setCursor(parseIsoDate(range.to));
+  };
+  const activePreset = PRESETS.find(preset => {
+    const range = presetRange(preset, today);
+    return range.from === draftFrom && range.to === (draftTo ?? draftFrom);
+  });
+
+  /** The next tap sets To when a start is picked and no end yet; otherwise it starts over. */
+  const settingTo = !!draftFrom && !draftTo;
+
   // A single day is a legitimate answer, so a range with only one end picked applies as
   // that one day rather than sitting there refusing to be used.
   const canApply = !!draftFrom;
@@ -168,9 +225,10 @@ export default function DateRangeSheet({
           <Pressable
             accessibilityRole="button"
             onPress={onClear}
-            style={({ pressed }) => [styles.clear, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.clear, pressed && styles.clearPressed]}
             testID="date-range-clear"
           >
+            <Ionicons name="close" size={18} color={colors.error} />
             <Text style={styles.clearLabel}>{t('history.dateRangeClear')}</Text>
           </Pressable>
           <Pressable
@@ -185,122 +243,239 @@ export default function DateRangeSheet({
             ]}
             testID="date-range-apply"
           >
-            <Text style={styles.applyLabel}>{t('history.dateRangeApply')}</Text>
+            <Ionicons name="checkmark" size={18} color={colors.surface} />
+            <Text style={styles.applyLabel} numberOfLines={1}>
+              {draftFrom
+                ? `${t('history.dateRangeApplyShort')} · ${formatRange(
+                    draftFrom,
+                    draftTo ?? draftFrom,
+                    months,
+                  )}`
+                : t('history.dateRangeApply')}
+            </Text>
           </Pressable>
         </View>
       }
     >
-      <View style={styles.monthBar}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('history.previousMonth')}
-          onPress={() => setCursor(new Date(year, month - 1, 1))}
-          style={({ pressed }) => [styles.monthStep, pressed && styles.pressed]}
-          testID="date-range-prev-month"
-        >
-          <Ionicons name="chevron-back" size={20} color={colors.ink} />
-        </Pressable>
-
-        <Text style={styles.monthLabel} testID="date-range-month">
-          {`${months[month]} ${year}`}
-        </Text>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('history.nextMonth')}
-          accessibilityState={{ disabled: atLastMonth }}
-          disabled={atLastMonth}
-          onPress={() => setCursor(new Date(year, month + 1, 1))}
-          style={({ pressed }) => [
-            styles.monthStep,
-            atLastMonth && styles.monthStepInert,
-            pressed && !atLastMonth && styles.pressed,
-          ]}
-          testID="date-range-next-month"
-        >
-          <Ionicons name="chevron-forward" size={20} color={colors.ink} />
-        </Pressable>
+      <View style={styles.ends}>
+        <View style={[styles.end, !settingTo && styles.endNext]} testID="date-range-from">
+          <View style={styles.endHead}>
+            <Ionicons name="calendar" size={13} color={colors.primaryDark} />
+            <Text style={styles.endLabel}>{t('history.dateRangeFrom')}</Text>
+          </View>
+          <Text style={[styles.endValue, !draftFrom && styles.endEmpty]} numberOfLines={1}>
+            {draftFrom ? longDay(draftFrom, months) : t('history.dateRangePick')}
+          </Text>
+        </View>
+        <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+        <View style={[styles.end, settingTo && styles.endNext]} testID="date-range-to">
+          <View style={styles.endHead}>
+            <Ionicons name="calendar" size={13} color={colors.primaryDark} />
+            <Text style={styles.endLabel}>{t('history.dateRangeTo')}</Text>
+          </View>
+          <Text
+            style={[styles.endValue, !(draftTo ?? draftFrom) && styles.endEmpty]}
+            numberOfLines={1}
+          >
+            {draftTo
+              ? longDay(draftTo, months)
+              : draftFrom
+                ? t('history.dateRangeSameDay')
+                : t('history.dateRangePick')}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.weekdays}>
-        {weekdays.map((label, index) => (
-          // Keyed by position: two of the seven initials are the same letter.
-          <Text key={index} style={styles.weekday}>
-            {label}
+      <View style={styles.presets}>
+        {PRESETS.map(preset => {
+          const on = preset === activePreset;
+          return (
+            <Pressable
+              key={preset}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              onPress={() => choosePreset(preset)}
+              style={({ pressed }) => [
+                styles.preset,
+                on && styles.presetOn,
+                pressed && styles.pressed,
+              ]}
+              testID={`date-range-preset-${preset}`}
+            >
+              <Text style={[styles.presetLabel, on && styles.presetLabelOn]} numberOfLines={1}>
+                {t(`history.dateRangePreset_${preset}`)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.calendar}>
+        <View style={styles.monthBar}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('history.previousMonth')}
+            onPress={() => setCursor(new Date(year, month - 1, 1))}
+            style={({ pressed }) => [styles.monthStep, pressed && styles.pressed]}
+            testID="date-range-prev-month"
+          >
+            <Ionicons name="chevron-back" size={20} color={colors.primaryDark} />
+          </Pressable>
+
+          <Text style={styles.monthLabel} testID="date-range-month">
+            {`${months[month]} ${year}`}
           </Text>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('history.nextMonth')}
+            accessibilityState={{ disabled: atLastMonth }}
+            disabled={atLastMonth}
+            onPress={() => setCursor(new Date(year, month + 1, 1))}
+            style={({ pressed }) => [
+              styles.monthStep,
+              atLastMonth && styles.monthStepInert,
+              pressed && !atLastMonth && styles.pressed,
+            ]}
+            testID="date-range-next-month"
+          >
+            <Ionicons name="chevron-forward" size={20} color={colors.primaryDark} />
+          </Pressable>
+        </View>
+
+        <View style={styles.weekdays}>
+          {weekdays.map((label, index) => (
+            // Keyed by position: two of the seven initials are the same letter.
+            <Text key={index} style={[styles.weekday, index === 0 && styles.weekdaySunday]}>
+              {label}
+            </Text>
+          ))}
+        </View>
+
+        {weeks.map((week, weekIndex) => (
+          <View key={weekIndex} style={styles.week}>
+            {week.map((date, dayIndex) => {
+              if (!date) {
+                return <View key={dayIndex} style={styles.cell} />;
+              }
+              const iso = isoDate(date);
+              const future = iso > todayIso;
+              const isStart = iso === draftFrom;
+              const isEnd = iso === draftTo;
+              const between = !!draftFrom && !!draftTo && iso > draftFrom && iso < draftTo;
+
+              return (
+                <Pressable
+                  key={dayIndex}
+                  accessibilityRole="button"
+                  accessibilityLabel={iso}
+                  accessibilityState={{ selected: isStart || isEnd, disabled: future }}
+                  disabled={future}
+                  onPress={() => tap(iso)}
+                  // The wash sits on the whole square so a run of days reads as one bar with
+                  // no gaps between the cells; only the two ends wear a circle.
+                  style={[styles.cell, between && styles.cellBetween]}
+                  testID={`date-range-day-${iso}`}
+                >
+                  <View style={[styles.day, (isStart || isEnd) && styles.dayEnd]}>
+                    <Text
+                      style={[
+                        styles.dayLabel,
+                        future && styles.dayLabelFuture,
+                        iso === todayIso && styles.dayLabelToday,
+                        (isStart || isEnd) && styles.dayLabelEnd,
+                      ]}
+                    >
+                      {date.getDate()}
+                    </Text>
+                    {iso === todayIso && !(isStart || isEnd) && <View style={styles.todayDot} />}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
         ))}
       </View>
-
-      {weeks.map((week, weekIndex) => (
-        <View key={weekIndex} style={styles.week}>
-          {week.map((date, dayIndex) => {
-            if (!date) {
-              return <View key={dayIndex} style={styles.cell} />;
-            }
-            const iso = isoDate(date);
-            const future = iso > todayIso;
-            const isStart = iso === draftFrom;
-            const isEnd = iso === draftTo;
-            const between = !!draftFrom && !!draftTo && iso > draftFrom && iso < draftTo;
-
-            return (
-              <Pressable
-                key={dayIndex}
-                accessibilityRole="button"
-                accessibilityLabel={iso}
-                accessibilityState={{ selected: isStart || isEnd, disabled: future }}
-                disabled={future}
-                onPress={() => tap(iso)}
-                // The wash sits on the whole square so a run of days reads as one bar with
-                // no gaps between the cells; only the two ends wear a circle.
-                style={[styles.cell, between && styles.cellBetween]}
-                testID={`date-range-day-${iso}`}
-              >
-                <View style={[styles.day, (isStart || isEnd) && styles.dayEnd]}>
-                  <Text
-                    style={[
-                      styles.dayLabel,
-                      future && styles.dayLabelFuture,
-                      iso === todayIso && styles.dayLabelToday,
-                      (isStart || isEnd) && styles.dayLabelEnd,
-                    ]}
-                  >
-                    {date.getDate()}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      ))}
     </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
+  // -- From and To ---------------------------------------------------------------------------
+  ends: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginBottom: spacing[3] },
+  end: {
+    flex: 1,
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: green[200],
+    backgroundColor: colors.primaryWash,
+  },
+  // The box the next tap fills, outlined in full green so nobody has to count their taps.
+  endNext: { borderColor: colors.primary, backgroundColor: colors.surface },
+  endHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  endLabel: { ...typography.caption, fontSize: 11, color: colors.primaryDark },
+  endValue: { ...typography.bodyStrong, color: colors.ink },
+  endEmpty: { color: colors.textMuted },
+
+  // -- one-tap ranges --------------------------------------------------------------------------
+  presets: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginBottom: spacing[3] },
+  preset: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.info,
+    backgroundColor: colors.infoWash,
+  },
+  presetOn: { backgroundColor: colors.info },
+  presetLabel: { ...typography.label, color: colors.info },
+  presetLabelOn: { color: colors.surface },
+
+  // -- the month ---------------------------------------------------------------------------------
+  calendar: {
+    padding: spacing[2],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
   monthBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing[3],
+    marginBottom: spacing[2],
+    padding: spacing[1],
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryWash,
   },
   monthStep: {
-    width: MIN_TOUCH_TARGET,
-    height: MIN_TOUCH_TARGET,
+    width: MIN_TOUCH_TARGET - 8,
+    height: MIN_TOUCH_TARGET - 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
+    backgroundColor: colors.surface,
   },
   monthStepInert: { opacity: 0.3 },
-  monthLabel: { ...typography.h3, color: colors.ink },
+  monthLabel: { ...typography.h3, color: colors.primaryDark },
 
-  weekdays: { flexDirection: 'row', marginBottom: spacing[1] },
+  weekdays: {
+    flexDirection: 'row',
+    marginBottom: spacing[1],
+    paddingVertical: spacing[1],
+    borderRadius: radius.sm,
+    backgroundColor: ink[50],
+  },
   weekday: {
     ...typography.caption,
+    fontFamily: typography.label.fontFamily,
     width: `${100 / 7}%`,
     textAlign: 'center',
-    color: colors.textMuted,
+    color: ink[500],
   },
+  weekdaySunday: { color: colors.error },
 
   week: { flexDirection: 'row' },
   cell: {
@@ -320,29 +495,44 @@ const styles = StyleSheet.create({
   dayEnd: { backgroundColor: colors.primary },
   dayLabel: { ...typography.body, color: colors.text },
   dayLabelFuture: { color: colors.border },
-  // Today is marked by weight rather than by a ring, which would compete with the two
-  // circles that mean something here.
+  // Today is marked by weight and a yolk dot rather than by a ring, which would compete with
+  // the two circles that mean something here.
   dayLabelToday: { ...typography.bodyStrong, color: colors.primaryDark },
+  todayDot: {
+    position: 'absolute',
+    bottom: 4,
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: yolk[500],
+  },
   dayLabelEnd: { ...typography.bodyStrong, color: colors.surface },
 
   footer: { flexDirection: 'row', gap: spacing[3], paddingTop: spacing[3] },
   pressed: { opacity: 0.85 },
   clear: {
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: spacing[5],
+    flexDirection: 'row',
+    gap: spacing[1],
+    minHeight: MIN_TOUCH_TARGET + 4,
+    paddingHorizontal: spacing[4],
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.error,
+    backgroundColor: colors.surface,
   },
-  clearLabel: { ...typography.bodyStrong, color: colors.textMuted },
+  clearPressed: { backgroundColor: colors.errorWash },
+  clearLabel: { ...typography.bodyStrong, color: colors.error },
   apply: {
     flex: 1,
-    minHeight: MIN_TOUCH_TARGET,
+    flexDirection: 'row',
+    gap: spacing[1],
+    minHeight: MIN_TOUCH_TARGET + 4,
+    paddingHorizontal: spacing[3],
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.sm,
+    borderRadius: radius.lg,
     backgroundColor: colors.primary,
   },
   applyInert: { opacity: 0.5 },
