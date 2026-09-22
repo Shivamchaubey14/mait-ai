@@ -153,11 +153,35 @@ class Member(TimeStampedModel):
     form_no = models.CharField(max_length=20, blank=True)
     folio_no = models.CharField(max_length=20, blank=True, db_index=True)
 
+    class MobileSource(models.TextChoices):
+        SAP = "sap", "SAP master"
+        OFFICE = "office", "Set by the office"
+
     mobile_no = models.CharField(
         max_length=15,
         blank=True,
         db_index=True,
         help_text="Payment authorisation OTPs are sent here (SRS §6.5).",
+    )
+    # Where the number on file came from. **An office number is never replaced by a master
+    # upload** — the office set it after a phone call because SAP's was wrong, and SAP will go
+    # on shipping the wrong one. The importer is insert-only for every field already, so this
+    # is belt and braces for the one field it matters most on: the explicit fact a future
+    # change to the importer has to reckon with, rather than a side effect of it skipping rows.
+    mobile_source = models.CharField(
+        max_length=10,
+        choices=MobileSource.choices,
+        default=MobileSource.SAP,
+        db_index=True,
+    )
+    mobile_updated_at = models.DateTimeField(null=True, blank=True)
+    mobile_updated_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="The admin who last set the number. The full history is the audit log.",
     )
     aadhar_no = EncryptedCharField(max_length=20, blank=True)
     # Keyed fingerprint of the Aadhaar, kept only so a non-member registration can be checked
@@ -375,6 +399,11 @@ class DataUploadLog(TimeStampedModel):
     total_rows = models.PositiveIntegerField(default=0)
     success_rows = models.PositiveIntegerField(default=0)
     failed_rows = models.PositiveIntegerField(default=0)
+    kept_rows = models.PositiveIntegerField(
+        default=0,
+        help_text="Member rows whose mobile number differed from one the office had set, and "
+        "where the office's number was kept. Counted among the skipped rows.",
+    )
     skipped_rows = models.PositiveIntegerField(
         default=0,
         help_text=(

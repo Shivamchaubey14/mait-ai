@@ -41,6 +41,7 @@ from openpyxl import load_workbook
 
 from . import columns as cols
 from .models import MAX_ERRORS_STORED, MPP, DataUploadLog, Mait, Member
+from .phone import normalise_mobile
 from .snapshots import store_snapshot
 
 logger = logging.getLogger(__name__)
@@ -142,6 +143,10 @@ class ImportContext:
         self.mpp_ids: dict[str, int] = {}
         self.seen_keys: set[str] = set()
         self.on_record: set[str] = set()
+        # Members whose number the office set, with that number — the few hundred a master
+        # upload must never take back, and whose disagreeing rows it counts as kept.
+        self.office_mobiles: dict[str, str] = {}
+        self.kept = 0
         # Carried so a rejected row can be reported with the cells that identify it, which
         # differ per file — see `columns.IDENTITY`.
         self.upload_type = upload_type
@@ -166,6 +171,12 @@ class ImportContext:
             return
         model, field = source
         self.on_record = set(model.objects.values_list(field, flat=True))
+        if model is Member:
+            self.office_mobiles = dict(
+                Member.objects.filter(mobile_source=Member.MobileSource.OFFICE).values_list(
+                    "member_code", "mobile_no"
+                )
+            )
 
     def check_duplicate(self, key: str) -> None:
         if key in self.seen_keys:
@@ -253,6 +264,7 @@ def _read_and_apply(upload: DataUploadLog, workbook, handler, context) -> dict[s
     upload.processed_rows = processed
     upload.success_rows = success
     upload.skipped_rows = skipped
+    upload.kept_rows = context.kept
     upload.failed_rows = failed
     upload.error_report = errors[:MAX_ERRORS_STORED]
     upload.save(
@@ -261,6 +273,7 @@ def _read_and_apply(upload: DataUploadLog, workbook, handler, context) -> dict[s
             "processed_rows",
             "success_rows",
             "skipped_rows",
+            "kept_rows",
             "failed_rows",
             "error_report",
             "updated_at",
@@ -394,19 +407,8 @@ def _clean(value) -> str:
 
 
 def _mobile(value) -> str:
-    """
-    Normalise an Indian mobile number.
-
-    SAP exports carry these inconsistently — as floats, with +91, with spaces. Returns ""
-    when the value cannot be salvaged rather than guessing, because a wrong number means the
-    payment authorisation OTP goes to a stranger (SRS §6.5).
-    """
-    raw = _clean(value).replace(" ", "").replace("-", "")
-    if raw.startswith("+91"):
-        raw = raw[3:]
-    elif raw.startswith("91") and len(raw) == 12:
-        raw = raw[2:]
-    return raw if len(raw) == 10 and raw[0] in "6789" and raw.isdigit() else ""
+    """Normalise an Indian mobile number — the one rule the office's own edits use too."""
+    return normalise_mobile(_clean(value))
 
 
 def _int_or_none(value) -> int | None:
@@ -592,6 +594,17 @@ def _insert_member(row: dict, context: ImportContext) -> str:
         # Rejected rather than auto-created: inventing an MPP from a member row would place a
         # member at a collection point that may not exist (SRS §6.1.4).
         raise ValueError(f"MPP '{mpp_code}' not found. Upload the MPP master first.")
+
+    # **An office-set number is never replaced**, and a row that would have replaced it is
+    # counted, so the report can say "kept 3 numbers the office set" rather than leave the
+    # office wondering whether the file quietly undid their corrections. The insert below
+    # already skips every existing member; this is the explicit rule for the one field that
+    # decides who receives a payment OTP.
+    if member_code in context.office_mobiles:
+        from_file = _mobile(cols.pick(row, *cols.MEMBER["mobile_no"]))
+        if from_file != context.office_mobiles[member_code]:
+            context.kept += 1
+        return SKIPPED
 
     return _insert_or_skip(
         Member,

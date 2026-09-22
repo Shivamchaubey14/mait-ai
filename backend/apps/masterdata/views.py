@@ -38,6 +38,8 @@ from . import columns as cols
 from .exports import COLUMNS as export_columns
 from .exports import non_member_workbook_response, with_last_known_position
 from .identity import aadhaar_clash, mobile_clash
+from .member_mobile import MemberMobileChangeSerializer, change_member_mobile
+from .member_mobile import mobile_history as history_of_mobile
 from .models import MPP, DataUploadLog, Member, NonMember
 from .serializers import (
     AdminNonMemberDetailSerializer,
@@ -523,13 +525,16 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
     """
 
     permission_classes = [IsAdminOrMaitReadOnly, in_section(PortalSection.MEMBERS)]
+    # Declared so the Aadhaar reveal can set its own; unset, the scoped throttle leaves every
+    # other action here exactly as it was.
+    throttle_scope = None
     lookup_field = "member_code"
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["mpp__mpp_code", "activation_status", "mobile_no"]
+    filterset_fields = ["mpp__mpp_code", "activation_status", "mobile_no", "mobile_source"]
     search_fields = ["member_name", "member_code", "mobile_no"]
 
     def get_queryset(self):
-        queryset = Member.objects.select_related("mpp")
+        queryset = Member.objects.select_related("mpp", "mobile_updated_by")
         if self.action == "retrieve":
             # Only on detail: the list serializer has no animals, and prefetching for a
             # 105k-row search would cost a second query per page for nothing.
@@ -541,7 +546,102 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
         return apply_scope(queryset, self.request, "mpp__plant_code")
 
     def get_serializer_class(self):
+        if self.action == "mobile":
+            return MemberMobileChangeSerializer
         return MemberDetailSerializer if self.action == "retrieve" else MemberListSerializer
+
+    @extend_schema(
+        summary="Change a member's mobile number (Admin only)",
+        description=(
+            "The number payment and verification OTPs go to, so an Admin's job alone, with a "
+            "`reason`, and audited with both numbers masked. The number becomes "
+            "`mobile_source: office` and **no member-master upload replaces it**.\n\n"
+            "Send `expected_mobile` — the number you were looking at. If it has changed since, "
+            "the answer is `409` with the number now on file, rather than one correction "
+            "silently replacing another. `shared_with` lists other members already on this "
+            "number: a warning, because a household often shares one phone."
+        ),
+        request=MemberMobileChangeSerializer,
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="mobile",
+        permission_classes=[IsAdmin, in_section(PortalSection.MEMBERS)],
+    )
+    def mobile(self, request, member_code=None):
+        # Through the scoped queryset: a member outside this admin's zones is a 404.
+        member = self.get_object()
+        payload = MemberMobileChangeSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        change = change_member_mobile(
+            member_id=member.id,
+            mobile_no=data["mobile_no"],
+            reason=data["reason"],
+            expected_mobile=data.get("expected_mobile"),
+            actor=request.user,
+            request=request,
+        )
+        fresh = Member.objects.select_related("mpp", "mobile_updated_by").get(pk=member.pk)
+        return Response(
+            {
+                "member": MemberListSerializer(fresh).data,
+                "shared_with": change.shared_with,
+            }
+        )
+
+    @extend_schema(
+        summary="A member's full Aadhaar, for an Admin to check it (audited)",
+        description=(
+            "The list carries the Aadhaar masked to its last four (SRS §16). This is the one "
+            "place the whole number comes from, so an Admin on the phone can check that the "
+            "caller is who they say they are. "
+            "**One member at a time, logged against the operator's account** as a personal "
+            "data read, never cached, and rate-limited — a reveal is a deliberate act about one "
+            "person, not a way to read the roll."
+        ),
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="aadhaar",
+        permission_classes=[IsAdmin, in_section(PortalSection.MEMBERS)],
+        throttle_scope="aadhaar_reveal",
+    )
+    def aadhaar(self, request, member_code=None):
+        # Through the scoped queryset: a member outside this admin's zones is a 404.
+        member = self.get_object()
+        number = member.aadhar_no or ""
+        record_audit(
+            action=AuditLog.Action.PII_ACCESS,
+            entity_type="member",
+            entity_id=member.id,
+            request=request,
+            meta={"aadhaar_viewed": True, "member_code": member.member_code},
+        )
+        response = Response(
+            {"member_code": member.member_code, "aadhar_no": number, "on_file": bool(number)}
+        )
+        # Not for a browser cache or a proxy: this is one person's identity number.
+        response["Cache-Control"] = "no-store"
+        return response
+
+    @extend_schema(
+        summary="Every change the office made to a member's number",
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="mobile-history",
+        permission_classes=[IsAdmin, in_section(PortalSection.MEMBERS)],
+    )
+    def mobile_history(self, request, member_code=None):
+        member = self.get_object()
+        return Response({"results": history_of_mobile(member)})
 
     @extend_schema(
         summary="Search members",

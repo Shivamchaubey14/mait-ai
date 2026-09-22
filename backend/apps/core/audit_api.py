@@ -93,6 +93,7 @@ ENTITIES = {
 FIELD_LABELS = {
     "ai_event_id": "AI event",
     "aadhaar_card_viewed": "Aadhaar card opened",
+    "aadhaar_viewed": "Full Aadhaar viewed",
     "amount_charged": "Amount charged",
     "calving_due_on": "Calving due",
     "carries": "Carries",
@@ -177,6 +178,9 @@ def describe(entry: AuditLog) -> str:
         # Named as plainly as possible. This is the line an auditor reads.
         if meta.get("aadhaar_card_viewed"):
             return f"Opened the Aadhaar card on {thing} {entry.entity_id}"
+        if meta.get("aadhaar_viewed"):
+            who = meta.get("member_code") or entry.entity_id
+            return f"Viewed the full Aadhaar of member {who}"
         if entry.entity_type == "report":
             return f"Exported {entry.entity_id.replace('_', ' ')}"
         return f"Read personal data on {thing} {entry.entity_id}"
@@ -253,6 +257,8 @@ def spoken_keys(entry: AuditLog) -> set[str]:
         return {"file_name"} if meta.get("file_name") else set()
     if entry.action == AuditLog.Action.PII_ACCESS and meta.get("aadhaar_card_viewed"):
         return {"aadhaar_card_viewed"}
+    if entry.action == AuditLog.Action.PII_ACCESS and meta.get("aadhaar_viewed"):
+        return {"aadhaar_viewed", "member_code"}
     if entry.action == AuditLog.Action.STATE_CHANGE:
         used = next((key for key in STATE_KEYS if meta.get(key)), None)
         return {used} if used else set()

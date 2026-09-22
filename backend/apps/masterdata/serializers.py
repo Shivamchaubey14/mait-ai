@@ -67,6 +67,7 @@ class DataUploadLogSerializer(serializers.ModelSerializer):
             "processed_rows",
             "success_rows",
             "skipped_rows",
+            "kept_rows",
             "failed_rows",
             "progress_percent",
             "error_count",
@@ -219,6 +220,11 @@ class MemberListSerializer(serializers.ModelSerializer):
     """
 
     mpp_code = serializers.CharField(source="mpp.mpp_code", read_only=True)
+    mobile_updated_by_name = serializers.SerializerMethodField()
+    # Masked, always — the portal's Members table shows the last four, never the number
+    # (SRS §16). Sent to an Admin only: the Mait's picker has no use for it, and a field the
+    # app does not need is personal data on a handset for no reason.
+    aadhar_masked = serializers.CharField(source="masked_aadhar", read_only=True)
 
     class Meta:
         model = Member
@@ -227,11 +233,28 @@ class MemberListSerializer(serializers.ModelSerializer):
             "member_code",
             "member_name",
             "father_husband_name",
+            "aadhar_masked",
             "mobile_no",
+            # Where the number came from — `office` is protected from the SAP master.
+            "mobile_source",
+            "mobile_updated_at",
+            "mobile_updated_by_name",
             "mpp_code",
             "activation_status",
         ]
         read_only_fields = fields
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not (user and getattr(user, "is_admin", False)):
+            data.pop("aadhar_masked", None)
+        return data
+
+    def get_mobile_updated_by_name(self, obj) -> str:
+        user = obj.mobile_updated_by
+        return (user.full_name or user.username) if user else ""
 
 
 class MemberDetailSerializer(serializers.ModelSerializer):

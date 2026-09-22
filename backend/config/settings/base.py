@@ -198,6 +198,9 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         # OTP endpoints are the fraud surface — throttled hardest (SRS §16).
         "otp_send": "5/hour",
+        # Revealing one member's full Aadhaar on the portal. Generous for a day on the phones,
+        # nowhere near enough to read the 105,000-row roll through it.
+        "aadhaar_reveal": "300/hour",
         "otp_verify": "10/hour",
         # Asking the office for a sign-in code. Each ask puts a row in front of a person, so it
         # is throttled like the SMS it stands in for.
