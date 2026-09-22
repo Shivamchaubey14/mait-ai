@@ -3786,6 +3786,16 @@ paths:
         schema:
           type: string
       - in: query
+        name: mobile_source
+        schema:
+          type: string
+          enum:
+          - office
+          - sap
+        description: |-
+          * `sap` - SAP master
+          * `office` - Set by the office
+      - in: query
         name: mpp__mpp_code
         schema:
           type: string
@@ -3842,6 +3852,99 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MemberDetail'
+          description: ''
+  /api/v1/members/{member_code}/aadhaar/:
+    get:
+      operationId: members_aadhaar_retrieve
+      description: The list carries the Aadhaar masked to its last four (SRS §16).
+        This is the one place the whole number comes from, so an Admin on the phone
+        can check that the caller is who they say they are. **One member at a time,
+        logged against the operator's account** as a personal data read, never cached,
+        and rate-limited — a reveal is a deliberate act about one person, not a way
+        to read the roll.
+      summary: A member's full Aadhaar, for an Admin to check it (audited)
+      parameters:
+      - in: path
+        name: member_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/members/{member_code}/mobile/:
+    post:
+      operationId: members_mobile_create
+      description: |-
+        The number payment and verification OTPs go to, so an Admin's job alone, with a `reason`, and audited with both numbers masked. The number becomes `mobile_source: office` and **no member-master upload replaces it**.
+
+        Send `expected_mobile` — the number you were looking at. If it has changed since, the answer is `409` with the number now on file, rather than one correction silently replacing another. `shared_with` lists other members already on this number: a warning, because a household often shares one phone.
+      summary: Change a member's mobile number (Admin only)
+      parameters:
+      - in: path
+        name: member_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - master-data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberMobileChangeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MemberMobileChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MemberMobileChangeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/members/{member_code}/mobile-history/:
+    get:
+      operationId: members_mobile_history_retrieve
+      description: |-
+        Member search (SRS §9.3).
+
+        Backed by the ``member_mpp_name_idx`` composite index — the table holds 105k+ rows, so an
+        unindexed search here would be the slowest thing a Mait does all day.
+      summary: Every change the office made to a member's number
+      parameters:
+      - in: path
+        name: member_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - master-data
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/v1/mpp/:
     get:
@@ -6805,6 +6908,12 @@ components:
           readOnly: true
           description: Rows whose record already existed and was therefore left untouched.
             A master upload inserts; it never overwrites (SRS §6.1.4).
+        kept_rows:
+          type: integer
+          readOnly: true
+          description: Member rows whose mobile number differed from one the office
+            had set, and where the office's number was kept. Counted among the skipped
+            rows.
         failed_rows:
           type: integer
           readOnly: true
@@ -6842,6 +6951,7 @@ components:
       - file_name
       - finished_at
       - id
+      - kept_rows
       - processed_rows
       - progress_percent
       - skipped_rows
@@ -7742,10 +7852,25 @@ components:
         father_husband_name:
           type: string
           readOnly: true
+        aadhar_masked:
+          type: string
+          readOnly: true
         mobile_no:
           type: string
           readOnly: true
           description: Payment authorisation OTPs are sent here (SRS §6.5).
+        mobile_source:
+          allOf:
+          - $ref: '#/components/schemas/MobileSourceEnum'
+          readOnly: true
+        mobile_updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        mobile_updated_by_name:
+          type: string
+          readOnly: true
         mpp_code:
           type: string
           readOnly: true
@@ -7753,13 +7878,42 @@ components:
           type: string
           readOnly: true
       required:
+      - aadhar_masked
       - activation_status
       - father_husband_name
       - id
       - member_code
       - member_name
       - mobile_no
+      - mobile_source
+      - mobile_updated_at
+      - mobile_updated_by_name
       - mpp_code
+    MemberMobileChangeRequest:
+      type: object
+      properties:
+        mobile_no:
+          type: string
+          minLength: 1
+          maxLength: 20
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 255
+        expected_mobile:
+          type: string
+          maxLength: 20
+      required:
+      - mobile_no
+      - reason
+    MobileSourceEnum:
+      enum:
+      - sap
+      - office
+      type: string
+      description: |-
+        * `sap` - SAP master
+        * `office` - Set by the office
     ModeAe4Enum:
       enum:
       - ONLINE

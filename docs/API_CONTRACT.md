@@ -213,8 +213,11 @@ the rows that actually carry figures rather than the whole roster.
 | --- | --- | --- | --- |
 | GET | `/mpp/` | List/search MPPs (filter: district, tehsil, mait, active) | JWT |
 | GET | `/mpp/{mpp_code}/` | MPP detail incl. assigned Mait | JWT |
-| GET | `/members/` | Search members (by mpp, mobile, member_code, name) | JWT |
+| GET | `/members/` | Search members (by mpp, mobile, member_code, name; `mobile_source=office` for numbers the office set). Each row carries `mobile_source`, `mobile_updated_at`, `mobile_updated_by_name` | JWT |
 | GET | `/members/{member_code}/` | Member detail incl. animals | JWT |
+| POST | `/members/{member_code}/mobile/` | Change a member's mobile number. `{mobile_no, reason, expected_mobile}`: 10-digit Indian mobile (`+91` accepted), a reason of 4+ characters, and the number the caller was looking at — `409 mobile-changed` if it has changed since. Sets `mobile_source: office`, which **no member-master upload replaces**; audited with both numbers masked. Returns the member and `shared_with` (other members on the number — a warning, not a refusal) | Admin · `members` |
+| GET | `/members/{member_code}/aadhaar/` | One member's **full** Aadhaar, for an Admin checking a caller. Logged as a personal-data read against the account, `Cache-Control: no-store`, throttled (`aadhaar_reveal`, 300/hour). The list itself carries only `aadhar_masked` (last four), and only to an Admin | Admin · `members` |
+| GET | `/members/{member_code}/mobile-history/` | Every change the office made to the number, newest first: `when`, `by`, masked `before` / `after`, `reason` | Admin · `members` |
 | GET | `/non-members/` | The non-members already registered at the Mait's MPPs | Mait |
 | POST | `/non-members/` | Register a new non-member on the fly | Mait |
 | POST | `/non-members/check/` | Is this Aadhaar or mobile already somebody's? | Mait |
