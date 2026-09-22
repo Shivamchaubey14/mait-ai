@@ -8,6 +8,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import type { StoreHandover } from '@api/types';
 import i18n from '@/i18n';
 import { jsonResponse, renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 import StoreHistoryScreen, {
   dayHeading,
@@ -90,12 +91,62 @@ const render = (onOpenHandover = jest.fn()) =>
   );
 
 describe('StoreHistoryScreen', () => {
+  it('colours each handover by what it became', async () => {
+    render();
+
+    await waitFor(() => screen.getByTestId('history-row-1'));
+    expect(screen.getByTestId('history-row-1')).toHaveStyle({
+      backgroundColor: colors.primaryWash,
+    });
+    expect(screen.getByTestId('history-row-2')).toHaveStyle({
+      backgroundColor: colors.secondaryWash,
+    });
+    // A straw is a syringe.
+    expect(screen.getByTestId('history-row-1')).toHaveTextContent(/needle/);
+    expect(screen.getByTestId('history-tile-collected')).toHaveTextContent(/Collected\s*2/);
+    expect(screen.getByTestId('history-tile-waiting')).toHaveTextContent(/1/);
+    expect(screen.getByTestId('history-tile-cancelled')).toHaveTextContent(/1/);
+  });
+
+  it('narrows to one state when its tile is tapped, and back again', async () => {
+    render();
+
+    await waitFor(() => screen.getByTestId('history-row-1'));
+    fireEvent.press(screen.getByTestId('history-tile-waiting'));
+    expect(screen.getByTestId('history-row-2')).toBeTruthy();
+    expect(screen.queryByTestId('history-row-1')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('history-tile-waiting'));
+    expect(screen.getByTestId('history-row-1')).toBeTruthy();
+  });
+
+  it('asks the server for any dates chosen on the calendar', async () => {
+    render();
+    await waitFor(() => screen.getByTestId('history-row-1'));
+
+    fireEvent.press(screen.getByTestId('history-window-dates'));
+    fireEvent.press(screen.getByTestId('date-range-preset-month'));
+    fireEvent.press(screen.getByTestId('date-range-apply'));
+
+    const first = localIso(new Date(NOW.getFullYear(), NOW.getMonth(), 1));
+    await waitFor(() => {
+      const asked = (global.fetch as jest.Mock).mock.calls.map(([input]) =>
+        typeof input === 'string' ? input : input.url,
+      );
+      expect(asked.some((url: string) => url.includes(`from=${first}`))).toBe(true);
+    });
+    // The three quick windows step aside while a range is in force.
+    expect(screen.getByTestId('history-window-week')).toHaveStyle({
+      backgroundColor: colors.infoWash,
+    });
+  });
+
   it('puts each handover under the day it happened, with what it became', async () => {
     render();
 
     await waitFor(() => screen.getByTestId('history-row-1'));
     expect(screen.getByTestId(`history-day-${localIso(NOW)}`)).toHaveTextContent(/Today/);
-    expect(screen.getByTestId('history-row-1')).toHaveTextContent(/IND-13 · Sunil Kumar/);
+    expect(screen.getByTestId('history-row-1')).toHaveTextContent(/IND-13\s*Sunil Kumar/);
     expect(screen.getByTestId('history-row-1')).toHaveTextContent(/18 Murrah/);
     expect(screen.getByTestId('history-row-1')).toHaveTextContent(/Collected 11:20/);
     expect(screen.getByTestId('history-row-2')).toHaveTextContent(/Waiting for code/);
@@ -152,6 +203,6 @@ describe('StoreHistoryScreen', () => {
     expect(windowStart('month', today)).toBe('2026-08-13');
     const t = i18n.t.bind(i18n);
     expect(dayHeading(new Date(2026, 8, 10, 9).toISOString(), t, today)).toBe('Yesterday');
-    expect(totalsByItem(ROWS, 'en')).toEqual([{ item: 'Murrah', qty: 25 }]);
+    expect(totalsByItem(ROWS, 'en')).toEqual([{ item: 'Murrah', qty: 25, straw: true }]);
   });
 });

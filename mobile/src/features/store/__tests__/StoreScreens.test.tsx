@@ -12,9 +12,11 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import type { StoreHandover, StoreHome, StoreIndent } from '@api/types';
 import { jsonResponse, problemResponse, renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 import IssueScreen, { mostThatCanGo } from '../IssueScreen';
 import IssuedScreen from '../IssuedScreen';
+import StoreProfileScreen from '../StoreProfileScreen';
 import StoreStockScreen from '../StoreStockScreen';
 import ToIssueScreen, { matches } from '../ToIssueScreen';
 
@@ -141,6 +143,29 @@ describe('ToIssueScreen', () => {
     expect(screen.getByTestId('store-indent-14-pill')).toHaveTextContent('Ready');
     expect(screen.getByTestId('store-indent-11-pill')).toHaveTextContent('Waiting 4d');
     expect(screen.getByTestId('store-indent-13')).toHaveTextContent(/Sunil Kumar · 25 Murrah/);
+  });
+
+  it('colours every row by its shelf, and says in a sentence what the shelf can do', async () => {
+    mockApi(() => undefined);
+    render();
+
+    await waitFor(() => screen.getByTestId('store-indent-13'));
+    expect(screen.getByTestId('store-indent-14')).toHaveStyle({
+      backgroundColor: colors.primaryWash,
+    });
+    expect(screen.getByTestId('store-indent-13')).toHaveStyle({
+      backgroundColor: colors.secondaryWash,
+    });
+    expect(screen.getByTestId('store-indent-11')).toHaveStyle({
+      backgroundColor: colors.errorWash,
+    });
+    expect(screen.getByTestId('store-indent-13')).toHaveTextContent(
+      /The shelf has 18 of the 25 owed/,
+    );
+    expect(screen.getByTestId('store-indent-13')).toHaveTextContent(/Approved by Zonal manager/);
+    expect(screen.getByTestId('store-indent-11')).toHaveTextContent(/Nothing on the shelf/);
+    // Three figures, the first new: what the shelf can hand over right now.
+    expect(screen.getByTestId('store-ready-now')).toHaveTextContent(/Ready now\s*2/);
   });
 
   it('finds an indent by its number', async () => {
@@ -467,6 +492,104 @@ describe('StoreStockScreen · record a delivery', () => {
     await waitFor(() => screen.getByTestId('receive-sheet'));
   };
 
+  it('groups the shelf by kind, each in its own colour', async () => {
+    const shelf = [
+      { ...STOCK[0]!, category: 'straw' as const },
+      {
+        product_type: 'consumable' as const,
+        breed: '',
+        product_ref_id: 7,
+        item_name: 'Gloves',
+        item_name_hi: '',
+        unit: 'pair',
+        on_hand: 0,
+        set_aside: 0,
+        available: 0,
+        category: 'consumable' as const,
+      },
+    ];
+    mockStock(request =>
+      request.url.includes('/store/stock/') && !request.url.includes('receive')
+        ? jsonResponse(shelf)
+        : undefined,
+    );
+    renderWithStore(<StoreStockScreen storeName="Barsana depot" />);
+
+    // Straws first — they are what the queue waits on — and only straws.
+    await waitFor(() => screen.getByTestId('stock-section-straw'));
+    expect(screen.queryByTestId('stock-section-consumable')).toBeNull();
+    expect(screen.getByTestId('stock-section-straw')).toHaveTextContent(/Straws.*1 item · 40/);
+    expect(screen.getByTestId('stock-line-MURRAH')).toHaveStyle({
+      backgroundColor: colors.infoWash,
+    });
+    expect(screen.getByTestId('stock-line-MURRAH')).toHaveTextContent(/22 free to issue/);
+    expect(screen.getByTestId('stock-line-MURRAH')).toHaveTextContent(/18 set aside/);
+    expect(screen.getByTestId('stock-tile-straw')).toHaveTextContent(/Straws\s*40/);
+    // A straw is a syringe, never a drop — a drop reads as milk on a dairy's app.
+    expect(screen.getByTestId('stock-tile-straw')).toHaveTextContent(/needle/);
+    expect(screen.getByTestId('stock-line-MURRAH')).toHaveTextContent(/needle/);
+    expect(screen.getByTestId('stock-line-MURRAH')).not.toHaveTextContent(/water/);
+
+    // A tile is the switch.
+    fireEvent.press(screen.getByTestId('stock-tile-consumable'));
+    await waitFor(() => screen.getByTestId('stock-section-consumable'));
+    expect(screen.queryByTestId('stock-section-straw')).toBeNull();
+    // None of it on the shelf is red, whatever its kind.
+    expect(screen.getByTestId('stock-line-7')).toHaveStyle({ backgroundColor: colors.errorWash });
+
+    // A kind the store holds none of still has its section, and says so.
+    fireEvent.press(screen.getByTestId('stock-tile-asset'));
+    expect(await screen.findByTestId('stock-section-asset-none')).toHaveTextContent(/No equipment/);
+  });
+
+  it('draws the delivery sheet in colour, every kind named whole', async () => {
+    mockStock();
+    await open();
+
+    // Each kind a button of its own, the chosen one filled — not a strip that cut the words.
+    expect(screen.getByTestId('receive-kind-consumable')).toHaveTextContent(/Consumables$/);
+    expect(screen.getByTestId('receive-kind-straw')).toHaveStyle({ backgroundColor: colors.info });
+    fireEvent.press(screen.getByTestId('receive-kind-consumable'));
+    expect(screen.getByTestId('receive-kind-consumable')).toHaveStyle({
+      backgroundColor: colors.primary,
+    });
+    expect(screen.getByTestId('receive-kind-straw')).toHaveStyle({
+      backgroundColor: colors.surface,
+    });
+  });
+
+  it('records equipment as a catalogue product', async () => {
+    const sent: Request[] = [];
+    mockStock(request => {
+      if (request.url.includes('/store/catalogue/')) {
+        return jsonResponse({
+          ...CATALOGUE,
+          products: [
+            ...CATALOGUE.products,
+            { id: 9, name: 'AI gun', unit: 'piece', category: 'asset' as const },
+          ],
+        });
+      }
+      if (request.url.includes('/store/stock/receive/')) {
+        sent.push(request.clone());
+        return jsonResponse({ ok: true });
+      }
+      return undefined;
+    });
+    await open();
+
+    fireEvent.press(screen.getByTestId('receive-kind-asset'));
+    fireEvent.press(await screen.findByTestId('receive-item-9'));
+    // Gloves are a consumable, not equipment.
+    expect(screen.queryByTestId('receive-item-7')).toBeNull();
+    fireEvent.press(screen.getByTestId('receive-save'));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    const body = await sent[0]!.json();
+    expect(body.product_type).toBe('consumable');
+    expect(body.product_ref_id).toBe(9);
+  });
+
   it('names the shelf it is writing onto', async () => {
     mockStock();
     await open();
@@ -569,5 +692,37 @@ describe('StoreStockScreen · record a delivery', () => {
     fireEvent.press(screen.getByTestId('receive-kind-consumable'));
     expect(screen.queryByTestId('receive-animal-COW')).toBeNull();
     expect(await screen.findByTestId('receive-item-7')).toBeTruthy();
+  });
+});
+
+describe('StoreProfileScreen', () => {
+  it('leads with the counter’s day, then the store and the places it serves, a colour each', async () => {
+    mockApi(request =>
+      request.url.endsWith('/store/')
+        ? jsonResponse({
+            ...HOME,
+            store: { ...HOME.store, plant_names: ['BARSANA BMC', 'NANDGAON BMC'] },
+          })
+        : undefined,
+    );
+    renderWithStore(<StoreProfileScreen />);
+
+    await waitFor(() => expect(screen.getByTestId('profile-waiting')).toHaveTextContent(/5/));
+    expect(screen.getByTestId('profile-ready')).toHaveTextContent(/2\s*Ready now/);
+    expect(screen.getByTestId('profile-issued')).toHaveTextContent(/12/);
+    expect(screen.getByTestId('profile-not-collected')).toHaveTextContent(/3/);
+
+    expect(screen.getByTestId('profile-store')).toHaveTextContent(/Barsana depot/);
+    expect(screen.getByTestId('profile-store')).toHaveTextContent(/BARSANA/);
+    expect(screen.getByTestId('profile-store')).toHaveTextContent(/Mathura/);
+    expect(screen.getByTestId('profile-serves')).toHaveTextContent(/BARSANA BMC.*NANDGAON BMC/);
+
+    expect(screen.getByTestId('profile-today')).toHaveStyle({ backgroundColor: colors.infoWash });
+    expect(screen.getByTestId('profile-store')).toHaveStyle({
+      backgroundColor: colors.primaryWash,
+    });
+    expect(screen.getByTestId('profile-serves')).toHaveStyle({
+      backgroundColor: colors.secondaryWash,
+    });
   });
 });
