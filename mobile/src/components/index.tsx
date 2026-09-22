@@ -93,7 +93,13 @@ export function SignOutButton({
       onPress={onPress}
       style={({ pressed }) => [styles.signOut, pressed && styles.signOutPressed]}
     >
-      <Text style={styles.signOutLabel}>{label}</Text>
+      {/* Across the whole button rather than sized to itself. Android measures a label in the
+          label's font, and Nunito has no Devanagari — so "साइन आउट" came out measured for
+          narrower glyphs than the ones drawn, and "आउट" wrapped out of sight, leaving "साइन".
+          The full width, and the simple line breaker, leave room for what is actually drawn. */}
+      <Text style={styles.signOutLabel} textBreakStrategy="simple" testID="sign-out-label">
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -277,7 +283,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
   },
   signOutPressed: { backgroundColor: colors.errorPressed },
-  signOutLabel: { ...typography.bodyStrong, color: colors.surface },
+  signOutLabel: {
+    ...typography.bodyStrong,
+    alignSelf: 'stretch',
+    textAlign: 'center',
+    paddingHorizontal: spacing[4],
+    color: colors.surface,
+  },
   field: { marginBottom: spacing[4] },
   fieldLabel: {
     ...typography.label,
