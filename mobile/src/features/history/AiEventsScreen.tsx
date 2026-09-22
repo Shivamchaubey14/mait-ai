@@ -36,15 +36,18 @@ import { readQueue } from '@api/queue';
 import type { AIEvent } from '@api/types';
 import { BrandMark } from '@/components/brand';
 import DateRangeSheet, { formatRange } from '@/components/dateRange';
+import { Tile, Tiles } from '@/components/frame';
+import Glyph, { GlyphName, STRAW_GLYPH } from '@/components/glyph';
 import PullToRefresh from '@/components/pullToRefresh';
 import { whatIsMissing } from '@/features/aiFlow/resume';
 import Problem, { useOnline } from '@/components/problem';
 import { EmptyState, SkeletonList } from '@/components/states';
 import {
   colors,
+  green,
+  ink,
   MIN_TOUCH_TARGET,
   radius,
-  shadows,
   spacing,
   typography,
   yolk,
@@ -98,6 +101,34 @@ function dayLabel(iso: string, t: (key: string) => string): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
+/**
+ * Each state in its colour and glyph: green done, yolk waiting on the phone, red waiting on
+ * the Mait, slate for the trail of a capture called off.
+ */
+const LOOK: Record<RowState, { icon: GlyphName; solid: string; onSolid: string; word: string }> = {
+  synced: {
+    icon: 'checkmark-done',
+    solid: colors.primary,
+    onSolid: colors.surface,
+    word: colors.primaryDark,
+  },
+  queued: { icon: 'cloud-upload', solid: yolk[500], onSolid: colors.ink, word: yolk[800] },
+  attention: {
+    icon: 'alert-circle',
+    solid: colors.error,
+    onSolid: colors.surface,
+    word: colors.error,
+  },
+  cancelled: { icon: 'close-circle', solid: ink[400], onSolid: colors.surface, word: ink[500] },
+};
+
+/** The three states worth counting, as tiles that also filter the list. */
+const COUNTED: { state: RowState; tone: 'good' | 'waiting' | 'bad' }[] = [
+  { state: 'synced', tone: 'good' },
+  { state: 'queued', tone: 'waiting' },
+  { state: 'attention', tone: 'bad' },
+];
+
 /** The label a state wears. `attention` is two words in the translations, hence the map. */
 function stateKey(state: RowState): string {
   return state === 'attention' ? 'history.needsAttention' : `history.${state}`;
@@ -108,9 +139,10 @@ function stateKey(state: RowState): string {
 // --------------------------------------------------------------------------------------
 /** The state as a word. Colour carries it too, but never alone — this is read in sunlight. */
 function StatePill({ state, label }: { state: RowState; label: string }): React.JSX.Element {
+  const look = LOOK[state];
   return (
-    <View style={[styles.pill, styles[`pill_${state}`]]}>
-      <Text style={[styles.pillLabel, styles[`pillLabel_${state}`]]} numberOfLines={1}>
+    <View style={[styles.pill, { backgroundColor: look.solid }]} testID={`ai-event-pill-${state}`}>
+      <Text style={[styles.pillLabel, { color: look.onSolid }]} numberOfLines={1}>
         {label}
       </Text>
     </View>
@@ -131,31 +163,68 @@ function EventRow({
   const { t } = useTranslation();
   const needs = state === 'attention';
   const label = t(stateKey(state));
+  const look = LOOK[state];
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${event.owner_name} · ${label}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, needs && styles.rowNeeds, pressed && styles.rowPressed]}
+      style={({ pressed }) => [styles.row, styles[`row_${state}`], pressed && styles.rowPressed]}
       testID={`ai-event-${event.id}`}
     >
+      {/* The state's glyph on its colour: the row says what it is before a word is read. */}
+      <View style={[styles.chip, { backgroundColor: look.solid }]}>
+        <Glyph name={look.icon} size={20} color={look.onSolid} />
+      </View>
+
       <View style={styles.rowBody}>
         <Text style={styles.rowName} numberOfLines={1}>
           {event.owner_name}
         </Text>
-        <Text style={[styles.rowMeta, needs && styles.rowMetaNeeds]} numberOfLines={1}>
-          {meta}
-        </Text>
+        <View style={styles.rowMetaLine}>
+          <Glyph
+            name={needs ? 'warning' : STRAW_GLYPH}
+            size={12}
+            color={needs ? colors.error : look.word}
+          />
+          <Text
+            style={[styles.rowMeta, { color: needs ? colors.error : ink[500] }]}
+            numberOfLines={1}
+          >
+            {meta}
+          </Text>
+        </View>
+        <View style={styles.rowFoot}>
+          <StatePill state={state} label={label} />
+          {/* The kind of owner, so a farmer asking "did I pay" is answered by the row. */}
+          <View
+            style={[
+              styles.owner,
+              event.owner_type === 'member' ? styles.owner_member : styles.owner_other,
+            ]}
+          >
+            <Ionicons
+              name={event.owner_type === 'member' ? 'people' : 'person'}
+              size={11}
+              color={event.owner_type === 'member' ? colors.info : yolk[800]}
+            />
+            <Text
+              style={[
+                styles.ownerLabel,
+                { color: event.owner_type === 'member' ? colors.info : yolk[800] },
+              ]}
+              numberOfLines={1}
+            >
+              {t(event.owner_type === 'member' ? 'history.member' : 'history.nonMember')}
+            </Text>
+          </View>
+        </View>
       </View>
 
-      <StatePill state={state} label={label} />
-
-      {/* Only where something is waiting to be done. On a finished row the pill is the whole
-          answer, and an arrow beside it promises a next step that does not exist. */}
-      {(needs || state === 'queued') && (
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-      )}
+      <View style={[styles.go, { borderColor: look.solid }]}>
+        <Ionicons name="chevron-forward" size={16} color={look.word} />
+      </View>
     </Pressable>
   );
 }
@@ -183,6 +252,8 @@ export default function AiEventsScreen({
    */
   const [dates, setDates] = useState<{ from: string; to: string } | null>(null);
   const [datesOpen, setDatesOpen] = useState(false);
+  /** One state picked off the tiles, or every state. Tapping the picked tile again clears it. */
+  const [only, setOnly] = useState<RowState | null>(null);
 
   const events = useListAiEventsQuery();
   /**
@@ -263,12 +334,16 @@ export default function AiEventsScreen({
             : true,
       );
 
+  /** Each state counted over the range in force, before the tiles narrow it further. */
+  const counts = COUNTED.map(({ state }) => shown.filter(event => stateOf(event) === state).length);
+  const visible = only ? shown.filter(event => stateOf(event) === only) : shown;
+
   /** Whichever request the rows came from is the one whose loading and errors are shown. */
   const source = dates ? ranged : events;
 
   /** Grouped by day, so a week's scroll reads as days rather than as forty rows. */
   const days: { label: string; rows: AIEvent[] }[] = [];
-  shown.forEach(event => {
+  visible.forEach(event => {
     const label = dayLabel(event.created_at, t);
     const last = days[days.length - 1];
     if (last && last.label === label) {
@@ -362,6 +437,11 @@ export default function AiEventsScreen({
                 style={[styles.range, active && styles.rangeActive]}
                 testID={`ai-events-range-${key}`}
               >
+                <Ionicons
+                  name={key === 'today' ? 'today' : key === 'week' ? 'calendar' : 'albums'}
+                  size={14}
+                  color={active ? colors.surface : colors.info}
+                />
                 <Text
                   style={[styles.rangeLabel, active && styles.rangeLabelActive]}
                   numberOfLines={1}
@@ -388,7 +468,7 @@ export default function AiEventsScreen({
                 {formatRange(dates.from, dates.to, months)}
               </Text>
             ) : (
-              <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
+              <Ionicons name="calendar-number" size={16} color={colors.info} />
             )}
           </Pressable>
         </View>
@@ -423,31 +503,60 @@ export default function AiEventsScreen({
             ) : shown.length === 0 ? (
               <EmptyState title={empty.title} body={empty.body} />
             ) : (
-              days.map(day => (
-                <View key={day.label} style={styles.day}>
-                  {/* Dropped when the filter is already one day: "Today" under a chip that says
+              <>
+                <Tiles>
+                  {COUNTED.map(({ state, tone }, index) => (
+                    <Tile
+                      key={state}
+                      label={t(stateKey(state))}
+                      value={counts[index]}
+                      icon={LOOK[state].icon}
+                      tone={tone}
+                      selected={only === state}
+                      onPress={() => setOnly(current => (current === state ? null : state))}
+                      testID={`ai-events-tile-${state}`}
+                    />
+                  ))}
+                </Tiles>
+                {visible.length === 0 && (
+                  <View style={styles.noneOfState} testID="ai-events-none-of-state">
+                    <Ionicons name="checkmark-circle" size={18} color={colors.primaryDark} />
+                    <Text style={styles.noneOfStateLabel}>
+                      {t('history.noneOfState', { state: t(stateKey(only ?? 'synced')) })}
+                    </Text>
+                  </View>
+                )}
+                {days.map(day => (
+                  <View key={day.label} style={styles.day}>
+                    {/* Dropped when the filter is already one day: "Today" under a chip that says
                   Today is the same word twice. */}
-                  {(!!dates || range !== 'today') && (
-                    <View style={styles.dayHead}>
-                      <Text style={styles.dayLabel}>{day.label}</Text>
-                      <Text style={styles.dayCount}>{day.rows.length}</Text>
-                    </View>
-                  )}
+                    {(!!dates || range !== 'today') && (
+                      <View style={styles.dayHead}>
+                        <View style={styles.dayPill}>
+                          <Ionicons name="calendar" size={13} color={colors.info} />
+                          <Text style={styles.dayLabel}>{day.label}</Text>
+                        </View>
+                        <View style={styles.dayCount}>
+                          <Text style={styles.dayCountLabel}>{day.rows.length}</Text>
+                        </View>
+                      </View>
+                    )}
 
-                  {day.rows.map(event => {
-                    const state = stateOf(event);
-                    return (
-                      <EventRow
-                        key={event.id}
-                        event={event}
-                        state={state}
-                        meta={metaFor(event, state)}
-                        onPress={() => onOpen(event)}
-                      />
-                    );
-                  })}
-                </View>
-              ))
+                    {day.rows.map(event => {
+                      const state = stateOf(event);
+                      return (
+                        <EventRow
+                          key={event.id}
+                          event={event}
+                          state={state}
+                          meta={metaFor(event, state)}
+                          onPress={() => onOpen(event)}
+                        />
+                      );
+                    })}
+                  </View>
+                ))}
+              </>
             )}
           </ScrollView>
         )}
@@ -499,14 +608,16 @@ const styles = StyleSheet.create({
   // three settings rather than as three labels that happen to be next to each other.
   range: {
     flex: 1,
+    flexDirection: 'row',
+    gap: 4,
     paddingHorizontal: spacing[2],
-    minHeight: MIN_TOUCH_TARGET - 12,
+    minHeight: MIN_TOUCH_TARGET - 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.infoWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.info,
   },
   // Content-width, and deliberately not `flex: 1`: it is the way to ask a different question,
   // not a fourth answer to this one. Shrinkable so a long range cannot crush the three.
@@ -518,31 +629,66 @@ const styles = StyleSheet.create({
     // with the same cold or gloved hands as everything else.
     minWidth: MIN_TOUCH_TARGET,
     paddingHorizontal: spacing[3],
-    minHeight: MIN_TOUCH_TARGET - 12,
+    minHeight: MIN_TOUCH_TARGET - 8,
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.infoWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.info,
   },
-  // Outlined rather than filled. Green is this app's one "do this" colour and a filter is not
-  // an action — the wash and the ring are enough to say which of the three is on.
-  rangeActive: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
-  rangeLabel: { ...typography.label, color: colors.textMuted },
-  rangeLabelActive: { color: colors.primaryDark },
+  // Blue, the colour of a fact rather than of an action: a filter says what is shown, and
+  // green is kept for "done".
+  rangeActive: { backgroundColor: colors.info, borderColor: colors.info },
+  rangeLabel: { ...typography.label, color: colors.info, flexShrink: 1 },
+  rangeLabelActive: { color: colors.surface },
 
   // -- days ------------------------------------------------------------------------------
-  body: { padding: spacing[4] },
-  day: { marginBottom: spacing[2] },
+  body: { padding: spacing[4], gap: spacing[3] },
+  day: { marginBottom: spacing[1] },
   dayHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing[1],
+    gap: spacing[2],
     marginBottom: spacing[2],
   },
-  dayLabel: { ...typography.label, color: colors.textMuted, letterSpacing: 1 },
-  dayCount: { ...typography.caption, color: colors.textMuted },
+  dayPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    paddingHorizontal: spacing[3],
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.info,
+    backgroundColor: colors.infoWash,
+  },
+  dayLabel: { ...typography.label, color: colors.info },
+  dayCount: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.info,
+  },
+  dayCountLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
+
+  noneOfState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    padding: spacing[4],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: green[300],
+    backgroundColor: colors.primaryWash,
+  },
+  noneOfStateLabel: { ...typography.body, color: colors.primaryDark, flex: 1 },
 
   // -- rows ------------------------------------------------------------------------------
   row: {
@@ -550,34 +696,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET + spacing[3],
-    padding: spacing[4],
+    padding: spacing[3],
     marginBottom: spacing[3],
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'transparent',
     borderRadius: radius.lg,
-    ...shadows.card,
   },
-  // The whole card, not a stripe down one edge: a thumb covers an edge, and a row read
-  // through a thumb then looks finished.
-  rowNeeds: { backgroundColor: colors.errorWash, borderColor: colors.error },
+  // The whole card in the state's wash, not a stripe down one edge: a thumb covers an edge,
+  // and a row read through a thumb then looks finished.
+  row_synced: { backgroundColor: colors.primaryWash, borderColor: green[300] },
+  row_queued: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  row_attention: { backgroundColor: colors.errorWash, borderColor: colors.error },
+  row_cancelled: { backgroundColor: ink[50], borderColor: ink[100] },
   rowPressed: { opacity: 0.85 },
-  rowBody: { flex: 1 },
+  chip: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowBody: { flex: 1, gap: 3 },
   rowName: { ...typography.h3, color: colors.ink },
-  rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  rowMetaNeeds: { color: colors.error },
+  rowMetaLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  rowMeta: { ...typography.caption, flexShrink: 1 },
+  rowFoot: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginTop: 2 },
+  go: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
 
   // -- pills -----------------------------------------------------------------------------
-  pill: { paddingHorizontal: spacing[3], paddingVertical: 3, borderRadius: radius.pill },
-  pill_queued: { backgroundColor: colors.secondaryWash },
-  // White on the red wash the row already carries. A second red block inside a red card is
-  // one alarm too many; the word is what has to be read.
-  pill_attention: { backgroundColor: colors.surface },
-  pill_synced: { backgroundColor: colors.primaryWash },
-  pill_cancelled: { backgroundColor: colors.background },
-  pillLabel: { ...typography.caption },
-  pillLabel_queued: { color: yolk[800] },
-  pillLabel_attention: { color: colors.error },
-  pillLabel_synced: { color: colors.primaryDark },
-  pillLabel_cancelled: { color: colors.textMuted },
+  pill: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.pill },
+  pillLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
+  owner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexShrink: 1,
+  },
+  owner_member: { backgroundColor: colors.infoWash, borderColor: colors.info },
+  owner_other: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  ownerLabel: { ...typography.caption },
 });

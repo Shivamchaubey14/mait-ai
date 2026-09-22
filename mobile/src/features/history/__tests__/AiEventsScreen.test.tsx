@@ -21,6 +21,7 @@ import type { AIEvent } from '@api/types';
 import i18n from '@/i18n';
 import { formatRange, isoDate } from '@/components/dateRange';
 import { jsonResponse, renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 /**
  * The clock these tests run against.
@@ -143,7 +144,7 @@ describe('AiEventsScreen', () => {
     renderWithStore(<AiEventsScreen onOpen={onOpen} />);
 
     await waitFor(() => expect(screen.getByText('Radha Singh')).toBeTruthy());
-    expect(screen.getByText('Needs attention')).toBeTruthy();
+    expect(screen.getByTestId('ai-event-31')).toHaveTextContent(/Needs attention/);
     expect(screen.getByText(/payment code missing/)).toBeTruthy();
   });
 
@@ -166,8 +167,8 @@ describe('AiEventsScreen', () => {
     ]);
     renderWithStore(<AiEventsScreen onOpen={onOpen} />);
 
-    await waitFor(() => expect(screen.getByText('Queued')).toBeTruthy());
-    expect(screen.queryByText('Needs attention')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('ai-event-pill-queued')).toBeTruthy());
+    expect(screen.queryByTestId('ai-event-pill-attention')).toBeNull();
   });
 
   it('counts what is waiting across the whole list, not the filter in force', async () => {
@@ -344,5 +345,74 @@ describe('AiEventsScreen', () => {
     fireEvent.press(screen.getByTestId('ai-event-30'));
 
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 30 }));
+  });
+
+  describe('in colour', () => {
+    const today = new Date().toISOString();
+    const mixed = () =>
+      mockApi([
+        event({ id: 40, owner_name: 'Sita Devi', status: 'completed', created_at: today }),
+        event({
+          id: 41,
+          owner_name: 'Radha Singh',
+          status: 'payment_pending',
+          payment: UNCONFIRMED,
+          created_at: today,
+        }),
+      ]);
+
+    it('tints each row by its state — green done, red needing attention', async () => {
+      mixed();
+      renderWithStore(<AiEventsScreen onOpen={onOpen} />);
+
+      await waitFor(() => screen.getByTestId('ai-event-40'));
+      expect(screen.getByTestId('ai-event-40')).toHaveStyle({
+        backgroundColor: colors.primaryWash,
+      });
+      expect(screen.getByTestId('ai-event-41')).toHaveStyle({ backgroundColor: colors.errorWash });
+      expect(screen.getByTestId('ai-event-pill-synced')).toHaveStyle({
+        backgroundColor: colors.primary,
+      });
+    });
+
+    it('counts each state on a tile, and a tile filters the list to that state', async () => {
+      mixed();
+      renderWithStore(<AiEventsScreen onOpen={onOpen} />);
+
+      await waitFor(() => screen.getByTestId('ai-events-tile-synced'));
+      expect(screen.getByTestId('ai-events-tile-synced')).toHaveTextContent(/1/);
+      expect(screen.getByTestId('ai-events-tile-attention')).toHaveTextContent(/1/);
+      expect(screen.getByTestId('ai-events-tile-queued')).toHaveTextContent(/0/);
+
+      fireEvent.press(screen.getByTestId('ai-events-tile-attention'));
+      expect(screen.getByTestId('ai-event-41')).toBeTruthy();
+      expect(screen.queryByTestId('ai-event-40')).toBeNull();
+
+      // Tapped again, the filter comes off.
+      fireEvent.press(screen.getByTestId('ai-events-tile-attention'));
+      expect(screen.getByTestId('ai-event-40')).toBeTruthy();
+    });
+
+    it('says so when a tile has nothing in it', async () => {
+      mixed();
+      renderWithStore(<AiEventsScreen onOpen={onOpen} />);
+
+      await waitFor(() => screen.getByTestId('ai-events-tile-queued'));
+      fireEvent.press(screen.getByTestId('ai-events-tile-queued'));
+      expect(screen.getByTestId('ai-events-none-of-state')).toHaveTextContent(/Queued/);
+    });
+
+    it('draws the range chips in blue, filled when chosen', async () => {
+      mixed();
+      renderWithStore(<AiEventsScreen onOpen={onOpen} />);
+
+      await waitFor(() => screen.getByTestId('ai-events-range-today'));
+      expect(screen.getByTestId('ai-events-range-today')).toHaveStyle({
+        backgroundColor: colors.info,
+      });
+      expect(screen.getByTestId('ai-events-range-week')).toHaveStyle({
+        backgroundColor: colors.infoWash,
+      });
+    });
   });
 });
