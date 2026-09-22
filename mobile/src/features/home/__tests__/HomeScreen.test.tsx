@@ -17,6 +17,7 @@ import type { AIEvent, InventorySummary } from '@api/types';
 import { loggedIn } from '@/features/auth/authSlice';
 import type { AuthUser } from '@/features/auth/authSlice';
 import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 const SUMMARY: InventorySummary = {
   total_straws: 32,
@@ -197,6 +198,29 @@ describe('HomeScreen', () => {
 
     await waitFor(() => expect(screen.getByTestId('breed-Murrah')).toBeTruthy());
     expect(screen.queryByTestId('resume-unfinished')).toBeNull();
+  });
+
+  it('draws the straws in colour: a syringe, a total badge, and a low breed in yolk', async () => {
+    mockApi(SUMMARY, []);
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('breed-Murrah')).toBeTruthy());
+    // Murrah is down to two — yolk, with its Low pill; the others are rows on paper.
+    expect(screen.getByTestId('breed-Murrah')).toHaveStyle({
+      backgroundColor: colors.secondaryWash,
+    });
+    expect(screen.getByTestId('breed-Sahiwal')).toHaveStyle({ backgroundColor: colors.surface });
+    // A straw is a syringe, never a drop.
+    expect(screen.getByTestId('breed-Sahiwal')).toHaveTextContent(/needle/);
+    expect(screen.getByTestId('home-straw-total')).toHaveTextContent('32 total');
+  });
+
+  it('turns the button blue, not grey, when there are no straws to start with', async () => {
+    mockApi({ ...SUMMARY, total_straws: 0, by_breed: {} }, []);
+    render();
+
+    await waitFor(() => expect(screen.getByText('See stock')).toBeTruthy());
+    expect(screen.getByTestId('home-start-ai')).toHaveStyle({ backgroundColor: colors.info });
   });
 
   it('sends a Mait with no straws to stock rather than into a capture', async () => {

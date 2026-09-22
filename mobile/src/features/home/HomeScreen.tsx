@@ -9,6 +9,11 @@
  * Every list here has four states and all four are built: loading, empty, error, and loaded.
  * The error state says the queued records are safe, since on a handset holding unsent
  * inseminations that is the actual question rather than what the server did.
+ *
+ * **In the product's colours** (docs/DESIGN_SYSTEM.md, *Coloured screen pattern*): green for
+ * the day's work, yolk for what is waiting, blue for the straws — each with its glyph on a
+ * solid chip, and a straw drawn as a syringe. Every breed is a row of its own, tinted yolk
+ * when it is running low, and the count sits on a badge rather than floating at the edge.
  */
 
 import React, { useCallback } from 'react';
@@ -18,12 +23,13 @@ import { useTranslation } from 'react-i18next';
 
 import { useGetInventorySummaryQuery, useListAiEventsQuery } from '@api/endpoints';
 import { LanguageToggle } from '@/components/brand';
+import Glyph, { STRAW_GLYPH } from '@/components/glyph';
 import PageHero from '@/components/hero';
 import Problem from '@/components/problem';
 import PullToRefresh from '@/components/pullToRefresh';
 import { EmptyState, SkeletonList } from '@/components/states';
 import { useAppSelector } from '@/store';
-import { colors, radius, spacing, typography } from '@theme/tokens';
+import { colors, green, radius, spacing, typography, yolk } from '@theme/tokens';
 
 interface Props {
   onOpenStock: () => void;
@@ -143,7 +149,9 @@ export default function HomeScreen({
           records left the phone cannot judge anything else on this screen. */}
       {!online && (
         <View style={styles.offline} testID="sync-offline">
-          <Ionicons name="cloud-offline-outline" size={17} color={colors.surface} />
+          <View style={styles.offlineChip}>
+            <Ionicons name="cloud-offline" size={15} color={colors.ink} />
+          </View>
           <Text style={styles.offlineLabel}>{t('home.offlineStrip')}</Text>
         </View>
       )}
@@ -163,7 +171,7 @@ export default function HomeScreen({
             <View style={[styles.tile, styles.tileDone]}>
               <View style={styles.tileHead}>
                 <View style={[styles.tileIcon, styles.tileIconDone]}>
-                  <Ionicons name="checkmark" size={13} color={colors.surface} />
+                  <Ionicons name="checkmark" size={15} color={colors.surface} />
                 </View>
                 <Text style={styles.tileLabel} numberOfLines={1}>
                   {t('home.today')}
@@ -186,7 +194,9 @@ export default function HomeScreen({
               testID="tile-waiting"
             >
               <View style={styles.tileHead}>
-                <Ionicons name="time-outline" size={17} color={colors.secondaryPressed} />
+                <View style={[styles.tileIcon, styles.tileIconWaiting]}>
+                  <Ionicons name="time" size={15} color={colors.ink} />
+                </View>
                 <Text style={styles.tileLabel} numberOfLines={1}>
                   {t('home.waiting')}
                 </Text>
@@ -205,9 +215,16 @@ export default function HomeScreen({
           {/* Stock, because it decides whether the day can start at all. */}
           <View style={styles.card}>
             <View style={styles.cardHead}>
+              <View style={styles.cardChip}>
+                <Glyph name={STRAW_GLYPH} size={16} color={colors.surface} />
+              </View>
               <Text style={styles.cardTitle}>{t('home.strawsWithYou')}</Text>
               {!stock.isLoading && !stock.isError && (
-                <Text style={styles.cardMeta}>{t('home.totalStraws', { count: totalStraws })}</Text>
+                <View style={styles.cardTotal} testID="home-straw-total">
+                  <Text style={styles.cardTotalLabel}>
+                    {t('home.totalStraws', { count: totalStraws })}
+                  </Text>
+                </View>
               )}
             </View>
 
@@ -242,17 +259,32 @@ export default function HomeScreen({
                   // unless they are the only Murrah left and the next three farmers keep buffalo.
                   const low = count <= LOW_BREED_STRAWS;
                   return (
-                    <View key={breed} style={styles.breedRow} testID={`breed-${breed}`}>
-                      <View style={[styles.dot, low && styles.dotLow]} />
+                    <View
+                      key={breed}
+                      style={[styles.breedRow, low && styles.breedRowLow]}
+                      testID={`breed-${breed}`}
+                    >
+                      <View style={[styles.breedChip, low && styles.breedChipLow]}>
+                        <Glyph
+                          name={STRAW_GLYPH}
+                          size={13}
+                          color={low ? colors.ink : colors.surface}
+                        />
+                      </View>
                       <Text style={styles.breedName} numberOfLines={1}>
                         {breed}
                       </Text>
                       {low && (
-                        <View style={[styles.lowBadge, styles.lowBadgeOnWash]}>
+                        <View style={styles.lowBadge}>
+                          <Ionicons name="warning" size={11} color={colors.ink} />
                           <Text style={styles.lowLabel}>{t('home.low')}</Text>
                         </View>
                       )}
-                      <Text style={styles.breedCount}>{count}</Text>
+                      <View style={[styles.breedCountBadge, low && styles.breedCountBadgeLow]}>
+                        <Text style={[styles.breedCount, low && styles.breedCountLow]}>
+                          {count}
+                        </Text>
+                      </View>
                     </View>
                   );
                 })
@@ -267,13 +299,21 @@ export default function HomeScreen({
               style={({ pressed }) => [styles.unfinished, pressed && styles.unfinishedPressed]}
               testID="resume-unfinished"
             >
-              <Ionicons name="create-outline" size={17} color={colors.secondaryPressed} />
+              <View style={styles.unfinishedChip}>
+                <Ionicons name="create" size={16} color={colors.ink} />
+                <View style={styles.unfinishedCount}>
+                  <Text style={styles.unfinishedCountLabel}>{unfinished.length}</Text>
+                </View>
+              </View>
               <Text style={styles.unfinishedLabel} numberOfLines={1}>
                 {unfinished.length === 1 && unfinished[0]
                   ? t('home.unfinished', { name: unfinished[0].owner_name })
                   : t('unfinished.openList', { count: unfinished.length })}
               </Text>
-              <Text style={styles.resume}>{t('home.resume')}</Text>
+              <View style={styles.resume}>
+                <Text style={styles.resumeLabel}>{t('home.resume')}</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.surface} />
+              </View>
             </Pressable>
           )}
 
@@ -302,11 +342,13 @@ export default function HomeScreen({
             ]}
             testID="home-start-ai"
           >
-            <Ionicons
-              name={totalStraws === 0 && !stock.isLoading ? 'cube-outline' : 'add'}
-              size={20}
-              color={colors.surface}
-            />
+            <View style={styles.ctaChip}>
+              <Ionicons
+                name={totalStraws === 0 && !stock.isLoading ? 'cube' : 'add'}
+                size={18}
+                color={totalStraws === 0 && !stock.isLoading ? colors.info : colors.primary}
+              />
+            </View>
             <Text style={styles.ctaLabel}>
               {totalStraws === 0 && !stock.isLoading ? t('home.seeStock') : t('home.startNewAi')}
             </Text>
@@ -344,7 +386,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     backgroundColor: colors.ink,
   },
-  offlineLabel: { ...typography.label, color: colors.surface },
+  offlineChip: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: yolk[400],
+  },
+  offlineLabel: { ...typography.label, color: colors.surface, flex: 1 },
 
   tiles: { flexDirection: 'row', gap: spacing[3], marginBottom: spacing[4] },
   // Centred, the way the portal's stat tile is. Two figures read as a pair are scanned left
@@ -357,7 +407,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
   },
-  tileDone: { backgroundColor: colors.successWash, borderColor: colors.primary },
+  tileDone: { backgroundColor: colors.successWash, borderColor: green[300] },
   tileWaiting: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
   tileHead: {
     flexDirection: 'row',
@@ -366,14 +416,16 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   tileIcon: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tileIconDone: { backgroundColor: colors.primary },
-  tileLabel: { ...typography.caption, color: colors.textMuted },
+  // Ink on yolk, never white — yolk fails contrast under white text.
+  tileIconWaiting: { backgroundColor: yolk[500] },
+  tileLabel: { ...typography.label, color: colors.ink },
   // Two figures, two colours, both already meaning this elsewhere in the product: green is
   // done, yellow is pending.
   tileValue: { ...typography.display, marginTop: spacing[2], textAlign: 'center' },
@@ -388,13 +440,6 @@ const styles = StyleSheet.create({
     marginTop: spacing[2],
     borderRadius: radius.sm,
     backgroundColor: colors.surface,
-  },
-  // The breed rows sit on the wash now, so the "Low" badge needs a ground of its own to stay
-  // legible — amber on pale blue is a badge that has stopped being a badge.
-  lowBadgeOnWash: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.secondary,
   },
 
   // `flexShrink`, never `flexGrow`: with three breeds the card is the height of three breeds,
@@ -421,29 +466,82 @@ const styles = StyleSheet.create({
   cardHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing[2],
     marginBottom: spacing[3],
   },
-  cardTitle: { ...typography.h3, color: colors.ink },
-  cardMeta: { ...typography.caption, color: colors.textMuted },
+  cardChip: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.info,
+  },
+  cardTitle: { ...typography.h3, color: colors.info, flex: 1 },
+  cardTotal: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: colors.info,
+  },
+  cardTotalLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
 
+  // A breed is a row of its own, paper on the blue — and yolk once it is running low.
   breedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    marginBottom: spacing[2],
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
   },
-  dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
-  dotLow: { backgroundColor: colors.secondary },
-  breedName: { ...typography.body, color: colors.text, flex: 1 },
+  breedRowLow: {
+    backgroundColor: colors.secondaryWash,
+    borderWidth: 1,
+    borderColor: yolk[300],
+  },
+  breedChip: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.info,
+  },
+  breedChipLow: { backgroundColor: yolk[500] },
+  breedName: { ...typography.bodyStrong, color: colors.ink, flex: 1 },
   lowBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     paddingHorizontal: spacing[2],
     paddingVertical: 2,
     borderRadius: radius.pill,
-    backgroundColor: colors.secondaryWash,
+    backgroundColor: yolk[400],
   },
-  lowLabel: { ...typography.caption, fontSize: 11, color: colors.secondaryPressed },
-  breedCount: { ...typography.bodyStrong, color: colors.ink, minWidth: 24, textAlign: 'right' },
+  lowLabel: {
+    ...typography.caption,
+    fontSize: 11,
+    fontFamily: typography.label.fontFamily,
+    color: colors.ink,
+  },
+  breedCountBadge: {
+    minWidth: 36,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    backgroundColor: colors.infoWash,
+  },
+  breedCountBadgeLow: { backgroundColor: yolk[500] },
+  breedCount: { ...typography.h3, color: colors.info },
+  breedCountLow: { color: colors.ink },
 
   unfinished: {
     flexDirection: 'row',
@@ -458,8 +556,45 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondaryWash,
   },
   unfinishedPressed: { opacity: 0.7 },
-  unfinishedLabel: { ...typography.body, color: colors.ink, flex: 1 },
-  resume: { ...typography.bodyStrong, color: colors.primaryDark },
+  unfinishedChip: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: yolk[500],
+  },
+  // How many, on the chip's corner: one capture and five are different mornings.
+  unfinishedCount: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.error,
+  },
+  unfinishedCountLabel: {
+    ...typography.caption,
+    fontSize: 10,
+    lineHeight: 12,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
+  unfinishedLabel: { ...typography.bodyStrong, color: colors.ink, flex: 1 },
+  resume: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: spacing[3],
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
+  resumeLabel: { ...typography.label, color: colors.surface },
 
   cta: {
     flexDirection: 'row',
@@ -475,8 +610,17 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
   },
   ctaReady: { backgroundColor: colors.primary },
-  // Not greyed out: at zero straws the button still has somewhere useful to send them.
-  ctaEmpty: { backgroundColor: colors.textMuted },
+  // Blue, not grey: at zero straws the button still has somewhere useful to send them, and
+  // grey read as a button that was switched off.
+  ctaEmpty: { backgroundColor: colors.info },
+  ctaChip: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
   ctaPressed: { opacity: 0.85 },
   ctaLabel: { ...typography.bodyStrong, color: colors.surface },
 });
