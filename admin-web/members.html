@@ -6,7 +6,8 @@
     <title>Members · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="assets/css/portal.css" />
+    <!-- members.css pulls in portal.css. -->
+    <link rel="stylesheet" href="assets/css/members.css" />
   </head>
 
   <body>
@@ -30,10 +31,24 @@
         <div class="notice">
           <span class="notice__icon" aria-hidden="true"></span>
           <div>
-            <p class="notice__title">Personal data is masked for everyone below Admin</p>
+            <p class="notice__title">Aadhaar is masked until you ask for it</p>
             <p class="notice__body">
-              Aadhaar and bank details are never returned in full from this screen. Every unmask is
-              logged against your account.
+              Only Admins see the Aadhaar column. <strong>Show</strong> opens one member's full
+              number so you can check a caller is who they say they are; it masks itself again after
+              30 seconds, and every view is logged against your account.
+            </p>
+          </div>
+        </div>
+
+        <!-- The rule for the one field an Admin can change here, said where the button is. -->
+        <div class="notice notice--good">
+          <span class="notice__icon" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">Only an Admin can change a member's mobile number</p>
+            <p class="notice__body">
+              It is the number payment and verification codes go to. A number the office sets is
+              marked <strong>Office</strong> and is kept when the member master is uploaded again —
+              SAP never takes it back. Every change is logged with who, when and why.
             </p>
           </div>
         </div>
@@ -52,6 +67,9 @@
           <button class="chip" id="filter-no-mobile" type="button" aria-pressed="false">
             No mobile
           </button>
+          <button class="chip" id="filter-office" type="button" aria-pressed="false">
+            Set by the office
+          </button>
         </section>
 
         <section class="panel panel--flush" aria-label="Members">
@@ -62,8 +80,10 @@
                   <th scope="col">Member</th>
                   <th scope="col">Code</th>
                   <th scope="col">MPP</th>
+                  <th scope="col" class="aadhaar-col" hidden>Aadhaar</th>
                   <th scope="col">Mobile</th>
                   <th scope="col">Status</th>
+                  <th scope="col" class="table__action">Action</th>
                 </tr>
               </thead>
               <tbody id="rows" aria-busy="true">
@@ -73,11 +93,6 @@
                   <td></td>
                   <td></td>
                   <td></td>
-                </tr>
-                <tr class="skeleton-row" aria-hidden="true">
-                  <td></td>
-                  <td></td>
-                  <td></td>
                   <td></td>
                   <td></td>
                 </tr>
@@ -87,15 +102,12 @@
                   <td></td>
                   <td></td>
                   <td></td>
-                </tr>
-                <tr class="skeleton-row" aria-hidden="true">
-                  <td></td>
-                  <td></td>
-                  <td></td>
                   <td></td>
                   <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
                   <td></td>
                   <td></td>
                   <td></td>
@@ -111,6 +123,115 @@
         <p class="topbar__meta" id="unusable-note"></p>
       </main>
     </div>
+
+    <!-- Changing a member's number. A `<dialog>`, like the portal's other modals: Escape closes
+         it, focus stays inside it, and the page behind is inert. -->
+    <dialog class="phone" id="phone" aria-labelledby="phone-title" tabindex="-1">
+      <form class="phone__form" id="phone-form" method="dialog" novalidate>
+        <div class="phone__head">
+          <span class="phone__mark" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2"
+              />
+            </svg>
+          </span>
+          <div class="phone__who">
+            <h2 class="phone__title" id="phone-title">Change mobile number</h2>
+            <p class="phone__meta" id="phone-meta">—</p>
+          </div>
+          <button class="btn phone__close" id="phone-close" type="button" aria-label="Close">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="phone__body">
+          <!-- What is on file now, and where it came from. -->
+          <div class="phone__now">
+            <span class="phone__label">On file now</span>
+            <span class="phone__current" id="phone-current">—</span>
+            <span id="phone-source"></span>
+          </div>
+
+          <div class="phone__field">
+            <label class="phone__label" for="phone-new">
+              <span class="phone__num" aria-hidden="true">1</span>The new number
+            </label>
+            <div class="phone__input">
+              <span class="phone__prefix" aria-hidden="true">+91</span>
+              <input
+                class="input"
+                id="phone-new"
+                type="tel"
+                inputmode="numeric"
+                autocomplete="off"
+                maxlength="16"
+                placeholder="98123 45678"
+              />
+            </div>
+            <p class="field__hint" id="phone-new-hint">10 digits, starting with 6, 7, 8 or 9</p>
+          </div>
+
+          <div class="phone__field">
+            <label class="phone__label" for="phone-reason">
+              <span class="phone__num" aria-hidden="true">2</span>Why it is changing
+            </label>
+            <div class="phone__reasons" id="phone-reasons">
+              <button class="chip" type="button" data-reason="The member rang the office">
+                Member rang the office
+              </button>
+              <button class="chip" type="button" data-reason="The Mait confirmed it at the MPP">
+                Mait confirmed it
+              </button>
+              <button class="chip" type="button" data-reason="SAP had the wrong number">
+                SAP had it wrong
+              </button>
+            </div>
+            <textarea
+              class="input phone__reason"
+              id="phone-reason"
+              rows="2"
+              maxlength="255"
+              placeholder="Say why — it is kept in the audit log"
+            ></textarea>
+          </div>
+
+          <!-- What saving will do, before it is done. -->
+          <div class="phone__preview" id="phone-preview" aria-live="polite"></div>
+
+          <div class="phone__history">
+            <p class="phone__label">Changes by the office</p>
+            <ul class="phone__changes" id="phone-history">
+              <li class="phone__empty">Loading…</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="phone__foot">
+          <button class="btn btn--primary" id="phone-save" type="submit" disabled>
+            Save the number
+          </button>
+          <button class="btn" id="phone-cancel" type="button">Cancel</button>
+          <p class="field__hint" id="phone-status"></p>
+        </div>
+      </form>
+    </dialog>
 
     <script src="assets/vendor/jquery-3.7.1.min.js"></script>
     <script src="assets/js/api.js"></script>

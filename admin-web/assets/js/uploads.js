@@ -248,7 +248,14 @@
       'written',
       ui.number(run.success) +
         ' added' +
-        (run.skipped ? ' · ' + ui.number(run.skipped) + ' already on record' : ''),
+        (run.skipped ? ' · ' + ui.number(run.skipped) + ' already on record' : '') +
+        // A member master that disagreed with a number the office set, and lost: said, so
+        // nobody wonders whether the upload quietly undid a correction.
+        (run.kept
+          ? ' · ' +
+            ui.number(run.kept) +
+            (run.kept === 1 ? ' office-set number kept' : ' office-set numbers kept')
+          : ''),
       reading ? '' : 'is-live'
     );
     stage(
@@ -317,6 +324,7 @@
     run.processed = upload.processed_rows || 0;
     run.success = upload.success_rows || 0;
     run.skipped = upload.skipped_rows || 0;
+    run.kept = upload.kept_rows || 0;
     run.failed = upload.failed_rows || 0;
     run.sending = Boolean((extra || {}).sending);
     run.sentPercent = (extra || {}).sentPercent || 0;

@@ -781,6 +781,28 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
+     * Change a member's mobile number — an Admin's job alone. `expected_mobile` is the number
+     * the dialog was opened on; a `409` means somebody changed it since.
+     */
+    changeMemberMobile: function (memberCode, body) {
+      return request({
+        path: '/members/' + encodeURIComponent(memberCode) + '/mobile/',
+        method: 'POST',
+        body: body,
+      });
+    },
+
+    /** A member's full Aadhaar, for an Admin to check it. Logged against the account. */
+    memberAadhaar: function (memberCode) {
+      return request({ path: '/members/' + encodeURIComponent(memberCode) + '/aadhaar/' });
+    },
+
+    /** Every change the office made to a member's number, newest first. */
+    memberMobileHistory: function (memberCode) {
+      return request({ path: '/members/' + encodeURIComponent(memberCode) + '/mobile-history/' });
+    },
+
+    /**
      * The farmers Maits registered in the field.
      *
      * `/admin/non-members/`, not the `/non-members/` the app uses: that one is scoped to the
