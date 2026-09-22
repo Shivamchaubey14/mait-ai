@@ -48,7 +48,8 @@
     straw: {
       label: 'Straws',
       tone: 'info',
-      icon: '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z" />',
+      // A syringe, not a drop: a drop reads as milk on a dairy's screens.
+      icon: '<path d="m18 2 4 4M17 7l3-3M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5M9 11l4 4M5 19l-3 3M14 4l6 6" />',
     },
     consumable: {
       label: 'Consumables',
