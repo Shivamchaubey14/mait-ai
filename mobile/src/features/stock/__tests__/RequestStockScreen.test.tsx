@@ -15,6 +15,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import RequestStockScreen from '../RequestStockScreen';
 import { jsonResponse, renderWithStore } from '@/test-utils';
+import { colors, yolk } from '@theme/tokens';
 
 const BREEDS = [
   { code: 'HF_CROSS', name: 'HF Cross', name_hi: '', animal_type: 'COW', display_order: 1 },
@@ -96,6 +97,10 @@ function render() {
 /** Opens the picker on the given line and taps one of its options. */
 async function choose(lineIndex: number, label: string) {
   fireEvent.press(screen.getByTestId(`indent-prod-${lineIndex}`));
+  // Straws are picked animal first: switch to the tab that holds the breed.
+  if (label === 'Murrah') {
+    fireEvent.press(await screen.findByTestId('sheet-tab-1'));
+  }
   fireEvent.press(await screen.findByText(label));
 }
 
@@ -244,5 +249,120 @@ describe('RequestStockScreen', () => {
     const keys = posts.map(request => request.headers.get('Idempotency-Key'));
     expect(keys[0]).toBeTruthy();
     expect(keys[0]).not.toEqual(keys[1]);
+  });
+
+  it('colours each line by its kind — straws blue, consumables green, equipment yolk', async () => {
+    mockApi();
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('indent-card-0')).toBeTruthy());
+    expect(screen.getByTestId('indent-card-0')).toHaveStyle({ backgroundColor: colors.infoWash });
+    // A straw is a syringe, never the drop that means milk.
+    expect(screen.getByTestId('indent-card-0')).toHaveTextContent(/needle/);
+    expect(screen.getByTestId('indent-cat-straw-0')).toHaveStyle({
+      backgroundColor: colors.info,
+    });
+
+    fireEvent.press(screen.getByTestId('indent-cat-consumable-0'));
+    expect(screen.getByTestId('indent-card-0')).toHaveStyle({
+      backgroundColor: colors.primaryWash,
+    });
+
+    fireEvent.press(screen.getByTestId('indent-cat-asset-0'));
+    expect(screen.getByTestId('indent-card-0')).toHaveStyle({
+      backgroundColor: colors.secondaryWash,
+    });
+    expect(screen.getByTestId('indent-cat-asset-0')).toHaveStyle({ backgroundColor: yolk[500] });
+  });
+
+  it('folds a straw line into a blue row', async () => {
+    mockApi();
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('indent-prod-0')).toBeTruthy());
+    await choose(0, 'Murrah');
+    fireEvent.press(await screen.findByTestId('indent-done-0'));
+
+    expect(await screen.findByTestId('indent-row-0')).toHaveStyle({
+      backgroundColor: colors.infoWash,
+    });
+  });
+
+  it('lists what was sent, in colour, once the request has gone', async () => {
+    mockApi();
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('indent-prod-0')).toBeTruthy());
+    await choose(0, 'Murrah');
+    fireEvent.press(screen.getByTestId('indent-submit'));
+    fireEvent.press(await screen.findByTestId('indent-confirm'));
+
+    const card = await screen.findByTestId('indent-sent-card');
+    expect(card).toHaveStyle({ backgroundColor: colors.primaryWash });
+    expect(card).toHaveTextContent(/What you asked for/);
+    expect(card).toHaveTextContent(/Murrah/);
+    expect(card).toHaveTextContent(/25 straws/);
+  });
+
+  it('opens the breed picker in blue, with the syringe and what is held on a badge', async () => {
+    mockApi();
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('indent-prod-0')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('indent-prod-0'));
+
+    expect(await screen.findByTestId('sheet-icon')).toHaveStyle({ backgroundColor: colors.info });
+    expect(screen.getByTestId('sheet-icon')).toHaveTextContent('needle');
+    expect(screen.getByTestId('sheet-option-HF_CROSS')).toHaveStyle({
+      backgroundColor: colors.infoWash,
+    });
+    // Eight held is enough: green.
+    expect(screen.getByTestId('sheet-badge-HF_CROSS')).toHaveStyle({
+      backgroundColor: colors.primary,
+    });
+  });
+
+  it('opens the item picker in the item’s colour, and says none held in red', async () => {
+    mockApi();
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('indent-prod-0')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('indent-cat-consumable-0'));
+    fireEvent.press(screen.getByTestId('indent-prod-0'));
+
+    expect(await screen.findByTestId('sheet-option-LN2')).toHaveStyle({
+      backgroundColor: colors.primaryWash,
+    });
+    expect(screen.getByTestId('sheet-badge-LN2')).toHaveStyle({ backgroundColor: colors.error });
+  });
+
+  it('asks Cow or Buffalo first, and lists only that animal’s breeds', async () => {
+    mockApi();
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('indent-prod-0')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('indent-prod-0'));
+
+    expect(await screen.findByTestId('sheet-tab-0')).toHaveTextContent(/Cow/);
+    expect(screen.getByTestId('sheet-tab-1')).toHaveTextContent(/Buffalo/);
+    expect(screen.getByTestId('sheet-tab-0')).toHaveStyle({ backgroundColor: colors.info });
+    expect(screen.getByTestId('sheet-option-HF_CROSS')).toBeTruthy();
+    expect(screen.queryByTestId('sheet-option-MURRAH')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('sheet-tab-1'));
+    expect(screen.getByTestId('sheet-option-MURRAH')).toBeTruthy();
+    expect(screen.queryByTestId('sheet-option-HF_CROSS')).toBeNull();
+  });
+
+  it('reopens on the animal of the breed already chosen', async () => {
+    mockApi();
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('indent-prod-0')).toBeTruthy());
+    await choose(0, 'Murrah');
+    fireEvent.press(screen.getByTestId('indent-prod-0'));
+
+    expect(await screen.findByTestId('sheet-option-MURRAH')).toBeTruthy();
+    expect(screen.getByTestId('sheet-tab-1')).toHaveProp('accessibilityState', { selected: true });
   });
 });

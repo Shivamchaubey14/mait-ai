@@ -29,24 +29,23 @@ import {
   useListProductsQuery,
 } from '@api/endpoints';
 import type { ProblemDetails } from '@api/types';
-import BottomSheet, { Sheet, SheetSection } from '@/components/BottomSheet';
+import BottomSheet, { Sheet, SheetSection, SheetTone } from '@/components/BottomSheet';
+import Glyph, { GlyphName, STRAW_GLYPH } from '@/components/glyph';
 import { FlowNotice, FlowScreen, FlowSpacer, useFieldReveal } from '@/features/aiFlow/components';
-import {
-  colors,
-  green,
-  MIN_TOUCH_TARGET,
-  radius,
-  shadows,
-  spacing,
-  typography,
-  yolk,
-} from '@theme/tokens';
+import { colors, green, MIN_TOUCH_TARGET, radius, spacing, typography, yolk } from '@theme/tokens';
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 type Category = 'straw' | 'consumable' | 'asset';
 
 /** What a full round usually needs. A Mait can change it; most will not have to. */
 const USUAL_STRAWS = 25;
+
+/** Fewer than this held of one breed or item reads as low in the picker, as on Inventory. */
+const LOW_HELD = 3;
+
+/** How much is held, as a colour: none red, low yolk, enough green. */
+function heldTone(count: number): SheetTone {
+  return count <= 0 ? 'danger' : count < LOW_HELD ? 'warm' : 'good';
+}
 
 /**
  * Straws are issued by the box, so nudging by one produces a number nobody can fill.
@@ -56,11 +55,29 @@ const USUAL_STRAWS = 25;
  */
 const STRAW_STEP = 5;
 
-const CATEGORY_ICON: Record<Category, IoniconName> = {
-  straw: 'thermometer-outline',
-  consumable: 'medkit-outline',
-  asset: 'construct-outline',
+type Tone = 'info' | 'good' | 'warm';
+
+/**
+ * Each kind in its colour and glyph — the same three Inventory draws them in, so a line on
+ * the indent is the colour of the tab its stock will land on.
+ */
+const KIND: Record<Category, { tone: Tone; icon: GlyphName }> = {
+  straw: { tone: 'info', icon: STRAW_GLYPH },
+  consumable: { tone: 'good', icon: 'flask' },
+  asset: { tone: 'warm', icon: 'construct' },
 };
+
+/** The solid colour of each tone, for a glyph or a word on a wash. */
+const SOLID: Record<Tone, string> = {
+  info: colors.info,
+  good: colors.primaryDark,
+  warm: yolk[800],
+};
+
+/** What sits on a solid chip: white, except on yolk, which fails contrast under white. */
+function onSolid(tone: Tone): string {
+  return tone === 'warm' ? colors.ink : colors.surface;
+}
 
 interface Line {
   id: string;
@@ -223,31 +240,40 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
 
   function productOptions(category: Category): SheetSection[] {
     if (category === 'straw') {
-      return [
-        {
-          title: t('requestStock.breed'),
-          options: (breeds.data ?? []).map(breed => ({
-            value: breed.code,
-            label: (hindi && breed.name_hi) || breed.name,
-            meta: t(`aiFlow.animalType.${breed.animal_type}`),
-            badge: t('requestStock.inHandShort', { count: held[breed.code] ?? 0 }),
-          })),
-        },
-      ];
+      // One section per animal, in the order the master lists them. A Mait asking for straws
+      // knows whether it is for cows or buffaloes before they know which breed, and a mixed
+      // list makes them read every row to find the half they want.
+      const byAnimal = new Map<string, SheetSection['options']>();
+      for (const breed of breeds.data ?? []) {
+        const options = byAnimal.get(breed.animal_type) ?? [];
+        options.push({
+          value: breed.code,
+          label: (hindi && breed.name_hi) || breed.name,
+          badge: t('requestStock.inHandShort', { count: held[breed.code] ?? 0 }),
+          badgeTone: heldTone(held[breed.code] ?? 0),
+        });
+        byAnimal.set(breed.animal_type, options);
+      }
+      return [...byAnimal].map(([animal, options]) => ({
+        title: t(`aiFlow.animalType.${animal}`),
+        options,
+      }));
     }
     return [
       {
         title: category === 'consumable' ? t('stock.consumables') : t('stock.assets'),
         options: (products.data ?? [])
           .filter(product => product.category === category)
-          .map(product => ({
-            value: product.code,
-            label: product.name,
-            meta: product.unit,
-            badge: t('requestStock.inHandShort', {
-              count: heldProducts.find(row => row.code === product.code)?.qty ?? 0,
-            }),
-          })),
+          .map(product => {
+            const count = heldProducts.find(row => row.code === product.code)?.qty ?? 0;
+            return {
+              value: product.code,
+              label: product.name,
+              meta: product.unit,
+              badge: t('requestStock.inHandShort', { count }),
+              badgeTone: heldTone(count),
+            };
+          }),
       },
     ];
   }
@@ -339,6 +365,34 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
         tabBarBelow
         place
       >
+        <View style={styles.sentCard} testID="indent-sent-card">
+          <View style={styles.sentHead}>
+            <View style={[styles.chip, styles.solid_good]}>
+              <Ionicons name="checkmark" size={18} color={colors.surface} />
+            </View>
+            <Text style={styles.sentTitle}>{t('requestStock.sentList')}</Text>
+            <View style={[styles.badge, styles.solid_good]}>
+              <Text style={[styles.badgeLabel, { color: colors.surface }]}>{sent}</Text>
+            </View>
+          </View>
+          {lines.slice(0, sent).map(line => {
+            const { tone, icon } = KIND[line.category];
+            return (
+              <View key={`sent-${line.id}`} style={[styles.sentRow, styles[`row_${tone}`]]}>
+                <View style={[styles.chipSmall, styles[`solid_${tone}`]]}>
+                  <Glyph name={icon} size={14} color={onSolid(tone)} />
+                </View>
+                <Text style={styles.sentName} numberOfLines={1}>
+                  {productLabel(line)}
+                </Text>
+                <Text style={[styles.sentQty, { color: SOLID[tone] }]}>
+                  {line.qty} {unitFor(line)}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+
         <FlowNotice
           tone="info"
           title={t('requestStock.whatNextTitle')}
@@ -367,21 +421,31 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
       place
       footerNote={
         <View style={styles.footerNote}>
-          <Text style={styles.footerCount} testID="indent-count">
-            {footerCount}
-          </Text>
+          <View style={styles.footerCountPill}>
+            <Ionicons name="list" size={14} color={colors.info} />
+            <Text style={styles.footerCount} numberOfLines={2} testID="indent-count">
+              {footerCount}
+            </Text>
+          </View>
           {/* The only place the screen says why the button below it is grey — or, once it is
-              not, where the list is about to go. */}
-          <Text
-            style={[styles.footerState, !!blocker && styles.footerStateWaiting]}
-            numberOfLines={2}
-            testID="indent-state"
-          >
-            {blocker ??
-              (destination
-                ? t('requestStock.goesTo', { plant: destination })
-                : t('requestStock.readyToSend'))}
-          </Text>
+              not, where the list is about to go. Yolk while it waits, green once it can go. */}
+          <View style={[styles.footerStatePill, blocker ? styles.pill_warm : styles.pill_good]}>
+            <Ionicons
+              name={blocker ? 'alert-circle' : destination ? 'storefront' : 'checkmark-circle'}
+              size={14}
+              color={blocker ? yolk[800] : colors.primaryDark}
+            />
+            <Text
+              style={[styles.footerState, !!blocker && styles.footerStateWaiting]}
+              numberOfLines={2}
+              testID="indent-state"
+            >
+              {blocker ??
+                (destination
+                  ? t('requestStock.goesTo', { plant: destination })
+                  : t('requestStock.readyToSend'))}
+            </Text>
+          </View>
         </View>
       }
       cta={{
@@ -395,6 +459,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
       {lines.map((line, index) => {
         const complete = isComplete(line);
         const open = !complete || editing === line.id;
+        const { tone, icon } = KIND[line.category];
 
         /* Folded. The line has been decided, so it reads as an item on a list rather than a
            form still waiting for an answer. */
@@ -405,11 +470,19 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
               accessibilityRole="button"
               accessibilityLabel={t('requestStock.editLine', { n: index + 1 })}
               onPress={() => setEditing(line.id)}
-              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              style={({ pressed }) => [
+                styles.row,
+                styles[`row_${tone}`],
+                pressed && styles.rowPressed,
+              ]}
               testID={`indent-row-${index}`}
             >
-              <View style={[styles.number, styles.numberDone]}>
-                <Text style={[styles.numberLabel, styles.numberLabelDone]}>{index + 1}</Text>
+              {/* The kind's glyph on its colour, with the line's number tucked on its corner. */}
+              <View style={[styles.chip, styles[`solid_${tone}`]]}>
+                <Glyph name={icon} size={18} color={onSolid(tone)} />
+                <View style={styles.chipNumber}>
+                  <Text style={styles.chipNumberLabel}>{index + 1}</Text>
+                </View>
               </View>
 
               <View style={styles.rowBody}>
@@ -422,26 +495,37 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
               </View>
 
               <View style={styles.rowAmount}>
-                <Text style={styles.rowQty}>{line.qty}</Text>
-                <Text style={styles.rowUnit} numberOfLines={1}>
+                <Text style={[styles.rowQty, { color: SOLID[tone] }]}>{line.qty}</Text>
+                <Text style={[styles.rowUnit, { color: SOLID[tone] }]} numberOfLines={1}>
                   {unitFor(line)}
                 </Text>
               </View>
 
-              <Ionicons name="pencil" size={16} color={colors.textMuted} />
+              <View style={styles.edit}>
+                <Ionicons name="pencil" size={14} color={SOLID[tone]} />
+              </View>
             </Pressable>
           );
         }
 
         return (
-          <View key={line.id} style={styles.card}>
+          <View
+            key={line.id}
+            style={[styles.card, styles[`row_${tone}`]]}
+            testID={`indent-card-${index}`}
+          >
             <View style={styles.cardHead}>
-              <View style={styles.number}>
-                <Text style={styles.numberLabel}>{index + 1}</Text>
+              <View style={[styles.chip, styles[`solid_${tone}`]]}>
+                <Glyph name={icon} size={18} color={onSolid(tone)} />
               </View>
-              <Text style={styles.cardTitle} numberOfLines={1}>
-                {t('requestStock.lineN', { n: index + 1 })}
-              </Text>
+              <View style={styles.cardTitleBox}>
+                <Text style={styles.cardTitle} numberOfLines={1}>
+                  {t('requestStock.lineN', { n: index + 1 })}
+                </Text>
+                <Text style={[styles.cardKind, { color: SOLID[tone] }]} numberOfLines={1}>
+                  {t(`requestStock.category_${line.category}`)}
+                </Text>
+              </View>
 
               {/* Only offered once the line says something worth folding away. On a line with
                   no product chosen, "Done" would be a lie. */}
@@ -452,6 +536,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                   style={({ pressed }) => [styles.done, pressed && styles.donePressed]}
                   testID={`indent-done-${index}`}
                 >
+                  <Ionicons name="checkmark" size={14} color={colors.surface} />
                   <Text style={styles.doneLabel}>{t('requestStock.doneLine')}</Text>
                 </Pressable>
               )}
@@ -474,6 +559,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
             <View style={styles.segments}>
               {(['straw', 'consumable', 'asset'] as Category[]).map(category => {
                 const active = line.category === category;
+                const kind = KIND[category];
                 return (
                   <Pressable
                     key={category}
@@ -487,10 +573,25 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                         qty: category === 'straw' ? String(USUAL_STRAWS) : '1',
                       })
                     }
-                    style={[styles.segment, active && styles.segmentActive]}
+                    style={[
+                      styles.segment,
+                      styles[`tab_${kind.tone}`],
+                      active && styles[`solid_${kind.tone}`],
+                    ]}
                     testID={`indent-cat-${category}-${index}`}
                   >
-                    <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
+                    <Glyph
+                      name={kind.icon}
+                      size={16}
+                      color={active ? onSolid(kind.tone) : SOLID[kind.tone]}
+                    />
+                    <Text
+                      style={[
+                        styles.segmentLabel,
+                        { color: active ? onSolid(kind.tone) : SOLID[kind.tone] },
+                      ]}
+                      numberOfLines={1}
+                    >
                       {t(`requestStock.categoryShort_${category}`)}
                     </Text>
                   </Pressable>
@@ -509,9 +610,18 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                 setEditing(line.id);
                 setPicking(line.id);
               }}
-              style={({ pressed }) => [styles.dropdown, pressed && styles.dropdownPressed]}
+              style={({ pressed }) => [
+                styles.dropdown,
+                { borderColor: line.product ? SOLID[tone] : colors.border },
+                pressed && styles.dropdownPressed,
+              ]}
               testID={`indent-prod-${index}`}
             >
+              <Ionicons
+                name={line.product ? 'checkmark-circle' : 'search'}
+                size={18}
+                color={line.product ? SOLID[tone] : colors.textMuted}
+              />
               <Text
                 style={[styles.dropdownValue, !line.product && styles.dropdownPlaceholder]}
                 numberOfLines={1}
@@ -521,7 +631,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                     ? t('requestStock.chooseBreed')
                     : t('requestStock.chooseItem'))}
               </Text>
-              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-down" size={16} color={SOLID[tone]} />
             </Pressable>
 
             <Text style={styles.fieldLabel}>{t('requestStock.quantity')}</Text>
@@ -535,10 +645,14 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                       qty: String(Math.max(stepOf(line), (Number(line.qty) || 0) - stepOf(line))),
                     })
                   }
-                  style={({ pressed }) => [styles.step, pressed && styles.stepPressed]}
+                  style={({ pressed }) => [
+                    styles.step,
+                    styles.stepDown,
+                    pressed && styles.stepPressed,
+                  ]}
                   testID={`indent-minus-${index}`}
                 >
-                  <Ionicons name="remove" size={18} color={colors.ink} />
+                  <Ionicons name="remove" size={18} color={colors.error} />
                 </Pressable>
 
                 <QuantityBox
@@ -564,15 +678,18 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                   ]}
                   testID={`indent-plus-${index}`}
                 >
-                  <Ionicons name="add" size={18} color={colors.primaryDark} />
+                  <Ionicons name="add" size={18} color={colors.surface} />
                 </Pressable>
               </View>
 
-              <Text style={styles.stepHint}>
-                {line.category === 'straw'
-                  ? t('requestStock.strawStepHint')
-                  : t('requestStock.oneAtATime')}
-              </Text>
+              <View style={styles.stepHintPill}>
+                <Ionicons name="information-circle" size={14} color={yolk[800]} />
+                <Text style={styles.stepHint}>
+                  {line.category === 'straw'
+                    ? t('requestStock.strawStepHint')
+                    : t('requestStock.oneAtATime')}
+                </Text>
+              </View>
             </View>
           </View>
         );
@@ -590,7 +707,9 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
         style={({ pressed }) => [styles.addButton, pressed && styles.addPressed]}
         testID="indent-add-line"
       >
-        <Ionicons name="add" size={18} color={colors.primaryDark} />
+        <View style={[styles.chipSmall, styles.solid_good]}>
+          <Ionicons name="add" size={16} color={colors.surface} />
+        </View>
         <Text style={styles.addLabel}>{t('requestStock.addAnother')}</Text>
       </Pressable>
 
@@ -631,27 +750,32 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
             testID="indent-confirm"
           >
             <Text style={styles.confirmLabel}>{t('requestStock.confirmSend')}</Text>
-            <Ionicons name="arrow-forward" size={18} color={colors.surface} />
+            <Ionicons name="send" size={18} color={colors.surface} />
           </Pressable>
         }
       >
-        {lines.map((line, index) => (
-          <View key={`review-${line.id}`} style={styles.reviewRow}>
-            <View style={styles.reviewSwatch}>
-              <Ionicons name={CATEGORY_ICON[line.category]} size={16} color={colors.primaryDark} />
+        {lines.map((line, index) => {
+          const { tone, icon } = KIND[line.category];
+          return (
+            <View key={`review-${line.id}`} style={[styles.reviewRow, styles[`row_${tone}`]]}>
+              <View style={[styles.chip, styles[`solid_${tone}`]]}>
+                <Glyph name={icon} size={16} color={onSolid(tone)} />
+              </View>
+              <View style={styles.reviewBody}>
+                <Text style={styles.reviewName}>
+                  {productLabel(line) ?? t('requestStock.notChosen')}
+                </Text>
+                <Text style={styles.reviewMeta}>
+                  {t(`requestStock.category_${line.category}`)} ·{' '}
+                  {t('requestStock.lineN', { n: index + 1 })}
+                </Text>
+              </View>
+              <View style={[styles.badge, styles[`solid_${tone}`]]}>
+                <Text style={[styles.badgeLabel, { color: onSolid(tone) }]}>{line.qty}</Text>
+              </View>
             </View>
-            <View style={styles.reviewBody}>
-              <Text style={styles.reviewName}>
-                {productLabel(line) ?? t('requestStock.notChosen')}
-              </Text>
-              <Text style={styles.reviewMeta}>
-                {t(`requestStock.category_${line.category}`)} ·{' '}
-                {t('requestStock.lineN', { n: index + 1 })}
-              </Text>
-            </View>
-            <Text style={styles.reviewQty}>{line.qty}</Text>
-          </View>
-        ))}
+          );
+        })}
 
         <FlowNotice
           tone="accent"
@@ -672,6 +796,10 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
         selected={openLine?.product ?? null}
         onSelect={value => openLine && update(openLine.id, { product: value })}
         onClose={() => setPicking(null)}
+        tone={openLine ? KIND[openLine.category].tone : undefined}
+        icon={openLine ? KIND[openLine.category].icon : undefined}
+        // Cow or Buffalo first, then the breed: a Mait knows which animal before which breed.
+        tabbed={openLine?.category === 'straw'}
         testID="indent-product-sheet"
       />
     </FlowScreen>
@@ -679,14 +807,12 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
 }
 
 const styles = StyleSheet.create({
+  /* Tinted by kind: the wash of the line's colour, bordered in it. */
   card: {
     padding: spacing[4],
     marginBottom: spacing[3],
-    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
   },
   cardHead: {
     flexDirection: 'row',
@@ -694,26 +820,51 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     marginBottom: spacing[3],
   },
-  number: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  chip: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
+    borderWidth: 1,
   },
-  numberDone: { backgroundColor: colors.primary },
-  numberLabel: { ...typography.caption, color: colors.textMuted },
-  numberLabelDone: { color: colors.surface },
-  cardTitle: { ...typography.bodyStrong, color: colors.ink, flex: 1 },
+  chipSmall: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  chipNumber: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 3,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.ink,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
+  chipNumberLabel: { ...typography.caption, fontSize: 10, lineHeight: 12, color: colors.surface },
+  cardTitleBox: { flex: 1 },
+  cardTitle: { ...typography.bodyStrong, color: colors.ink },
+  cardKind: { ...typography.caption, fontFamily: typography.label.fontFamily, marginTop: 1 },
   done: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[1],
     borderRadius: radius.pill,
-    backgroundColor: colors.primaryWash,
+    backgroundColor: colors.primary,
   },
-  donePressed: { backgroundColor: colors.primary },
-  doneLabel: { ...typography.label, color: colors.primaryDark },
+  donePressed: { backgroundColor: colors.primaryPressed },
+  doneLabel: { ...typography.label, color: colors.surface },
   remove: {
     width: 30,
     height: 30,
@@ -721,7 +872,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.errorWash,
+    borderWidth: 1,
+    borderColor: colors.error,
   },
+
+  // -- tones --------------------------------------------------------------------------------
+  row_info: { backgroundColor: colors.infoWash, borderColor: colors.info },
+  row_good: { backgroundColor: colors.primaryWash, borderColor: green[300] },
+  row_warm: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  tab_info: { backgroundColor: colors.surface, borderColor: colors.info },
+  tab_good: { backgroundColor: colors.surface, borderColor: colors.primary },
+  tab_warm: { backgroundColor: colors.surface, borderColor: yolk[500] },
+  solid_info: { backgroundColor: colors.info, borderColor: colors.info },
+  solid_good: { backgroundColor: colors.primary, borderColor: colors.primary },
+  solid_warm: { backgroundColor: yolk[500], borderColor: yolk[500] },
+  pill_good: { backgroundColor: colors.primaryWash, borderColor: green[300] },
+  pill_warm: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
 
   // -- a folded line ---------------------------------------------------------------------
   row: {
@@ -732,44 +898,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
     marginBottom: spacing[3],
-    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
   },
-  rowPressed: { backgroundColor: colors.background },
+  rowPressed: { opacity: 0.85 },
   rowBody: { flex: 1 },
   rowName: { ...typography.bodyStrong, color: colors.ink },
   rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   rowAmount: { alignItems: 'flex-end' },
-  rowQty: { ...typography.h3, fontFamily: typography.h2.fontFamily, color: colors.ink },
-  rowUnit: { ...typography.caption, color: colors.textMuted },
+  rowQty: { ...typography.h3, fontFamily: typography.h2.fontFamily },
+  rowUnit: { ...typography.caption },
+  edit: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
 
-  /* One grey track holding all three rather than three outlined boxes: it is a single
-     question with three answers, and three bordered boxes read as three of them. */
+  /* Three buttons, each in its kind's colour: outlined until chosen, filled once it is. The
+     colour is the answer read at arm's length — blue is straws on every screen. */
   segments: {
     flexDirection: 'row',
-    gap: spacing[1],
-    padding: spacing[1],
+    gap: spacing[2],
     marginBottom: spacing[3],
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
   },
   segment: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: MIN_TOUCH_TARGET - 10,
-    borderRadius: radius.sm,
+    gap: spacing[1],
+    minHeight: MIN_TOUCH_TARGET - 6,
+    paddingHorizontal: spacing[1],
+    borderRadius: radius.md,
+    borderWidth: 1.5,
   },
-  /* Filled, not tinted. Which of the three a line is gets read across a card at arm's length
-     in sunlight, and a pale wash behind dark text is a difference a Mait has to look for. */
-  segmentActive: { backgroundColor: colors.primary },
-  segmentLabel: { ...typography.label, color: colors.ink },
-  segmentLabelActive: { color: colors.surface },
+  segmentLabel: { ...typography.label, flexShrink: 1 },
 
-  fieldLabel: { ...typography.caption, color: colors.textMuted, marginBottom: spacing[1] },
+  fieldLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.textMuted,
+    marginBottom: spacing[1],
+  },
 
   dropdown: {
     flexDirection: 'row',
@@ -779,8 +952,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
     marginBottom: spacing[3],
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
     backgroundColor: colors.surface,
   },
   dropdownPressed: { backgroundColor: colors.background },
@@ -795,23 +967,22 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_TARGET + 6,
     paddingHorizontal: spacing[2],
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   step: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
   },
-  /* Green, where taking one away is grey. The two are not the same act: a Mait short of
-     straws is here to ask for more, and the button they want should be the one that looks
-     like an answer. */
-  stepUp: { backgroundColor: green[100] },
-  stepPressed: { backgroundColor: colors.primaryWash },
+  /* Red to take away, solid green to add. A Mait short of straws is here to ask for more,
+     and the button they want should be the one that looks like an answer. */
+  stepDown: { backgroundColor: colors.errorWash },
+  stepUp: { backgroundColor: colors.primary },
+  stepPressed: { opacity: 0.7 },
   quantityBody: { flex: 1, alignItems: 'center' },
   quantityInput: {
     ...typography.h2,
@@ -821,9 +992,21 @@ const styles = StyleSheet.create({
     minWidth: 60,
   },
   quantityUnit: { ...typography.caption, color: colors.textMuted },
-  /* Amber, because it is a constraint rather than a caption: a Mait who reads it as decoration
+  /* Yolk, because it is a constraint rather than a caption: a Mait who reads it as decoration
      types 23 and gets a number the depot cannot fill. */
-  stepHint: { ...typography.caption, color: yolk[800], maxWidth: 96 },
+  stepHintPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    maxWidth: 112,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: yolk[300],
+    backgroundColor: colors.secondaryWash,
+  },
+  stepHint: { ...typography.caption, color: yolk[800], flexShrink: 1 },
 
   addButton: {
     flexDirection: 'row',
@@ -833,12 +1016,12 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_TARGET,
     marginTop: spacing[1],
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: colors.primary,
     backgroundColor: colors.primaryWash,
   },
-  addPressed: { backgroundColor: colors.surface },
+  addPressed: { opacity: 0.8 },
   addLabel: { ...typography.label, color: colors.primaryDark },
 
   noticeGap: { marginTop: spacing[4] },
@@ -847,16 +1030,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing[3],
+    gap: spacing[2],
     marginBottom: spacing[3],
   },
-  footerCount: { ...typography.caption, color: colors.textMuted, flexShrink: 1 },
-  footerState: {
-    ...typography.label,
-    color: colors.primaryDark,
+  footerCountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
     flexShrink: 1,
-    textAlign: 'right',
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.info,
+    backgroundColor: colors.infoWash,
   },
+  footerCount: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.info,
+    flexShrink: 1,
+  },
+  footerStatePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    flexShrink: 1,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  footerState: { ...typography.label, color: colors.primaryDark, flexShrink: 1 },
   footerStateWaiting: { color: yolk[800] },
 
   reviewRow: {
@@ -865,23 +1070,21 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     padding: spacing[3],
     marginBottom: spacing[2],
-    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-  },
-  reviewSwatch: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryWash,
   },
   reviewBody: { flex: 1 },
   reviewName: { ...typography.bodyStrong, color: colors.ink },
   reviewMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  reviewQty: { ...typography.h3, fontFamily: typography.h2.fontFamily, color: colors.ink },
+  badge: {
+    minWidth: 36,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  badgeLabel: { ...typography.bodyStrong, fontFamily: typography.h2.fontFamily },
 
   confirm: {
     flexDirection: 'row',
@@ -896,4 +1099,33 @@ const styles = StyleSheet.create({
   },
   confirmPressed: { backgroundColor: colors.primaryPressed },
   confirmLabel: { ...typography.bodyStrong, color: colors.surface },
+
+  // -- sent -------------------------------------------------------------------------------
+  sentCard: {
+    padding: spacing[4],
+    marginBottom: spacing[4],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: green[300],
+    backgroundColor: colors.primaryWash,
+    gap: spacing[2],
+  },
+  sentHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    marginBottom: spacing[1],
+  },
+  sentTitle: { ...typography.bodyStrong, color: colors.primaryDark, flex: 1 },
+  sentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.sm,
+    borderWidth: 1,
+  },
+  sentName: { ...typography.body, color: colors.ink, flex: 1 },
+  sentQty: { ...typography.label },
 });
