@@ -284,6 +284,81 @@ bug in the portal rather than a fact about the row.
 reserved for alerts and highlighted series, so a yellow line always means "look here" — which is
 also why yellow is never used as an ordinary series colour.
 
+## Coloured screen pattern (zonal manager and store keeper apps)
+
+Built across September 2026 on the zonal manager's app (Zone, Indents, Stock, History, Profile,
+the event record, All AI events) and the store keeper's (To issue, Stock, History, Profile),
+and asked for on every screen still to be done. The one-line rule: **no plain white cards.**
+Every card says what it is by its colour and its glyph before a word of it is read.
+
+**Frame.** The Ink hero (`AppHero`, `components/frame.tsx`) with the place in its pill and,
+on a record, the record's number on a yolk `tag` pill. The page is grey; cards sit on it.
+
+**Colour is meaning, the same everywhere.** A card is a *wash with a matching border* in its
+tone, never white and never an edge stripe:
+
+| Tone | Wash / border | Means |
+| --- | --- | --- |
+| Green | `primaryWash` / `green[300]` | done, ready, collected, approved, a member, work landing |
+| Yolk | `secondaryWash` / `yolk[300]` | waiting, short, a code not yet typed — and the people cards (who is asking, who is working) |
+| Red | `errorWash` / `error` | none on the shelf, at zero, rejected, locked, depot empty with someone asking |
+| Blue | `infoWash` / `info` | a fact about the situation: places, depots, filters, the date picker, a fixed record |
+| Slate | `ink[50]` / `ink[200]` | the trail, settings (language), put back, a note |
+
+The **three kinds of stock** always wear the same three: **Straws blue, Consumables green,
+Equipment yolk** — on tiles, section heads, rows, chips and the delivery sheet, app and portal.
+
+**White is paper, only inside a tinted card:** an inset panel for the sentence that explains
+the row ("The shelf has 18 of the 25 owed — hand over what there is"), a figure box, a time
+pill. A card that is white itself is the thing this pattern exists to remove.
+
+**Glyphs.** Every card, section and tile carries one on a **solid chip** of its tone. **Ink on
+yolk, never white** — yolk fails contrast under white text. The vocabulary:
+
+- **Straw: a syringe** — `Glyph` with `STRAW_GLYPH` (`components/glyph.tsx`, drawn from
+  Material Community Icons because Ionicons has none). **Never a drop**: a drop means milk, and
+  stays only where it does (the daily-litres field).
+- Consumable `flask` (a box `cube` for an item line) · Equipment `construct` · depot
+  `storefront` · place `location` · people `people` · a Mait as their **initials** on a disc ·
+  verdicts `checkmark` / `close` / `key` / `return-down-back` on a solid round disc.
+
+**Pieces, reused rather than redrawn:**
+
+- **Tiles** (`Tile`, `Tiles` in `components/frame.tsx`) — icon, label, figure, one line of
+  note. Where tiles switch what is below them, one is chosen on arrival (Straws first), a tap
+  switches, and the chosen one carries a **tick badge** and a thicker edge.
+- **Section head** — solid chip, title, and a **count bubble**. Day headings: an Ink calendar
+  chip, "Today / Yesterday / 19 Sep", and the day's count.
+- **A row card** — identity first (initials disc or verdict disc, the number on a pill in the
+  row's tone, the name), then **labelled facts** read back over the phone: `Mait name:`,
+  `Vendor code:`, `MPP: BARSANA · 001302`, `Depot:`; the figure on a badge; the white inset
+  sentence; a foot word with a chevron in the tone (`Hand over ›`, `Review ›`).
+- **The answer beside its heading** — a zone, a store name, the centres served, the language
+  switch sit on the heading's row, right-aligned, wrapping on the right if they must. Never a
+  heading with its answer dropped onto the next line.
+- **Progress as steps** — an approval's road (*Approved → At the depot → Handed over*), lit green
+  behind and yolk where it stands. A shelf's split as a green-over-yolk bar with a key.
+- **Filters** — blue pill chips (`Today / 7 days / 30 days`) plus a **calendar chip** that opens
+  `DateRangeSheet` (From/To boxes, one-tap ranges, month grid). Dates read as `19 Dec 2026`.
+- **Sheets** — numbered steps, each its own tinted card; a choice between kinds is coloured
+  buttons with the **whole word** (never a strip that cuts "Consumables" to "Consuma…").
+
+**Actions are buttons.** A destructive answer beside the green one is `FooterAction`'s
+`dangerOutline` (red outline) — never a line of red text. A record opened from a list has **no
+back arrow** in its hero; the handset's back and the tab bar lead out.
+
+**Live.** The zonal screens re-read every 30 s while on screen (`features/zonal/live.ts`) and
+refetch on returning to the front; the hero says when the figures landed.
+
+**Hindi.** Every string in `en.json` and `hi.json`. Add keys with a check that the key did not
+already exist under another meaning — `store.approvedBy` did, and a card showed raw
+`{{date}}`. A button label spans the button (`alignSelf: 'stretch'`, `textBreakStrategy:
+'simple'`): Android measures Devanagari in a font without it and hides the last word.
+
+**Tests** assert the colour, not only the words: `toHaveStyle({ backgroundColor:
+colors.secondaryWash })` on the card, and the glyph by name (`needle` for the syringe — both
+icon sets render their names under Jest).
+
 ## Language
 
 Hindi/English toggle on mobile (SRS §7 Usability). All user-facing strings live in

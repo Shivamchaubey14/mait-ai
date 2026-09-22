@@ -7,7 +7,99 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Mait's Home in the coloured pattern.** Today and Waiting tiles with their glyphs on
+  solid chips; Straws with you as a blue card with a syringe chip and a total badge, each breed
+  a row of its own with its count on a badge and a yolk row and Low pill when it runs low;
+  unfinished captures as a yolk card with a count and a Resume button; See stock in blue rather
+  than a grey that read as switched off.
+
+- **Raising an indent is a tab.** The Mait's bar gains **Indent** between Inventory and AI
+  events, opening the form directly, and Inventory's Raise an indent button is gone — one form,
+  one place. After an indent is sent, Done opens My indents.
+
+- **The Mait's AI events in the coloured pattern.** Synced, Queued and Needs attention as three
+  coloured tiles with their counts, each one a filter — tapped again it comes off, and a state
+  with nothing in it says so in a green note. Every row is tinted by its state (green synced,
+  yolk queued, red needing attention, slate cancelled) with the state's glyph on a solid chip,
+  a solid state pill, a Member / Non-member pill and a round arrow. The range chips are blue
+  with their glyphs, filled when chosen; each day is a blue pill with its count on a badge.
+
+- **The Indent form in the coloured pattern.** Each line is tinted by its kind — Straws blue
+  with a syringe, Consumables green with a flask, Equipment yolk with a spanner — and the three
+  kind buttons wear those colours, filled once chosen. A folded line is a row in its colour with
+  the glyph on a solid chip and its number on the corner; the stepper takes away in red and adds
+  in solid green; "Issued in fives" is a yolk pill. The foot shows the count as a blue pill and
+  the state as a yolk pill while a line is unfinished, green once it can go. The review sheet
+  rows match, and the sent screen lists what was asked for in a green card. The breed and item
+  pickers open in the line's colour: the kind's glyph on a solid chip by the title, the section
+  as a pill with its count, each option tinted with its own chip, and what is held on a badge —
+  green for enough, yolk for low, red for none. The breed picker asks **Cow** or
+  **Buffalo** first — two buttons at the top, each with its count, filled blue when chosen —
+  and lists only that animal's breeds; it reopens on the animal of the breed already chosen.
+  The switch is opt-in on `BottomSheet` through `tabbed`. Other pickers are unchanged; the colour is
+  opt-in on `BottomSheet` through `tone` and `icon`.
+- **The Mait's Inventory in the coloured pattern.** Straws / Consumables / Equipment as three
+  coloured buttons with their glyph and count; every row tinted in its kind, its glyph on a
+  solid chip and its count on a solid badge; low stock in yolk with a Low pill; species heads,
+  the nitrogen warning and the footnotes with chips of their own.
+
+### Added (members)
+
+- **Aadhaar on Members, for Admins only.** A column showing it masked to the last four, with
+  **Show** to reveal one member's full number so an Admin can check a caller is who they say
+  they are; it masks itself again after 30 seconds. Each reveal is logged as a personal-data
+  read against the account, never cached, and rate-limited (`GET /members/{code}/aadhaar/`).
+  The Mait app is not sent the field at all.
+
+- **Only an Admin changes a member's mobile number, and SAP never takes it back.** Change
+  number on every row of Members opens a dialog: what is on file and where it came from, the
+  new number (checked as a 10-digit Indian mobile as it is typed), a required reason with
+  quick picks, a preview of what saving will do, and every earlier change. The number becomes
+  `mobile_source: office`, shown as a green Office badge and filterable. A member-master
+  re-upload never writes an existing member, and now counts and reports the rows whose number
+  disagreed with one the office set ("N office-set numbers kept"). Row-locked and checked
+  against the number the admin saw, so two admins on one member are one change and one clear
+  `409`; audited with both numbers masked. Admin with the Members section only, within their
+  zones (`POST /members/{code}/mobile/`, `GET …/mobile-history/`; migration `0013`).
+
+### Fixed
+
+- **Sign out reads whole in Hindi.** On Android it showed "साइन" alone: the label was measured
+  in Nunito, which has no Devanagari, and "आउट" wrapped out of sight. The label now spans the
+  button with the simple line breaker.
+
 ### Added
+
+- **The keeper's Profile in colour.** Today at your counter first — waiting, ready now, issued
+  today and not collected, each with its glyph — then the store in green with its code and zone
+  as pills, the BMC/MCCs it serves in yolk as pills with a count, and the language in slate.
+
+- **The keeper's History in colour, over any dates.** Today / 7 days / 30 days and a calendar
+  chip for any From–To range; Collected / Waiting for code / Put back as three tiles that
+  filter the list; what went out as a green card of items with their glyphs; each handover a
+  card in its state's colour with its verdict on a solid disc, and day headings with a count.
+
+- **A straw is a syringe.** Everywhere a semen straw was a water drop — the zonal dashboard,
+  indents, history, stock, the keeper's queue and stock, and the portal's store shelf — it is
+  now a syringe; a drop reads as milk on a dairy's screens. Ionicons has none, so
+  `components/glyph.tsx` draws it from Material Community Icons in the same package. The drop
+  stays where it means milk: the daily-litres field.
+
+- **The keeper's stock by kind.** Straws, Consumables and Equipment as three tiles and three
+  sections, each item tinted in its kind's colour with its glyph, free and packed as words and a
+  bar, and the count on a solid badge — red when there is none. A kind the store holds none of
+  keeps its section and says so. Equipment can now be recorded as a delivery. The three tiles
+  are the switch between kinds, straws chosen first, and a chosen tile carries a tick. The
+  delivery sheet is drawn in the same colours: the kind as three coloured buttons with their
+  glyphs and whole names, cow or buffalo as two, items as chips in the kind's colour, and each
+  card a numbered step.
+- **The keeper's To issue screen in colour.** Ready now / Issued today / Not collected as
+  three tiles with their glyphs; every indent a card in its shelf's colour (green ready, yolk
+  short, red nothing) with the Mait's initials and code, the item's glyph and count, and a
+  sentence on what the shelf can do and who approved it; codes waiting on a Mait as yolk cards
+  with the digits large enough to read out, red once locked. `Tile` moved to the shared frame.
 
 - **Store stock from the portal.** Stock on any row of the Stores screen opens that store's
   shelf — straws, consumables and equipment in their own colours, each line with what is free
