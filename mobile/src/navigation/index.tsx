@@ -202,9 +202,9 @@ export default function RootNavigator(): React.JSX.Element {
    * Only the four that are tabs: a card on its way to an AI event is not a reason to move the
    * bar, because the record is layered over the tab that opened it and that tab stays lit.
    */
-  const pendingTab = (['home', 'stock', 'history', 'settings'] as RouteKey[]).includes(
-    transition.pending as RouteKey,
-  )
+  const pendingTab = (
+    ['home', 'stock', 'requestStock', 'history', 'settings'] as RouteKey[]
+  ).includes(transition.pending as RouteKey)
     ? (transition.pending as Tab)
     : null;
 
@@ -239,9 +239,13 @@ export default function RootNavigator(): React.JSX.Element {
     [transition],
   );
 
-  const [requestingStock, setRequestingStock] = useState(false);
   /** null = not looking at indents, 0 = the list, n = that indent. */
   const [indentView, setIndentView] = useState<number | null>(null);
+  /**
+   * The indent form is a tab now, not a layer: it is showing when that tab is lit and nothing
+   * is laid over it. The name is kept because every screen below is conditioned on it.
+   */
+  const requestingStock = tab === 'requestStock' && indentView === null;
   /**
    * Where the pregnancy checks are.
    *
@@ -655,10 +659,6 @@ export default function RootNavigator(): React.JSX.Element {
       return reverse(() => setPdView(null));
     }
 
-    if (requestingStock) {
-      return reverse(() => setRequestingStock(false));
-    }
-
     if (indentView) {
       return reverse(() => setIndentView(0));
     }
@@ -686,7 +686,6 @@ export default function RootNavigator(): React.JSX.Element {
     step,
     farmer,
     ownerType,
-    requestingStock,
     indentView,
     eventView,
     tab,
@@ -1607,7 +1606,11 @@ export default function RootNavigator(): React.JSX.Element {
       <RouteTransitionHost transition={transition}>
         {/* Keeps the bar, unlike the capture flow: asking for stock is a form a Mait can
             abandon by tapping another tab, not a sequence they can strand halfway. */}
-        {requestingStock && <RequestStockScreen onDone={() => setRequestingStock(false)} />}
+        {/* A tab of its own. Once an indent is sent, Done opens My indents, so the Mait sees
+            the request they just raised rather than an empty form. */}
+        {requestingStock && (
+          <RequestStockScreen onDone={() => transition.go('indents', () => setIndentView(0))} />
+        )}
 
         {!requestingStock && tab === 'home' && indentView === null && (
           <HomeScreen
@@ -1646,13 +1649,7 @@ export default function RootNavigator(): React.JSX.Element {
           />
         )}
         {!requestingStock && tab === 'stock' && indentView === null && (
-          <StockScreen
-            onSync={sync}
-            onRequestStock={() => {
-              setIndentView(null);
-              setRequestingStock(true);
-            }}
-          />
+          <StockScreen onSync={sync} />
         )}
         {!requestingStock && tab === 'history' && indentView === null && eventView === null && (
           <AiEventsScreen
@@ -1769,9 +1766,9 @@ export default function RootNavigator(): React.JSX.Element {
           they are anywhere, and the news does not belong to whichever page happens to be up. */}
       <Toast message={scopeNotice} tone="info" onDismiss={scope.clear} testID="scope-changed" />
 
-      {/* Destinations only. Each screen's own action lives at the foot of that screen's
-          content — "Start new AI" on Home, "Request stock" on Inventory — where it is next to
-          the thing it acts on rather than in the furniture. */}
+      {/* Destinations only — and raising an indent is one, a tab beside Inventory. Each
+          screen's own action still lives at the foot of its content: "Start new AI" on Home,
+          where it is next to the thing it acts on rather than in the furniture. */}
       <BottomNav
         active={pendingTab ?? tab}
         pending={waiting}
@@ -1782,19 +1779,12 @@ export default function RootNavigator(): React.JSX.Element {
           // while the pregnancy checks are open is a real destination — they were opened
           // from Profile, so the tab underneath is already lit and the guard would otherwise
           // swallow the tap and strand the Mait on the list.
-          if (
-            next === tab &&
-            indentView === null &&
-            eventView === null &&
-            pdView === null &&
-            !requestingStock
-          ) {
+          if (next === tab && indentView === null && eventView === null && pdView === null) {
             return;
           }
           transition.go(next, () => {
             // Switching tabs leaves the form. Nothing is lost that was worth keeping — an
             // unsent indent is a decision not yet made.
-            setRequestingStock(false);
             setIndentView(null);
             setEventView(null);
             setPdView(null);

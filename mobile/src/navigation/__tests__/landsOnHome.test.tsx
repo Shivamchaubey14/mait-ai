@@ -133,7 +133,7 @@ describe('where a session starts', () => {
     await screen.findByTestId('home-start-ai');
 
     fireEvent.press(screen.getByTestId('tab-stock'));
-    await screen.findByTestId('stock-cta');
+    await screen.findByTestId('stock-tab-straws');
 
     act(() => {
       store.dispatch(loggedOut());

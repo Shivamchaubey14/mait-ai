@@ -29,7 +29,7 @@ import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '
  * `nav.*` in the translations — "stock" is shown as Inventory, "history" as AI events, and
  * "settings" as Profile.
  */
-export type Tab = 'home' | 'stock' | 'history' | 'settings';
+export type Tab = 'home' | 'stock' | 'requestStock' | 'history' | 'settings';
 
 /**
  * A store keeper's three. Profile keeps the Mait's key, `settings`, because it is the same
@@ -56,6 +56,9 @@ export interface NavItem<T extends string> {
 const TABS: NavItem<Tab>[] = [
   { key: 'home', icon: 'home-outline', activeIcon: 'home' },
   { key: 'stock', icon: 'cube-outline', activeIcon: 'cube' },
+  // Raising an indent is a tab of its own, beside the stock it restocks — it was a button at
+  // the foot of Inventory, one screen deeper than the thing a Mait does every few days.
+  { key: 'requestStock', icon: 'add-circle-outline', activeIcon: 'add-circle' },
   { key: 'history', icon: 'document-text-outline', activeIcon: 'document-text' },
   { key: 'settings', icon: 'person-outline', activeIcon: 'person' },
 ];

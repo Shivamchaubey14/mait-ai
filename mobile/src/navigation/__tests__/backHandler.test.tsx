@@ -127,7 +127,7 @@ describe('back from the tabs', () => {
     await screen.findByTestId('home-start-ai');
 
     fireEvent.press(screen.getByTestId('tab-stock'));
-    await screen.findByTestId('stock-cta');
+    await screen.findByTestId('stock-tab-straws');
 
     expect(pressBack()).toBe(true);
     await screen.findByTestId('home-start-ai');
@@ -191,18 +191,17 @@ describe('back inside the capture flow', () => {
   });
 });
 
-describe('back from the stock request form', () => {
-  it('closes the stock request form without leaving Inventory', async () => {
+describe('back from the Indent tab', () => {
+  it('goes Home, like every other tab', async () => {
     renderApp();
     await screen.findByTestId('home-start-ai');
 
-    fireEvent.press(screen.getByTestId('tab-stock'));
-    fireEvent.press(await screen.findByTestId('stock-cta'));
+    fireEvent.press(screen.getByTestId('tab-requestStock'));
     await screen.findByText('Raise an indent');
 
     expect(pressBack()).toBe(true);
 
-    await waitFor(() => expect(screen.getByTestId('stock-cta')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('home-start-ai')).toBeTruthy());
   });
 });
 
