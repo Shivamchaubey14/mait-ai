@@ -9,15 +9,57 @@
  * handed, which is how this app is used while the other hand holds a flask.
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, green, MIN_TOUCH_TARGET, radius, spacing, typography, yolk } from '@theme/tokens';
 
+import Glyph, { GlyphName } from './glyph';
 import { useKeyboardOverlap } from './keyboard';
+
+/**
+ * The colour a picker wears when it is picking one kind of thing — blue for straws, green for
+ * consumables, yolk for equipment, as they are drawn everywhere else. A picker given no tone
+ * stays the plain list it always was.
+ */
+export type SheetTone = 'info' | 'good' | 'warm' | 'danger';
+
+const SOLID: Record<SheetTone, string> = {
+  info: colors.info,
+  good: colors.primary,
+  warm: yolk[500],
+  danger: colors.error,
+};
+
+/** A word on a wash: yolk and green read darker than their solids. */
+const INK: Record<SheetTone, string> = {
+  info: colors.info,
+  good: colors.primaryDark,
+  warm: yolk[800],
+  danger: colors.error,
+};
+
+const WASH: Record<SheetTone, string> = {
+  info: colors.infoWash,
+  good: colors.primaryWash,
+  warm: colors.secondaryWash,
+  danger: colors.errorWash,
+};
+
+const EDGE: Record<SheetTone, string> = {
+  info: colors.info,
+  good: green[300],
+  warm: yolk[300],
+  danger: colors.error,
+};
+
+/** White on a solid chip, except on yolk, which fails contrast under white. */
+function onSolid(tone: SheetTone): string {
+  return tone === 'warm' ? colors.ink : colors.surface;
+}
 
 export interface SheetOption {
   value: string;
@@ -26,6 +68,8 @@ export interface SheetOption {
   meta?: string;
   /** A short qualifier on the right, e.g. "6 in hand". */
   badge?: string;
+  /** The badge's colour: green for plenty, yolk for low, red for none. Grey when unset. */
+  badgeTone?: SheetTone;
   disabled?: boolean;
 }
 
@@ -129,6 +173,9 @@ export default function BottomSheet({
   selected,
   onSelect,
   onClose,
+  tone,
+  icon,
+  tabbed = false,
   testID,
 }: {
   visible: boolean;
@@ -136,12 +183,37 @@ export default function BottomSheet({
   subtitle?: string;
   sections: SheetSection[];
   selected?: string | null;
+  /** Tints the sheet and every option in one kind's colour. */
+  tone?: SheetTone;
+  /** The kind's glyph, on a solid chip beside the title and on every option. */
+  icon?: GlyphName;
+  /**
+   * Shows the sections as a switch at the top, one at a time, rather than one long list —
+   * for a choice made in two steps, Cow or Buffalo first and then the breed.
+   */
+  tabbed?: boolean;
   onSelect: (value: string) => void;
   onClose: () => void;
   testID?: string;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const [tab, setTab] = useState(0);
+  const switchTone = tone ?? 'good';
+
+  // Opens on the section holding what is already chosen — reopening a Murrah line lands on
+  // Buffalo, not on Cow with the answer hidden behind a tap.
+  useEffect(() => {
+    if (visible) {
+      const index = sections.findIndex(section =>
+        section.options.some(option => option.value === selected),
+      );
+      setTab(Math.max(0, index));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  const shown = tabbed ? sections.slice(tab, tab + 1) : sections;
 
   return (
     <Modal
@@ -164,6 +236,11 @@ export default function BottomSheet({
           <View style={styles.grabber} />
 
           <View style={styles.head}>
+            {!!tone && !!icon && (
+              <View style={[styles.chip, { backgroundColor: SOLID[tone] }]} testID="sheet-icon">
+                <Glyph name={icon} size={20} color={onSolid(tone)} />
+              </View>
+            )}
             <View style={styles.headText}>
               <Text style={styles.title}>{title}</Text>
               {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
@@ -179,10 +256,79 @@ export default function BottomSheet({
             </Pressable>
           </View>
 
+          {tabbed && sections.length > 0 && (
+            <View style={styles.tabs} accessibilityRole="tablist">
+              {sections.map((section, index) => {
+                const active = index === tab;
+                return (
+                  <Pressable
+                    key={section.title}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => setTab(index)}
+                    style={[
+                      styles.tab,
+                      { borderColor: SOLID[switchTone] },
+                      active && { backgroundColor: SOLID[switchTone] },
+                    ]}
+                    testID={`sheet-tab-${index}`}
+                  >
+                    <Text
+                      style={[
+                        styles.tabLabel,
+                        { color: active ? onSolid(switchTone) : INK[switchTone] },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {section.title}
+                    </Text>
+                    <View
+                      style={[
+                        styles.tabCount,
+                        {
+                          backgroundColor: active ? colors.surface : SOLID[switchTone],
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.sectionCountLabel,
+                          { color: active ? INK[switchTone] : onSolid(switchTone) },
+                        ]}
+                      >
+                        {section.options.length}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-            {sections.map(section => (
+            {shown.map(section => (
               <View key={section.title}>
-                <Text style={styles.section}>{section.title}</Text>
+                {tabbed ? null : tone ? (
+                  <View style={styles.sectionRow}>
+                    <View
+                      style={[
+                        styles.sectionPill,
+                        { backgroundColor: WASH[tone], borderColor: EDGE[tone] },
+                      ]}
+                    >
+                      <Text style={[styles.sectionPillLabel, { color: INK[tone] }]}>
+                        {section.title}
+                      </Text>
+                    </View>
+                    <View style={[styles.sectionCount, { backgroundColor: SOLID[tone] }]}>
+                      <Text style={[styles.sectionCountLabel, { color: onSolid(tone) }]}>
+                        {section.options.length}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.section}>{section.title}</Text>
+                )}
                 {section.options.map(option => {
                   const isSelected = option.value === selected;
                   return (
@@ -197,24 +343,54 @@ export default function BottomSheet({
                       disabled={option.disabled}
                       style={({ pressed }) => [
                         styles.option,
-                        isSelected && styles.optionSelected,
+                        !!tone && { backgroundColor: WASH[tone], borderColor: EDGE[tone] },
+                        isSelected &&
+                          (tone
+                            ? { borderColor: SOLID[tone], borderWidth: 2 }
+                            : styles.optionSelected),
                         option.disabled && styles.optionDisabled,
                         pressed && !option.disabled && styles.optionPressed,
                       ]}
                       testID={`sheet-option-${option.value}`}
                     >
+                      {!!tone && !!icon && (
+                        <View style={[styles.chipSmall, { backgroundColor: SOLID[tone] }]}>
+                          <Glyph name={icon} size={16} color={onSolid(tone)} />
+                        </View>
+                      )}
                       <View style={styles.optionBody}>
                         <Text style={styles.optionLabel}>{option.label}</Text>
                         {!!option.meta && <Text style={styles.optionMeta}>{option.meta}</Text>}
                       </View>
                       {!!option.badge && (
-                        <View style={styles.badge}>
-                          <Text style={styles.badgeLabel}>{option.badge}</Text>
+                        <View
+                          style={[
+                            styles.badge,
+                            !!option.badgeTone && { backgroundColor: SOLID[option.badgeTone] },
+                          ]}
+                          testID={`sheet-badge-${option.value}`}
+                        >
+                          <Text
+                            style={[
+                              styles.badgeLabel,
+                              !!option.badgeTone && {
+                                color: onSolid(option.badgeTone),
+                                fontFamily: typography.label.fontFamily,
+                              },
+                            ]}
+                          >
+                            {option.badge}
+                          </Text>
                         </View>
                       )}
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={18} color={colors.primaryDark} />
-                      )}
+                      {isSelected &&
+                        (tone ? (
+                          <View style={[styles.tick, { backgroundColor: SOLID[tone] }]}>
+                            <Ionicons name="checkmark" size={14} color={onSolid(tone)} />
+                          </View>
+                        ) : (
+                          <Ionicons name="checkmark" size={18} color={colors.primaryDark} />
+                        ))}
                     </Pressable>
                   );
                 })}
@@ -310,4 +486,74 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   badgeLabel: { ...typography.caption, color: colors.textMuted },
+
+  // -- tabbed -----------------------------------------------------------------------------
+  tabs: { flexDirection: 'row', gap: spacing[2], marginTop: spacing[4] },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    backgroundColor: colors.surface,
+  },
+  tabLabel: { ...typography.bodyStrong, flexShrink: 1 },
+  tabCount: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // -- toned ------------------------------------------------------------------------------
+  chip: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tick: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginTop: spacing[3],
+    marginBottom: spacing[2],
+  },
+  sectionPill: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  sectionPillLabel: { ...typography.label },
+  sectionCount: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionCountLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
 });
