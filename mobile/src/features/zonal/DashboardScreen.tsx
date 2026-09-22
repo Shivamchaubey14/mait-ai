@@ -28,6 +28,7 @@
 import React from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Glyph, { STRAW_GLYPH } from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
 
 import { useGetZonalDashboardQuery } from '@api/endpoints';
@@ -259,7 +260,7 @@ export default function DashboardScreen({
               testID={`zonal-capture-${capture.id}`}
             >
               <View style={styles.captureDisc}>
-                <Ionicons name="water" size={16} color={colors.surface} />
+                <Glyph name={STRAW_GLYPH} size={16} color={colors.surface} />
               </View>
               <View style={styles.captureBody}>
                 <Text style={styles.captureTitle} numberOfLines={1}>

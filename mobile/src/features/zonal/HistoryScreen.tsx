@@ -23,6 +23,7 @@
 import React, { useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Glyph, { STRAW_GLYPH } from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
 
 import { useGetZonalHistoryQuery } from '@api/endpoints';
@@ -161,8 +162,8 @@ export default function HistoryScreen({ zoneName }: { zoneName: string }): React
             </View>
             {!!item && (
               <View style={styles.itemLine}>
-                <Ionicons
-                  name={row.product_type === 'consumable' ? 'cube' : 'water'}
+                <Glyph
+                  name={row.product_type === 'consumable' ? 'cube' : STRAW_GLYPH}
                   size={13}
                   color={colors.info}
                 />

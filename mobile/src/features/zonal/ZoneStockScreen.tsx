@@ -25,7 +25,8 @@
 
 import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import Glyph, { STRAW_GLYPH } from '@/components/glyph';
+import type { GlyphName } from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
 
 import { useGetZoneStockQuery } from '@api/endpoints';
@@ -48,11 +49,8 @@ type View_ = 'locations' | 'products' | 'maits' | 'stores';
 type Category = 'straw' | 'consumable' | 'asset';
 
 /** Each category in its own colour and glyph, so the three read apart at a glance. */
-const CATEGORY: Record<
-  Category,
-  { tone: TileTone; icon: React.ComponentProps<typeof Ionicons>['name'] }
-> = {
-  straw: { tone: 'info', icon: 'water' },
+const CATEGORY: Record<Category, { tone: TileTone; icon: GlyphName }> = {
+  straw: { tone: 'info', icon: STRAW_GLYPH },
   consumable: { tone: 'good', icon: 'flask' },
   asset: { tone: 'waiting', icon: 'construct' },
 };
@@ -67,7 +65,7 @@ function Breeds({ by }: { by: Record<string, number> }): React.JSX.Element | nul
     <View style={styles.breeds}>
       {rows.map(([breed, qty]) => (
         <View key={breed} style={styles.breed}>
-          <Ionicons name="water" size={12} color={colors.info} />
+          <Glyph name={STRAW_GLYPH} size={12} color={colors.info} />
           <Text style={styles.breedName} numberOfLines={1}>
             {breed}
           </Text>
@@ -86,7 +84,7 @@ function Chip({
   tone,
   size = 34,
 }: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: GlyphName;
   tone: TileTone;
   size?: number;
 }): React.JSX.Element {
@@ -98,7 +96,7 @@ function Chip({
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
-      <Ionicons name={icon} size={Math.round(size * 0.5)} color={colors.surface} />
+      <Glyph name={icon} size={Math.round(size * 0.5)} color={colors.surface} />
     </View>
   );
 }
@@ -127,7 +125,7 @@ function Section({
   tone,
   label,
 }: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: GlyphName;
   tone: TileTone;
   label: string;
 }): React.JSX.Element {
@@ -167,7 +165,7 @@ function OnItsWay({ row }: { row: ZoneStockProduct }): React.JSX.Element {
   if (!steps.some(step => step.value > 0)) {
     return (
       <View style={styles.way}>
-        <Ionicons name="checkmark-done" size={14} color={colors.textMuted} />
+        <Glyph name="checkmark-done" size={14} color={colors.textMuted} />
         <Text style={styles.wayQuiet}>{t('zonal.nothingOnItsWay')}</Text>
       </View>
     );
@@ -179,7 +177,7 @@ function OnItsWay({ row }: { row: ZoneStockProduct }): React.JSX.Element {
         .filter(step => step.value > 0)
         .map(step => (
           <View key={step.key} style={[styles.step, styles[`step_${step.tone}`]]}>
-            <Ionicons name={step.icon} size={11} color={colors.surface} />
+            <Glyph name={step.icon} size={11} color={colors.surface} />
             <Text style={styles.stepLabel}>
               {t(`zonal.way_${step.key}`, { count: step.value })}
             </Text>
@@ -225,7 +223,7 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
 
         <View style={styles.stats}>
           <View style={styles.stat}>
-            <Ionicons name="people" size={13} color={colors.ink} />
+            <Glyph name="people" size={13} color={colors.ink} />
             <Text style={styles.statLabel}>{t('zonal.maitsHere', { count: place.maits })}</Text>
           </View>
           {place.at_zero > 0 && (
@@ -256,7 +254,7 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
           ))
         ) : (
           <View style={[styles.depot, styles.noDepot]}>
-            <Ionicons name="information-circle" size={18} color={colors.info} />
+            <Glyph name="information-circle" size={18} color={colors.info} />
             <Text style={styles.noDepotLabel}>{t('zonal.noDepotHere')}</Text>
           </View>
         )}
@@ -299,7 +297,7 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
 
         <View style={styles.inset}>
           <View style={styles.place}>
-            <Ionicons name="location" size={13} color={colors.info} />
+            <Glyph name="location" size={13} color={colors.info} />
             <Text style={styles.placeLabel} numberOfLines={2}>
               {[
                 row.plant_name || t('zonal.noPlace'),
@@ -347,7 +345,7 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
 
         <View style={styles.figures}>
           <View style={styles.figure}>
-            <Ionicons name="people" size={14} color={yolk[700]} />
+            <Glyph name="people" size={14} color={yolk[700]} />
             <Text style={[styles.figureValue, row.with_maits === 0 && styles.figureBad]}>
               {row.with_maits}
             </Text>
@@ -357,7 +355,7 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
             </Text>
           </View>
           <View style={styles.figure}>
-            <Ionicons name="storefront" size={14} color={colors.info} />
+            <Glyph name="storefront" size={14} color={colors.info} />
             <Text style={[styles.figureValue, row.at_depots === 0 && styles.figureBad]}>
               {row.at_depots}
             </Text>
@@ -425,7 +423,7 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
         <View style={styles.serves}>
           {row.plant_names.map(name => (
             <View key={name} style={styles.serve}>
-              <Ionicons name="location" size={11} color={colors.surface} />
+              <Glyph name="location" size={11} color={colors.surface} />
               <Text style={styles.serveLabel} numberOfLines={1}>
                 {name}
               </Text>
@@ -511,7 +509,7 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
                   ]}
                   testID={`zonal-category-${key}`}
                 >
-                  <Ionicons name={icon} size={18} color={on ? colors.surface : CHIP[tone]} />
+                  <Glyph name={icon} size={18} color={on ? colors.surface : CHIP[tone]} />
                   <Text
                     style={[styles.categoryLabel, { color: on ? colors.surface : CHIP[tone] }]}
                     numberOfLines={1}

@@ -33,6 +33,7 @@ import {
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Glyph from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
 
 import { useGetZonalHomeQuery, useListZonalApprovalsQuery } from '@api/endpoints';
@@ -188,7 +189,7 @@ export default function IndentsScreen({
                 testID={`zonal-approval-item-${row.id}`}
               >
                 <View style={[styles.itemIcon, styles[`itemIcon_${ITEM_TONE[row.coverage]}`]]}>
-                  <Ionicons name={itemIcon(row)} size={14} color={colors.surface} />
+                  <Glyph name={itemIcon(row)} size={14} color={colors.surface} />
                 </View>
                 <View style={styles.itemBody}>
                   <Text style={styles.itemName} numberOfLines={1}>

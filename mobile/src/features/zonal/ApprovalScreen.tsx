@@ -25,6 +25,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Glyph from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -333,7 +334,7 @@ export default function ApprovalScreen({
             >
               <View style={styles.itemHead}>
                 <View style={[styles.itemIcon, styles[`itemIcon_${tone}`]]}>
-                  <Ionicons name={itemIcon(row)} size={18} color={colors.surface} />
+                  <Glyph name={itemIcon(row)} size={18} color={colors.surface} />
                 </View>
                 <View style={styles.itemBody}>
                   <Text style={styles.itemName} numberOfLines={2}>

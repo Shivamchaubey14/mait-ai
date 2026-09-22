@@ -9,13 +9,23 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
 
 import type { ZonalApproval } from '@api/types';
+import { STRAW_GLYPH } from '@/components/glyph';
+import type { GlyphName } from '@/components/glyph';
 import type { PillTone } from '@/components/frame';
 import { colors, green, MIN_TOUCH_TARGET, radius, spacing, typography, yolk } from '@theme/tokens';
 
-export { AppHero as ZonalHero, FooterAction as ZonalAction, Pill } from '@/components/frame';
+export {
+  AppHero as ZonalHero,
+  FooterAction as ZonalAction,
+  initials,
+  Pill,
+  Tile,
+  Tiles,
+} from '@/components/frame';
+export type { TileTone } from '@/components/frame';
+import type { TileTone } from '@/components/frame';
 export { frameStyles as zonalStyles } from '@/components/frame';
 
 /**
@@ -97,14 +107,6 @@ export function groupIndents(rows: ZonalApproval[]): IndentGroup[] {
   return groups;
 }
 
-/** "Sunil Kumar" → "SK": enough to tell two Maits apart at a glance down a queue. */
-export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return (
-    (parts[0]?.[0] ?? '') + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '')
-  ).toUpperCase();
-}
-
 /** Worst first: one empty shelf is the fact about a request, not three ready ones beside it. */
 const SEVERITY: ZonalApproval['coverage'][] = ['empty', 'short', 'no-store', 'ready'];
 
@@ -120,103 +122,9 @@ export function groupTone(rows: ZonalApproval[]): TileTone {
         : 'good';
 }
 
-/** The glyph for what was asked for: a drop for semen straws, a box for everything else. */
-export function itemIcon(row: ZonalApproval): React.ComponentProps<typeof Ionicons>['name'] {
-  return row.product_type === 'straw' ? 'water' : 'cube';
-}
-
-/**
- * A row of figures under the hero.
- *
- * Green for what is settled, yolk for what is waiting on somebody else, red for what nobody
- * can work around — the same three meanings these colours carry everywhere in the product.
- * Tappable where the figure is a list; inert where it is only a figure, and it does not
- * pretend otherwise.
- */
-/**
- * `info` is the fourth, and it is not decoration: this palette's blue is a *fact about the
- * situation* — where the handset was, what came out of the bag — as against green for done,
- * yolk for waiting on somebody and red for wrong. The portal's event screen and the Mait's
- * own draw the same two cards in it, and a manager looking at the same record should be
- * looking at the same colours.
- */
-export type TileTone = 'good' | 'waiting' | 'bad' | 'info' | 'plain';
-
-export function Tiles({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <View style={[styles.tiles, styles.tilesStretch]}>{children}</View>;
-}
-
-export function Tile({
-  label,
-  value,
-  note,
-  icon,
-  tone = 'plain',
-  selected = false,
-  onPress,
-  children,
-  testID,
-}: {
-  label: string;
-  value?: string | number;
-  /**
-   * The line of context under the figure — *what* the figure is of.
-   *
-   * The design system's stat tile is a label, a figure and one line under it, and that line
-   * is where a tile stops being a number somebody has to interpret: "₹ 300" over "Deducted
-   * from milk payment · Verified" is an answer, and "₹ 300" alone is a prompt to go and look.
-   */
-  note?: string;
-  /** A glyph above the label, on a chip of the tile's own colour. */
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
-  tone?: TileTone;
-  selected?: boolean;
-  onPress?: () => void;
-  /** In place of `value`, where the figure is a pill rather than a number. */
-  children?: React.ReactNode;
-  testID?: string;
-}): React.JSX.Element {
-  const body = (
-    <>
-      {!!icon && (
-        <View style={[styles.tileIcon, styles[`tileIcon_${tone}`]]}>
-          <Ionicons name={icon} size={14} color={colors.surface} />
-        </View>
-      )}
-      <Text style={[styles.tileLabel, styles[`tileLabel_${tone}`]]} numberOfLines={2}>
-        {label}
-      </Text>
-      {children ?? (
-        <Text style={[styles.tileValue, styles[`tileValue_${tone}`]]} numberOfLines={1}>
-          {value}
-        </Text>
-      )}
-      {!!note && (
-        <Text style={styles.tileNote} numberOfLines={2}>
-          {note}
-        </Text>
-      )}
-    </>
-  );
-
-  if (!onPress) {
-    return (
-      <View style={[styles.tile, styles[`tile_${tone}`]]} testID={testID}>
-        {body}
-      </View>
-    );
-  }
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.tile, styles[`tile_${tone}`], selected && styles.tileOn]}
-      testID={testID}
-    >
-      {body}
-    </Pressable>
-  );
+/** The glyph for what was asked for: a syringe for semen straws, a box for everything else. */
+export function itemIcon(row: ZonalApproval): GlyphName {
+  return row.product_type === 'straw' ? STRAW_GLYPH : 'cube';
 }
 
 /**
@@ -314,61 +222,6 @@ export const rowStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  tiles: { flexDirection: 'row', gap: spacing[3], marginBottom: spacing[3] },
-  tile: {
-    flex: 1,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing[3],
-    minHeight: MIN_TOUCH_TARGET + spacing[5],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Every tile in a row is as tall as the tallest, so a two-line note under one does not
-  // leave the others floating half a card above the baseline.
-  tilesStretch: { alignItems: 'stretch' },
-  tileOn: { borderWidth: 2 },
-  tile_plain: { backgroundColor: colors.surface, borderColor: colors.border },
-  tile_good: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
-  tile_waiting: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
-  tile_bad: { backgroundColor: colors.errorWash, borderColor: colors.error },
-  tile_info: { backgroundColor: colors.infoWash, borderColor: colors.info },
-  tileIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[1],
-  },
-  tileIcon_plain: { backgroundColor: colors.textMuted },
-  tileIcon_good: { backgroundColor: colors.primary },
-  tileIcon_waiting: { backgroundColor: yolk[600] },
-  tileIcon_bad: { backgroundColor: colors.error },
-  tileIcon_info: { backgroundColor: colors.info },
-  tileLabel: { ...typography.caption, textAlign: 'center' },
-  tileLabel_plain: { color: colors.textMuted },
-  tileLabel_good: { color: colors.primaryDark },
-  tileLabel_waiting: { color: yolk[800] },
-  tileLabel_bad: { color: colors.error },
-  tileLabel_info: { color: colors.info },
-  tileValue: { ...typography.h1, marginTop: 2 },
-  tileValue_plain: { color: colors.ink },
-  tileValue_good: { color: colors.primaryDark },
-  tileValue_waiting: { color: colors.ink },
-  tileValue_bad: { color: colors.error },
-  // Ink on the blue wash, the rule every wash token in this palette is written to: the wash
-  // carries the colour and the border states it, and the text stays legible in sunlight.
-  tileValue_info: { color: colors.ink },
-  tileNote: {
-    ...typography.caption,
-    fontSize: 11,
-    lineHeight: 15,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-
   track: {
     flexDirection: 'row',
     padding: spacing[1],
