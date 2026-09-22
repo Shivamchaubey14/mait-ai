@@ -20,6 +20,15 @@
  * definition stock that is not in a Mait's hands, and rows that look like stock while not
  * being stock are the fastest way to start a round on straws that are still at the depot.
  * They live on Profile now, on a screen that can say what is outstanding on each of them.
+ *
+ * **No button to raise an indent.** That is a tab of its own now, beside this one on the bar, so
+ * the screen is only what is in the flask.
+ *
+ * **Each kind in its own colour** (docs/DESIGN_SYSTEM.md, *Coloured screen pattern*), the same
+ * three the store and the zonal manager see: straws blue with a syringe, consumables green with
+ * a flask, equipment yolk with a tool. The three tabs are coloured buttons with their glyph and
+ * count; every row is tinted in its kind, its glyph on a solid chip and its count on a solid
+ * badge — and anything running low turns yolk with a Low pill, whatever its kind.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -31,22 +40,37 @@ import { useTranslation } from 'react-i18next';
 import { useGetInventorySummaryQuery, useListBreedsQuery } from '@api/endpoints';
 import type { StrawLot, SuppliesLot } from '@api/types';
 import { BrandMark } from '@/components/brand';
+import Glyph, { STRAW_GLYPH } from '@/components/glyph';
+import type { GlyphName } from '@/components/glyph';
 import PullToRefresh from '@/components/pullToRefresh';
 import Problem, { useOnline } from '@/components/problem';
 import { EmptyState, SkeletonList } from '@/components/states';
-import {
-  colors,
-  MIN_TOUCH_TARGET,
-  radius,
-  shadows,
-  spacing,
-  typography,
-  yolk,
-} from '@theme/tokens';
+import { colors, green, MIN_TOUCH_TARGET, radius, spacing, typography, yolk } from '@theme/tokens';
 
 type Tab = 'straws' | 'consumables' | 'equipment';
 
 const TABS: Tab[] = ['straws', 'consumables', 'equipment'];
+
+type Tone = 'info' | 'good' | 'warm';
+
+/** Each kind in its colour and glyph — the same three everywhere stock is drawn. */
+const KIND: Record<Tab, { tone: Tone; icon: GlyphName }> = {
+  straws: { tone: 'info', icon: STRAW_GLYPH },
+  consumables: { tone: 'good', icon: 'flask' },
+  equipment: { tone: 'warm', icon: 'construct' },
+};
+
+/** The solid colour of each tone, for a glyph or a word on a wash. */
+const SOLID: Record<Tone, string> = {
+  info: colors.info,
+  good: colors.primaryDark,
+  warm: yolk[800],
+};
+
+/** What sits on a solid chip: white, except on yolk, which fails contrast under white. */
+function onSolid(tone: Tone): string {
+  return tone === 'warm' ? colors.ink : colors.surface;
+}
 
 /** Fewer than this of one breed is worth flagging on the row itself. */
 const LOW_PER_BREED = 3;
@@ -90,6 +114,7 @@ function longDate(iso: string | null): string | null {
  * says. Low rows take the amber wash the rest of the product uses for "act on this".
  */
 function StockRow({
+  kind,
   name,
   meta,
   value,
@@ -98,6 +123,7 @@ function StockRow({
   badge,
   testID,
 }: {
+  kind: Tab;
   name: string;
   meta: string;
   /** The number, or a status word for something that is not counted. */
@@ -108,8 +134,14 @@ function StockRow({
   badge?: { label: string; tone: 'warn' | 'good' | 'info' };
   testID?: string;
 }): React.JSX.Element {
+  const { tone, icon } = KIND[kind];
+  // Running low wears yolk whatever its kind — the one line worth stopping on.
+  const look: Tone = low ? 'warm' : tone;
   return (
-    <View style={[styles.row, low && styles.rowLow]} testID={testID}>
+    <View style={[styles.row, styles[`row_${look}`]]} testID={testID}>
+      <View style={[styles.rowChip, styles[`solid_${look}`]]}>
+        <Glyph name={low ? 'warning' : icon} size={16} color={onSolid(look)} />
+      </View>
       <View style={styles.rowBody}>
         <View style={styles.rowTitleLine}>
           <Text style={styles.rowName} numberOfLines={1}>
@@ -117,6 +149,11 @@ function StockRow({
           </Text>
           {!!badge && (
             <View style={[styles.pill, styles[`pill${badge.tone}` as const]]}>
+              <Ionicons
+                name={badge.tone === 'warn' ? 'warning' : 'checkmark-circle'}
+                size={11}
+                color={badge.tone === 'warn' ? colors.ink : colors.surface}
+              />
               <Text style={[styles.pillLabel, styles[`pillLabel${badge.tone}` as const]]}>
                 {badge.label}
               </Text>
@@ -128,10 +165,12 @@ function StockRow({
         </Text>
       </View>
 
-      <View style={styles.rowFigure}>
-        <Text style={[styles.rowValue, low && styles.rowValueLow]}>{value}</Text>
-        {!!unit && <Text style={styles.rowUnit}>{unit}</Text>}
-      </View>
+      {!!value && (
+        <View style={[styles.rowFigure, styles[`solid_${look}`]]}>
+          <Text style={[styles.rowValue, { color: onSolid(look) }]}>{value}</Text>
+          {!!unit && <Text style={[styles.rowUnit, { color: onSolid(look) }]}>{unit}</Text>}
+        </View>
+      )}
     </View>
   );
 }
@@ -140,8 +179,13 @@ function StockRow({
 function GroupHead({ label, meta }: { label: string; meta: string }): React.JSX.Element {
   return (
     <View style={styles.groupHead}>
+      <View style={styles.groupChip}>
+        <Ionicons name="paw" size={13} color={colors.surface} />
+      </View>
       <Text style={styles.groupLabel}>{label}</Text>
-      <Text style={styles.groupMeta}>{meta}</Text>
+      <View style={styles.groupCount}>
+        <Text style={styles.groupMeta}>{meta}</Text>
+      </View>
     </View>
   );
 }
@@ -150,7 +194,9 @@ function GroupHead({ label, meta }: { label: string; meta: string }): React.JSX.
 function Warning({ title, body }: { title: string; body: string }): React.JSX.Element {
   return (
     <View style={styles.warning} testID="stock-warning">
-      <Ionicons name="warning-outline" size={18} color={colors.secondaryPressed} />
+      <View style={styles.warningChip}>
+        <Ionicons name="warning" size={16} color={colors.ink} />
+      </View>
       <View style={styles.warningBody}>
         <Text style={styles.warningTitle}>{title}</Text>
         <Text style={styles.warningText}>{body}</Text>
@@ -171,6 +217,7 @@ function Footnote({
 }): React.JSX.Element {
   return (
     <View style={styles.footnote}>
+      <Ionicons name="information-circle" size={18} color={colors.info} />
       <Text style={styles.footnoteText}>{text}</Text>
       {!!action && (
         <Pressable accessibilityRole="button" onPress={onPress} testID="stock-footnote-action">
@@ -185,10 +232,8 @@ function Footnote({
 // Screen
 // --------------------------------------------------------------------------------------
 export default function StockScreen({
-  onRequestStock,
   onSync,
 }: {
-  onRequestStock: () => void;
   /**
    * Push whatever is still queued on the handset.
    *
@@ -301,18 +346,36 @@ export default function StockScreen({
         <View style={styles.tabs}>
           {TABS.map(key => {
             const active = key === tab;
+            const { tone, icon } = KIND[key];
+            const count =
+              key === 'straws'
+                ? (stock.data?.total_straws ?? 0)
+                : key === 'consumables'
+                  ? consumables.length
+                  : assets.length;
             return (
               <Pressable
                 key={key}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
                 onPress={() => setTab(key)}
-                style={[styles.tab, active && styles.tabActive]}
+                style={[styles.tab, styles[`tab_${tone}`], active && styles[`solid_${tone}`]]}
                 testID={`stock-tab-${key}`}
               >
-                <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1}>
+                <Glyph name={icon} size={18} color={active ? onSolid(tone) : SOLID[tone]} />
+                <Text
+                  style={[styles.tabLabel, { color: active ? onSolid(tone) : SOLID[tone] }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
                   {t(`stock.tab.${key}`)}
                 </Text>
+                {!loading && !failed && (
+                  <View style={[styles.tabCount, active && styles.tabCountActive]}>
+                    <Text style={[styles.tabCountLabel, { color: SOLID[tone] }]}>{count}</Text>
+                  </View>
+                )}
               </Pressable>
             );
           })}
@@ -365,6 +428,7 @@ export default function StockScreen({
                     />
                     {group.rows.map(row => (
                       <StockRow
+                        kind="straws"
                         key={row.breed}
                         name={breedName(row.breed)}
                         meta={t('stock.issuedUsed', {
@@ -398,6 +462,7 @@ export default function StockScreen({
 
                 {consumables.map(item => (
                   <StockRow
+                    kind="consumables"
                     key={item.code}
                     name={item.name}
                     meta={t('stock.perUnit', {
@@ -439,6 +504,7 @@ export default function StockScreen({
                   const since = longDate(item.issued_at);
                   return (
                     <StockRow
+                      kind="equipment"
                       key={item.code}
                       name={item.name}
                       meta={
@@ -466,31 +532,6 @@ export default function StockScreen({
           </ScrollView>
         )}
       </PullToRefresh>
-
-      {/* Fixed foot, above the tab bar. The one action out of this screen should not have to
-          be scrolled back to — a Mait who has just read a low count wants it under their
-          thumb, not at the end of a list of eleven breeds.
-
-          Equipment has none. It is issued once and held until the dairy asks for it back, so
-          there is nothing to order and nothing to correct; a button there would have to
-          invent a job for itself. */}
-      {!loading && !failed && tab !== 'equipment' && (
-        <View style={styles.foot}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onRequestStock}
-            style={({ pressed }) => [
-              styles.cta,
-              styles.ctaPrimary,
-              pressed && styles.ctaPrimaryPressed,
-            ]}
-            testID="stock-cta"
-          >
-            <Ionicons name="add" size={18} color={colors.surface} />
-            <Text style={[styles.ctaLabel, styles.ctaLabelPrimary]}>{t('stock.raiseIndent')}</Text>
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 }
@@ -503,14 +544,6 @@ const styles = StyleSheet.create({
   tabsWrap: {
     paddingHorizontal: spacing[4],
     paddingTop: spacing[4],
-    backgroundColor: colors.background,
-  },
-  // Opaque, and it has to be: the list scrolls behind this, and a transparent foot would show
-  // rows sliding through the button on top of them.
-  foot: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[3],
-    paddingBottom: spacing[3],
     backgroundColor: colors.background,
   },
 
@@ -533,120 +566,153 @@ const styles = StyleSheet.create({
   // Yolk on Ink, which is the one place the accent is legible as text (DESIGN_SYSTEM).
   heroAccent: { color: colors.secondary, opacity: 1 },
 
-  // -- tabs ------------------------------------------------------------------------------
-  tabs: {
-    flexDirection: 'row',
-    gap: spacing[1],
-    padding: spacing[1],
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-  },
+  // -- tabs: the three kinds, a coloured button each ----------------------------------------
+  tabs: { flexDirection: 'row', gap: spacing[2] },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: spacing[2],
+    gap: 2,
+    minHeight: MIN_TOUCH_TARGET + spacing[4],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[1],
     borderRadius: radius.md,
+    borderWidth: 1.5,
   },
-  tabActive: { backgroundColor: colors.primary },
-  tabLabel: { ...typography.bodyStrong, fontSize: 14, color: colors.text },
-  tabLabelActive: { color: colors.surface },
+  tab_info: { backgroundColor: colors.infoWash, borderColor: colors.info },
+  tab_good: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
+  tab_warm: { backgroundColor: colors.secondaryWash, borderColor: yolk[500] },
+  tabLabel: { ...typography.label },
+  tabCount: {
+    minWidth: 24,
+    paddingHorizontal: 6,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+  },
+  tabCountActive: { backgroundColor: colors.surface },
+  tabCountLabel: { ...typography.caption, fontSize: 11, fontFamily: typography.label.fontFamily },
+
+  // -- solid fills, by tone --------------------------------------------------------------
+  solid_info: { backgroundColor: colors.info, borderColor: colors.info },
+  solid_good: { backgroundColor: colors.primary, borderColor: colors.primary },
+  // Ink on yolk, never white.
+  solid_warm: { backgroundColor: yolk[500], borderColor: yolk[500] },
 
   // -- group heads -----------------------------------------------------------------------
   groupHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing[1],
+    gap: spacing[2],
     marginBottom: spacing[2],
     marginTop: spacing[2],
   },
-  groupLabel: { ...typography.label, color: colors.textMuted, letterSpacing: 1 },
-  groupMeta: { ...typography.caption, color: colors.textMuted },
+  groupChip: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.ink,
+  },
+  groupLabel: { ...typography.h3, color: colors.ink, flex: 1 },
+  groupCount: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.infoWash,
+  },
+  groupMeta: { ...typography.caption, fontFamily: typography.label.fontFamily, color: colors.info },
 
-  // -- rows ------------------------------------------------------------------------------
+  // -- rows: tinted in their kind --------------------------------------------------------
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET + spacing[4],
-    padding: spacing[4],
-    marginBottom: spacing[3],
-    backgroundColor: colors.surface,
+    padding: spacing[3],
+    marginBottom: spacing[2],
     borderWidth: 1,
-    borderColor: 'transparent',
     borderRadius: radius.lg,
-    ...shadows.card,
   },
-  rowLow: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
+  row_info: { backgroundColor: colors.infoWash, borderColor: colors.info },
+  row_good: { backgroundColor: colors.primaryWash, borderColor: green[300] },
+  row_warm: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  rowChip: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rowBody: { flex: 1 },
-  rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   rowName: { ...typography.h3, color: colors.ink, flexShrink: 1 },
-  rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  rowFigure: { alignItems: 'flex-end' },
-  rowValue: { ...typography.h1, color: colors.ink },
-  rowValueLow: { color: colors.secondaryPressed },
-  rowUnit: { ...typography.caption, color: colors.textMuted },
+  rowMeta: { ...typography.caption, color: colors.ink, marginTop: 2 },
+  // The count on a solid badge in the row's colour — read down the column without a name.
+  rowFigure: {
+    alignItems: 'center',
+    minWidth: 58,
+    paddingVertical: spacing[1],
+    paddingHorizontal: spacing[2],
+    borderRadius: radius.md,
+  },
+  rowValue: { ...typography.h2 },
+  rowUnit: { ...typography.caption, fontSize: 10, lineHeight: 12 },
 
   // -- pills -----------------------------------------------------------------------------
-  pill: { paddingHorizontal: spacing[3], paddingVertical: 2, borderRadius: radius.pill },
-  pillwarn: { backgroundColor: colors.secondaryWash },
-  pillgood: { backgroundColor: colors.primaryWash },
-  pillinfo: { backgroundColor: colors.infoWash },
-  pillLabel: { ...typography.caption },
-  pillLabelwarn: { color: yolk[800] },
-  pillLabelgood: { color: colors.primaryDark },
-  pillLabelinfo: { color: colors.info },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  pillwarn: { backgroundColor: yolk[400] },
+  pillgood: { backgroundColor: colors.primary },
+  pillinfo: { backgroundColor: colors.info },
+  pillLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
+  pillLabelwarn: { color: colors.ink },
+  pillLabelgood: { color: colors.surface },
+  pillLabelinfo: { color: colors.surface },
 
   // -- warning ---------------------------------------------------------------------------
   warning: {
-    flexDirection: 'row',
-    gap: spacing[3],
-    padding: spacing[4],
-    marginBottom: spacing[3],
-    borderRadius: radius.lg,
-    backgroundColor: colors.secondaryWash,
-    borderWidth: 1,
-    borderColor: colors.secondary,
-  },
-  warningBody: { flex: 1 },
-  warningTitle: { ...typography.bodyStrong, color: yolk[800] },
-  warningText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-
-  // -- footnote --------------------------------------------------------------------------
-  footnote: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     padding: spacing[3],
     marginBottom: spacing[3],
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    backgroundColor: colors.secondaryWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: yolk[400],
   },
-  footnoteText: { ...typography.caption, color: colors.textMuted, flex: 1 },
-  footnoteAction: { ...typography.caption, color: colors.primaryDark },
-
-  // -- call to action --------------------------------------------------------------------
-  cta: {
-    flexDirection: 'row',
+  warningChip: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: yolk[500],
+  },
+  warningBody: { flex: 1 },
+  warningTitle: { ...typography.bodyStrong, color: yolk[900] },
+  warningText: { ...typography.caption, color: colors.ink, marginTop: 2 },
+
+  // -- footnote --------------------------------------------------------------------------
+  footnote: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing[2],
-    minHeight: 56,
-    borderRadius: radius.lg,
-  },
-  ctaPrimary: { backgroundColor: colors.primary },
-  ctaPrimaryPressed: { backgroundColor: colors.primaryPressed },
-  ctaQuiet: {
-    backgroundColor: colors.surface,
+    padding: spacing[3],
+    marginBottom: spacing[3],
+    borderRadius: radius.md,
+    backgroundColor: colors.infoWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.info,
   },
-  ctaQuietPressed: { backgroundColor: colors.background },
-  ctaLabel: { ...typography.bodyStrong, fontSize: 16 },
-  ctaLabelPrimary: { color: colors.surface },
-  ctaLabelQuiet: { color: colors.text },
+  footnoteText: { ...typography.caption, color: colors.ink, flex: 1 },
+  footnoteAction: { ...typography.caption, color: colors.primaryDark },
 });

@@ -13,6 +13,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import StockScreen from '../StockScreen';
 import type { InventorySummary } from '@api/types';
+import { colors } from '@theme/tokens';
 import { jsonResponse, renderWithStore } from '@/test-utils';
 
 const BREEDS = [
@@ -109,7 +110,7 @@ function mockApi(summary: InventorySummary = SUMMARY, indents: unknown[] = []) {
 }
 
 function render() {
-  return renderWithStore(<StockScreen onRequestStock={jest.fn()} />);
+  return renderWithStore(<StockScreen />);
 }
 
 describe('StockScreen', () => {
@@ -213,19 +214,39 @@ describe('StockScreen', () => {
     );
   });
 
-  it('offers no action at all on equipment', async () => {
+  it('draws each kind in its own colour, and low stock in yolk', async () => {
     mockApi();
     render();
 
-    await waitFor(() => expect(screen.getByTestId('stock-cta')).toBeTruthy());
-    expect(screen.getByText('Raise an indent')).toBeTruthy();
+    // Straws blue, with a syringe; Murrah is down to two, so it is yolk.
+    await waitFor(() => expect(screen.getByTestId('stock-straw-HF')).toBeTruthy());
+    expect(screen.getByTestId('stock-straw-HF')).toHaveStyle({ backgroundColor: colors.infoWash });
+    expect(screen.getByTestId('stock-straw-HF')).toHaveTextContent(/needle/);
+    expect(screen.getByTestId('stock-straw-MURRAH')).toHaveStyle({
+      backgroundColor: colors.secondaryWash,
+    });
+    // Each kind is a coloured button with its own count; the chosen one filled.
+    expect(screen.getByTestId('stock-tab-straws')).toHaveStyle({ backgroundColor: colors.info });
+    expect(screen.getByTestId('stock-tab-straws')).toHaveTextContent(/32/);
 
-    fireEvent.press(screen.getByTestId('stock-tab-equipment'));
+    fireEvent.press(screen.getByTestId('stock-tab-consumables'));
+    await waitFor(() => screen.getByTestId('stock-consumable-GLOVES'));
+    expect(screen.getByTestId('stock-consumable-GLOVES')).toHaveStyle({
+      backgroundColor: colors.primaryWash,
+    });
+    expect(screen.getByTestId('stock-tab-consumables')).toHaveStyle({
+      backgroundColor: colors.primary,
+    });
+  });
 
-    // Equipment is issued once and held until the dairy asks for it back: nothing to order,
-    // nothing to correct. The button here used to say "Report lost or broken" and open the
-    // indent list, which is neither.
-    await waitFor(() => expect(screen.queryByTestId('stock-cta')).toBeNull());
+  it('has no button to raise an indent — that is a tab of its own now', async () => {
+    mockApi();
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('stock-tab-straws')).toBeTruthy());
+    expect(screen.queryByText('Raise an indent')).toBeNull();
+    fireEvent.press(screen.getByTestId('stock-tab-consumables'));
+    expect(screen.queryByText('Raise an indent')).toBeNull();
   });
 
   it('says the flask is empty rather than showing a zero', async () => {
