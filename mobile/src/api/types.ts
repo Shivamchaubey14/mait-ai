@@ -722,6 +722,8 @@ export interface StoreStockLine {
   set_aside: number;
   /** What can still be promised. */
   available: number;
+  /** Which kind of shelf it sits on. Absent from a server older than the grouped stock. */
+  category?: 'straw' | 'consumable' | 'asset';
 }
 
 export interface StoreCatalogue {

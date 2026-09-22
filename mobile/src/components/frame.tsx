@@ -20,6 +20,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import Glyph from '@/components/glyph';
+import type { GlyphName } from '@/components/glyph';
 import { fitTitleSize } from '@/components/hero';
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography, yolk } from '@theme/tokens';
 
@@ -154,6 +156,118 @@ export function AppHero({
       {children}
     </View>
   );
+}
+
+// --------------------------------------------------------------------------------------
+// Tiles
+// --------------------------------------------------------------------------------------
+/**
+ * A row of figures under the hero.
+ *
+ * Green for what is settled, yolk for what is waiting on somebody else, red for what nobody
+ * can work around — the same three meanings these colours carry everywhere in the product.
+ * Tappable where the figure is a list; inert where it is only a figure, and it does not
+ * pretend otherwise.
+ */
+/**
+ * `info` is the fourth, and it is not decoration: this palette's blue is a *fact about the
+ * situation* — where the handset was, what came out of the bag — as against green for done,
+ * yolk for waiting on somebody and red for wrong. The portal's event screen and the Mait's
+ * own draw the same two cards in it, and a manager looking at the same record should be
+ * looking at the same colours.
+ */
+export type TileTone = 'good' | 'waiting' | 'bad' | 'info' | 'plain';
+
+export function Tiles({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <View style={[tileStyles.tiles, tileStyles.tilesStretch]}>{children}</View>;
+}
+
+export function Tile({
+  label,
+  value,
+  note,
+  icon,
+  tone = 'plain',
+  selected = false,
+  onPress,
+  children,
+  testID,
+}: {
+  label: string;
+  value?: string | number;
+  /**
+   * The line of context under the figure — *what* the figure is of.
+   *
+   * The design system's stat tile is a label, a figure and one line under it, and that line
+   * is where a tile stops being a number somebody has to interpret: "₹ 300" over "Deducted
+   * from milk payment · Verified" is an answer, and "₹ 300" alone is a prompt to go and look.
+   */
+  note?: string;
+  /** A glyph above the label, on a chip of the tile's own colour. */
+  icon?: GlyphName;
+  tone?: TileTone;
+  selected?: boolean;
+  onPress?: () => void;
+  /** In place of `value`, where the figure is a pill rather than a number. */
+  children?: React.ReactNode;
+  testID?: string;
+}): React.JSX.Element {
+  const body = (
+    <>
+      {/* The chosen one of a row of filters, said with a tick in the corner as well as the
+          thicker edge — a border alone does not read across three coloured tiles. */}
+      {selected && (
+        <View style={[tileStyles.tick, tileStyles[`tileIcon_${tone}`]]}>
+          <Ionicons name="checkmark" size={11} color={colors.surface} />
+        </View>
+      )}
+      {!!icon && (
+        <View style={[tileStyles.tileIcon, tileStyles[`tileIcon_${tone}`]]}>
+          <Glyph name={icon} size={14} color={colors.surface} />
+        </View>
+      )}
+      <Text style={[tileStyles.tileLabel, tileStyles[`tileLabel_${tone}`]]} numberOfLines={2}>
+        {label}
+      </Text>
+      {children ?? (
+        <Text style={[tileStyles.tileValue, tileStyles[`tileValue_${tone}`]]} numberOfLines={1}>
+          {value}
+        </Text>
+      )}
+      {!!note && (
+        <Text style={tileStyles.tileNote} numberOfLines={2}>
+          {note}
+        </Text>
+      )}
+    </>
+  );
+
+  if (!onPress) {
+    return (
+      <View style={[tileStyles.tile, tileStyles[`tile_${tone}`]]} testID={testID}>
+        {body}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[tileStyles.tile, tileStyles[`tile_${tone}`], selected && tileStyles.tileOn]}
+      testID={testID}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+/** "Sunil Kumar" → "SK": enough to tell two Maits apart at a glance down a queue. */
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return (
+    (parts[0]?.[0] ?? '') + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '')
+  ).toUpperCase();
 }
 
 // --------------------------------------------------------------------------------------
@@ -396,4 +510,72 @@ const styles = StyleSheet.create({
   actionLabel: { ...typography.bodyStrong, fontSize: 16, color: colors.surface },
   actionLabelOutline: { color: colors.ink },
   actionLabelInert: { color: colors.textDisabled },
+});
+
+/** The figures under a hero — moved here when the store keeper's screens needed them too. */
+const tileStyles = StyleSheet.create({
+  tiles: { flexDirection: 'row', gap: spacing[3], marginBottom: spacing[3] },
+  tile: {
+    flex: 1,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing[3],
+    minHeight: MIN_TOUCH_TARGET + spacing[5],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Every tile in a row is as tall as the tallest, so a two-line note under one does not
+  // leave the others floating half a card above the baseline.
+  tilesStretch: { alignItems: 'stretch' },
+  tileOn: { borderWidth: 2.5 },
+  tick: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tile_plain: { backgroundColor: colors.surface, borderColor: colors.border },
+  tile_good: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
+  tile_waiting: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
+  tile_bad: { backgroundColor: colors.errorWash, borderColor: colors.error },
+  tile_info: { backgroundColor: colors.infoWash, borderColor: colors.info },
+  tileIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[1],
+  },
+  tileIcon_plain: { backgroundColor: colors.textMuted },
+  tileIcon_good: { backgroundColor: colors.primary },
+  tileIcon_waiting: { backgroundColor: yolk[600] },
+  tileIcon_bad: { backgroundColor: colors.error },
+  tileIcon_info: { backgroundColor: colors.info },
+  tileLabel: { ...typography.caption, textAlign: 'center' },
+  tileLabel_plain: { color: colors.textMuted },
+  tileLabel_good: { color: colors.primaryDark },
+  tileLabel_waiting: { color: yolk[800] },
+  tileLabel_bad: { color: colors.error },
+  tileLabel_info: { color: colors.info },
+  tileValue: { ...typography.h1, marginTop: 2 },
+  tileValue_plain: { color: colors.ink },
+  tileValue_good: { color: colors.primaryDark },
+  tileValue_waiting: { color: colors.ink },
+  tileValue_bad: { color: colors.error },
+  // Ink on the blue wash, the rule every wash token in this palette is written to: the wash
+  // carries the colour and the border states it, and the text stays legible in sunlight.
+  tileValue_info: { color: colors.ink },
+  tileNote: {
+    ...typography.caption,
+    fontSize: 11,
+    lineHeight: 15,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 2,
+  },
 });

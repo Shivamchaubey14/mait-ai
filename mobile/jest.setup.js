@@ -13,6 +13,14 @@ jest.mock('@expo/vector-icons/Ionicons', () => {
   return ({ name, ...props }) => React.createElement(Text, props, name);
 });
 
+// The second set, for the one glyph Ionicons does not have — a straw's syringe
+// (components/glyph.tsx). Same stand-in, for the same reason.
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return ({ name, ...props }) => React.createElement(Text, props, name);
+});
+
 // AsyncStorage is a native module with no JS implementation under Jest. This in-memory stand
 // -in keeps the semantics the offline queue actually depends on: values come back as the
 // strings they went in as, and a missing key resolves to null rather than throwing.
