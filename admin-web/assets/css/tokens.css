@@ -92,6 +92,10 @@
   --color-error-wash: #fdecea;
   --color-info-wash: #d8e7fa;
 
+  /* Red has no 100 step of its own the way Green and Yolk do, and a washed button still has to
+     answer the cursor. This is that one step down from `--color-error-wash`. */
+  --color-error-wash-pressed: #fbd8d4;
+
   --color-text: var(--ink-600);
   --color-text-muted: #7a8893;
   --color-text-disabled: var(--ink-300);

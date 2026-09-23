@@ -635,35 +635,45 @@ a.btn:hover {
   border-color: var(--color-error-pressed);
 }
 
-/* Outlined rather than filled, for a destructive or restoring action that sits in a row or in a
+/* Washed rather than filled, for a destructive or restoring action that sits in a row or in a
    group of other buttons. `--danger` is the filled red, for the one action a screen is warning
    about; a table of fifteen filled red buttons reads as fifteen problems, and so does a form
-   with Delete shouting next to Save. */
+   with Delete shouting next to Save.
+
+   The wash is the fill, not the hover. These were an outline on white, which is the same
+   defect `--soft` was written for a few rules up: on a white panel the button was white, and
+   the only thing saying it was a control was a border you had to already be looking at. The
+   wash is pale enough that a row of them still reads as a row of quiet actions, and it leaves
+   the colour meaning exactly what it meant — the swatch, not a shout. Hover goes one step
+   deeper, so the control still answers the cursor. */
 .btn--danger-outline {
   color: var(--color-error);
+  background: var(--color-error-wash);
   border-color: var(--color-error);
 }
 
 .btn--danger-outline:hover {
-  background: var(--color-error-wash);
+  background: var(--color-error-wash-pressed);
 }
 
 .btn--good-outline {
   color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
   border-color: var(--color-primary);
 }
 
 .btn--good-outline:hover {
-  background: var(--color-primary-wash);
+  background: var(--green-100);
 }
 
 .btn--warn-outline {
   color: var(--yolk-800);
+  background: var(--color-secondary-wash);
   border-color: var(--color-secondary);
 }
 
 .btn--warn-outline:hover {
-  background: var(--color-secondary-wash);
+  background: var(--yolk-100);
 }
 
 /* `.btn` is already an inline-flex row with a gap, so a glyph only needs a size. */
