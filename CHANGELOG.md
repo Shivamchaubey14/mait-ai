@@ -26,6 +26,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a solid state pill, a Member / Non-member pill and a round arrow. The range chips are blue
   with their glyphs, filled when chosen; each day is a blue pill with its count on a badge.
 
+- **No plain white button left in the portal.** A `.btn` with no modifier was white on a white
+  panel, and so were the outlined row actions — the only thing saying either was a control was
+  a border you had to already be looking at. The three outline variants now carry their wash as
+  the fill rather than on hover, and hover goes one step deeper (`--color-error-wash-pressed` is
+  new, Red having no 100 step of its own). On **Stores** and **Zones** every remaining white
+  button took a colour for what it does: the bulk tick green, and Clear, Cancel and Close the
+  ink tint. **Products** row Edit joins the yolk Edit the other tables already had, and every
+  Edit now carries a pencil glyph beside the word.
+
+- **The Zones card names its Action column.** Its last header was a `visually-hidden` span, so
+  the column read as unlabelled on screen while screen readers heard it. It is now *Action*,
+  right-aligned over the button, as on Stores and Products.
+
 - **The Indent form in the coloured pattern.** Each line is tinted by its kind — Straws blue
   with a syringe, Consumables green with a flask, Equipment yolk with a spanner — and the three
   kind buttons wear those colours, filled once chosen. A folded line is a row in its colour with
