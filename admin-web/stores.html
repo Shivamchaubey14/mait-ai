@@ -273,8 +273,10 @@
                   placeholder="Search by name or code"
                   aria-label="Search the BMC/MCC list"
                 />
-                <button class="btn" type="button" id="pick-zone">Tick its zone's free ones</button>
-                <button class="btn" type="button" id="pick-none">Clear</button>
+                <button class="btn btn--good-outline" type="button" id="pick-zone">
+                  Tick its zone's free ones
+                </button>
+                <button class="btn btn--soft" type="button" id="pick-none">Clear</button>
               </div>
 
               <div class="access zone-plants" id="plant-grid" role="group" aria-label="BMC/MCCs">
@@ -322,7 +324,9 @@
                   placeholder="10-digit mobile"
                   aria-label="Keeper's mobile number"
                 />
-                <button class="btn" type="button" id="keeper-save">Add keeper</button>
+                <button class="btn btn--good-outline" type="button" id="keeper-save">
+                  Add keeper
+                </button>
               </div>
               <p class="field__hint" id="keeper-hint">
                 They sign in to the Mait AI app with this number and an OTP, and see this store's
@@ -333,7 +337,7 @@
 
           <div class="form-actions">
             <button class="btn btn--primary" id="save" type="button">Save store</button>
-            <button class="btn" id="cancel" type="button">Cancel</button>
+            <button class="btn btn--soft" id="cancel" type="button">Cancel</button>
             <button class="btn btn--danger-outline" id="remove" type="button" hidden>Delete</button>
             <p class="field__hint" id="editor-status">—</p>
           </div>
@@ -359,7 +363,7 @@
               <h2 class="editor__name" id="stock-title">Stock</h2>
               <p class="editor__code" id="stock-meta">—</p>
             </div>
-            <button class="btn" id="stock-close" type="button">Close</button>
+            <button class="btn btn--soft" id="stock-close" type="button">Close</button>
           </div>
 
           <div class="stock-editor__grid">
@@ -495,7 +499,7 @@
 
               <div class="form-actions">
                 <button class="btn btn--primary" id="stock-save" type="submit">Add to stock</button>
-                <button class="btn" id="stock-reset" type="button">Clear</button>
+                <button class="btn btn--soft" id="stock-reset" type="button">Clear</button>
                 <p class="field__hint" id="stock-status"></p>
               </div>
             </form>
