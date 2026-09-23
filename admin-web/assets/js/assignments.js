@@ -85,9 +85,13 @@
       '<td>' +
       stateCell(mait) +
       '</td>' +
-      '<td><button class="btn" type="button" data-edit="' +
+      '<td class="table__action"><button class="btn btn--warn" type="button" data-edit="' +
       ui.escapeHtml(mait.sahayak_vendor_code) +
-      '">Edit</button></td>' +
+      '">' +
+      '<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>' +
+      'Edit</button></td>' +
       '</tr>'
     );
   }
