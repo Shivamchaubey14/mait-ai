@@ -214,7 +214,11 @@
       '<path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8" /></svg>Stock</button>' +
       '<button class="btn btn--warn" type="button" data-edit="' +
       store.id +
-      '">Edit</button></div></td>' +
+      '">' +
+      '<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>' +
+      'Edit</button></div></td>' +
       '</tr>'
     );
   }
