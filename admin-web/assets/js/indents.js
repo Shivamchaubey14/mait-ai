@@ -114,24 +114,49 @@
       : '';
   }
 
+  /* Review is yolk, the colour this product gives to anything waiting on somebody — the same
+     yolk the row itself is tinted with while an indent sits unanswered, and the same filled
+     yolk every other table in the portal uses for the action that repeats down it. A white
+     button in every row left the column looking empty until the cursor found the border.
+
+     Issue keeps the green. It is a different thing from Review — the stock actually moves —
+     and the two states are never both offered on one row, so the column reads as one action
+     per indent rather than as green competing with yolk. */
+  function reviewButton(indent) {
+    return (
+      '<button class="btn btn--warn" type="button" data-open="' +
+      indent.id +
+      '">' +
+      '<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7M12 9.5a2.5 2.5 0 1 0 0 5 ' +
+      '2.5 2.5 0 0 0 0-5" /></svg>' +
+      'Review</button>'
+    );
+  }
+
   /** Only the two open states have anything an admin can do to them. */
   function actionCell(indent) {
     if (indent.status === 'requested') {
-      return '<button class="btn" type="button" data-open="' + indent.id + '">Review</button>';
+      return reviewButton(indent);
     }
     if (indent.status === 'approved' && indent.store_name) {
       // The store's keeper issues this one. Once part of it has gone there is nothing left for
       // the office to do; before that, the panel still offers to reject it.
       return indent.qty_issued
         ? '<span class="table__sub">With ' + ui.escapeHtml(indent.store_name) + '</span>'
-        : '<button class="btn" type="button" data-open="' + indent.id + '">Review</button>';
+        : reviewButton(indent);
     }
     if (indent.status === 'approved') {
       // Labelled for the likely action, not the only one — rejecting is still on the panel.
       return (
         '<button class="btn btn--primary" type="button" data-open="' +
         indent.id +
-        '">Issue</button>'
+        '">' +
+        '<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+        'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M4 13v6a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6M12 3v12M8 7l4-4 4 4" /></svg>' +
+        'Issue</button>'
       );
     }
     return '<span class="table__sub">—</span>';
@@ -159,7 +184,7 @@
       '<td>' +
       statusPill(indent) +
       '</td>' +
-      '<td>' +
+      '<td class="table__action">' +
       actionCell(indent) +
       '</td>' +
       '</tr>'
