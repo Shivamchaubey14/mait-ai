@@ -29,6 +29,12 @@
       return;
     }
 
+    // Django's admin lives on the API's host, not the portal's. Behind nginx they are the
+    // same origin and the markup's `/admin/` is already right; on the development path the
+    // portal is static-served on another port, and left alone this link would ask the file
+    // server for a page Django is holding.
+    $('#django-admin').attr('href', api.serverUrl('/admin/'));
+
     const $form = $('#login-form');
     const $submit = $('#submit');
     const $label = $('#submit-label');

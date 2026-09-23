@@ -72,8 +72,11 @@
 }
 
 /* --- right: the form ---------------------------------------------------------------- */
+/* A column, not a row: the panel holds the form and the second door below it, and the
+   default flex direction put them side by side. */
 .auth__panel {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
@@ -149,6 +152,96 @@
   font-size: var(--text-caption);
   color: var(--color-text-muted);
   text-align: center;
+}
+
+/* --- the second door ----------------------------------------------------------------
+   Django's admin, for a superuser. Ink rather than green: the screen already has one
+   primary action and it is the form above. A rule with the reason written into it, because
+   an unexplained second button on a sign-in page is the kind of thing an operator clicks
+   once, lands somewhere they cannot use, and never trusts again. */
+.auth__alt {
+  width: 100%;
+  max-width: 360px;
+  margin-top: var(--space-5);
+}
+
+/* The label sits in the rule rather than above it, so the two lines do not read as two
+   separate things on an already short panel. */
+.auth__alt-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.auth__alt-rule::before,
+.auth__alt-rule::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.auth__alt-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  color: var(--color-surface);
+  background: var(--color-ink);
+  border: 1px solid var(--color-ink);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+}
+
+.auth__alt-link:hover,
+.auth__alt-link:focus-visible {
+  background: var(--ink-700);
+  text-decoration: none;
+}
+
+/* The glyph on a chip, as every other tone-carrying thing in this product wears it. */
+.auth__alt-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: rgb(255 255 255 / 12%);
+}
+
+.auth__alt-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.auth__alt-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.auth__alt-title {
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+/* Ink-200 rather than Ink-300: this line is the warning, so it has to be readable, not
+   decorative. */
+.auth__alt-sub {
+  font-size: var(--text-caption);
+  line-height: var(--leading-normal);
+  color: var(--ink-200);
+}
+
+.auth__alt-go {
+  margin-left: auto;
+  flex: none;
+  color: var(--ink-200);
 }
 
 /* Stack on a narrow screen. The Ink panel keeps its brand and drops the rest, so the form

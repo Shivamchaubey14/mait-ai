@@ -381,8 +381,20 @@ window.MaitAI = window.MaitAI || {};
       if (/^(https?:)?\/\//i.test(path)) {
         return path;
       }
+      return MaitAI.api.serverUrl(path);
+    },
+
+    /**
+     * Resolve a path on the server the API is on, whatever origin that turns out to be.
+     *
+     * Not everything the portal links to is under `/api/v1` — Django's own admin is at
+     * `/admin/` on that same host. A plain `href="/admin/"` is right behind nginx and wrong
+     * on the development path, where the portal is static-served on 8080 and the browser
+     * would ask the file server for a page Django is holding on 8000.
+     */
+    serverUrl: function (path) {
       const origin = BASE_URL.replace(/\/api\/v1\/?$/, '');
-      return origin + (path.charAt(0) === '/' ? '' : '/') + path;
+      return origin + (String(path || '').charAt(0) === '/' ? '' : '/') + (path || '');
     },
 
     login: function (username, password) {

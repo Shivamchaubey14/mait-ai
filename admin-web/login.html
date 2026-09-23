@@ -78,6 +78,43 @@
             Repeated failures are rate limited. Contact Shwetdhara IT if you are locked out.
           </p>
         </form>
+
+        <!--
+          The second door, and deliberately not a second form. Django's admin is a different
+          application on the same host — it edits the database directly, with none of this
+          portal's zone scoping or audit trail in the way — so it is a superuser's tool, not
+          an office admin's. It sits outside the form, in Ink rather than green, with the
+          warning said plainly: one primary action per screen, and this is not it.
+
+          `href` is the root-relative path, which is already correct behind nginx. login.js
+          rewrites it to the API's own origin on the development path, where the portal is
+          static-served on a different port from Django.
+        -->
+        <div class="auth__alt">
+          <p class="auth__alt-rule"><span>Or, for the database itself</span></p>
+
+          <a class="auth__alt-link" id="django-admin" href="/admin/">
+            <span class="auth__alt-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M12 3 4 6v6c0 4.4 3.4 8.2 8 9 4.6-.8 8-4.6 8-9V6zM9.5 12l1.8 1.8 3.5-3.6"
+                />
+              </svg>
+            </span>
+            <span class="auth__alt-text">
+              <span class="auth__alt-title">Superuser login</span>
+              <span class="auth__alt-sub">Django admin — full database access, no zone limits</span>
+            </span>
+            <span class="auth__alt-go" aria-hidden="true">→</span>
+          </a>
+        </div>
       </section>
     </main>
 
