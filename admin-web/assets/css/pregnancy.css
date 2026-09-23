@@ -69,8 +69,10 @@
   width: 200px;
 }
 
+/* 118px, not 100: the button carries a glyph and a gap now, and `table-layout: fixed` will
+   not widen a column to fit its contents — it would have wrapped the word instead. */
 .table--checks .col-round {
-  width: 100px;
+  width: 118px;
 }
 
 /* Fixed layout will not widen a column to fit a long word, so a name with no spaces in it
@@ -95,6 +97,36 @@
   color: var(--color-text);
   background: var(--ink-50);
   border-radius: var(--radius-sm);
+}
+
+/* Past the third, the codes are behind the count beside them. Hidden in CSS rather than left
+   out of the markup, so the row can open in place and the search box can still match a Mait
+   on an MPP that is not currently on screen. `nth-of-type` counts spans, which the toggle —
+   a button — is deliberately not. */
+.mpp-codes__code:nth-of-type(n + 4) {
+  display: none;
+}
+
+.mpp-codes.is-open .mpp-codes__code {
+  display: block;
+}
+
+/* Reads as one of the chips, not as a button parked in a data cell: same height and radius,
+   outlined instead of filled so it is plainly the one that does something. */
+.mpp-codes__more {
+  padding: 1px var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  background: none;
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.mpp-codes__more:hover {
+  background: var(--color-primary-wash);
 }
 
 /* --- the rate column -------------------------------------------------------------------

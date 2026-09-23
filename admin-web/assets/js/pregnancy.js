@@ -74,6 +74,44 @@
 
   /* --- the table ------------------------------------------------------------------------ */
 
+  /**
+   * The MPPs a round spans, three at a time.
+   *
+   * Which villages a round covers is half of why an admin opens this screen, so the codes
+   * cannot simply be cut: a Mait covering seven and a Mait covering four would read
+   * identically. Nor can they all be shown — a Mait on seven made its row four lines tall and
+   * pushed the rate column, the one the screen exists for, off the bottom of the panel.
+   *
+   * So: three chips, and the rest behind their own count. The count is what keeps the two
+   * Maits distinguishable without the row growing, and the button opens the row in place for
+   * anybody who does want the list. Every code is in the DOM either way, which is what lets
+   * the search box keep finding a Mait by an MPP that is not currently on screen.
+   */
+  const MPP_SHOWN = 3;
+
+  function mppCell(holder) {
+    if (!holder.mpp_codes.length) {
+      return '<span class="table__sub">None</span>';
+    }
+    const hidden = holder.mpp_codes.length - MPP_SHOWN;
+    return (
+      '<span class="mpp-codes">' +
+      holder.mpp_codes
+        .map(function (code) {
+          return '<span class="mpp-codes__code">' + ui.escapeHtml(code) + '</span>';
+        })
+        .join('') +
+      (hidden > 0
+        ? '<button class="mpp-codes__more" type="button" data-mpp-more="' +
+          hidden +
+          '" aria-expanded="false">+' +
+          hidden +
+          ' more</button>'
+        : '') +
+      '</span>'
+    );
+  }
+
   function row(holder) {
     // Yellow, not red: an overdue check is waiting work, not blocked work. The Mait can still
     // record events; it is the animal's answer that is late.
@@ -88,19 +126,7 @@
       ui.identity(holder.name, holder.sahayak_vendor_code) +
       '</td>' +
       '<td>' +
-      // Every code, not the first two: a Mait covering four MPPs and a Mait covering two read
-      // identically once the list is silently cut, and which villages a round spans is half of
-      // why an admin opens this screen. Chips rather than a comma list, so the count is
-      // countable at a glance.
-      (holder.mpp_codes.length
-        ? '<span class="mpp-codes">' +
-          holder.mpp_codes
-            .map(function (code) {
-              return '<span class="mpp-codes__code">' + ui.escapeHtml(code) + '</span>';
-            })
-            .join('') +
-          '</span>'
-        : '<span class="table__sub">None</span>') +
+      mppCell(holder) +
       '</td>' +
       '<td class="table__num">' +
       ui.number(holder.open) +
@@ -114,9 +140,14 @@
       '<td>' +
       rateCell(holder) +
       '</td>' +
-      '<td><button class="btn" type="button" data-open="' +
+      '<td><button class="btn btn--warn" type="button" data-open="' +
       holder.mait_id +
-      '">Round</button></td>' +
+      '">' +
+      '<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1M8 6H6a1 1 0 0 0-1 1v12a1 1 0 0 0 ' +
+      '1 1h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2M9 13l2 2 4-4" /></svg>' +
+      'Round</button></td>' +
       '</tr>'
     );
   }
@@ -669,6 +700,16 @@
     // Delegated: the table is rebuilt whenever the search or the sort changes.
     $('#rows').on('click', '[data-open]', function () {
       showRound(Number($(this).data('open')));
+    });
+
+    // Opening one row's codes leaves every other row alone — an admin comparing two Maits is
+    // reading one of them, not switching the whole table into a taller mode.
+    $('#rows').on('click', '[data-mpp-more]', function () {
+      const $button = $(this);
+      const open = $button.closest('.mpp-codes').toggleClass('is-open').hasClass('is-open');
+      $button
+        .attr('aria-expanded', String(open))
+        .text(open ? 'Show fewer' : '+' + $button.data('mpp-more') + ' more');
     });
 
     $('#round-close').on('click', function () {
