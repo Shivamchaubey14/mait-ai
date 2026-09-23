@@ -35,6 +35,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ink tint. **Products** row Edit joins the yolk Edit the other tables already had, and every
   Edit now carries a pencil glyph beside the word.
 
+- **A superuser door on the sign-in page.** Below the form, and deliberately not a second
+  form: an Ink card saying *Superuser login · Django admin — full database access, no zone
+  limits*, which opens Django's own admin. It links to `/admin/` on the API's host, not the
+  portal's — the same origin behind nginx, a different port on the development path, which
+  `api.serverUrl()` now resolves in one place for both this and media.
+
+- **The same row action on every table that has one.** The yolk Edit with its pencil reaches
+  **Maits** and **Assignment**, whose Edit columns were still white. On **Indents** the Action
+  column takes the colour of what it does: *Review* in yolk with an eye — the same yolk the
+  row is tinted while an indent waits — and *Issue* keeping its green, now with an outbound
+  glyph. On **Pregnancy** the *Round* button is filled yolk with a clipboard glyph, and its
+  column widened to 118px because `table-layout: fixed` wraps rather than widens.
+
+- **A Mait's MPPs, three at a time.** Seven MPPs made a row four lines tall and pushed the
+  conception rate — the column the screen exists for — off the bottom of the panel. Three
+  codes are shown and the rest sit behind a dashed *+N more* that opens that row in place and
+  leaves every other row alone. The count is the point: it keeps a Mait covering seven
+  distinguishable from one covering four, which a silent cut would not. Every code stays in
+  the DOM, so the search still finds a Mait by a code that is not on screen.
+
 - **The Zones card names its Action column.** Its last header was a `visually-hidden` span, so
   the column read as unlabelled on screen while screen readers heard it. It is now *Action*,
   right-aligned over the button, as on Stores and Products.
