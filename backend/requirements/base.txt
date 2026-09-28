@@ -5,7 +5,7 @@
 # 5.1+ is required for CheckConstraint(condition=); the old check= spelling is removed in
 # Django 6. Staying on the 5.2 LTS line, which is what the SRS specifies.
 Django==5.2.16
-djangorestframework==3.17.1
+djangorestframework==3.17.2
 django-environ==0.14.0
 django-cors-headers==4.9.0
 django-filter==26.1
