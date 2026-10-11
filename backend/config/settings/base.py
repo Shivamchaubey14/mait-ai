@@ -206,6 +206,10 @@ REST_FRAMEWORK = {
         # is throttled like the SMS it stands in for.
         "super_otp_request": "5/hour",
         "login": "20/hour",
+        # Password reset is an OTP door onto an office account, so it is throttled like the OTP
+        # endpoints rather than like login — tighter, because each request sends an SMS.
+        "password_reset_request": "5/hour",
+        "password_reset_verify": "10/hour",
         "upload": "10/hour",
         "burst": "120/min",
     },
@@ -304,13 +308,38 @@ OTP_MAX_ATTEMPTS = env.int("OTP_MAX_ATTEMPTS", default=3)  # SRS §6.5.1
 # Empty here and populated only in dev. `production.py` refuses to boot if it is non-empty.
 DEV_FIXED_OTP_NUMBERS = env.list("DEV_FIXED_OTP_NUMBERS", default=[])
 DEV_FIXED_OTP_CODE = env("DEV_FIXED_OTP_CODE", default="123456")
+# The fixed code an account signs in with when an admin has turned on `User.fixed_otp_enabled`
+# — the training / SMS-outage switch. Unlike `DEV_FIXED_OTP_*` this is a real, audited
+# production feature, so it is not refused anywhere; it only ever applies to the specific
+# accounts an admin has flipped it on for.
+FIXED_LOGIN_OTP_CODE = env("FIXED_LOGIN_OTP_CODE", default="123456")
 IDEMPOTENCY_TTL_HOURS = env.int("IDEMPOTENCY_TTL_HOURS", default=24)
 LOW_STOCK_THRESHOLD = env.int("LOW_STOCK_THRESHOLD", default=5)
 
 SMS_GATEWAY = {
     "PROVIDER": env("SMS_GATEWAY_PROVIDER", default="console"),
     "API_KEY": env("SMS_GATEWAY_API_KEY", default=""),
-    "SENDER_ID": env("SMS_GATEWAY_SENDER_ID", default="MAITAI"),
+    "SENDER_ID": env("SMS_GATEWAY_SENDER_ID", default="SHWETD"),
+    # smsfortius (Shwetdhara's DLT account). The API key is a secret and is read only from the
+    # environment — never committed. The endpoint, sender id and DLT template ids are
+    # registration metadata, so they carry the dairy's real values as defaults.
+    "BASE_URL": env("SMS_GATEWAY_BASE_URL", default="https://smsfortius.work/V2/apikey.php"),
+    "TEMPLATES": {
+        # A Mait, store keeper or zonal manager signing in — "tell no one".
+        "login": {
+            "template_id": env("SMS_TEMPLATE_LOGIN", default="1777179118415192372"),
+            "text": "Welcome to MAIT A.I. लॉगिन ओटीपी {#var#} है। किसी को न बताएं।Shwetdhara",
+        },
+        # A farmer confirming her identity or authorising a payment: she reads the code to the
+        # Mait. The one template the dairy registered for every farmer-facing step.
+        "verify": {
+            "template_id": env("SMS_TEMPLATE_VERIFY", default="1777179118440743640"),
+            "text": (
+                "Shwetdhara MAIT A.I. में पहचान की पुष्टि के लिए ओटीपी {#var#} है। "
+                "यह otp MAIT को बताएं।"
+            ),
+        },
+    },
 }
 
 # --------------------------------------------------------------------------------------
