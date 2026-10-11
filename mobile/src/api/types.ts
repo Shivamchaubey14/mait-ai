@@ -863,6 +863,37 @@ export interface ZonalHome {
   scope: { scoped: boolean; zones: string[]; plant_codes: string[] | null };
 }
 
+/** A Mait as the assign screen lists them: who they are, and what they already cover. */
+export interface ZonalMait {
+  id: number;
+  name: string;
+  sahayak_vendor_code: string;
+  mobile_no: string;
+  mpp_codes: string[];
+  mpp_count: number;
+}
+
+/** One holder of a collection point, named by the codes a manager reads off a screen. */
+export interface AssignHolder {
+  sahayak_vendor_code: string;
+  name: string;
+}
+
+/**
+ * What a hand-over answered.
+ *
+ * `moved_from` is whoever held the point before, so the screen can say whose round just
+ * changed; it is `null` when the point was unassigned. `already_assigned` means the Mait
+ * asked for already covered it — a tap that changed nothing, which the screen reports as the
+ * state the manager wanted rather than as an error.
+ */
+export interface AssignResult {
+  mait: ZonalMait;
+  mpp: { mpp_code: string; mpp_name: string };
+  moved_from: AssignHolder | null;
+  already_assigned: boolean;
+}
+
 /** One day of the trend, already bucketed by the server so the chart does no arithmetic. */
 export interface ZonalTrendDay {
   date: string;

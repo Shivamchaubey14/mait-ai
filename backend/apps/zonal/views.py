@@ -20,11 +20,16 @@ So this is the third app on the same handset login, beside the Mait's and the st
   (``events.py``). Opened from the Profile tab.
 * ``GET /zonal/events/{id}/`` — one insemination, whole: the portal's AI event detail (W6)
   as one answer rather than three, for a manager standing in the village it happened in.
+* ``GET /zonal/maits/`` — the Maits a manager can assign a collection point to.
+* ``POST /zonal/assignments/`` — hand one MPP to one Mait, by the codes on a screen (W19).
 
-**There is no write path here, and that is deliberate.** Approving and rejecting stay on
-``/indents/{id}/approve|reject/``, where the state machine, the store routing and the audit
-entry already are; the app posts to those. Two endpoints for one decision is two places for
-them to drift, and the one that drifts is always the one nobody tested.
+**The only write here is assignment, and it earns the exception.** Approving and rejecting
+still stay on ``/indents/{id}/approve|reject/`` — that decision's state machine, store routing
+and audit entry already live there, and a second path to it is a second place to drift. But
+assignment has no such home a handset can reach: the portal writes it straight onto the MPP,
+and the one thing it needs beyond that write is the zone scope ``IsZonalManager`` already
+carries. So it lives here, scoped to the point being moved, rather than opening the whole of
+the portal's user-admin surface to a field login.
 
 **Everything is scoped twice.** ``IsZonalManager`` settles who may call these at all, and
 every queryset is narrowed by ``scope_of`` — the same zone scope every "who" screen in the
@@ -37,13 +42,18 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from django.db import transaction
+
+from apps.core.models import AuditLog
 from apps.core.permissions import IsZonalManager
 from apps.core.scoping import scope_note, scope_of
+from apps.core.services import record_audit
 from apps.indents.models import IndentRequest
-from apps.masterdata.models import Mait
+from apps.masterdata.models import MPP, Mait
 from apps.stores.models import Store
 from apps.stores.services import availability
 
@@ -51,7 +61,20 @@ from . import dashboard as zone_dashboard
 from . import events as zone_events
 from . import history as zone_history
 from . import stock as zone_stock
-from .serializers import ApprovalSerializer, held_by_maits
+from .serializers import ApprovalSerializer, AssignMppSerializer, held_by_maits
+
+
+def _mait_row(mait) -> dict:
+    """A Mait as the assign screen draws them: who they are, and what they already cover."""
+    codes = sorted(mpp.mpp_code for mpp in mait.mpps.all())
+    return {
+        "id": mait.id,
+        "name": mait.name,
+        "sahayak_vendor_code": mait.sahayak_vendor_code,
+        "mobile_no": mait.mobile_no,
+        "mpp_codes": codes,
+        "mpp_count": len(codes),
+    }
 
 
 def _int(params, key, default, *, low=1, high=10_000) -> int:
@@ -354,5 +377,150 @@ def zonal_event(request, event_id: int):
         {
             **AIEventDetailSerializer(event, context={"request": request}).data,
             "timeline": AIEventTimelineSerializer(trail, many=True).data,
+        }
+    )
+
+
+@extend_schema(
+    tags=["zonal"],
+    summary="The Maits a manager can assign to",
+    parameters=[
+        OpenApiParameter(
+            name="q",
+            description=(
+                "Search by name or Sahayak vendor code. Without it the list is the Maits "
+                "already covering a collection point in this zone; with it the search runs "
+                "across every active Mait, so a manager can hand a point to one who has none "
+                "here yet."
+            ),
+            required=False,
+            type=str,
+        )
+    ],
+    responses={200: dict},
+)
+@api_view(["GET"])
+@permission_classes([IsZonalManager])
+def zonal_maits(request):
+    """
+    Who a manager can give a collection point to.
+
+    Default is the roster of this zone — the Maits a manager already works with, which is who
+    a reassignment moves a point *between*. A search widens to every active Mait by name or
+    code, because the other half of the job is handing a point to a Mait who covers nothing
+    here yet, and that Mait is by definition not in the zone list until they do.
+    """
+    codes = scope_of(request)
+    query = (request.query_params.get("q") or "").strip()
+
+    maits = Mait.objects.filter(is_active=True).prefetch_related("mpps")
+    if query:
+        maits = maits.filter(Q(name__icontains=query) | Q(sahayak_vendor_code__icontains=query))
+    elif codes is not None:
+        maits = maits.filter(mpps__plant_code__in=codes).distinct()
+
+    maits = maits.order_by("name")[:50]
+    return Response(
+        {
+            "results": [_mait_row(mait) for mait in maits],
+            "scope": scope_note(request),
+        }
+    )
+
+
+@extend_schema(
+    tags=["zonal"],
+    summary="Hand a collection point to a Mait",
+    description=(
+        "Assign one MPP, by its code, to one Mait, by their Sahayak vendor code — the "
+        "phone-side of the portal's Assignment screen (W19), one point at a time rather than "
+        "a workbook.\n\n"
+        "**Scoped to the MPP, not the Mait.** A manager may only move a collection point that "
+        "reports into their own zone; a code outside it is a `404`, because whether a point "
+        "exists in the next zone along is not this account's to learn. The Mait on the other "
+        "end may be any active Mait — a point is a thing of the zone, a Mait is not.\n\n"
+        "The move is absolute: the point leaves whoever held it before and its members go "
+        "with it (SRS §6.2.2–6.2.3). The previous holder is named back in `moved_from` so the "
+        "screen can say whose round just changed."
+    ),
+    request=AssignMppSerializer,
+    responses={200: dict},
+)
+@api_view(["POST"])
+@permission_classes([IsZonalManager])
+def zonal_assign(request):
+    serializer = AssignMppSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    vendor_code = serializer.validated_data["sahayak_vendor_code"]
+    mpp_code = serializer.validated_data["mpp_code"]
+
+    codes = scope_of(request)
+
+    try:
+        mait = Mait.objects.get(sahayak_vendor_code__iexact=vendor_code, is_active=True)
+    except Mait.DoesNotExist:
+        return Response(
+            {"sahayak_vendor_code": ["No active Mait with this vendor code."]},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    # The MPP is looked up inside the manager's scope. A code outside their zone is reported
+    # as "not found" rather than "forbidden": the same answer a code that is pure fiction
+    # gets, so neither one tells a manager a point exists in a zone that is not theirs.
+    mpps = MPP.objects.select_related("mait")
+    if codes is not None:
+        mpps = mpps.filter(plant_code__in=codes)
+    try:
+        mpp = mpps.get(mpp_code__iexact=mpp_code)
+    except MPP.DoesNotExist:
+        return Response(
+            {"mpp_code": ["No such MPP in your zone."]},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    previous = mpp.mait
+    if previous and previous.id == mait.id:
+        # Already theirs. Nothing to write, and nothing to undo if the manager taps twice —
+        # the honest answer is the state they were asking for.
+        return Response(
+            {
+                "mait": _mait_row(mait),
+                "mpp": {"mpp_code": mpp.mpp_code, "mpp_name": mpp.mpp_name},
+                "moved_from": None,
+                "already_assigned": True,
+            }
+        )
+
+    with transaction.atomic():
+        mpp.mait = mait
+        mpp.save(update_fields=["mait", "updated_at"])
+
+    record_audit(
+        action=AuditLog.Action.UPDATE,
+        entity_type="mpp",
+        entity_id=mpp.id,
+        request=request,
+        meta={
+            "mpp_code": mpp.mpp_code,
+            "to": {"sahayak_vendor_code": mait.sahayak_vendor_code, "name": mait.name},
+            "from": (
+                {"sahayak_vendor_code": previous.sahayak_vendor_code, "name": previous.name}
+                if previous
+                else None
+            ),
+        },
+    )
+
+    mait.refresh_from_db()
+    return Response(
+        {
+            "mait": _mait_row(mait),
+            "mpp": {"mpp_code": mpp.mpp_code, "mpp_name": mpp.mpp_name},
+            "moved_from": (
+                {"sahayak_vendor_code": previous.sahayak_vendor_code, "name": previous.name}
+                if previous
+                else None
+            ),
+            "already_assigned": False,
         }
     )

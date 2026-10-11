@@ -24,6 +24,27 @@ from apps.stores.serializers import ItemNames
 from apps.stores.services import item_of
 
 
+class AssignMppSerializer(serializers.Serializer):
+    """
+    One collection point handed to one Mait, by the codes a manager reads off a screen.
+
+    The MPP (TR) code and the Sahayak vendor code are what a manager has in front of them — a
+    row in a book, a label on a crate — so the assignment is made by those rather than by
+    database ids nobody out at a depot can see. Both are trimmed of the stray spaces a phone
+    keyboard adds; the view matches them case-insensitively, so casing a manager did not mean
+    is not the difference between a hit and a baffling "no such code".
+    """
+
+    sahayak_vendor_code = serializers.CharField(max_length=20)
+    mpp_code = serializers.CharField(max_length=15)
+
+    def validate_sahayak_vendor_code(self, value: str) -> str:
+        return value.strip()
+
+    def validate_mpp_code(self, value: str) -> str:
+        return value.strip()
+
+
 class ApprovalSerializer(serializers.ModelSerializer):
     """
     One indent waiting on this manager, and everything the decision turns on.

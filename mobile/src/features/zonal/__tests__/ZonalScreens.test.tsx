@@ -19,6 +19,7 @@ import type {
   ZonalEvent,
   ZonalHistory,
   ZonalHome,
+  ZonalMait,
   ZoneStock,
 } from '@api/types';
 import { isoDate } from '@/components/dateRange';
@@ -27,6 +28,7 @@ import { colors, ink, yolk } from '@theme/tokens';
 
 import AllEventsScreen from '../AllEventsScreen';
 import ApprovalScreen from '../ApprovalScreen';
+import AssignMppScreen from '../AssignMppScreen';
 import DashboardScreen from '../DashboardScreen';
 import EventScreen from '../EventScreen';
 import HistoryScreen from '../HistoryScreen';
@@ -1426,7 +1428,7 @@ describe('HistoryScreen', () => {
 describe('ZonalProfileScreen', () => {
   it('gives the zone, the patch and the language a colour and a figure each', async () => {
     mockApi();
-    renderWithStore(<ZonalProfileScreen onOpenEvents={jest.fn()} />);
+    renderWithStore(<ZonalProfileScreen onOpenEvents={jest.fn()} onOpenAssign={jest.fn()} />);
 
     await waitFor(() => expect(screen.getByTestId('zonal-profile-maits')).toHaveTextContent(/11/));
     expect(screen.getByTestId('zonal-profile-maits')).toHaveTextContent(/Maits/);
@@ -1439,5 +1441,112 @@ describe('ZonalProfileScreen', () => {
       backgroundColor: colors.secondaryWash,
     });
     expect(screen.getByTestId('zonal-profile-language')).toHaveStyle({ backgroundColor: ink[50] });
+  });
+
+  it('opens the assign screen from its own door', () => {
+    mockApi();
+    const onOpenAssign = jest.fn();
+    renderWithStore(<ZonalProfileScreen onOpenEvents={jest.fn()} onOpenAssign={onOpenAssign} />);
+
+    fireEvent.press(screen.getByTestId('zonal-profile-assign'));
+    expect(onOpenAssign).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AssignMppScreen', () => {
+  const MAITS: ZonalMait[] = [
+    {
+      id: 4,
+      name: 'Sunil Kumar',
+      sahayak_vendor_code: '5500000054',
+      mobile_no: '9811100045',
+      mpp_codes: ['001302'],
+      mpp_count: 1,
+    },
+    {
+      id: 5,
+      name: 'Devi Prasad',
+      sahayak_vendor_code: '5500000099',
+      mobile_no: '',
+      mpp_codes: [],
+      mpp_count: 0,
+    },
+  ];
+
+  it('lists the zone, assigns a typed code, and names who it moved from', async () => {
+    const assigned = jest.fn();
+    mockApi((input: Request) => {
+      if (input.url.includes('/zonal/maits/')) {
+        return jsonResponse({ results: MAITS });
+      }
+      if (input.url.includes('/zonal/assignments/')) {
+        assigned(input);
+        return jsonResponse({
+          mait: { ...MAITS[1], mpp_codes: ['009001'], mpp_count: 1 },
+          mpp: { mpp_code: '009001', mpp_name: 'NANDGAON' },
+          moved_from: { sahayak_vendor_code: '5500000054', name: 'Sunil Kumar' },
+          already_assigned: false,
+        });
+      }
+      return undefined;
+    });
+
+    renderWithStore(<AssignMppScreen />);
+
+    // The zone roster lands; pick the Mait with nothing yet.
+    await waitFor(() => expect(screen.getByTestId('assign-mait-5500000099')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('assign-mait-5500000099'));
+
+    fireEvent.changeText(screen.getByTestId('assign-mpp-input'), '009001');
+    fireEvent.press(screen.getByTestId('assign-submit'));
+
+    await waitFor(() => expect(screen.getByTestId('assign-result')).toBeTruthy());
+    expect(screen.getByTestId('assign-result')).toHaveTextContent(/009001/);
+    expect(screen.getByTestId('assign-result')).toHaveTextContent(/Sunil Kumar/);
+    expect(assigned).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the server’s refusal when the code is outside the zone', async () => {
+    mockApi((input: Request) => {
+      if (input.url.includes('/zonal/maits/')) {
+        return jsonResponse({ results: MAITS });
+      }
+      if (input.url.includes('/zonal/assignments/')) {
+        return jsonResponse({ mpp_code: ['No such MPP in your zone.'] }, 404);
+      }
+      return undefined;
+    });
+
+    renderWithStore(<AssignMppScreen />);
+
+    await waitFor(() => expect(screen.getByTestId('assign-mait-5500000054')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('assign-mait-5500000054'));
+    fireEvent.changeText(screen.getByTestId('assign-mpp-input'), '999999');
+    fireEvent.press(screen.getByTestId('assign-submit'));
+
+    await waitFor(() => expect(screen.getByTestId('assign-error')).toBeTruthy());
+    expect(screen.getByTestId('assign-error')).toHaveTextContent(/No such MPP in your zone/);
+  });
+
+  it('refuses to send an empty code', async () => {
+    const assigned = jest.fn();
+    mockApi((input: Request) => {
+      if (input.url.includes('/zonal/maits/')) {
+        return jsonResponse({ results: MAITS });
+      }
+      if (input.url.includes('/zonal/assignments/')) {
+        assigned(input);
+        return jsonResponse({});
+      }
+      return undefined;
+    });
+
+    renderWithStore(<AssignMppScreen />);
+
+    await waitFor(() => expect(screen.getByTestId('assign-mait-5500000054')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('assign-mait-5500000054'));
+    fireEvent.press(screen.getByTestId('assign-submit'));
+
+    expect(assigned).not.toHaveBeenCalled();
   });
 });

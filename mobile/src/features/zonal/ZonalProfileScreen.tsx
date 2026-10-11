@@ -103,9 +103,12 @@ function Figure({
 
 export default function ZonalProfileScreen({
   onOpenEvents,
+  onOpenAssign,
 }: {
   /** The list of every insemination in the zone, by date. */
   onOpenEvents: () => void;
+  /** The screen that hands a collection point to one of this zone's Maits. */
+  onOpenAssign: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
@@ -163,6 +166,24 @@ export default function ZonalProfileScreen({
             <Text style={styles.doorText}>{t('zonal.allEventsBody')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.info} />
+        </Pressable>
+
+        {/* The one write a manager has on a handset: giving a collection point to a Mait by its
+            code. A door of its own in the manager's colour, beside the one to the events. */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpenAssign}
+          style={({ pressed }) => [styles.assignDoor, pressed && styles.doorPressed]}
+          testID="zonal-profile-assign"
+        >
+          <View style={styles.assignChip}>
+            <Ionicons name="git-branch" size={20} color={colors.surface} />
+          </View>
+          <View style={styles.rowBody}>
+            <Text style={styles.assignTitle}>{t('zonal.assignTitle')}</Text>
+            <Text style={styles.doorText}>{t('zonal.assignSubtitle')}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
         </Pressable>
 
         {/* The zone beside its heading, where the language switch sits on its own card — one
@@ -312,4 +333,25 @@ const styles = StyleSheet.create({
   },
   doorTitle: { ...typography.h3, color: colors.info },
   doorText: { ...typography.caption, color: colors.ink, marginTop: 2 },
+  assignDoor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    minHeight: MIN_TOUCH_TARGET + spacing[4],
+    padding: spacing[4],
+    marginBottom: spacing[3],
+    backgroundColor: colors.primaryWash,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  assignChip: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  assignTitle: { ...typography.h3, color: colors.primaryDark },
 });

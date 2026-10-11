@@ -38,6 +38,8 @@ APPROVALS = "/api/v1/zonal/approvals/"
 STOCK = "/api/v1/zonal/stock/"
 HISTORY = "/api/v1/zonal/history/"
 EVENTS = "/api/v1/zonal/events/"
+MAITS = "/api/v1/zonal/maits/"
+ASSIGN = "/api/v1/zonal/assignments/"
 
 
 def auth(user) -> APIClient:
@@ -559,3 +561,110 @@ class TestHistory:
         # move as somebody filters.
         assert approved["summary"]["approved"] == 1
         assert approved["summary"]["rejected"] == 1
+
+
+class TestAssignment:
+    """
+    Handing a collection point to a Mait from the handset (W19, one point at a time).
+
+    The one write a manager has here, and so the one most worth pinning down: it moves farmers
+    and the whole scope of a Mait's app, it must never reach past the manager's own zone, and
+    tapping it twice must not become a bug.
+    """
+
+    def test_a_manager_moves_an_mpp_to_another_mait_in_their_zone(self, network):
+        manager = office_account("zonal-ayodhya", zone=network["AYODHYA"]["zone"])
+        mpp = network["AYODHYA"]["mait"].mpps.get()
+        target = MaitFactory(name="New Ayodhya Mait")
+
+        response = auth(manager).post(
+            ASSIGN,
+            {"sahayak_vendor_code": target.sahayak_vendor_code, "mpp_code": mpp.mpp_code},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["already_assigned"] is False
+        assert mpp.mpp_code in body["mait"]["mpp_codes"]
+        assert body["moved_from"]["name"] == "Ayodhya Mait"
+
+        mpp.refresh_from_db()
+        assert mpp.mait_id == target.id
+
+    def test_the_code_is_matched_case_insensitively(self, network):
+        manager = office_account("zonal-ayodhya", zone=network["AYODHYA"]["zone"])
+        mpp = network["AYODHYA"]["mait"].mpps.get()
+        target = MaitFactory(name="New Ayodhya Mait")
+
+        response = auth(manager).post(
+            ASSIGN,
+            {
+                "sahayak_vendor_code": target.sahayak_vendor_code.lower(),
+                "mpp_code": f"  {mpp.mpp_code.lower()} ",
+            },
+        )
+        assert response.status_code == 200
+        mpp.refresh_from_db()
+        assert mpp.mait_id == target.id
+
+    def test_a_manager_cannot_reach_a_point_in_another_zone(self, network):
+        manager = office_account("zonal-ayodhya", zone=network["AYODHYA"]["zone"])
+        other = network["BAHRAICH"]["mait"].mpps.get()
+        target = MaitFactory(name="New Ayodhya Mait")
+
+        response = auth(manager).post(
+            ASSIGN,
+            {"sahayak_vendor_code": target.sahayak_vendor_code, "mpp_code": other.mpp_code},
+        )
+        # A 404, not a 403: the manager never learns the point exists elsewhere, and nothing
+        # moved.
+        assert response.status_code == 404
+        other.refresh_from_db()
+        assert other.mait_id == network["BAHRAICH"]["mait"].id
+
+    def test_an_unknown_mait_is_refused(self, network):
+        manager = office_account("zonal-ayodhya", zone=network["AYODHYA"]["zone"])
+        mpp = network["AYODHYA"]["mait"].mpps.get()
+
+        response = auth(manager).post(
+            ASSIGN, {"sahayak_vendor_code": "NOBODY", "mpp_code": mpp.mpp_code}
+        )
+        assert response.status_code == 404
+        mpp.refresh_from_db()
+        assert mpp.mait_id == network["AYODHYA"]["mait"].id
+
+    def test_assigning_to_the_current_holder_is_a_quiet_noop(self, network):
+        manager = office_account("zonal-ayodhya", zone=network["AYODHYA"]["zone"])
+        holder = network["AYODHYA"]["mait"]
+        mpp = holder.mpps.get()
+
+        response = auth(manager).post(
+            ASSIGN,
+            {"sahayak_vendor_code": holder.sahayak_vendor_code, "mpp_code": mpp.mpp_code},
+        )
+        assert response.status_code == 200
+        assert response.json()["already_assigned"] is True
+
+    def test_the_maits_list_is_the_zone_until_a_search_widens_it(self, network):
+        manager = office_account("zonal-ayodhya", zone=network["AYODHYA"]["zone"])
+        elsewhere = MaitFactory(name="Faraway Singh")
+
+        zone_list = auth(manager).get(MAITS).json()
+        names = {row["name"] for row in zone_list["results"]}
+        assert "Ayodhya Mait" in names
+        assert "Faraway Singh" not in names
+
+        found = auth(manager).get(MAITS, {"q": "Faraway"}).json()
+        assert {row["sahayak_vendor_code"] for row in found["results"]} == {
+            elsewhere.sahayak_vendor_code
+        }
+
+    def test_a_head_office_admin_is_refused(self, network):
+        head = office_account("head-office", mobile_no="9811100099")
+        mpp = network["AYODHYA"]["mait"].mpps.get()
+        target = MaitFactory(name="New Ayodhya Mait")
+
+        response = auth(head).post(
+            ASSIGN,
+            {"sahayak_vendor_code": target.sahayak_vendor_code, "mpp_code": mpp.mpp_code},
+        )
+        assert response.status_code == 403

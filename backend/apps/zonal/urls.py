@@ -10,11 +10,13 @@ from django.urls import path
 
 from .views import (
     zonal_approvals,
+    zonal_assign,
     zonal_dashboard,
     zonal_event,
     zonal_events,
     zonal_history,
     zonal_home,
+    zonal_maits,
     zonal_stock,
 )
 
@@ -28,4 +30,6 @@ urlpatterns = [
     path("zonal/history/", zonal_history, name="zonal-history"),
     path("zonal/events/", zonal_events, name="zonal-events"),
     path("zonal/events/<int:event_id>/", zonal_event, name="zonal-event"),
+    path("zonal/maits/", zonal_maits, name="zonal-maits"),
+    path("zonal/assignments/", zonal_assign, name="zonal-assign"),
 ]

@@ -46,6 +46,8 @@ import type {
   ZonalEvent,
   ZonalEventPage,
   ZonalHome,
+  ZonalMait,
+  AssignResult,
   ZoneStock,
   Paginated,
   StrawValidation,
@@ -745,6 +747,39 @@ export const maitaiApi = api.injectEndpoints({
       invalidatesTags: ['Zonal', 'Indent'],
     }),
 
+    /**
+     * The Maits a manager can hand a collection point to.
+     *
+     * No search is the zone's own roster — who a reassignment moves a point between. A search
+     * widens to every active Mait by name or vendor code, for the other half of the job:
+     * giving a point to a Mait who covers nothing here yet, and so is not on the zone list.
+     */
+    listZonalMaits: builder.query<{ results: ZonalMait[] }, { search?: string } | void>({
+      query: args => ({
+        url: '/zonal/maits/',
+        params: args?.search ? { q: args.search } : {},
+      }),
+      providesTags: ['Zonal', 'MPP'],
+    }),
+
+    /**
+     * Hand one MPP, by its code, to one Mait, by their vendor code (W19, one point at a time).
+     *
+     * Invalidates `Zonal` so every figure that counts Maits and points redraws, and `MPP` so
+     * the Mait's own app picks up its new coverage the next time it asks.
+     */
+    assignZonalMpp: builder.mutation<
+      AssignResult,
+      { sahayakVendorCode: string; mppCode: string }
+    >({
+      query: ({ sahayakVendorCode, mppCode }) => ({
+        url: '/zonal/assignments/',
+        method: 'POST',
+        body: { sahayak_vendor_code: sahayakVendorCode, mpp_code: mppCode },
+      }),
+      invalidatesTags: ['Zonal', 'MPP'],
+    }),
+
     getAiEvent: builder.query<AIEvent, number>({
       query: id => `/ai-events/${id}/`,
       providesTags: ['AIEvent'],
@@ -822,4 +857,7 @@ export const {
   useListZonalEventsQuery,
   useApproveIndentMutation,
   useRejectIndentMutation,
+  useListZonalMaitsQuery,
+  useLazyListZonalMaitsQuery,
+  useAssignZonalMppMutation,
 } = maitaiApi;

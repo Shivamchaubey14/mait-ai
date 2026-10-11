@@ -27,6 +27,7 @@ import type { ZonalTab } from '@/components/BottomNav';
 import { RouteTransitionHost, useRouteTransition } from '@/components/routeTransition';
 import AllEventsScreen from '@/features/zonal/AllEventsScreen';
 import ApprovalScreen from '@/features/zonal/ApprovalScreen';
+import AssignMppScreen from '@/features/zonal/AssignMppScreen';
 import DashboardScreen from '@/features/zonal/DashboardScreen';
 import EventScreen from '@/features/zonal/EventScreen';
 import HistoryScreen from '@/features/zonal/HistoryScreen';
@@ -66,6 +67,8 @@ export default function ZonalNavigator(): React.JSX.Element {
    * so back from the record lands on the list, and back again on Profile.
    */
   const [allEvents, setAllEvents] = useState(false);
+  /** Over *Profile* too: the assign screen, where a point is handed to a Mait by its code. */
+  const [assigning, setAssigning] = useState(false);
 
   // The badge on Indents is live like every screen, and the whole app is marked stale the
   // moment it comes back to the front — see `features/zonal/live`.
@@ -97,12 +100,16 @@ export default function ZonalNavigator(): React.JSX.Element {
       transition.back(() => setAllEvents(false));
       return true;
     }
+    if (assigning) {
+      transition.back(() => setAssigning(false));
+      return true;
+    }
     if (tab !== 'zonalHome') {
       transition.back(() => setTab('zonalHome'));
       return true;
     }
     return false;
-  }, [allEvents, event, open, tab, transition]);
+  }, [allEvents, assigning, event, open, tab, transition]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', goBack);
@@ -126,6 +133,8 @@ export default function ZonalNavigator(): React.JSX.Element {
         onOpen={id => transition.go('zonalEvent', () => setEvent(id))}
       />
     );
+  } else if (assigning) {
+    screen = <AssignMppScreen />;
   } else if (open) {
     screen = (
       <ApprovalScreen
@@ -155,6 +164,7 @@ export default function ZonalNavigator(): React.JSX.Element {
     screen = (
       <ZonalProfileScreen
         onOpenEvents={() => transition.go('zonalEvents', () => setAllEvents(true))}
+        onOpenAssign={() => transition.go('zonalAssign', () => setAssigning(true))}
       />
     );
   } else {
@@ -176,13 +186,14 @@ export default function ZonalNavigator(): React.JSX.Element {
         pending={home.data?.waiting ?? 0}
         active={pendingTab ?? tab}
         onChange={next => {
-          if (next === tab && !open && event === null && !allEvents) {
+          if (next === tab && !open && event === null && !allEvents && !assigning) {
             return;
           }
           transition.go(TAB_ROUTE[next], () => {
             setOpen(null);
             setEvent(null);
             setAllEvents(false);
+            setAssigning(false);
             setTab(next);
           });
         }}

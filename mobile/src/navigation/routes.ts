@@ -51,6 +51,7 @@ export type RouteKey =
   | 'zonalHistory'
   | 'zonalEvent'
   | 'zonalEvents'
+  | 'zonalAssign'
   | 'zonalProfile';
 
 export interface RouteMeta {
@@ -118,6 +119,11 @@ export const ROUTES: Record<RouteKey, RouteMeta> = {
     title: 'route.zonalEvents',
     context: 'route.zonalEventsContext',
   },
+  zonalAssign: {
+    icon: 'git-branch',
+    title: 'route.zonalAssign',
+    context: 'route.zonalAssignContext',
+  },
   zonalProfile: { icon: 'person', title: 'nav.settings', context: 'route.zonalProfileContext' },
 };
 
@@ -167,6 +173,8 @@ const ANNOUNCED: readonly RouteKey[] = [
   'zonalEvent',
   // The list of every event, opened from Profile.
   'zonalEvents',
+  // The assign screen, opened from Profile like the events list.
+  'zonalAssign',
 ];
 
 export function announces(key: RouteKey): boolean {
