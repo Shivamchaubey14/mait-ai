@@ -57,8 +57,32 @@ def generate_code(mobile_no: str = "") -> str:
         )
         return settings.DEV_FIXED_OTP_CODE
 
+    # The admin's per-account training / SMS-outage switch. Checked the same place and the same
+    # way as the development fixed code — at generation, so verification, expiry, the attempt
+    # limit and the audit log behave exactly as for a real OTP, and there is no bypass branch in
+    # the path that checks a submitted code. Scoped by the account's own number, so only the
+    # Mait (or keeper / zonal manager) an admin flipped it on for gets the fixed code; a farmer's
+    # verification OTP, which goes to the farmer's number, is untouched.
+    if mobile_no and _fixed_login_enabled(mobile_no):
+        logger.warning(
+            "Issuing the admin-enabled fixed login code for this account",
+            extra={"mobile_no": mobile_no},
+        )
+        return settings.FIXED_LOGIN_OTP_CODE
+
     length = settings.OTP_LENGTH
     return "".join(secrets.choice("0123456789") for _ in range(length))
+
+
+def _fixed_login_enabled(mobile_no: str) -> bool:
+    """Whether an admin has turned the fixed login code on for the account at this number."""
+    # Imported here rather than at module scope: accounts reaches into payments, and naming the
+    # model at the top would risk closing the import loop at startup.
+    from apps.accounts.models import User
+
+    return User.objects.filter(
+        mobile_no=mobile_no, fixed_otp_enabled=True, is_active=True
+    ).exists()
 
 
 @transaction.atomic
@@ -314,7 +338,57 @@ def send_sms(*, mobile_no: str, code: str, purpose: str) -> str | None:
         print(f"[SMS to {mobile_no}] Mait AI OTP for {purpose}: {code}", flush=True)
         return "console"
 
+    if provider == "smsfortius":
+        return _send_via_smsfortius(mobile_no=mobile_no, code=code, purpose=purpose)
+
     raise NotImplementedError(
         f"SMS provider '{provider}' is not implemented yet. Configure the vendor confirmed "
         "in SRS §18.2 item 3 before Phase 4 (docs/ROADMAP.md)."
     )
+
+
+def _smsfortius_template(purpose: str) -> dict:
+    """
+    The DLT template for this step. The dairy registered two: one for sign-in, and one the
+    farmer reads back for every identity check and payment confirmation — so anything that is
+    not a login takes the farmer-facing template.
+    """
+    templates = settings.SMS_GATEWAY["TEMPLATES"]
+    return templates["login"] if purpose == OTPLog.Purpose.LOGIN else templates["verify"]
+
+
+def _send_via_smsfortius(*, mobile_no: str, code: str, purpose: str) -> str:
+    """
+    Send one OTP through smsfortius (Shwetdhara's DLT account).
+
+    A GET to the vendor's `apikey.php` with the sender id, the registered template id and the
+    message that template produces with its one variable filled. The message must still match
+    the DLT-registered text exactly, which is why the text lives in configuration beside the id
+    rather than being assembled here. Any transport or HTTP error propagates so `dispatch_otp`
+    retries with backoff; the office's own code (Super OTP) is the fallback when it keeps
+    failing, so a down gateway never strands a sign-in or a payment.
+    """
+    import requests
+
+    cfg = settings.SMS_GATEWAY
+    template = _smsfortius_template(purpose)
+    params = {
+        "apikey": cfg["API_KEY"],
+        "senderid": cfg["SENDER_ID"],
+        "templateid": template["template_id"],
+        "number": mobile_no,
+        "message": template["text"].replace("{#var#}", code),
+    }
+    response = requests.get(cfg["BASE_URL"], params=params, timeout=10)
+    response.raise_for_status()
+    # The vendor answers with a short status/message-id body. Kept as the gateway message id for
+    # the audit trail; never the code, which is not in the response and must not be logged.
+    #
+    # Truncated to the column's own width, not a guessed 255. smsfortius answers with a status
+    # line that runs past 64 characters (and, on a bad request, with a longer page still), and a
+    # value wider than the column raises a 1406 DataError when the row is saved — which, because
+    # the send runs inside issue_otp's transaction, 500s the request and rolls the whole OTP back,
+    # so a code the gateway actually sent can never be verified. The failure read as "the gateway
+    # is down" when it was the record of success that would not fit.
+    max_len = OTPLog._meta.get_field("gateway_message_id").max_length
+    return (response.text or "").strip()[:max_len] or "sent"
