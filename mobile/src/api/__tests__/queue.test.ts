@@ -129,6 +129,69 @@ describe('draining', () => {
     expect((await readQueue())[0]?.lastError).toContain('400');
   });
 
+  it('refreshes an expired token and resends, rather than refusing the record', async () => {
+    // The exact shape of the bug this exists for: a Mait drains with a token that aged out
+    // while they were offline, the server answers 401 ("Authentication required"), and the
+    // record is whole — it just needs a fresh token. One refresh, one resend, nothing refused.
+    (global.fetch as jest.Mock).mockImplementationOnce(() => status(401)).mockImplementation(ok);
+    const reauth = jest.fn().mockResolvedValue('fresh-token');
+    await enqueue('completeEvent', 'uuid-1', { eventId: 1 });
+
+    const result = await drainQueue(TOKEN, undefined, reauth);
+
+    expect(reauth).toHaveBeenCalledTimes(1);
+    expect(result.sent).toBe(1);
+    expect(result.remaining).toBe(0);
+    // The resend carried the refreshed token, not the stale one.
+    expect((global.fetch as jest.Mock).mock.calls[1][1].headers.Authorization).toBe(
+      'Bearer fresh-token',
+    );
+  });
+
+  it('refreshes once and sends the rest of the backlog with the new token', async () => {
+    // Two captures, one refresh. The second must not trigger a second refresh — that would be
+    // a refresh loop — and must still go out with the token the first one obtained.
+    (global.fetch as jest.Mock).mockImplementationOnce(() => status(401)).mockImplementation(ok);
+    const reauth = jest.fn().mockResolvedValue('fresh-token');
+    await enqueue('completeEvent', 'uuid-1', { eventId: 1 });
+    await enqueue('completeEvent', 'uuid-2', { eventId: 2 });
+
+    const result = await drainQueue(TOKEN, undefined, reauth);
+
+    expect(reauth).toHaveBeenCalledTimes(1);
+    expect(result.sent).toBe(2);
+    expect(result.remaining).toBe(0);
+  });
+
+  it('leaves the queue intact and refuses nothing when the session is over', async () => {
+    // The refresh token is spent too, so the drain can only stop — but it must stop without
+    // marking a day's work refused. The record stays queued, failed-flag clear, for the next
+    // sign-in to drain.
+    (global.fetch as jest.Mock).mockImplementation(() => status(401));
+    const reauth = jest.fn().mockResolvedValue(null);
+    await enqueue('completeEvent', 'uuid-1', { eventId: 1 });
+
+    const result = await drainQueue(TOKEN, undefined, reauth);
+
+    expect(result.sent).toBe(0);
+    expect(result.remaining).toBe(1);
+    expect(result.failed).toBe(0);
+    expect((await readQueue())[0]?.failed).toBeFalsy();
+  });
+
+  it('never treats a 401 as a permanent refusal, even with no way to refresh', async () => {
+    // Without a reauth hook the drain still must not mark the record "Not accepted" — a token
+    // the drain cannot refresh here will be refreshed by an online call and drained next time.
+    (global.fetch as jest.Mock).mockImplementation(() => status(401));
+    await enqueue('completeEvent', 'uuid-1', { eventId: 1 });
+
+    const result = await drainQueue(TOKEN);
+
+    expect(result.failed).toBe(0);
+    expect(result.remaining).toBe(1);
+    expect((await readQueue())[0]?.failed).toBeFalsy();
+  });
+
   it('does not send anything without a session', async () => {
     await enqueue('completeEvent', 'uuid-1', { eventId: 1 });
 

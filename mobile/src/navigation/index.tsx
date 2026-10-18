@@ -73,6 +73,7 @@ import UnfinishedScreen from '@/features/aiFlow/UnfinishedScreen';
 import { resumePoint, whatIsMissing } from '@/features/aiFlow/resume';
 import OwnerTypeScreen, { OwnerType } from '@/features/aiFlow/OwnerTypeScreen';
 import { useLiveScope } from '@/features/auth/liveScope';
+import { loggedOut, tokensRefreshed } from '@/features/auth/authSlice';
 import AiEventDetailScreen from '@/features/history/AiEventDetailScreen';
 import AiEventsScreen from '@/features/history/AiEventsScreen';
 import SyncQueueScreen, { toCaptures } from '@/features/history/SyncQueueScreen';
@@ -89,7 +90,7 @@ import PdRecordScreen from '@/features/pregnancy/PdRecordScreen';
 import RequestStockScreen from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { RETRY_TICK_MS } from '@/config/env';
+import { apiBaseUrl, RETRY_TICK_MS } from '@/config/env';
 import { colors } from '@theme/tokens';
 
 /** Where the capture flow has got to. `null` means it is not running. */
@@ -152,6 +153,7 @@ export default function RootNavigator(): React.JSX.Element {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const accessToken = useAppSelector(state => state.auth.accessToken);
+  const refreshToken = useAppSelector(state => state.auth.refreshToken);
 
   const [tab, setTab] = useState<Tab>('home');
   const [step, setStepDirect] = useState<CaptureStep | null>(null);
@@ -456,13 +458,53 @@ export default function RootNavigator(): React.JSX.Element {
     dispatch(maitaiApi.util.invalidateTags(['Animal', 'Member']));
   }, [dispatch]);
 
+  /**
+   * Refresh the drain's access token when the server rejects it as expired.
+   *
+   * The queue drains with a token minted at sign-in, and those expire every ~15 minutes (SRS
+   * §16). A Mait who captures through a dead patch and rides back into signal an hour later is
+   * draining with a token that aged out long ago — every job meets a 401, which the backend
+   * labels "Authentication required". That is not the record being refused; it is the token.
+   * So the drain is handed this, calls it once on a 401, and sends again with what it returns —
+   * the same single refresh-and-retry the online reads already do (`baseQueryWithReauth`).
+   *
+   * Returns the fresh access token, or null when the session itself is over (the refresh token
+   * has expired or been revoked), at which point the Mait is signed out and the queue waits for
+   * the next sign-in. A refresh that simply could not reach the server returns null too but
+   * leaves the session alone — a dead network is not a dead session.
+   */
+  const reauth = useCallback(async (): Promise<string | null> => {
+    if (!refreshToken) {
+      dispatch(loggedOut());
+      return null;
+    }
+    try {
+      const response = await fetch(`${apiBaseUrl()}/auth/refresh/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+      if (!response.ok) {
+        dispatch(loggedOut());
+        return null;
+      }
+      const tokens = (await response.json()) as { access: string; refresh?: string };
+      dispatch(tokensRefreshed(tokens));
+      return tokens.access ?? null;
+    } catch {
+      // The refresh request itself never reached the server — a network failure, not a spent
+      // token. The Mait stays signed in and the queue waits for signal, exactly as before.
+      return null;
+    }
+  }, [refreshToken, dispatch]);
+
   const sync = useCallback(async () => {
     setDraining(true);
     // Both directions on one gesture. Every pull-to-refresh in the app calls this, so a Mait
     // pulling any screen also re-reads who they are and what the office has changed — which
     // is the one thing they cannot see from the handset.
     const scopeRead = refreshScope();
-    const result = await drainQueue(accessToken, setProgress);
+    const result = await drainQueue(accessToken, setProgress, reauth);
     await scopeRead;
     setPending(result.remaining);
     setQueueJobs(await readQueue());
@@ -476,7 +518,7 @@ export default function RootNavigator(): React.JSX.Element {
       // lands.
       eventsChanged();
     }
-  }, [accessToken, eventsChanged, refreshScope]);
+  }, [accessToken, eventsChanged, refreshScope, reauth]);
 
   /** Read the queue for the screen that lists it, without sending anything. */
   const refreshQueue = useCallback(async () => {

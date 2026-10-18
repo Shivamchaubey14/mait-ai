@@ -85,10 +85,27 @@ async function refusalDetail(response: Response, fallback: string): Promise<stri
   }
 }
 
-/** A 4xx other than 409 means the request is wrong and will be wrong every time. */
+/**
+ * A 4xx that means the request is wrong and will be wrong every time.
+ *
+ * 409 is an idempotency-key conflict and 429 is backpressure — both transient. **401 is left
+ * out too**, and that is the one that matters here: it is an expired access token (SRS §16),
+ * not the server refusing the record, and the drain handles it separately by refreshing the
+ * token and sending again. Marking it permanent is how a whole round came back as a red
+ * "Not accepted — Authentication required" when nothing was lost and nothing was refused.
+ */
 function isPermanent(status: number): boolean {
-  return status >= 400 && status < 500 && status !== 409 && status !== 429;
+  return status >= 400 && status < 500 && status !== 401 && status !== 409 && status !== 429;
 }
+
+/**
+ * Refresh the access token when the server rejects the current one as expired.
+ *
+ * Returns the new access token, or null when the session itself is over (the refresh token has
+ * expired too) or there is no way to refresh. The drain calls it at most once per run, the way
+ * `baseQueryWithReauth` does for live reads.
+ */
+export type Reauth = () => Promise<string | null>;
 
 /**
  * The event this job is for, or null while its capture has no id yet.
@@ -210,13 +227,19 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
     if (nonMemberId === null) {
       throw new AwaitingEventId();
     }
+    // The field names the server reads are `front` and `back` (NonMemberAadhaarSerializer), not
+    // `aadhar_front`/`aadhar_back`. Sent under the wrong names the serializer saw neither face,
+    // refused the whole request, and the card never reached the record — so the back office
+    // opened every non-member to "Aadhaar card missing" however faithfully the Mait had
+    // photographed it. The live RTK path (endpoints.ts) already uses these names; this is the
+    // queue drain, which is the path the registration flow actually takes, catching up to it.
     const card = new FormData();
-    card.append('aadhar_front', {
+    card.append('front', {
       uri: job.payload.front as string,
       name: 'aadhaar-front.jpg',
       type: 'image/jpeg',
     } as unknown as Blob);
-    card.append('aadhar_back', {
+    card.append('back', {
       uri: job.payload.back as string,
       name: 'aadhaar-back.jpg',
       type: 'image/jpeg',
@@ -405,6 +428,12 @@ export async function drainQueue(
    * stops. Optional: the queue drains on reconnect with no screen watching.
    */
   onProgress?: (progress: SyncProgress) => void,
+  /**
+   * How to refresh an expired access token mid-drain. Optional: a drain with no way to refresh
+   * simply stops at the first 401 and leaves the queue for the next sign-in, rather than
+   * refusing anything.
+   */
+  reauth?: Reauth,
 ): Promise<SyncResult> {
   if (!accessToken) {
     const jobs = await readQueue();
@@ -420,6 +449,30 @@ export async function drainQueue(
   const jobs = await readQueue();
   const now = Date.now();
   let sent = 0;
+
+  /**
+   * The token the rest of this drain sends with, and whether it has already been refreshed.
+   *
+   * An access token minted at sign-in expires every ~15 minutes (SRS §16), so a drain that
+   * began with a good one routinely meets a 401 partway through a backlog — most of all for a
+   * Mait coming back into signal after an hour in a dead patch. The first 401 refreshes the
+   * token once and every job after it reuses the new one; a second refresh in the same drain
+   * would be a refresh loop, so it is refused and the drain stops instead.
+   */
+  let token = accessToken;
+  let reauthTried = false;
+  const refreshToken = async (): Promise<boolean> => {
+    if (reauthTried || !reauth) {
+      return false;
+    }
+    reauthTried = true;
+    const next = await reauth();
+    if (next) {
+      token = next;
+      return true;
+    }
+    return false;
+  };
 
   const isStale = (job: QueuedJob) => stale.some(expired => expired.id === job.id);
 
@@ -461,7 +514,24 @@ export async function drainQueue(
     });
 
     try {
-      const response = await send(job, accessToken);
+      let response = await send(job, token);
+
+      // An expired access token, not a refusal. Refresh once and send again — exactly what the
+      // online path does (baseQueryWithReauth). The idempotency key makes the resend safe: if
+      // the first attempt had in fact landed before the token aged out, the server replays it
+      // rather than recording a second insemination.
+      if (response.status === 401 && (await refreshToken())) {
+        response = await send(job, token);
+      }
+
+      // Still unauthenticated: the refresh token is spent too, or there was no way to refresh.
+      // Every remaining job would meet the same wall, so the drain stops here — and crucially
+      // leaves the queue exactly as it is, nothing marked refused, nothing dropped. The record
+      // is whole on the handset and the next sign-in drains it. This is the case the screenshot
+      // came from; it must never again become a red "Not accepted".
+      if (response.status === 401) {
+        break;
+      }
 
       if (response.ok) {
         await rememberCreated(job, response);

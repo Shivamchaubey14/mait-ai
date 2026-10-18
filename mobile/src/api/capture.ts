@@ -39,6 +39,36 @@ import type {
   ProblemDetails,
 } from './types';
 
+/**
+ * How long a write waits on the network before it is handed to the queue instead (SRS §6.9).
+ *
+ * A weak signal is not no signal, and that is the case a Mait is in all day: the request will
+ * land eventually, and the old behaviour was to make them watch it try. Past this the write goes
+ * on the queue and the flow moves on at once — the record is safe either way, and `sync.ts`
+ * sends it in the background the moment the link can carry it, with the same idempotency key, so
+ * a request that in fact reached the server is recognised as a replay rather than repeated.
+ *
+ * The photo gets a longer cap than the small JSON writes: it is image bytes rather than a line
+ * of it, and a cap short enough to feel instant for a create would background every photo on a
+ * link that could have carried it in a second or two.
+ */
+const WRITE_CAP_MS = 4_000;
+const PHOTO_UPLOAD_CAP_MS = 6_000;
+
+/**
+ * `fetch`, but it gives up after `ms` and lets the caller queue instead.
+ *
+ * The abort surfaces as a rejection, which every write here already treats as "no network, go
+ * to the queue" — a slow link and a dead one reach the same safe place, just sooner. The real
+ * send from `sync.ts` carries no such cap: once it is the background's problem it can take as
+ * long as the village makes it take.
+ */
+function cappedFetch(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 export interface CaptureOutcome {
   /** True when the server took it now. */
   sent: boolean;
@@ -84,6 +114,21 @@ function problemDetail(body: string | null): { problem?: string; problemBody?: P
   } catch {
     return {};
   }
+}
+
+/**
+ * A 4xx the server *means*, as opposed to one about the token or the rate.
+ *
+ * 401 is an expired access token (SRS §16), not the server refusing the record — so the write
+ * is queued and the drain sends it again once the token has been refreshed (see `sync.ts`),
+ * exactly as a dropped connection would be. Surfacing it instead flashed the backend's
+ * "Authentication required" at a Mait mid-capture and, worse, left the record nowhere. 429 is
+ * backpressure, also transient. Everything else in the 4xx range is the server having
+ * considered the request and said no, which no retry will change, so it is shown rather than
+ * queued.
+ */
+function isRefusal(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 401 && status !== 429;
 }
 
 async function refusal(
@@ -137,6 +182,11 @@ function putPhoto(
     request.open('PATCH', url);
     request.setRequestHeader('Authorization', `Bearer ${accessToken}`);
     request.setRequestHeader('Idempotency-Key', clientUuid);
+
+    // A weak link must not hold the Mait at the last screen of the capture. Past the cap the
+    // upload is abandoned and `ontimeout` rejects, which `attachPhoto` already treats as "no
+    // network" and queues — the photo then goes out in the background with no further waiting.
+    request.timeout = PHOTO_UPLOAD_CAP_MS;
 
     // Absent on an implementation that does not support it, which is not a reason to fail the
     // send — it is a reason to say the size is unknown and carry on.
@@ -255,6 +305,10 @@ export async function registerNonMember(
   }
 
   try {
+    // Deliberately *not* capped, unlike the capture's own writes. Registering a new farmer runs
+    // its identity check live "wherever there is any signal at all, before the money" (see this
+    // function's docstring): a weak link should wait for that answer, not race a timer onto the
+    // provisional path where the office may later refuse her after cash has changed hands.
     const response = await fetch(`${apiBaseUrl()}/non-members/`, {
       method: 'POST',
       headers: {
@@ -276,7 +330,7 @@ export async function registerNonMember(
       return { sent: true, queued: false, nonMember, remaining: drained.remaining };
     }
 
-    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+    if (isRefusal(response.status)) {
       return {
         sent: false,
         queued: false,
@@ -359,15 +413,19 @@ export async function registerAnimal(
   }
 
   try {
-    const response = await fetch(`${apiBaseUrl()}/animals/`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        ...idempotencyHeaders(clientUuid),
+    const response = await cappedFetch(
+      `${apiBaseUrl()}/animals/`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          ...idempotencyHeaders(clientUuid),
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
+      WRITE_CAP_MS,
+    );
 
     if (response.ok) {
       const animal = (await response.json()) as Animal;
@@ -384,7 +442,7 @@ export async function registerAnimal(
       return { sent: true, queued: false, animal, remaining: await pendingCount() };
     }
 
-    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+    if (isRefusal(response.status)) {
       return {
         sent: false,
         queued: false,
@@ -440,15 +498,19 @@ export async function createEvent(
   }
 
   try {
-    const response = await fetch(`${apiBaseUrl()}/ai-events/`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        ...idempotencyHeaders(draft.client_uuid),
+    const response = await cappedFetch(
+      `${apiBaseUrl()}/ai-events/`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          ...idempotencyHeaders(draft.client_uuid),
+        },
+        body: JSON.stringify(draft),
       },
-      body: JSON.stringify(draft),
-    });
+      WRITE_CAP_MS,
+    );
 
     if (response.ok) {
       const event = (await response.json()) as AIEvent;
@@ -461,7 +523,7 @@ export async function createEvent(
 
     // As on the photo and the completion: a 4xx is the server having considered this and said
     // no. It will say no again, so it is surfaced rather than queued.
-    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+    if (isRefusal(response.status)) {
       return {
         sent: false,
         queued: false,
@@ -567,7 +629,7 @@ export async function attachPhoto(
 
     // 4xx means the server refuses this photo and will refuse it again. Queuing it would
     // retry forever; it is surfaced instead.
-    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+    if (isRefusal(response.status)) {
       return {
         sent: false,
         queued: false,
@@ -619,15 +681,19 @@ export async function completeEvent(
   }
 
   try {
-    const response = await fetch(`${apiBaseUrl()}/ai-events/${eventId}/complete/`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Idempotency-Key': clientUuid,
-        'Content-Type': 'application/json',
+    const response = await cappedFetch(
+      `${apiBaseUrl()}/ai-events/${eventId}/complete/`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Idempotency-Key': clientUuid,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
+      WRITE_CAP_MS,
+    );
 
     if (response.ok) {
       const result = await drainQueue(accessToken);
@@ -637,7 +703,7 @@ export async function completeEvent(
     // As on the photo: a 4xx is a refusal, not a dropped connection, and it will be refused
     // again on every retry. Queuing one put the capture on the waiting list for good — it sat
     // there claiming to need a network it already had, and no amount of signal could clear it.
-    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+    if (isRefusal(response.status)) {
       return {
         sent: false,
         queued: false,
