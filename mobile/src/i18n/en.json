@@ -234,6 +234,61 @@
       "fieldStore": "Depot",
       "fieldApprovedBy": "Approved by",
       "fieldNote": "Note"
+    },
+    "payment": {
+      "error": "Could not load the payment report. Try again.",
+      "none": "No rows for this month.",
+      "inProgress": "In progress",
+      "settled": "Settled",
+      "maits": "Maits",
+      "aiTotal": "AI done",
+      "netTotal": "Net payable",
+      "ai": "{{count}} AI",
+      "overdrawn": "Over-issued",
+      "maskedNote": "Bank details are masked here. The workbook with full details stays on the portal."
+    },
+    "leaderboard": {
+      "error": "Could not load the leaderboard. Try again.",
+      "none": "No work recorded in this period.",
+      "ai": "AI"
+    },
+    "pregnancy": {
+      "error": "Could not load pregnancy data. Try again.",
+      "none": "Nothing to show.",
+      "overdue": "Overdue",
+      "open": "Open",
+      "recorded": "Recorded",
+      "conception": "Conception",
+      "overdueN": "{{count}} overdue",
+      "openN": "{{count}} open",
+      "conceptionN": "{{pct}} conception"
+    },
+    "exceptions": {
+      "error": "Could not load exceptions. Try again.",
+      "none": "Nothing to show.",
+      "clear": "All clear.",
+      "more": "+{{count}} more",
+      "pending_payments": "Payments pending",
+      "failed_otps": "Failed OTPs",
+      "low_stock": "Low stock",
+      "stale_indents": "Stale indents",
+      "overdue_checks": "Overdue checks",
+      "declined_checks": "Declined checks"
+    },
+    "rates": {
+      "error": "Could not load rates. Try again.",
+      "scheme": "Payout scheme",
+      "commission": "AI commission",
+      "perAi": "per AI",
+      "retainer": "Monthly retainer",
+      "minAi": "at least {{count}} AI",
+      "noRetainer": "No retainer",
+      "straw": "Straw",
+      "perPiece": "per straw",
+      "materials": "MATERIAL RATES",
+      "noMaterials": "No material rates set.",
+      "perUnit": "per {{unit}}",
+      "unpriced": "No rate"
     }
   },
   "aiFlow": {

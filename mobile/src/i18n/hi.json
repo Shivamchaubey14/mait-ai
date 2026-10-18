@@ -234,6 +234,61 @@
       "fieldStore": "डिपो",
       "fieldApprovedBy": "स्वीकृत किया",
       "fieldNote": "टिप्पणी"
+    },
+    "payment": {
+      "error": "भुगतान रिपोर्ट लोड नहीं हो सकी। दोबारा कोशिश करें।",
+      "none": "इस महीने के लिए कोई पंक्ति नहीं।",
+      "inProgress": "जारी",
+      "settled": "निपटाया गया",
+      "maits": "मैत",
+      "aiTotal": "कुल AI",
+      "netTotal": "शुद्ध देय",
+      "ai": "{{count}} AI",
+      "overdrawn": "अधिक जारी",
+      "maskedNote": "यहाँ बैंक विवरण छिपे हैं। पूरे विवरण वाली वर्कबुक पोर्टल पर ही रहती है।"
+    },
+    "leaderboard": {
+      "error": "लीडरबोर्ड लोड नहीं हो सका। दोबारा कोशिश करें।",
+      "none": "इस अवधि में कोई काम दर्ज नहीं।",
+      "ai": "AI"
+    },
+    "pregnancy": {
+      "error": "गर्भावस्था डेटा लोड नहीं हो सका। दोबारा कोशिश करें।",
+      "none": "दिखाने के लिए कुछ नहीं।",
+      "overdue": "बकाया",
+      "open": "खुले",
+      "recorded": "दर्ज",
+      "conception": "गर्भाधान",
+      "overdueN": "{{count}} बकाया",
+      "openN": "{{count}} खुले",
+      "conceptionN": "{{pct}} गर्भाधान"
+    },
+    "exceptions": {
+      "error": "अपवाद लोड नहीं हो सके। दोबारा कोशिश करें।",
+      "none": "दिखाने के लिए कुछ नहीं।",
+      "clear": "सब ठीक है।",
+      "more": "+{{count}} और",
+      "pending_payments": "लंबित भुगतान",
+      "failed_otps": "विफल OTP",
+      "low_stock": "कम स्टॉक",
+      "stale_indents": "पुराने इंडेंट",
+      "overdue_checks": "बकाया जाँच",
+      "declined_checks": "अस्वीकृत जाँच"
+    },
+    "rates": {
+      "error": "दरें लोड नहीं हो सकीं। दोबारा कोशिश करें।",
+      "scheme": "भुगतान योजना",
+      "commission": "AI कमीशन",
+      "perAi": "प्रति AI",
+      "retainer": "मासिक रिटेनर",
+      "minAi": "कम से कम {{count}} AI",
+      "noRetainer": "कोई रिटेनर नहीं",
+      "straw": "स्ट्रॉ",
+      "perPiece": "प्रति स्ट्रॉ",
+      "materials": "सामग्री दरें",
+      "noMaterials": "कोई सामग्री दर निर्धारित नहीं।",
+      "perUnit": "प्रति {{unit}}",
+      "unpriced": "कोई दर नहीं"
     }
   },
   "aiFlow": {

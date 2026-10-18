@@ -19,6 +19,11 @@ import type {
   InventoryOversight,
   ProductAdmin,
   StoreAdmin,
+  MaitPaymentReport,
+  Leaderboard,
+  PregnancyOversight,
+  DashboardSummary,
+  PayoutScheme,
   AIEventDraft,
   AIEventTimelineEntry,
   AnimalTypeCode,
@@ -935,6 +940,37 @@ export const maitaiApi = api.injectEndpoints({
       }),
       providesTags: ['Indent'],
     }),
+
+    /** The Mait payment preview for a month (GET /reports/mait-payment/), bank details masked. */
+    adminMaitPayment: builder.query<MaitPaymentReport, { month?: string } | void>({
+      query: args => ({
+        url: '/reports/mait-payment/',
+        params: args?.month ? { month: args.month } : {},
+      }),
+      providesTags: ['Payment'],
+    }),
+
+    /** The Mait leaderboard (GET /dashboard/mait-performance/), ranked by inseminations. */
+    adminLeaderboard: builder.query<Leaderboard, void>({
+      query: () => '/dashboard/mait-performance/',
+    }),
+
+    /** Pregnancy oversight across Maits (GET /admin/pregnancy/). */
+    adminPregnancyOversight: builder.query<PregnancyOversight, void>({
+      query: () => '/admin/pregnancy/',
+      providesTags: ['Pregnancy'],
+    }),
+
+    /** The exception queues, read off the dashboard summary (GET /dashboard/summary/). */
+    adminDashboardSummary: builder.query<DashboardSummary, void>({
+      query: () => '/dashboard/summary/',
+    }),
+
+    /** The payout scheme — commission, retainer and straw rate (GET /reports/mait-payment/scheme/). */
+    adminPayoutScheme: builder.query<PayoutScheme, void>({
+      query: () => '/reports/mait-payment/scheme/',
+      providesTags: ['Payment'],
+    }),
   }),
 });
 
@@ -1013,4 +1049,9 @@ export const {
   useAdminListProductsQuery,
   useAdminListStoresQuery,
   useAdminListIndentsQuery,
+  useAdminMaitPaymentQuery,
+  useAdminLeaderboardQuery,
+  useAdminPregnancyOversightQuery,
+  useAdminDashboardSummaryQuery,
+  useAdminPayoutSchemeQuery,
 } = maitaiApi;

@@ -138,6 +138,127 @@ export interface ProductAdmin {
   is_active: boolean;
 }
 
+/** The payout scheme (GET /reports/mait-payment/scheme/). */
+export interface PayoutScheme {
+  commission_per_ai: string;
+  monthly_fixed_amount: string;
+  fixed_min_ai: number;
+  straw_rate?: string;
+}
+
+/** One Mait's line on the payout preview (masked). */
+export interface MaitPaymentRow {
+  serial: number;
+  mait_id: number;
+  mcc_name: string;
+  mait_name: string;
+  vendor_code: string;
+  ai_performed: number;
+  commission: string;
+  fixed_amount: string;
+  gross: string;
+  deduction: string;
+  after_deduction: string;
+  tagging: string;
+  net_payable: string;
+  bank_account_no: string;
+  ifsc_code: string;
+  pan_no: string;
+  has_bank_details: boolean;
+  overdrawn: boolean;
+}
+
+export interface MaitPaymentReport {
+  month: string;
+  in_progress: boolean;
+  scheme: { commission_per_ai: string; monthly_fixed_amount: string; fixed_min_ai: number };
+  rates: Record<string, string>;
+  rows: MaitPaymentRow[];
+  totals: {
+    maits: number;
+    ai_performed: number;
+    gross: string;
+    deduction: string;
+    net_payable: string;
+    overdrawn: number;
+  };
+}
+
+/** One Mait on the leaderboard (GET /dashboard/mait-performance/). */
+export interface LeaderboardRow {
+  mait_id: number;
+  name: string;
+  sahayak_vendor_code: string;
+  ai_count: number;
+  collected: number;
+  cod: number;
+  online: number;
+}
+
+export interface Leaderboard {
+  date_from: string;
+  date_to: string;
+  count: number;
+  totals: { ai_count: number; amount_collected: string };
+  results: LeaderboardRow[];
+}
+
+/** One Mait's pregnancy standing (GET /admin/pregnancy/). */
+export interface PregnancyRow {
+  mait_id: number;
+  name: string;
+  sahayak_vendor_code: string;
+  open: number;
+  overdue: number;
+  due_this_week: number;
+  recorded: number;
+  pregnant: number;
+  not_pregnant: number;
+  unsure: number;
+  declined: number;
+}
+
+export interface PregnancyOversight {
+  summary: {
+    maits: number;
+    open: number;
+    overdue: number;
+    due_this_week: number;
+    recorded: number;
+    pregnant: number;
+    not_pregnant: number;
+    unsure: number;
+    declined: number;
+  };
+  results: PregnancyRow[];
+}
+
+/** One sampled row inside an exception queue. */
+export interface ExceptionRow {
+  label: string;
+  meta: string;
+  severity: string;
+}
+
+export interface ExceptionGroup {
+  count: number;
+  rows: ExceptionRow[];
+  more: number;
+}
+
+export interface DashboardExceptions {
+  pending_payments: ExceptionGroup;
+  failed_otps: ExceptionGroup;
+  low_stock: ExceptionGroup;
+  stale_indents?: ExceptionGroup;
+  overdue_checks?: ExceptionGroup;
+  declined_checks?: ExceptionGroup;
+}
+
+export interface DashboardSummary {
+  exceptions: DashboardExceptions;
+}
+
 /** A store/depot for the admin roster (GET /admin/stores/). */
 export interface StoreAdmin {
   id: number;

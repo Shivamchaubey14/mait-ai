@@ -23,13 +23,18 @@ import { useTranslation } from 'react-i18next';
 import { useLogoutMutation } from '@api/endpoints';
 import AdminDrawer from '@/features/admin/AdminDrawer';
 import AdminEventsScreen from '@/features/admin/AdminEventsScreen';
+import AdminExceptionsScreen from '@/features/admin/AdminExceptionsScreen';
 import AdminIndentsScreen from '@/features/admin/AdminIndentsScreen';
 import AdminInventoryScreen from '@/features/admin/AdminInventoryScreen';
+import AdminLeaderboardScreen from '@/features/admin/AdminLeaderboardScreen';
+import AdminMaitPaymentScreen from '@/features/admin/AdminMaitPaymentScreen';
 import AdminMaitsScreen from '@/features/admin/AdminMaitsScreen';
 import AdminMembersScreen from '@/features/admin/AdminMembersScreen';
 import AdminMppsScreen from '@/features/admin/AdminMppsScreen';
 import AdminNonMembersScreen from '@/features/admin/AdminNonMembersScreen';
+import AdminPregnancyScreen from '@/features/admin/AdminPregnancyScreen';
 import AdminProductsScreen from '@/features/admin/AdminProductsScreen';
+import AdminRatesScreen from '@/features/admin/AdminRatesScreen';
 import AdminStoresScreen from '@/features/admin/AdminStoresScreen';
 import { ADMIN_HOME, sectionFor } from '@/features/admin/sections';
 import { loggedOut } from '@/features/auth/authSlice';
@@ -114,6 +119,16 @@ export default function AdminNavigator(): React.JSX.Element {
     screen = <AdminIndentsScreen />;
   } else if (section === 'stores') {
     screen = <AdminStoresScreen />;
+  } else if (section === 'rates') {
+    screen = <AdminRatesScreen />;
+  } else if (section === 'leaderboard') {
+    screen = <AdminLeaderboardScreen />;
+  } else if (section === 'pregnancy') {
+    screen = <AdminPregnancyScreen />;
+  } else if (section === 'exceptions') {
+    screen = <AdminExceptionsScreen />;
+  } else if (section === 'mait-payment') {
+    screen = <AdminMaitPaymentScreen />;
   } else {
     screen = (
       <View style={styles.soonBody} testID="admin-section-soon">

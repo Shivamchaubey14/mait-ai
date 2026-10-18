@@ -15,13 +15,18 @@ import type { UserRole } from '@/features/auth/authSlice';
 import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
 
 import AdminEventsScreen from '../AdminEventsScreen';
+import AdminExceptionsScreen from '../AdminExceptionsScreen';
 import AdminIndentsScreen from '../AdminIndentsScreen';
 import AdminInventoryScreen from '../AdminInventoryScreen';
+import AdminLeaderboardScreen from '../AdminLeaderboardScreen';
+import AdminMaitPaymentScreen from '../AdminMaitPaymentScreen';
 import AdminMaitsScreen from '../AdminMaitsScreen';
 import AdminMembersScreen from '../AdminMembersScreen';
 import AdminMppsScreen from '../AdminMppsScreen';
 import AdminNonMembersScreen from '../AdminNonMembersScreen';
+import AdminPregnancyScreen from '../AdminPregnancyScreen';
 import AdminProductsScreen from '../AdminProductsScreen';
+import AdminRatesScreen from '../AdminRatesScreen';
 import AdminStoresScreen from '../AdminStoresScreen';
 
 const EVENT = {
@@ -360,5 +365,117 @@ describe('AdminIndentsScreen', () => {
     fireEvent.press(await screen.findByTestId('admin-indent-55'));
     await waitFor(() => expect(screen.getByTestId('admin-indent-approve')).toBeTruthy());
     expect(screen.getByTestId('admin-indent-reject')).toBeTruthy();
+  });
+});
+
+describe('AdminMaitPaymentScreen', () => {
+  it('previews the month with net payable and masked totals', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        month: '2026-10',
+        in_progress: true,
+        scheme: { commission_per_ai: '220', monthly_fixed_amount: '2500', fixed_min_ai: 25 },
+        rates: {},
+        rows: [
+          {
+            serial: 1,
+            mait_id: 1,
+            mcc_name: 'COLONELGANJ',
+            mait_name: 'Randheer Singh',
+            vendor_code: 'V1',
+            ai_performed: 67,
+            commission: '14740.00',
+            fixed_amount: '2500.00',
+            gross: '17240.00',
+            deduction: '2685.00',
+            after_deduction: '14555.00',
+            tagging: '0.00',
+            net_payable: '14555.00',
+            bank_account_no: 'XXXX3035',
+            ifsc_code: 'SBIN0012497',
+            pan_no: 'XXXXX6713H',
+            has_bank_details: true,
+            overdrawn: false,
+          },
+        ],
+        totals: { maits: 1, ai_performed: 67, gross: '17240.00', deduction: '2685.00', net_payable: '14555.00', overdrawn: 0 },
+      }),
+    );
+    renderWithStore(<AdminMaitPaymentScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-payment-V1')).toBeTruthy());
+    expect(screen.getByText('Randheer Singh')).toBeTruthy();
+  });
+});
+
+describe('AdminLeaderboardScreen', () => {
+  it('ranks Maits by inseminations', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        date_from: '2026-10-01',
+        date_to: '2026-10-31',
+        count: 1,
+        totals: { ai_count: 67, amount_collected: '0' },
+        results: [{ mait_id: 1, name: 'Randheer Singh', sahayak_vendor_code: 'V1', ai_count: 67, collected: 0, cod: 0, online: 0 }],
+      }),
+    );
+    renderWithStore(<AdminLeaderboardScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-leader-V1')).toBeTruthy());
+    expect(screen.getByText('Randheer Singh')).toBeTruthy();
+  });
+});
+
+describe('AdminPregnancyScreen', () => {
+  it('leads with overdue and lists Maits', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        summary: { maits: 1, open: 4, overdue: 2, due_this_week: 1, recorded: 10, pregnant: 6, not_pregnant: 3, unsure: 1, declined: 0 },
+        results: [{ mait_id: 1, name: 'Sunil Kumar', sahayak_vendor_code: 'V1', open: 4, overdue: 2, due_this_week: 1, recorded: 10, pregnant: 6, not_pregnant: 3, unsure: 1, declined: 0 }],
+      }),
+    );
+    renderWithStore(<AdminPregnancyScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-pregnancy-V1')).toBeTruthy());
+    expect(screen.getByText('Sunil Kumar')).toBeTruthy();
+  });
+});
+
+describe('AdminExceptionsScreen', () => {
+  it('shows each queue with its count', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        exceptions: {
+          pending_payments: { count: 3, rows: [{ label: 'Barsana · ₹250', meta: '2 days old', severity: 'warning' }], more: 2 },
+          failed_otps: { count: 0, rows: [], more: 0 },
+          low_stock: { count: 0, rows: [], more: 0 },
+        },
+      }),
+    );
+    renderWithStore(<AdminExceptionsScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByText('Payments pending')).toBeTruthy());
+    expect(screen.getByText('Barsana · ₹250')).toBeTruthy();
+  });
+});
+
+describe('AdminRatesScreen', () => {
+  it('shows the scheme and the material rates', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async (input: Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('/scheme/')) {
+        return jsonResponse({ commission_per_ai: '220', monthly_fixed_amount: '2500', fixed_min_ai: 25, straw_rate: '35' });
+      }
+      return jsonResponse({
+        count: 1,
+        next: null,
+        previous: null,
+        results: [{ id: 1, code: 'LN2', name: 'Liquid nitrogen', category: 'consumable', unit: 'litre', rate: '20.00', display_order: 1, is_active: true }],
+      });
+    });
+    renderWithStore(<AdminRatesScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-rates-scheme')).toBeTruthy());
+    expect(screen.getByTestId('admin-rate-LN2')).toBeTruthy();
   });
 });
