@@ -24,6 +24,9 @@ import type {
   PregnancyOversight,
   DashboardSummary,
   PayoutScheme,
+  AuditEntry,
+  AdminUser,
+  Zone,
   AIEventDraft,
   AIEventTimelineEntry,
   AnimalTypeCode,
@@ -971,6 +974,34 @@ export const maitaiApi = api.injectEndpoints({
       query: () => '/reports/mait-payment/scheme/',
       providesTags: ['Payment'],
     }),
+
+    /** The audit trail (GET /admin/audit/), newest first, filterable by one search box. */
+    adminAuditTrail: builder.query<
+      { count: number; results: AuditEntry[] },
+      { search?: string; offset?: number } | void
+    >({
+      query: args => ({
+        url: '/admin/audit/',
+        params: {
+          limit: 25,
+          ...(args?.search ? { search: args.search } : {}),
+          ...(args?.offset ? { offset: args.offset } : {}),
+        },
+      }),
+    }),
+
+    /** Portal accounts (GET /admin/users/), searchable by name, username or mobile. */
+    adminListUsers: builder.query<Paginated<AdminUser>, { search?: string } | void>({
+      query: args => ({
+        url: '/admin/users/',
+        params: { limit: 50, ...(args?.search ? { search: args.search } : {}) },
+      }),
+    }),
+
+    /** Zones (GET /admin/zones/) — each with how much of the network it holds. */
+    adminListZones: builder.query<Paginated<Zone>, void>({
+      query: () => ({ url: '/admin/zones/', params: { limit: 100 } }),
+    }),
   }),
 });
 
@@ -1054,4 +1085,7 @@ export const {
   useAdminPregnancyOversightQuery,
   useAdminDashboardSummaryQuery,
   useAdminPayoutSchemeQuery,
+  useAdminAuditTrailQuery,
+  useAdminListUsersQuery,
+  useAdminListZonesQuery,
 } = maitaiApi;

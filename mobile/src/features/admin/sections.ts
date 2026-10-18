@@ -25,7 +25,7 @@ export interface AdminSection {
 }
 
 export const ADMIN_SECTIONS: AdminSection[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: 'speedometer' },
+  { key: 'dashboard', label: 'Dashboard', icon: 'speedometer', built: true },
   { key: 'uploads', label: 'SAP upload', icon: 'cloud-upload' },
   { key: 'ai-events', label: 'AI events', icon: 'document-text', built: true },
   { key: 'maits', label: 'Maits', icon: 'people', built: true },
@@ -43,10 +43,10 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'exceptions', label: 'Exceptions', icon: 'alert-circle', built: true },
   { key: 'reports', label: 'Reports', icon: 'bar-chart' },
   { key: 'mait-payment', label: 'Mait payment', icon: 'wallet', built: true },
-  { key: 'users', label: 'Users & roles', icon: 'shield-checkmark' },
+  { key: 'users', label: 'Users & roles', icon: 'shield-checkmark', built: true },
   { key: 'super-otp', label: 'Super OTP', icon: 'key' },
-  { key: 'zones', label: 'Zones', icon: 'map' },
-  { key: 'logs', label: 'Audit log', icon: 'list' },
+  { key: 'zones', label: 'Zones', icon: 'map', built: true },
+  { key: 'logs', label: 'Audit log', icon: 'list', built: true },
 ];
 
 /** The section the admin app opens on. AI events is the first built screen (Round 2). */

@@ -289,6 +289,54 @@
       "noMaterials": "कोई सामग्री दर निर्धारित नहीं।",
       "perUnit": "प्रति {{unit}}",
       "unpriced": "कोई दर नहीं"
+    },
+    "dashboard": {
+      "error": "डैशबोर्ड लोड नहीं हो सका। दोबारा कोशिश करें।",
+      "today": "आज",
+      "week": "इस सप्ताह",
+      "month": "इस महीने",
+      "lifetime": "अब तक",
+      "conception": "गर्भाधान",
+      "recorded": "{{count}} दर्ज",
+      "exceptions": "अपवाद",
+      "needAttention": "ध्यान चाहिए",
+      "allClear": "सब ठीक है"
+    },
+    "audit": {
+      "searchPlaceholder": "कौन, क्या, या कौन-सा रिकॉर्ड",
+      "error": "ऑडिट लॉग लोड नहीं हो सका। दोबारा कोशिश करें।",
+      "none": "कोई ऑडिट प्रविष्टि नहीं।",
+      "noneFound": "“{{query}}” से कुछ मेल नहीं खाता।"
+    },
+    "users": {
+      "searchPlaceholder": "नाम, यूज़रनेम, या मोबाइल",
+      "error": "उपयोगकर्ता लोड नहीं हो सके। दोबारा कोशिश करें।",
+      "none": "कोई उपयोगकर्ता नहीं मिला।",
+      "noneFound": "“{{query}}” से कोई उपयोगकर्ता मेल नहीं खाता।",
+      "active": "सक्रिय",
+      "inactive": "लॉगिन बंद",
+      "sectionsOf": "{{total}} में से {{have}} सेक्शन",
+      "neverSignedIn": "कभी साइन इन नहीं किया",
+      "fieldUsername": "यूज़रनेम",
+      "fieldMobile": "मोबाइल",
+      "fieldEmail": "ईमेल",
+      "fieldSections": "सेक्शन",
+      "fieldZones": "ज़ोन",
+      "fieldMait": "मैत रिकॉर्ड",
+      "fieldLastLogin": "अंतिम साइन-इन"
+    },
+    "zones": {
+      "error": "ज़ोन लोड नहीं हो सके। दोबारा कोशिश करें।",
+      "none": "कोई ज़ोन नहीं मिला।",
+      "active": "सक्रिय",
+      "inactive": "निष्क्रिय",
+      "mpps": "{{count}} केंद्र",
+      "fieldCode": "कोड",
+      "fieldMpps": "संग्रह केंद्र",
+      "fieldMembers": "सदस्य",
+      "fieldUsers": "कार्यालय खाते",
+      "fieldPlants": "प्लांट (BMC/MCC)",
+      "fieldNote": "टिप्पणी"
     }
   },
   "aiFlow": {

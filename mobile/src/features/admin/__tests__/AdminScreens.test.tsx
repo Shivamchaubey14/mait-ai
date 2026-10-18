@@ -14,6 +14,8 @@ import { loggedIn } from '@/features/auth/authSlice';
 import type { UserRole } from '@/features/auth/authSlice';
 import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
 
+import AdminAuditScreen from '../AdminAuditScreen';
+import AdminDashboardScreen from '../AdminDashboardScreen';
 import AdminEventsScreen from '../AdminEventsScreen';
 import AdminExceptionsScreen from '../AdminExceptionsScreen';
 import AdminIndentsScreen from '../AdminIndentsScreen';
@@ -28,6 +30,8 @@ import AdminPregnancyScreen from '../AdminPregnancyScreen';
 import AdminProductsScreen from '../AdminProductsScreen';
 import AdminRatesScreen from '../AdminRatesScreen';
 import AdminStoresScreen from '../AdminStoresScreen';
+import AdminUsersScreen from '../AdminUsersScreen';
+import AdminZonesScreen from '../AdminZonesScreen';
 
 const EVENT = {
   id: 7,
@@ -477,5 +481,127 @@ describe('AdminRatesScreen', () => {
 
     await waitFor(() => expect(screen.getByTestId('admin-rates-scheme')).toBeTruthy());
     expect(screen.getByTestId('admin-rate-LN2')).toBeTruthy();
+  });
+});
+
+describe('AdminDashboardScreen', () => {
+  it('leads with today and shows the week/month/all-time figures', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        today: 42,
+        today_delta_percent: 10,
+        this_week: 210,
+        this_month: 900,
+        last_month_to_same_day: 850,
+        lifetime: 32006,
+        since: 'Jan 2026',
+        exceptions: {
+          pending_payments: { count: 3, rows: [], more: 0 },
+          failed_otps: { count: 0, rows: [], more: 0 },
+          low_stock: { count: 1, rows: [], more: 0 },
+        },
+        pregnancy: { rate: 55, recorded: 100, overdue: 2, declined_30d: 0 },
+      }),
+    );
+    renderWithStore(<AdminDashboardScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByText('42')).toBeTruthy());
+    expect(screen.getByText('210')).toBeTruthy();
+    expect(screen.getByText('55%')).toBeTruthy();
+  });
+});
+
+describe('AdminAuditScreen', () => {
+  it('reads the trail back in readable sentences', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        count: 1,
+        results: [
+          {
+            id: 99,
+            when: '2026-10-10T09:00:00Z',
+            action: 'delete',
+            action_label: 'Deleted',
+            tone: 'danger',
+            entity_type: 'ai_event',
+            entity_label: 'AI event',
+            entity_id: '7',
+            summary: 'Deleted an AI event for Kavita Devi',
+            actor: { name: 'Office Admin', role: 'Admin' },
+            ip_address: '',
+          },
+        ],
+      }),
+    );
+    renderWithStore(<AdminAuditScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-audit-99')).toBeTruthy());
+    expect(screen.getByText('Deleted an AI event for Kavita Devi')).toBeTruthy();
+  });
+});
+
+describe('AdminUsersScreen', () => {
+  it('lists accounts with their role', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        count: 1,
+        next: null,
+        previous: null,
+        results: [
+          {
+            id: 1,
+            username: 'payroll',
+            full_name: 'Payroll Clerk',
+            email: '',
+            mobile_no: '',
+            role: 'admin',
+            role_display: 'Admin',
+            is_active: true,
+            fixed_otp_enabled: false,
+            last_login_at: null,
+            mait_name: null,
+            sahayak_vendor_code: null,
+            assigned_mpp_count: 0,
+            portal_sections: ['mait-payment'],
+            portal_section_total: 22,
+            zones: [],
+            zone_names: [],
+          },
+        ],
+      }),
+    );
+    renderWithStore(<AdminUsersScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-user-payroll')).toBeTruthy());
+    expect(screen.getByText('Payroll Clerk')).toBeTruthy();
+  });
+});
+
+describe('AdminZonesScreen', () => {
+  it('lists zones with how much they hold', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        count: 1,
+        next: null,
+        previous: null,
+        results: [
+          {
+            id: 1,
+            code: 'AYODHYA',
+            name: 'Ayodhya Zone',
+            description: '',
+            is_active: true,
+            plant_names: ['COLONELGANJ'],
+            mpp_count: 120,
+            member_count: 4200,
+            user_count: 2,
+          },
+        ],
+      }),
+    );
+    renderWithStore(<AdminZonesScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-zone-AYODHYA')).toBeTruthy());
+    expect(screen.getByText('Ayodhya Zone')).toBeTruthy();
   });
 });

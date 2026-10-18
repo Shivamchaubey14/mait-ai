@@ -289,6 +289,54 @@
       "noMaterials": "No material rates set.",
       "perUnit": "per {{unit}}",
       "unpriced": "No rate"
+    },
+    "dashboard": {
+      "error": "Could not load the dashboard. Try again.",
+      "today": "today",
+      "week": "This week",
+      "month": "This month",
+      "lifetime": "All time",
+      "conception": "Conception",
+      "recorded": "{{count}} recorded",
+      "exceptions": "Exceptions",
+      "needAttention": "Need attention",
+      "allClear": "All clear"
+    },
+    "audit": {
+      "searchPlaceholder": "Who, what, or which record",
+      "error": "Could not load the audit log. Try again.",
+      "none": "No audit entries.",
+      "noneFound": "Nothing matches “{{query}}”."
+    },
+    "users": {
+      "searchPlaceholder": "Name, username, or mobile",
+      "error": "Could not load users. Try again.",
+      "none": "No users found.",
+      "noneFound": "No user matches “{{query}}”.",
+      "active": "Active",
+      "inactive": "Login off",
+      "sectionsOf": "{{have}} of {{total}} sections",
+      "neverSignedIn": "Never signed in",
+      "fieldUsername": "Username",
+      "fieldMobile": "Mobile",
+      "fieldEmail": "Email",
+      "fieldSections": "Sections",
+      "fieldZones": "Zones",
+      "fieldMait": "Mait record",
+      "fieldLastLogin": "Last sign-in"
+    },
+    "zones": {
+      "error": "Could not load zones. Try again.",
+      "none": "No zones found.",
+      "active": "Active",
+      "inactive": "Inactive",
+      "mpps": "{{count}} points",
+      "fieldCode": "Code",
+      "fieldMpps": "Collection points",
+      "fieldMembers": "Members",
+      "fieldUsers": "Office accounts",
+      "fieldPlants": "Plants (BMC/MCC)",
+      "fieldNote": "Note"
     }
   },
   "aiFlow": {

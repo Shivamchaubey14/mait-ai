@@ -21,6 +21,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { useLogoutMutation } from '@api/endpoints';
+import AdminAuditScreen from '@/features/admin/AdminAuditScreen';
+import AdminDashboardScreen from '@/features/admin/AdminDashboardScreen';
 import AdminDrawer from '@/features/admin/AdminDrawer';
 import AdminEventsScreen from '@/features/admin/AdminEventsScreen';
 import AdminExceptionsScreen from '@/features/admin/AdminExceptionsScreen';
@@ -36,6 +38,8 @@ import AdminPregnancyScreen from '@/features/admin/AdminPregnancyScreen';
 import AdminProductsScreen from '@/features/admin/AdminProductsScreen';
 import AdminRatesScreen from '@/features/admin/AdminRatesScreen';
 import AdminStoresScreen from '@/features/admin/AdminStoresScreen';
+import AdminUsersScreen from '@/features/admin/AdminUsersScreen';
+import AdminZonesScreen from '@/features/admin/AdminZonesScreen';
 import { ADMIN_HOME, sectionFor } from '@/features/admin/sections';
 import { loggedOut } from '@/features/auth/authSlice';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -129,6 +133,14 @@ export default function AdminNavigator(): React.JSX.Element {
     screen = <AdminExceptionsScreen />;
   } else if (section === 'mait-payment') {
     screen = <AdminMaitPaymentScreen />;
+  } else if (section === 'dashboard') {
+    screen = <AdminDashboardScreen />;
+  } else if (section === 'users') {
+    screen = <AdminUsersScreen />;
+  } else if (section === 'zones') {
+    screen = <AdminZonesScreen />;
+  } else if (section === 'logs') {
+    screen = <AdminAuditScreen />;
   } else {
     screen = (
       <View style={styles.soonBody} testID="admin-section-soon">

@@ -256,7 +256,64 @@ export interface DashboardExceptions {
 }
 
 export interface DashboardSummary {
+  today: number;
+  today_delta_percent: number | null;
+  this_week: number;
+  this_month: number;
+  last_month_to_same_day: number;
+  lifetime: number;
+  since: string | null;
   exceptions: DashboardExceptions;
+  pregnancy: { rate: number | null; recorded: number; overdue: number; declined_30d: number };
+}
+
+/** One audit-trail entry (GET /admin/audit/). */
+export interface AuditEntry {
+  id: number;
+  when: string;
+  action: string;
+  action_label: string;
+  tone: string | null;
+  entity_type: string;
+  entity_label: string;
+  entity_id: string;
+  summary: string;
+  actor: { name: string; role?: string };
+  ip_address: string;
+}
+
+/** A portal account on the admin roster (GET /admin/users/). */
+export interface AdminUser {
+  id: number;
+  username: string;
+  full_name: string;
+  email: string;
+  mobile_no: string;
+  role: string;
+  role_display: string;
+  is_active: boolean;
+  fixed_otp_enabled: boolean;
+  last_login_at: string | null;
+  mait_name: string | null;
+  sahayak_vendor_code: string | null;
+  assigned_mpp_count: number;
+  portal_sections: string[];
+  portal_section_total: number;
+  zones: number[];
+  zone_names: string[];
+}
+
+/** A zone on the admin roster (GET /admin/zones/). */
+export interface Zone {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+  is_active: boolean;
+  plant_names: string[];
+  mpp_count: number;
+  member_count: number;
+  user_count: number;
 }
 
 /** A store/depot for the admin roster (GET /admin/stores/). */
