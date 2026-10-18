@@ -27,6 +27,10 @@ import type {
   AuditEntry,
   AdminUser,
   Zone,
+  SuperOtpRow,
+  SuperOtpIssued,
+  UploadJob,
+  MppCoverage,
   AIEventDraft,
   AIEventTimelineEntry,
   AnimalTypeCode,
@@ -1002,6 +1006,62 @@ export const maitaiApi = api.injectEndpoints({
     adminListZones: builder.query<Paginated<Zone>, void>({
       query: () => ({ url: '/admin/zones/', params: { limit: 100 } }),
     }),
+
+    /**
+     * Login codes (GET /admin/super-otp/) — the asks waiting and the live codes.
+     *
+     * A plain array, not a page (the server turns pagination off). `state=open` is what needs
+     * the office, `all` is the last 200 of everything. No tag: the three writes below refetch
+     * the list by hand, the way the Indents screen does, so a decision's effect is immediate
+     * without a cache-invalidation web for one screen.
+     */
+    adminSuperOtpList: builder.query<SuperOtpRow[], { state?: 'open' | 'all' } | void>({
+      query: args => ({ url: '/admin/super-otp/', params: { state: args?.state ?? 'open' } }),
+    }),
+
+    /**
+     * Generate the code for an ask (POST /admin/super-otp/{id}/issue/).
+     *
+     * The one response that carries a plaintext code, and only this once — it is stored as a
+     * hash and never returned again. The screen shows it, the admin reads it out, and it is
+     * gone from the page the moment they dismiss it.
+     */
+    adminIssueSuperOtp: builder.mutation<SuperOtpIssued, number>({
+      query: id => ({ url: `/admin/super-otp/${id}/issue/`, method: 'POST', body: {} }),
+    }),
+
+    /** A code for somebody who phoned the office rather than asking from the app. */
+    adminIssueSuperOtpForNumber: builder.mutation<SuperOtpIssued, { mobileNo: string }>({
+      query: ({ mobileNo }) => ({
+        url: '/admin/super-otp/issue-for-number/',
+        method: 'POST',
+        body: { mobile_no: mobileNo },
+      }),
+    }),
+
+    /** Decline an ask, with the reason kept on the record (POST .../decline/). */
+    adminDeclineSuperOtp: builder.mutation<SuperOtpRow, { id: number; reason: string }>({
+      query: ({ id, reason }) => ({
+        url: `/admin/super-otp/${id}/decline/`,
+        method: 'POST',
+        body: { reason },
+      }),
+    }),
+
+    /** The SAP import history (GET /admin/uploads/), newest first — status and progress. */
+    adminUploadHistory: builder.query<Paginated<UploadJob>, void>({
+      query: () => ({ url: '/admin/uploads/', params: { limit: 25 } }),
+    }),
+
+    /**
+     * The coverage picture behind Assignment (GET /dashboard/mpp-coverage/): which points are
+     * served, who holds each, and whether that Mait can sign in. `days` is the service window
+     * the "served" figure is measured over.
+     */
+    adminMppCoverage: builder.query<MppCoverage, { days?: number } | void>({
+      query: args => ({ url: '/dashboard/mpp-coverage/', params: { days: args?.days ?? 30 } }),
+      providesTags: ['MPP'],
+    }),
   }),
 });
 
@@ -1088,4 +1148,10 @@ export const {
   useAdminAuditTrailQuery,
   useAdminListUsersQuery,
   useAdminListZonesQuery,
+  useAdminSuperOtpListQuery,
+  useAdminIssueSuperOtpMutation,
+  useAdminIssueSuperOtpForNumberMutation,
+  useAdminDeclineSuperOtpMutation,
+  useAdminUploadHistoryQuery,
+  useAdminMppCoverageQuery,
 } = maitaiApi;

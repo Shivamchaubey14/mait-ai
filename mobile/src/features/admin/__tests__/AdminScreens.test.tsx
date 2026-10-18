@@ -14,6 +14,7 @@ import { loggedIn } from '@/features/auth/authSlice';
 import type { UserRole } from '@/features/auth/authSlice';
 import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
 
+import AdminAssignmentScreen from '../AdminAssignmentScreen';
 import AdminAuditScreen from '../AdminAuditScreen';
 import AdminDashboardScreen from '../AdminDashboardScreen';
 import AdminEventsScreen from '../AdminEventsScreen';
@@ -29,7 +30,10 @@ import AdminNonMembersScreen from '../AdminNonMembersScreen';
 import AdminPregnancyScreen from '../AdminPregnancyScreen';
 import AdminProductsScreen from '../AdminProductsScreen';
 import AdminRatesScreen from '../AdminRatesScreen';
+import AdminReportsScreen from '../AdminReportsScreen';
 import AdminStoresScreen from '../AdminStoresScreen';
+import AdminSuperOtpScreen from '../AdminSuperOtpScreen';
+import AdminUploadsScreen from '../AdminUploadsScreen';
 import AdminUsersScreen from '../AdminUsersScreen';
 import AdminZonesScreen from '../AdminZonesScreen';
 
@@ -603,5 +607,150 @@ describe('AdminZonesScreen', () => {
 
     await waitFor(() => expect(screen.getByTestId('admin-zone-AYODHYA')).toBeTruthy());
     expect(screen.getByText('Ayodhya Zone')).toBeTruthy();
+  });
+});
+
+describe('AdminSuperOtpScreen', () => {
+  const ASK = {
+    id: 12,
+    state: 'waiting',
+    purpose: 'login',
+    step: 'Sign-in',
+    for_farmer: false,
+    farmer_name: null,
+    context: null,
+    ai_event_id: null,
+    status: 'requested',
+    status_display: 'Waiting for a call',
+    full_name: 'Sunil Kumar',
+    role: 'mait',
+    role_display: 'Mait',
+    who: 'Mait · 5500000054',
+    mobile_no: '9811100045',
+    number_on_file: '9811100045',
+    reason: '',
+    requested_at: '2026-10-18T09:00:00Z',
+    request_count: 1,
+    issued_by_name: '',
+    issued_at: null,
+    expires_at: null,
+    attempt_count: 0,
+    used_at: null,
+    decline_reason: '',
+    sms: { delivered: false, sent_at: '2026-10-18T08:59:00Z', sent_last_hour: 2, verified: false },
+  };
+
+  it('lists a waiting ask and offers to generate a code', async () => {
+    // The list endpoint answers a plain array, not a page.
+    (global.fetch as jest.Mock).mockImplementation(async () => jsonResponse([ASK]));
+    renderWithStore(<AdminSuperOtpScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-superotp-12')).toBeTruthy());
+    expect(screen.getByText('Sunil Kumar')).toBeTruthy();
+    expect(screen.getByTestId('admin-superotp-generate-12')).toBeTruthy();
+    expect(screen.getByTestId('admin-superotp-decline-12')).toBeTruthy();
+  });
+});
+
+describe('AdminUploadsScreen', () => {
+  it('lists an import job with its tally', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        count: 1,
+        next: null,
+        previous: null,
+        results: [
+          {
+            id: 3,
+            upload_type: 'member_master',
+            upload_type_display: 'Member Master',
+            file_name: 'members-oct.xlsx',
+            status: 'completed_with_errors',
+            status_display: 'Completed with errors',
+            uploaded_by: 1,
+            uploaded_by_name: 'Office Admin',
+            total_rows: 1000,
+            processed_rows: 1000,
+            success_rows: 980,
+            skipped_rows: 0,
+            kept_rows: 0,
+            failed_rows: 20,
+            progress_percent: 100,
+            error_count: 20,
+            started_at: '2026-10-18T02:00:00Z',
+            finished_at: '2026-10-18T02:05:00Z',
+            created_at: '2026-10-18T02:00:00Z',
+          },
+        ],
+      }),
+    );
+    renderWithStore(<AdminUploadsScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-upload-3')).toBeTruthy());
+    expect(screen.getByText('Member Master')).toBeTruthy();
+    expect(screen.getByText('members-oct.xlsx')).toBeTruthy();
+  });
+});
+
+describe('AdminAssignmentScreen', () => {
+  it('leads with an unassigned point and shows the coverage tiles', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        days: 30,
+        summary: {
+          mpps: 2,
+          members: 100,
+          members_served: 40,
+          coverage_percent: 40,
+          mpps_above_40: 1,
+          mpps_at_zero: 1,
+        },
+        rows_shown: 2,
+        scope: '',
+        results: [
+          {
+            mpp_code: '001371',
+            mpp_name: 'Barsana',
+            district_code: '',
+            total_members: 50,
+            members_served: 20,
+            coverage_percent: 40,
+            mait_code: '5500000054',
+            mait_name: 'Sunil Kumar',
+            mait_activated: true,
+          },
+          {
+            mpp_code: '001399',
+            mpp_name: 'Nandgaon',
+            district_code: '',
+            total_members: 50,
+            members_served: 0,
+            coverage_percent: 0,
+            mait_code: '',
+            mait_name: '',
+            mait_activated: false,
+          },
+        ],
+      }),
+    );
+    renderWithStore(<AdminAssignmentScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-assignment-001399')).toBeTruthy());
+    // The unassigned point leads, ahead of the served one.
+    expect(screen.getByText('Nandgaon')).toBeTruthy();
+    expect(screen.getByText('Nobody assigned')).toBeTruthy();
+  });
+});
+
+describe('AdminReportsScreen', () => {
+  it('leads with the matching count and lists recent events', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({ ...PAGE, count: 3 }),
+    );
+    renderWithStore(<AdminReportsScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-report-7')).toBeTruthy());
+    expect(screen.getByText('3')).toBeTruthy();
+    expect(screen.getByText('Kavita Devi')).toBeTruthy();
   });
 });

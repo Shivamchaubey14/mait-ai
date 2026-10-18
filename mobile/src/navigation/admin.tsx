@@ -10,8 +10,9 @@
  * state, and signing out unmounts it rather than resetting twenty flags by hand. It mounts only
  * for an office account that is not a zonal manager (a manager gets the zonal app instead).
  *
- * This round builds AI events and Members; the rest of the drawer is visible and opens a short
- * note that it is on the way, so the whole surface is navigable while it is filled in.
+ * The whole portal surface is here now — every drawer section has a handset screen, the last
+ * four (SAP upload, Assignment, Reports, Super OTP) landing in Round 7. The "coming soon"
+ * branch below is kept only as the fall-through for an unknown key, not for any real section.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -21,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { useLogoutMutation } from '@api/endpoints';
+import AdminAssignmentScreen from '@/features/admin/AdminAssignmentScreen';
 import AdminAuditScreen from '@/features/admin/AdminAuditScreen';
 import AdminDashboardScreen from '@/features/admin/AdminDashboardScreen';
 import AdminDrawer from '@/features/admin/AdminDrawer';
@@ -37,7 +39,10 @@ import AdminNonMembersScreen from '@/features/admin/AdminNonMembersScreen';
 import AdminPregnancyScreen from '@/features/admin/AdminPregnancyScreen';
 import AdminProductsScreen from '@/features/admin/AdminProductsScreen';
 import AdminRatesScreen from '@/features/admin/AdminRatesScreen';
+import AdminReportsScreen from '@/features/admin/AdminReportsScreen';
 import AdminStoresScreen from '@/features/admin/AdminStoresScreen';
+import AdminSuperOtpScreen from '@/features/admin/AdminSuperOtpScreen';
+import AdminUploadsScreen from '@/features/admin/AdminUploadsScreen';
 import AdminUsersScreen from '@/features/admin/AdminUsersScreen';
 import AdminZonesScreen from '@/features/admin/AdminZonesScreen';
 import { ADMIN_HOME, sectionFor } from '@/features/admin/sections';
@@ -141,6 +146,14 @@ export default function AdminNavigator(): React.JSX.Element {
     screen = <AdminZonesScreen />;
   } else if (section === 'logs') {
     screen = <AdminAuditScreen />;
+  } else if (section === 'super-otp') {
+    screen = <AdminSuperOtpScreen />;
+  } else if (section === 'uploads') {
+    screen = <AdminUploadsScreen />;
+  } else if (section === 'assignments') {
+    screen = <AdminAssignmentScreen />;
+  } else if (section === 'reports') {
+    screen = <AdminReportsScreen />;
   } else {
     screen = (
       <View style={styles.soonBody} testID="admin-section-soon">

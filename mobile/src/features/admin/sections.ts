@@ -26,11 +26,11 @@ export interface AdminSection {
 
 export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'dashboard', label: 'Dashboard', icon: 'speedometer', built: true },
-  { key: 'uploads', label: 'SAP upload', icon: 'cloud-upload' },
+  { key: 'uploads', label: 'SAP upload', icon: 'cloud-upload', built: true },
   { key: 'ai-events', label: 'AI events', icon: 'document-text', built: true },
   { key: 'maits', label: 'Maits', icon: 'people', built: true },
   { key: 'mpps', label: 'MPPs', icon: 'location', built: true },
-  { key: 'assignments', label: 'Assignment', icon: 'git-branch' },
+  { key: 'assignments', label: 'Assignment', icon: 'git-branch', built: true },
   { key: 'members', label: 'Members', icon: 'person', built: true },
   { key: 'non-members', label: 'Non-members', icon: 'person-add', built: true },
   { key: 'inventory', label: 'Inventory', icon: 'cube', built: true },
@@ -41,10 +41,10 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'leaderboard', label: 'Leaderboard', icon: 'trophy', built: true },
   { key: 'pregnancy', label: 'Pregnancy', icon: 'heart', built: true },
   { key: 'exceptions', label: 'Exceptions', icon: 'alert-circle', built: true },
-  { key: 'reports', label: 'Reports', icon: 'bar-chart' },
+  { key: 'reports', label: 'Reports', icon: 'bar-chart', built: true },
   { key: 'mait-payment', label: 'Mait payment', icon: 'wallet', built: true },
   { key: 'users', label: 'Users & roles', icon: 'shield-checkmark', built: true },
-  { key: 'super-otp', label: 'Super OTP', icon: 'key' },
+  { key: 'super-otp', label: 'Super OTP', icon: 'key', built: true },
   { key: 'zones', label: 'Zones', icon: 'map', built: true },
   { key: 'logs', label: 'Audit log', icon: 'list', built: true },
 ];

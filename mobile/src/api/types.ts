@@ -1473,3 +1473,119 @@ export interface ZonalEvent extends AIEvent {
   pregnancy_checks: PregnancyCheck[];
   timeline: AIEventTimelineEntry[];
 }
+
+// ---- admin: Super OTP, SAP upload, Assignment (Round 7) --------------------------------
+
+/**
+ * What the gateway did with a field user's last SMS — the other half of the judgement on an
+ * ask. A code the gateway says it delivered two minutes ago is a reason to tell them to look
+ * at their messages before the office reads one out.
+ */
+export interface SuperOtpSms {
+  delivered: boolean;
+  sent_at: string | null;
+  sent_last_hour: number;
+  verified: boolean;
+}
+
+/**
+ * One ask or live code on the Login codes screen (GET /admin/super-otp/).
+ *
+ * Never carries the code itself — that comes back **once**, on the issue response, as
+ * {@link SuperOtpIssued}. `state` drives the row: `waiting` is somebody to call, `issued` is a
+ * code given and not yet used, and the rest are history.
+ */
+export interface SuperOtpRow {
+  id: number;
+  state: 'waiting' | 'issued' | 'used' | 'expired' | 'locked' | 'declined' | 'revoked' | 'lapsed';
+  purpose: string;
+  /** The step the code is for, in words: Sign-in, Farmer check, Online/Cash payment. */
+  step: string;
+  /** The office phones the farmer, not the Mait who asked — the reveal says so. */
+  for_farmer: boolean;
+  farmer_name: string | null;
+  context: string | null;
+  ai_event_id: number | null;
+  status: string;
+  status_display: string;
+  full_name: string;
+  role: string;
+  role_display: string;
+  /** The line under the name: which Mait, which store, or which zone. */
+  who: string;
+  mobile_no: string;
+  /** The number to call back — the one on the record, never whoever rang the office. */
+  number_on_file: string;
+  reason: string;
+  requested_at: string | null;
+  request_count: number;
+  issued_by_name: string;
+  issued_at: string | null;
+  expires_at: string | null;
+  attempt_count: number;
+  used_at: string | null;
+  decline_reason: string;
+  sms: SuperOtpSms | null;
+}
+
+/** The issue response — the one time the plaintext code travels (POST .../issue/). */
+export interface SuperOtpIssued extends SuperOtpRow {
+  code: string;
+}
+
+/**
+ * One SAP import job (GET /admin/uploads/) — the status an office account checks from the
+ * field to know last night's master landed. Read-only on the handset; the file itself is
+ * uploaded at a desk.
+ */
+export interface UploadJob {
+  id: number;
+  upload_type: string;
+  upload_type_display: string;
+  file_name: string;
+  status: 'pending' | 'processing' | 'completed' | 'completed_with_errors' | 'failed';
+  status_display: string;
+  uploaded_by: number | null;
+  uploaded_by_name: string;
+  total_rows: number;
+  processed_rows: number;
+  success_rows: number;
+  skipped_rows: number;
+  kept_rows: number;
+  failed_rows: number;
+  progress_percent: number;
+  error_count: number;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
+/** One collection point on the Assignment/coverage view (GET /dashboard/mpp-coverage/). */
+export interface MppCoverageRow {
+  mpp_code: string;
+  mpp_name: string;
+  district_code: string;
+  total_members: number;
+  members_served: number;
+  coverage_percent: number;
+  /** The Mait holding this point, or empty — nobody is assigned. */
+  mait_code: string;
+  mait_name: string;
+  /** Assigned but cannot sign in yet, if false while a Mait is named. */
+  mait_activated: boolean;
+}
+
+export interface MppCoverage {
+  days: number;
+  summary: {
+    mpps: number;
+    members: number;
+    members_served: number;
+    coverage_percent: number;
+    mpps_above_40: number;
+    mpps_at_zero: number;
+  };
+  rows_shown: number;
+  scope: string;
+  results: MppCoverageRow[];
+}
