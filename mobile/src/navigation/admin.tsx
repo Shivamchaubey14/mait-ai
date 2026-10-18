@@ -23,7 +23,10 @@ import { useTranslation } from 'react-i18next';
 import { useLogoutMutation } from '@api/endpoints';
 import AdminDrawer from '@/features/admin/AdminDrawer';
 import AdminEventsScreen from '@/features/admin/AdminEventsScreen';
+import AdminMaitsScreen from '@/features/admin/AdminMaitsScreen';
 import AdminMembersScreen from '@/features/admin/AdminMembersScreen';
+import AdminMppsScreen from '@/features/admin/AdminMppsScreen';
+import AdminNonMembersScreen from '@/features/admin/AdminNonMembersScreen';
 import { ADMIN_HOME, sectionFor } from '@/features/admin/sections';
 import { loggedOut } from '@/features/auth/authSlice';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -93,6 +96,12 @@ export default function AdminNavigator(): React.JSX.Element {
     screen = <AdminEventsScreen />;
   } else if (section === 'members') {
     screen = <AdminMembersScreen />;
+  } else if (section === 'maits') {
+    screen = <AdminMaitsScreen />;
+  } else if (section === 'mpps') {
+    screen = <AdminMppsScreen />;
+  } else if (section === 'non-members') {
+    screen = <AdminNonMembersScreen />;
   } else {
     screen = (
       <View style={styles.soonBody} testID="admin-section-soon">

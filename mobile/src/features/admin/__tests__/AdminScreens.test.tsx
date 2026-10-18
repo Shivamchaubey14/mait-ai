@@ -1,10 +1,10 @@
 /**
- * The admin screens (Round 2 — AI events and Members).
+ * The admin screens (Rounds 2–3 — AI events, Members, Maits, MPPs, Non-members).
  *
- * What is under test is what an office account would act on wrongly if it were wrong: that the
- * roster renders the server's events and its set-wide counts; that the one irreversible action,
- * delete, is offered to an admin and withheld from a Normal User (the server enforces it too,
- * but the button must not even appear); and that the member search reads back a result.
+ * What is under test is what an office account would act on wrongly if it were wrong: that each
+ * roster renders what the server returns; that AI events carries the set-wide counts; and that
+ * the one irreversible action, delete, is offered to an admin and withheld from a Normal User
+ * (the server enforces it too, but the button must not even appear).
  */
 
 import React from 'react';
@@ -15,7 +15,10 @@ import type { UserRole } from '@/features/auth/authSlice';
 import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
 
 import AdminEventsScreen from '../AdminEventsScreen';
+import AdminMaitsScreen from '../AdminMaitsScreen';
 import AdminMembersScreen from '../AdminMembersScreen';
+import AdminMppsScreen from '../AdminMppsScreen';
+import AdminNonMembersScreen from '../AdminNonMembersScreen';
 
 const EVENT = {
   id: 7,
@@ -133,5 +136,112 @@ describe('AdminMembersScreen', () => {
     fireEvent.changeText(screen.getByTestId('admin-members-search'), 'Kavita');
     await waitFor(() => expect(screen.getByTestId('admin-member-MEM-001')).toBeTruthy());
     expect(screen.getByText('Kavita Devi')).toBeTruthy();
+  });
+});
+
+describe('AdminMaitsScreen', () => {
+  it('lists Maits and says where the account stands', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        count: 1,
+        next: null,
+        previous: null,
+        results: [
+          {
+            id: 4,
+            sahayak_vendor_code: '5500000054',
+            name: 'Sunil Kumar',
+            mobile_no: '9811100045',
+            needs_mobile: false,
+            is_active: true,
+            activated: true,
+            account_active: true,
+            mpp_codes: ['001371'],
+            mpp_count: 1,
+          },
+        ],
+      }),
+    );
+    renderWithStore(<AdminMaitsScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-mait-5500000054')).toBeTruthy());
+    expect(screen.getByText('Sunil Kumar')).toBeTruthy();
+    expect(screen.getByText('Active')).toBeTruthy();
+  });
+});
+
+describe('AdminMppsScreen', () => {
+  it('lists collection points with the Mait that holds each', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        count: 1,
+        next: null,
+        previous: null,
+        results: [
+          {
+            id: 9,
+            mpp_code: '001371',
+            mpp_name: 'Barsana',
+            plant_code: '2006',
+            plant_name: 'COLONELGANJ',
+            district_code: '',
+            tehsil_code: '',
+            village_code: '',
+            mobile_no: '',
+            is_active: true,
+            mait: 4,
+            mait_name: 'Sunil Kumar',
+            member_count: 42,
+          },
+        ],
+      }),
+    );
+    renderWithStore(<AdminMppsScreen />, { store: storeFor('admin') });
+
+    await waitFor(() => expect(screen.getByTestId('admin-mpp-001371')).toBeTruthy());
+    expect(screen.getByText('Barsana')).toBeTruthy();
+  });
+});
+
+describe('AdminNonMembersScreen', () => {
+  it('searches the field-registered farmers', async () => {
+    (global.fetch as jest.Mock).mockImplementation(async () =>
+      jsonResponse({
+        count: 1,
+        next: null,
+        previous: null,
+        results: [
+          {
+            id: 21,
+            name: 'Meena Devi',
+            father_husband_name: 'Ram',
+            relation: 'husband',
+            relation_display: 'Husband',
+            mobile_no: '9811100099',
+            address: '',
+            masked_aadhar: 'XXXXXXXX1234',
+            aadhar_front_captured: true,
+            aadhar_back_captured: false,
+            mpp: 9,
+            mpp_code: '001371',
+            mpp_name: 'Barsana',
+            registered_by: 'Sunil Kumar',
+            registered_by_code: '5500000054',
+            animal_count: 2,
+            ai_event_count: 1,
+            cattle_cows: 1,
+            cattle_buffaloes: 1,
+            cattle_total: 2,
+            daily_yield_litres: '8.0',
+            created_at: '2026-10-01T09:00:00Z',
+          },
+        ],
+      }),
+    );
+    renderWithStore(<AdminNonMembersScreen />, { store: storeFor('admin') });
+
+    fireEvent.changeText(screen.getByTestId('admin-nonmembers-search'), 'Meena');
+    await waitFor(() => expect(screen.getByTestId('admin-nonmember-21')).toBeTruthy());
+    expect(screen.getByText('Meena Devi')).toBeTruthy();
   });
 });

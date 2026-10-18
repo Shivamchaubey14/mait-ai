@@ -14,6 +14,8 @@ import type {
   AadhaarImages,
   AIEvent,
   AdminAiEventsPage,
+  AdminMait,
+  AdminNonMember,
   AIEventDraft,
   AIEventTimelineEntry,
   AnimalTypeCode,
@@ -866,6 +868,36 @@ export const maitaiApi = api.injectEndpoints({
       }),
       providesTags: ['Member'],
     }),
+
+    /** The Mait roster (GET /admin/users/maits/), searchable by name, vendor code or mobile. */
+    adminListMaits: builder.query<Paginated<AdminMait>, { search?: string } | void>({
+      query: args => ({
+        url: '/admin/users/maits/',
+        params: { limit: 25, ...(args?.search ? { search: args.search } : {}) },
+      }),
+      providesTags: ['MPP'],
+    }),
+
+    /** One collection point, whole (GET /mpp/{id}/) — the detail behind a search result. */
+    getMpp: builder.query<MPP, number>({
+      query: id => `/mpp/${id}/`,
+      providesTags: ['MPP'],
+    }),
+
+    /** The field-registered farmers, for the back office (GET /admin/non-members/). */
+    adminSearchNonMembers: builder.query<Paginated<AdminNonMember>, { search?: string } | void>({
+      query: args => ({
+        url: '/admin/non-members/',
+        params: { limit: 25, ...(args?.search ? { search: args.search } : {}) },
+      }),
+      providesTags: ['Member'],
+    }),
+
+    /** One field-registered farmer, whole (GET /admin/non-members/{id}/). */
+    adminGetNonMember: builder.query<AdminNonMember, number>({
+      query: id => `/admin/non-members/${id}/`,
+      providesTags: ['Member'],
+    }),
   }),
 });
 
@@ -936,4 +968,8 @@ export const {
   useAdminListAiEventsQuery,
   useDeleteAiEventMutation,
   useAdminSearchMembersQuery,
+  useAdminListMaitsQuery,
+  useGetMppQuery,
+  useAdminSearchNonMembersQuery,
+  useAdminGetNonMemberQuery,
 } = maitaiApi;

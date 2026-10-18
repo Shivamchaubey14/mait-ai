@@ -60,6 +60,48 @@ export interface AdminAiEventsPage extends Paginated<AIEvent> {
   summary: AiEventsSummary;
 }
 
+/** A Mait as the admin roster lists them (GET /admin/users/maits/). */
+export interface AdminMait {
+  id: number;
+  sahayak_vendor_code: string;
+  name: string;
+  mobile_no: string;
+  needs_mobile: boolean;
+  is_active: boolean;
+  /** Holds a login. */
+  activated: boolean;
+  /** The login is switched on, or null for a Mait who never activated. */
+  account_active: boolean | null;
+  mpp_codes: string[];
+  mpp_count: number;
+}
+
+/** A field-registered farmer as the admin roster lists them (GET /admin/non-members/). */
+export interface AdminNonMember {
+  id: number;
+  name: string;
+  father_husband_name: string;
+  relation: string;
+  relation_display: string;
+  mobile_no: string;
+  address: string;
+  masked_aadhar: string;
+  aadhar_front_captured: boolean;
+  aadhar_back_captured: boolean;
+  mpp: number | null;
+  mpp_code: string;
+  mpp_name: string;
+  registered_by: string;
+  registered_by_code: string;
+  animal_count: number;
+  ai_event_count: number;
+  cattle_cows: number | null;
+  cattle_buffaloes: number | null;
+  cattle_total: number | null;
+  daily_yield_litres: string | null;
+  created_at: string;
+}
+
 export interface MPP {
   id: number;
   mpp_code: string;
