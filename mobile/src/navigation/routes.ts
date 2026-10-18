@@ -52,6 +52,7 @@ export type RouteKey =
   | 'zonalEvent'
   | 'zonalEvents'
   | 'zonalAssign'
+  | 'zonalSearch'
   | 'zonalProfile';
 
 export interface RouteMeta {
@@ -123,6 +124,11 @@ export const ROUTES: Record<RouteKey, RouteMeta> = {
     icon: 'git-branch',
     title: 'route.zonalAssign',
     context: 'route.zonalAssignContext',
+  },
+  zonalSearch: {
+    icon: 'search',
+    title: 'route.zonalSearch',
+    context: 'route.zonalSearchContext',
   },
   zonalProfile: { icon: 'person', title: 'nav.settings', context: 'route.zonalProfileContext' },
 };

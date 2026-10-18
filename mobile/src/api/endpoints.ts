@@ -47,6 +47,7 @@ import type {
   ZonalEventPage,
   ZonalHome,
   ZonalMait,
+  ZonalLookup,
   AssignResult,
   ZoneStock,
   Paginated,
@@ -763,6 +764,16 @@ export const maitaiApi = api.injectEndpoints({
     }),
 
     /**
+     * A read-only lookup, both ways off one query: a Mait to the points they hold, a point to
+     * the Mait that holds it (W19's sibling). Empty `q` returns two empty lists, so a blank box
+     * never fetches the network.
+     */
+    zonalLookup: builder.query<ZonalLookup, { q: string }>({
+      query: ({ q }) => ({ url: '/zonal/lookup/', params: { q } }),
+      providesTags: ['Zonal', 'MPP'],
+    }),
+
+    /**
      * Hand one MPP, by its code, to one Mait, by their vendor code (W19, one point at a time).
      *
      * Invalidates `Zonal` so every figure that counts Maits and points redraws, and `MPP` so
@@ -859,5 +870,6 @@ export const {
   useRejectIndentMutation,
   useListZonalMaitsQuery,
   useLazyListZonalMaitsQuery,
+  useZonalLookupQuery,
   useAssignZonalMppMutation,
 } = maitaiApi;

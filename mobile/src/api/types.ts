@@ -863,14 +863,38 @@ export interface ZonalHome {
   scope: { scoped: boolean; zones: string[]; plant_codes: string[] | null };
 }
 
-/** A Mait as the assign screen lists them: who they are, and what they already cover. */
+/** One collection point, named by its TR code and its name. */
+export interface ZonalMppRef {
+  mpp_code: string;
+  mpp_name: string;
+}
+
+/** A Mait as the assign and search screens list them: who they are, and what they cover. */
 export interface ZonalMait {
   id: number;
   name: string;
   sahayak_vendor_code: string;
   mobile_no: string;
+  /** Each point they hold, TR code and name — what the search screen reads back. */
+  mpps: ZonalMppRef[];
   mpp_codes: string[];
   mpp_count: number;
+}
+
+/** A collection point as the search screen draws it: its name, where it sits, and who holds it. */
+export interface ZonalMppHit {
+  mpp_code: string;
+  mpp_name: string;
+  plant_name: string;
+  /** The Mait it is assigned to, or null where it is held by nobody. */
+  mait: { name: string; sahayak_vendor_code: string; mobile_no: string } | null;
+}
+
+/** Both halves of a lookup off one query: the Maits that matched, and the points that matched. */
+export interface ZonalLookup {
+  maits: ZonalMait[];
+  mpps: ZonalMppHit[];
+  scope: { scoped: boolean; zones: string[]; plant_codes: string[] | null };
 }
 
 /** One holder of a collection point, named by the codes a manager reads off a screen. */

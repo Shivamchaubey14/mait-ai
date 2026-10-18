@@ -104,11 +104,14 @@ function Figure({
 export default function ZonalProfileScreen({
   onOpenEvents,
   onOpenAssign,
+  onOpenSearch,
 }: {
   /** The list of every insemination in the zone, by date. */
   onOpenEvents: () => void;
   /** The screen that hands a collection point to one of this zone's Maits. */
   onOpenAssign: () => void;
+  /** The read-only lookup: a Mait to their points, a point to its Mait. */
+  onOpenSearch: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
@@ -166,6 +169,24 @@ export default function ZonalProfileScreen({
             <Text style={styles.doorText}>{t('zonal.allEventsBody')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.info} />
+        </Pressable>
+
+        {/* The read-only lookup beside the write: a Mait to the points they hold, a point to the
+            Mait that holds it. Slate, so it reads as a reference rather than an action. */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpenSearch}
+          style={({ pressed }) => [styles.searchDoor, pressed && styles.doorPressed]}
+          testID="zonal-profile-search"
+        >
+          <View style={styles.searchChip}>
+            <Ionicons name="search" size={20} color={colors.surface} />
+          </View>
+          <View style={styles.rowBody}>
+            <Text style={styles.searchTitle}>{t('zonal.searchTitle')}</Text>
+            <Text style={styles.doorText}>{t('zonal.searchDoorBody')}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.ink} />
         </Pressable>
 
         {/* The one write a manager has on a handset: giving a collection point to a Mait by its
@@ -354,4 +375,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   assignTitle: { ...typography.h3, color: colors.primaryDark },
+  searchDoor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    minHeight: MIN_TOUCH_TARGET + spacing[4],
+    padding: spacing[4],
+    marginBottom: spacing[3],
+    backgroundColor: ink[50],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: ink[200],
+  },
+  searchChip: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.ink,
+  },
+  searchTitle: { ...typography.h3, color: colors.ink },
 });

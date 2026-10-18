@@ -39,6 +39,7 @@ STOCK = "/api/v1/zonal/stock/"
 HISTORY = "/api/v1/zonal/history/"
 EVENTS = "/api/v1/zonal/events/"
 MAITS = "/api/v1/zonal/maits/"
+LOOKUP = "/api/v1/zonal/lookup/"
 ASSIGN = "/api/v1/zonal/assignments/"
 
 
@@ -561,6 +562,57 @@ class TestHistory:
         # move as somebody filters.
         assert approved["summary"]["approved"] == 1
         assert approved["summary"]["rejected"] == 1
+
+
+class TestLookup:
+    """
+    The read-only lookup a manager uses at a crate: a Mait to their points, a point to its Mait.
+    """
+
+    def test_a_mait_search_returns_their_points_with_names(self, network):
+        manager = office_account("zonal-ayodhya", zone=network["AYODHYA"]["zone"])
+        mait = network["AYODHYA"]["mait"]
+        mpp = mait.mpps.get()
+
+        body = auth(manager).get(LOOKUP, {"q": "Ayodhya Mait"}).json()
+
+        row = next(m for m in body["maits"] if m["id"] == mait.id)
+        assert {"mpp_code": mpp.mpp_code, "mpp_name": mpp.mpp_name} in row["mpps"]
+
+    def test_a_point_search_names_the_mait_it_is_assigned_to(self, network):
+        manager = office_account("zonal-ayodhya", zone=network["AYODHYA"]["zone"])
+        mpp = network["AYODHYA"]["mait"].mpps.get()
+
+        body = auth(manager).get(LOOKUP, {"q": mpp.mpp_code}).json()
+
+        hit = next(p for p in body["mpps"] if p["mpp_code"] == mpp.mpp_code)
+        assert hit["mpp_name"] == mpp.mpp_name
+        assert hit["mait"]["name"] == "Ayodhya Mait"
+
+    def test_a_point_in_another_zone_does_not_appear(self, network):
+        manager = office_account("zonal-ayodhya", zone=network["AYODHYA"]["zone"])
+        other = network["BAHRAICH"]["mait"].mpps.get()
+
+        body = auth(manager).get(LOOKUP, {"q": other.mpp_code}).json()
+
+        # The point is real, but not in this manager's zone — so it is simply not there, the
+        # same silence the assign screen gives a foreign code.
+        assert all(p["mpp_code"] != other.mpp_code for p in body["mpps"])
+
+    def test_an_empty_query_returns_nothing_rather_than_the_network(self, network):
+        manager = office_account("zonal-ayodhya", zone=network["AYODHYA"]["zone"])
+        body = auth(manager).get(LOOKUP, {"q": "  "}).json()
+        assert body["maits"] == []
+        assert body["mpps"] == []
+
+    def test_a_mait_is_refused(self, network):
+        mait_user = User.objects.create_user(
+            username="field-mait",
+            password="x",
+            full_name="Field Mait",
+            role=Role.MAIT,
+        )
+        assert auth(mait_user).get(LOOKUP, {"q": "anything"}).status_code == 403
 
 
 class TestAssignment:

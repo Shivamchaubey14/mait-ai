@@ -65,15 +65,42 @@ from .serializers import ApprovalSerializer, AssignMppSerializer, held_by_maits
 
 
 def _mait_row(mait) -> dict:
-    """A Mait as the assign screen draws them: who they are, and what they already cover."""
-    codes = sorted(mpp.mpp_code for mpp in mait.mpps.all())
+    """A Mait as the assign and search screens draw them: who they are, and what they cover.
+
+    ``mpps`` carries each point's name beside its code, because the search screen shows a
+    manager the collection points a Mait holds and a bare code is not something they can read
+    back. ``mpp_codes`` is kept for the assign screen, which only ever needed the count.
+    """
+    points = sorted(
+        ({"mpp_code": mpp.mpp_code, "mpp_name": mpp.mpp_name} for mpp in mait.mpps.all()),
+        key=lambda point: point["mpp_code"],
+    )
     return {
         "id": mait.id,
         "name": mait.name,
         "sahayak_vendor_code": mait.sahayak_vendor_code,
         "mobile_no": mait.mobile_no,
-        "mpp_codes": codes,
-        "mpp_count": len(codes),
+        "mpps": points,
+        "mpp_codes": [point["mpp_code"] for point in points],
+        "mpp_count": len(points),
+    }
+
+
+def _mpp_row(mpp) -> dict:
+    """A collection point as the search screen draws it: its name, where it sits, and who holds it."""
+    return {
+        "mpp_code": mpp.mpp_code,
+        "mpp_name": mpp.mpp_name,
+        "plant_name": mpp.plant_name,
+        "mait": (
+            {
+                "name": mpp.mait.name,
+                "sahayak_vendor_code": mpp.mait.sahayak_vendor_code,
+                "mobile_no": mpp.mait.mobile_no,
+            }
+            if mpp.mait
+            else None
+        ),
     }
 
 
@@ -423,6 +450,67 @@ def zonal_maits(request):
     return Response(
         {
             "results": [_mait_row(mait) for mait in maits],
+            "scope": scope_note(request),
+        }
+    )
+
+
+@extend_schema(
+    tags=["zonal"],
+    summary="Look up a Mait's points, or a point's Mait",
+    description=(
+        "A read-only lookup for a manager standing at a crate with a code in front of them, "
+        "answering it both ways at once off one query.\n\n"
+        "**Search a Mait** by name or Sahayak vendor code and `maits` carries them with every "
+        "collection point they hold — its TR code and its name — so a manager can read back "
+        "the round. **Type an MPP's TR code** (or part of its name) and `mpps` carries the "
+        "point with the Mait it is assigned to, or `null` where it is held by nobody.\n\n"
+        "The point lookup is scoped to the manager's own zones — a code outside them simply "
+        "does not appear, the same silence the assign screen gives it. The Mait lookup is "
+        "across every active Mait, because a manager may want to read back the coverage of one "
+        "who holds nothing here yet. An empty `q` returns two empty lists rather than the "
+        "whole network."
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="q",
+            description="A Mait name or vendor code, or an MPP's TR code or name.",
+            required=False,
+            type=str,
+        )
+    ],
+    responses={200: dict},
+)
+@api_view(["GET"])
+@permission_classes([IsZonalManager])
+def zonal_lookup(request):
+    codes = scope_of(request)
+    query = (request.query_params.get("q") or "").strip()
+    if not query:
+        return Response({"maits": [], "mpps": [], "scope": scope_note(request)})
+
+    # Who, by name or vendor code — across every active Mait, so a manager can read back the
+    # coverage of one who holds nothing in this zone yet.
+    maits = (
+        Mait.objects.filter(is_active=True)
+        .filter(Q(name__icontains=query) | Q(sahayak_vendor_code__icontains=query))
+        .prefetch_related("mpps")
+        .order_by("name")[:25]
+    )
+
+    # Which point, by its TR code or its name — scoped to this manager's zones. A code outside
+    # them does not appear, which is the same answer the assign screen gives a foreign code.
+    points = MPP.objects.select_related("mait").filter(
+        Q(mpp_code__icontains=query) | Q(mpp_name__icontains=query)
+    )
+    if codes is not None:
+        points = points.filter(plant_code__in=codes)
+    points = points.order_by("mpp_code")[:25]
+
+    return Response(
+        {
+            "maits": [_mait_row(mait) for mait in maits],
+            "mpps": [_mpp_row(point) for point in points],
             "scope": scope_note(request),
         }
     )

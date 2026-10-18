@@ -1428,7 +1428,9 @@ describe('HistoryScreen', () => {
 describe('ZonalProfileScreen', () => {
   it('gives the zone, the patch and the language a colour and a figure each', async () => {
     mockApi();
-    renderWithStore(<ZonalProfileScreen onOpenEvents={jest.fn()} onOpenAssign={jest.fn()} />);
+    renderWithStore(
+      <ZonalProfileScreen onOpenEvents={jest.fn()} onOpenAssign={jest.fn()} onOpenSearch={jest.fn()} />,
+    );
 
     await waitFor(() => expect(screen.getByTestId('zonal-profile-maits')).toHaveTextContent(/11/));
     expect(screen.getByTestId('zonal-profile-maits')).toHaveTextContent(/Maits/);
@@ -1446,10 +1448,31 @@ describe('ZonalProfileScreen', () => {
   it('opens the assign screen from its own door', () => {
     mockApi();
     const onOpenAssign = jest.fn();
-    renderWithStore(<ZonalProfileScreen onOpenEvents={jest.fn()} onOpenAssign={onOpenAssign} />);
+    renderWithStore(
+      <ZonalProfileScreen
+        onOpenEvents={jest.fn()}
+        onOpenAssign={onOpenAssign}
+        onOpenSearch={jest.fn()}
+      />,
+    );
 
     fireEvent.press(screen.getByTestId('zonal-profile-assign'));
     expect(onOpenAssign).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the search screen from its own door', () => {
+    mockApi();
+    const onOpenSearch = jest.fn();
+    renderWithStore(
+      <ZonalProfileScreen
+        onOpenEvents={jest.fn()}
+        onOpenAssign={jest.fn()}
+        onOpenSearch={onOpenSearch}
+      />,
+    );
+
+    fireEvent.press(screen.getByTestId('zonal-profile-search'));
+    expect(onOpenSearch).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1460,6 +1483,7 @@ describe('AssignMppScreen', () => {
       name: 'Sunil Kumar',
       sahayak_vendor_code: '5500000054',
       mobile_no: '9811100045',
+      mpps: [{ mpp_code: '001302', mpp_name: 'Barsana' }],
       mpp_codes: ['001302'],
       mpp_count: 1,
     },
@@ -1468,6 +1492,7 @@ describe('AssignMppScreen', () => {
       name: 'Devi Prasad',
       sahayak_vendor_code: '5500000099',
       mobile_no: '',
+      mpps: [],
       mpp_codes: [],
       mpp_count: 0,
     },

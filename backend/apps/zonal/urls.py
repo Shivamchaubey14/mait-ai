@@ -16,6 +16,7 @@ from .views import (
     zonal_events,
     zonal_history,
     zonal_home,
+    zonal_lookup,
     zonal_maits,
     zonal_stock,
 )
@@ -31,5 +32,6 @@ urlpatterns = [
     path("zonal/events/", zonal_events, name="zonal-events"),
     path("zonal/events/<int:event_id>/", zonal_event, name="zonal-event"),
     path("zonal/maits/", zonal_maits, name="zonal-maits"),
+    path("zonal/lookup/", zonal_lookup, name="zonal-lookup"),
     path("zonal/assignments/", zonal_assign, name="zonal-assign"),
 ]
