@@ -22,6 +22,7 @@ import { loggedIn } from '@/features/auth/authSlice';
 import type { AuthUser } from '@/features/auth/authSlice';
 import PullToRefresh from '@/components/pullToRefresh';
 import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
+import { colors, ink } from '@theme/tokens';
 
 const USER: AuthUser = {
   id: 4,
@@ -273,5 +274,58 @@ describe('SettingsScreen', () => {
     fireEvent.press(await screen.findByTestId('sign-out'));
 
     expect(screen.queryByTestId('signout-warning')).toBeNull();
+  });
+
+  describe('in colour', () => {
+    it('draws the month in green and every row in the colour of what it says', async () => {
+      mockApi({});
+      render();
+
+      await waitFor(() => expect(screen.getByTestId('profile-month')).toHaveTextContent(/214/));
+      expect(screen.getByTestId('profile-month')).toHaveStyle({
+        backgroundColor: colors.primaryWash,
+      });
+      // Places are blue, settings slate, and all-sent green.
+      await waitFor(() =>
+        expect(screen.getByTestId('profile-mpps')).toHaveStyle({
+          backgroundColor: colors.infoWash,
+        }),
+      );
+      expect(screen.getByTestId('profile-language')).toHaveStyle({ backgroundColor: ink[50] });
+      expect(screen.getByTestId('profile-sync')).toHaveStyle({
+        backgroundColor: colors.primaryWash,
+      });
+      expect(screen.getByTestId('profile-code')).toHaveTextContent(/00341/);
+    });
+
+    it('turns sync yolk while work is still on the phone', async () => {
+      mockApi({});
+      render({ pending: 2 });
+
+      await waitFor(() => screen.getByTestId('profile-sync'));
+      expect(screen.getByTestId('profile-sync')).toHaveStyle({
+        backgroundColor: colors.secondaryWash,
+      });
+    });
+  });
+
+  it('opens the MPPs under their row in blue, the arrow turned down', async () => {
+    mockApi();
+    render();
+
+    await waitFor(() => expect(screen.getByTestId('profile-mpps')).toHaveTextContent(/3 MPPs/));
+    expect(screen.getByTestId('profile-mpps')).toHaveProp('accessibilityState', {
+      expanded: false,
+    });
+
+    fireEvent.press(screen.getByTestId('profile-mpps'));
+
+    expect(screen.getByTestId('profile-mpps')).toHaveProp('accessibilityState', {
+      expanded: true,
+    });
+    expect(screen.getByTestId('profile-mpp-list')).toHaveStyle({
+      backgroundColor: colors.infoWash,
+    });
+    expect(screen.getByTestId('profile-mpp-list')).toHaveTextContent(/Barsana/);
   });
 });

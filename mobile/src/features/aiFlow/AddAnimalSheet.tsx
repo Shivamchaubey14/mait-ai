@@ -260,7 +260,7 @@ export default function AddAnimalSheet({
                 <Image source={{ uri: photoUri }} style={styles.thumb} resizeMode="cover" />
               ) : (
                 <View style={styles.photoChip}>
-                  <Ionicons name="camera-outline" size={20} color={colors.text} />
+                  <Ionicons name="camera" size={20} color={colors.surface} />
                 </View>
               )}
 
@@ -355,27 +355,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET + spacing[3],
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.textDisabled,
+    borderColor: colors.info,
+    backgroundColor: colors.infoWash,
     borderRadius: radius.lg,
     padding: spacing[3],
   },
   // Once she has been photographed it is a record, not a space for one.
-  photoTaken: { borderStyle: 'solid', borderColor: colors.border },
-  photoPressed: { backgroundColor: colors.background },
+  photoTaken: {
+    borderStyle: 'solid',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryWash,
+  },
+  photoPressed: { opacity: 0.85 },
   photoChip: {
     width: 40,
     height: 40,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.info,
   },
   thumb: { width: 44, height: 44, borderRadius: radius.sm },
   photoText: { flex: 1 },
   photoTitle: { ...typography.bodyStrong, color: colors.ink },
-  photoBody: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  photoBody: { ...typography.caption, color: colors.info, marginTop: 2 },
   // Yolk 800: the action here is optional and must not read as the screen's primary green.
   take: { ...typography.bodyStrong, color: yolk[800] },
 

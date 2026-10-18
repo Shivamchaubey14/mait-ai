@@ -146,6 +146,7 @@ export default function SelectNonMemberScreen({
         <OptionCard
           key={farmer.id}
           swatchLabel={initials(farmer.name)}
+          tone="accent"
           round
           title={farmer.name}
           subtitle={describe(farmer)}

@@ -57,6 +57,10 @@ class TestSmsFortius:
         assert params["number"] == "7518914554"
         assert params["message"] == "Login OTP 482913. Tell no one."
         assert "{#var#}" not in params["message"]
+        # The DLT templates are Devanagari, so the body must be submitted as Unicode. Without
+        # this flag the gateway accepts the send but the operator drops the Unicode body, so
+        # nothing reaches the handset — the flag is what makes a real OTP actually arrive.
+        assert params["unicode"] == "2"
         assert message_id == "OK|42"
 
     @pytest.mark.parametrize(

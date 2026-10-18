@@ -17,6 +17,19 @@
 
   const state = { offset: 0, count: 0 };
 
+  // Deleting an event is admin-only (the API gates it to super_admin / admin, matching
+  // `IsAdmin`). The tick column and the bar over a selection exist only to drive that one
+  // write, so for anyone else — including an account that has merely been *assigned* the AI
+  // Events section — they are not rendered at all: no empty column, no button that only ever
+  // returns 403. Set once at init from the profile cached at sign-in.
+  let canDelete = false;
+
+  function readCanDelete() {
+    const profile = MaitAI.api.profile.get();
+    const role = profile && profile.role;
+    return role === 'super_admin' || role === 'admin';
+  }
+
   /**
    * Status colours match the app exactly.
    *
@@ -30,6 +43,17 @@
     straw_verified: 'info',
     draft: null,
     cancelled: 'bad',
+  };
+
+  // The capture states that still need the Mait who started them — a record standing between
+  // an animal that has been served and a line that says so. Kept in step with the server's
+  // own `AIEvent.UNFINISHED_STATUSES`, which the `unfinished` filter is defined from: completed
+  // and cancelled are terminal, everything else is a Mait to ring.
+  const UNFINISHED = {
+    draft: true,
+    straw_verified: true,
+    photo_captured: true,
+    payment_pending: true,
   };
 
   function paymentCell(payment) {
@@ -54,18 +78,28 @@
 
   function row(event) {
     // Anything waiting on a human is tinted, so a screenful can be triaged without reading
-    // every status cell.
-    const rowClass =
-      event.status === 'payment_pending'
-        ? ' class="is-waiting"'
-        : event.status === 'cancelled'
-          ? ' class="is-blocked"'
-          : '';
+    // every status cell. Every unfinished capture is tinted, not only the payment-pending one
+    // it used to be: a straw verified days ago and never photographed is just as stuck, and
+    // the whole point of this screen is to spot it.
+    const rowClass = UNFINISHED[event.status]
+      ? ' class="is-waiting"'
+      : event.status === 'cancelled'
+        ? ' class="is-blocked"'
+        : '';
 
     return (
       '<tr' +
       rowClass +
       '>' +
+      '<td class="col-pick">' +
+      (canDelete
+        ? '<input class="pick" type="checkbox" value="' +
+          event.id +
+          '" aria-label="Select event ' +
+          event.id +
+          '" />'
+        : '') +
+      '</td>' +
       '<td><a class="table__code" href="ai-event.html?id=' +
       event.id +
       '">' +
@@ -75,7 +109,10 @@
       ui.identity(event.owner_name, event.owner_type === 'member' ? event.mpp_code : 'Non-member') +
       '</td>' +
       '<td>' +
-      ui.identity(event.mait_name, event.mait_code) +
+      ui.identity(event.mait_name, event.mait_code, {
+        title: event.mait_name,
+        detail: event.mait_mobile,
+      }) +
       '</td>' +
       '<td>' +
       animalCell(event) +
@@ -84,7 +121,11 @@
       paymentCell(event.payment) +
       '</td>' +
       '<td>' +
-      ui.dateTime(event.created_at) +
+      // The day the event is dated to, the same one the dashboard counts it on: its
+      // completion for a finished capture, or when it was started while it is still
+      // unfinished. Dating the row by `created_at` alone made this screen disagree with the
+      // dashboard by one whenever a capture crossed midnight between starting and finishing.
+      ui.dateTime(event.completed_at || event.created_at) +
       '</td>' +
       '<td>' +
       ui.pill(event.status_display, STATUS_TONE[event.status]) +
@@ -179,6 +220,9 @@
       '<tr' +
       r[10] +
       '>' +
+      // An empty tick cell, so the sample lines up with real rows without offering a checkbox
+      // over data that is not there.
+      '<td class="col-pick"></td>' +
       '<td><span class="table__code">' +
       ui.escapeHtml(r[0]) +
       '</span></td>' +
@@ -204,6 +248,11 @@
     );
   }
 
+  /** True when the Unfinished chip is pressed. */
+  function unfinishedOn() {
+    return $('#filter-unfinished').attr('aria-pressed') === 'true';
+  }
+
   /** True when nothing is narrowing the list, so "nothing here" means nothing exists. */
   function unfiltered() {
     return (
@@ -211,7 +260,8 @@
       !$('#filter-status').val() &&
       !$('#filter-mpp').val() &&
       !$('#filter-from').val() &&
-      !$('#filter-to').val()
+      !$('#filter-to').val() &&
+      !unfinishedOn()
     );
   }
 
@@ -219,6 +269,8 @@
     $('#events').addClass('events--sample');
     $('#events-note').html('<span class="events__badge">Sample — no events recorded yet</span>');
     $('#rows').removeAttr('aria-busy').html(SAMPLE.map(sampleRow).join(''));
+    // The sample carries no checkboxes, so nothing can be selected — make sure the bar is down.
+    renderBulk();
   }
 
   function query() {
@@ -243,6 +295,13 @@
     }
     if (to) {
       params.date_to = to;
+    }
+    // The server decides what "unfinished" means (its UNFINISHED_STATUSES), so the screen asks
+    // for the set by name rather than listing the statuses itself. Left off when a specific
+    // status is chosen: the two would AND, and "photo captured AND unfinished" is just a
+    // longer way to narrow to one box the dropdown already covers.
+    if (unfinishedOn() && !status) {
+      params.unfinished = true;
     }
     return params;
   }
@@ -285,13 +344,114 @@
       });
   }
 
-  function load() {
+  /* --- selecting and deleting rows -----------------------------------------------------
+   * Deleting is the one write this screen allows, and only for an admin — the API enforces
+   * that, so this is simply the control that drives it. The tick column and the bar over a
+   * selection are the same shape the Users screen uses for its bulk action.
+   */
+  function picked() {
+    return $('#rows .pick:checked')
+      .map(function () {
+        return Number(this.value);
+      })
+      .get();
+  }
+
+  /** The header tick reflects the rows: all, none, or the in-between state. */
+  function syncPickAll() {
+    const $boxes = $('#rows .pick');
+    const $on = $('#rows .pick:checked');
+    const all = $boxes.length > 0 && $on.length === $boxes.length;
+    $('#pick-all')
+      .prop('checked', all)
+      .prop('indeterminate', $on.length > 0 && !all);
+  }
+
+  /** Show or hide the bar, and count what is in it. Called after every selection and reload. */
+  function renderBulk() {
+    const ids = picked();
+    if (!ids.length) {
+      $('#bulk').prop('hidden', true);
+      $('#bulk-status').text('');
+      syncPickAll();
+      return;
+    }
+    $('#bulk-count').text(ids.length + (ids.length === 1 ? ' event' : ' events') + ' selected');
+    $('#bulk-delete').text('Delete ' + ids.length);
+    $('#bulk').prop('hidden', false);
+    syncPickAll();
+  }
+
+  function setBulkBusy(busy) {
+    $('#bulk-delete, #bulk-clear, #pick-all').prop('disabled', busy);
+    $('#rows .pick').prop('disabled', busy);
+  }
+
+  /**
+   * Delete the ticked events, after one deliberate confirmation.
+   *
+   * The whole selection goes in one request — the server removes them in a single transaction,
+   * so it is all or nothing rather than a half-finished delete to puzzle over. On success the
+   * list is reloaded from the first page: a destructive action should land somewhere known, and
+   * the rows that were on screen are gone.
+   */
+  function runDelete() {
+    const ids = picked();
+    if (!ids.length) {
+      return;
+    }
+    if (
+      !window.confirm(
+        'Delete ' +
+          ids.length +
+          (ids.length === 1 ? ' event' : ' events') +
+          '? This removes the record, its payment and its pregnancy checks, and cannot be undone.'
+      )
+    ) {
+      return;
+    }
+
+    setBulkBusy(true);
+    $('#bulk-status').text('Deleting…');
+
+    MaitAI.api
+      .bulkDeleteAiEvents(ids)
+      .done(function (result) {
+        const n = (result && result.deleted_count) || ids.length;
+        state.offset = 0;
+        load(n + (n === 1 ? ' event deleted.' : ' events deleted.'));
+      })
+      .fail(function (problem) {
+        setBulkBusy(false);
+        $('#bulk-status').text('');
+        MaitAI.shell.alert(problem.detail);
+      });
+  }
+
+  /**
+   * @param {string} [flash] a success line to show once the reloaded list has rendered. Set by
+   *   a delete; left off by the pager and the filters, which have nothing to announce.
+   */
+  function load(flash) {
     MaitAI.shell.clearAlert();
     MaitAI.api
       .aiEvents(query())
       .done(function (page) {
         state.count = page.count;
+        const summary = page.summary || {};
         $('#event-count').text(ui.number(page.count) + ' events');
+        if (flash) {
+          MaitAI.shell.alert(flash, 'good');
+        }
+
+        // The Unfinished chip carries how many captures in this view still wait on a Mait, so
+        // an admin can see at a glance that there are any — and click to list them. It is also
+        // what reconciles this screen with the dashboard: the dashboard counts the completed,
+        // and the unfinished are the difference.
+        const unfinishedN = summary.unfinished || 0;
+        $('#unfinished-count')
+          .text(ui.number(unfinishedN))
+          .prop('hidden', !unfinishedN || unfinishedOn());
 
         // An empty unfiltered list is a screen nobody can read. Anything else — including a
         // filter that matches nothing — is a result, and gets said plainly.
@@ -302,10 +462,30 @@
         }
 
         $('#events').removeClass('events--sample');
-        $('#events-note').text(
-          ui.number(page.count) + ' matching · showing ' + (page.results || []).length
-        );
-        ui.rows($('#rows'), page.results, row, 'No events match these filters.', 7);
+        // The count, then its status split (what the dashboard counts vs what is still open),
+        // then how many of the page are on screen. The split is left off when the Unfinished
+        // chip is already pressed — the whole list is unfinished there, so it says nothing.
+        const parts = [ui.number(page.count) + (unfinishedOn() ? ' unfinished' : ' matching')];
+        if (!unfinishedOn()) {
+          const split = [];
+          if (summary.completed) {
+            split.push(ui.number(summary.completed) + ' completed');
+          }
+          if (summary.unfinished) {
+            split.push(ui.number(summary.unfinished) + ' unfinished');
+          }
+          if (summary.cancelled) {
+            split.push(ui.number(summary.cancelled) + ' cancelled');
+          }
+          if (split.length) {
+            parts.push(split.join(' · '));
+          }
+        }
+        parts.push('showing ' + (page.results || []).length);
+        $('#events-note').text(parts.join(' · '));
+        ui.rows($('#rows'), page.results, row, 'No events match these filters.', 8);
+        // The table was just rebuilt, so nothing is ticked any more and the bar must say so.
+        renderBulk();
         ui.pager(
           $('#pager'),
           { count: page.count, limit: LIMIT, offset: state.offset },
@@ -317,7 +497,8 @@
       })
       .fail(function (problem) {
         MaitAI.shell.alert(problem.detail);
-        ui.rows($('#rows'), [], row, 'Could not load events.', 7);
+        ui.rows($('#rows'), [], row, 'Could not load events.', 8);
+        renderBulk();
       });
   }
 
@@ -343,6 +524,13 @@
     MaitAI.shell.mount();
     loadMppOptions();
 
+    // Decide before the first render, so the tick column is never drawn for someone who cannot
+    // use it. `table--no-pick` collapses that column (header and body alike) for non-admins.
+    canDelete = readCanDelete();
+    if (!canDelete) {
+      $('.table').addClass('table--no-pick');
+    }
+
     // Arrived from a queue card on Exceptions or the dashboard. Set the control rather than
     // filtering behind its back: the operator has to be able to see why this list is short,
     // and to widen it without going back the way they came. An unknown value leaves the select
@@ -352,9 +540,33 @@
       $('#filter-status').val(status);
     }
 
+    // Arrived from a "stuck events" link (e.g. the dashboard): open straight onto the
+    // unfinished set. A status in the URL wins, since it is the more specific request.
+    const unfinished = MaitAI.shell.param('unfinished');
+    if (!status && (unfinished === '1' || unfinished === 'true')) {
+      $('#filter-unfinished').attr('aria-pressed', 'true').addClass('is-active');
+    }
+
     load();
 
     $('#filter-status, #filter-mpp, #filter-from, #filter-to').on('change', function () {
+      // A chosen status is the more specific answer, so picking one releases the Unfinished
+      // chip rather than fighting it — otherwise the two AND to a confusing near-empty list.
+      if (this.id === 'filter-status' && $(this).val()) {
+        $('#filter-unfinished').attr('aria-pressed', 'false').removeClass('is-active');
+      }
+      state.offset = 0;
+      load();
+    });
+
+    // One click to every capture that stopped partway, and where it stopped. Clears any single
+    // status first — the chip asks for the whole unfinished set, which a lone status contradicts.
+    $('#filter-unfinished').on('click', function () {
+      const on = $(this).attr('aria-pressed') !== 'true';
+      $(this).attr('aria-pressed', String(on)).toggleClass('is-active', on);
+      if (on) {
+        $('#filter-status').val('');
+      }
       state.offset = 0;
       load();
     });
@@ -371,5 +583,25 @@
     });
 
     $('#export').on('click', exportCsv);
+
+    /* --- bulk selection and delete -------------------------------------------------------- */
+    // Wired only for an admin: for everyone else the controls are not on the page, so there is
+    // nothing to bind and no path to the delete call.
+    if (canDelete) {
+      // Delegated: the table is rebuilt on every load and pager click.
+      $('#rows').on('change', '.pick', renderBulk);
+
+      $('#pick-all').on('change', function () {
+        $('#rows .pick').prop('checked', $(this).is(':checked'));
+        renderBulk();
+      });
+
+      $('#bulk-clear').on('click', function () {
+        $('#rows .pick').prop('checked', false);
+        renderBulk();
+      });
+
+      $('#bulk-delete').on('click', runDelete);
+    }
   });
 })(window.MaitAI, jQuery);

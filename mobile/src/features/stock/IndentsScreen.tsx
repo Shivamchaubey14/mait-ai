@@ -33,13 +33,15 @@ import type { TFunction } from 'i18next';
 
 import { useListBreedsQuery, useListIndentsQuery } from '@api/endpoints';
 import type { Indent } from '@api/types';
+import Glyph, { GlyphName, STRAW_GLYPH } from '@/components/glyph';
 import Problem, { useOnline } from '@/components/problem';
 import { EmptyState, SkeletonList } from '@/components/states';
 import {
   colors,
+  green,
+  ink,
   MIN_TOUCH_TARGET,
   radius,
-  shadows,
   spacing,
   typography,
   yolk,
@@ -111,6 +113,64 @@ const TONES: Record<IndentState, IndentTone> = {
   collected: 'good',
   rejected: 'bad',
 };
+
+/**
+ * Each tone as paint: the solid for a chip or a pill, what goes on it, the word colour on a
+ * wash, and the wash and edge of a card. Exported so the detail screen wears the same.
+ */
+export const TONE_PAINT: Record<
+  IndentTone,
+  { solid: string; onSolid: string; word: string; wash: string; edge: string }
+> = {
+  plain: {
+    solid: ink[400],
+    onSolid: colors.surface,
+    word: ink[600],
+    wash: ink[50],
+    edge: ink[100],
+  },
+  info: {
+    solid: colors.info,
+    onSolid: colors.surface,
+    word: colors.info,
+    wash: colors.infoWash,
+    edge: colors.info,
+  },
+  waiting: {
+    solid: yolk[500],
+    onSolid: colors.ink,
+    word: yolk[800],
+    wash: colors.secondaryWash,
+    edge: yolk[300],
+  },
+  good: {
+    solid: colors.primary,
+    onSolid: colors.surface,
+    word: colors.primaryDark,
+    wash: colors.primaryWash,
+    edge: green[300],
+  },
+  bad: {
+    solid: colors.error,
+    onSolid: colors.surface,
+    word: colors.error,
+    wash: colors.errorWash,
+    edge: colors.error,
+  },
+};
+
+/** Each state's glyph: sent, agreed, at the counter, in the flask, turned down. */
+export const STATE_GLYPH: Record<IndentState, GlyphName> = {
+  requested: 'paper-plane',
+  approved: 'thumbs-up',
+  issued: 'storefront',
+  collected: 'checkmark-done',
+  rejected: 'close-circle',
+};
+
+export function toneOf(state: IndentState): IndentTone {
+  return TONES[state];
+}
 
 /**
  * The state as a word and a colour, ready to draw.
@@ -215,7 +275,10 @@ export default function IndentsScreen({
         </View>
 
         <Text style={styles.heroTitle}>{t('indents.title')}</Text>
-        <Text style={styles.heroSubtitle} testID="indents-headline">
+        <Text
+          style={[styles.heroSubtitle, waiting > 0 && styles.heroSubtitleWaiting]}
+          testID="indents-headline"
+        >
           {waiting > 0
             ? t('indents.waitingToCollect', { count: waiting })
             : rows.length
@@ -242,17 +305,38 @@ export default function IndentsScreen({
           {(['all', ...INDENT_STATES] as const).map(key => {
             const active = key === filter;
             const count = key === 'all' ? all.length : (counts[key] ?? 0);
+            // "All" in the ink of the header; each state in its own colour, filled when on.
+            const paint =
+              key === 'all'
+                ? {
+                    solid: colors.ink,
+                    onSolid: colors.surface,
+                    word: colors.ink,
+                    wash: colors.surface,
+                    edge: ink[300],
+                  }
+                : TONE_PAINT[TONES[key]];
             return (
               <Pressable
                 key={key}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
                 onPress={() => setFilter(key)}
-                style={[styles.filter, active && styles.filterActive]}
+                style={[
+                  styles.filter,
+                  active
+                    ? { backgroundColor: paint.solid, borderColor: paint.solid }
+                    : { backgroundColor: paint.wash, borderColor: paint.edge },
+                ]}
                 testID={`indent-filter-${key}`}
               >
+                <Glyph
+                  name={key === 'all' ? 'albums' : STATE_GLYPH[key]}
+                  size={14}
+                  color={active ? paint.onSolid : paint.word}
+                />
                 <Text
-                  style={[styles.filterLabel, active && styles.filterLabelActive]}
+                  style={[styles.filterLabel, { color: active ? paint.onSolid : paint.word }]}
                   numberOfLines={1}
                 >
                   {key === 'all' ? t('indents.filterAll') : t(`indents.state_${key}`)}
@@ -260,9 +344,21 @@ export default function IndentsScreen({
                 {/* Only where there is something to count. A grey nought beside every unused
                     status turns the row into a report nobody asked for. */}
                 {count > 0 && (
-                  <Text style={[styles.filterCount, active && styles.filterLabelActive]}>
-                    {count}
-                  </Text>
+                  <View
+                    style={[
+                      styles.filterCount,
+                      { backgroundColor: active ? colors.surface : paint.solid },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterCountLabel,
+                        { color: active ? paint.word : paint.onSolid },
+                      ]}
+                    >
+                      {count}
+                    </Text>
+                  </View>
                 )}
               </Pressable>
             );
@@ -304,16 +400,30 @@ export default function IndentsScreen({
         ) : (
           rows.map(indent => {
             const status = statusTone(indent, t);
-            const collectable = indentState(indent) === 'issued';
+            const state = indentState(indent);
+            const collectable = state === 'issued';
+            const paint = TONE_PAINT[status.tone];
             return (
               <Pressable
                 key={indent.id}
                 accessibilityRole="button"
                 accessibilityLabel={`IND-${indent.id} · ${status.label}`}
                 onPress={() => onOpen(indent)}
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                style={({ pressed }) => [
+                  styles.row,
+                  { backgroundColor: paint.wash, borderColor: paint.edge },
+                  pressed && styles.rowPressed,
+                ]}
                 testID={`indent-${indent.id}`}
               >
+                {/* What was asked for, on the colour of where it has got to. */}
+                <View style={[styles.chip, { backgroundColor: paint.solid }]}>
+                  <Glyph
+                    name={indent.breed ? STRAW_GLYPH : 'flask'}
+                    size={20}
+                    color={paint.onSolid}
+                  />
+                </View>
                 <View style={styles.rowBody}>
                   <Text style={styles.rowTitle} numberOfLines={1}>
                     {t('stock.indentLine', {
@@ -323,23 +433,22 @@ export default function IndentsScreen({
                     })}
                   </Text>
                   <Text
-                    style={[styles.rowMeta, collectable && styles.rowMetaWaiting]}
+                    style={[styles.rowMeta, { color: collectable ? yolk[800] : paint.word }]}
                     numberOfLines={2}
                   >
                     {nextStep(indent, t)}
                   </Text>
+                  <View style={[styles.pill, { backgroundColor: paint.solid }]}>
+                    <Glyph name={STATE_GLYPH[state]} size={11} color={paint.onSolid} />
+                    <Text style={[styles.pillLabel, { color: paint.onSolid }]} numberOfLines={1}>
+                      {status.label}
+                    </Text>
+                  </View>
                 </View>
 
-                <View style={[styles.pill, styles[`pill_${status.tone}`]]}>
-                  <Text
-                    style={[styles.pillLabel, styles[`pillLabel_${status.tone}`]]}
-                    numberOfLines={1}
-                  >
-                    {status.label}
-                  </Text>
+                <View style={[styles.go, { borderColor: paint.solid }]}>
+                  <Ionicons name="chevron-forward" size={16} color={paint.word} />
                 </View>
-
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </Pressable>
             );
           })
@@ -348,7 +457,9 @@ export default function IndentsScreen({
         {/* The sentence this whole screen exists to prevent somebody learning the hard way. */}
         {rows.length > 0 && filter !== 'collected' && filter !== 'rejected' && (
           <View style={styles.footnote} testID="indents-footnote">
-            <Ionicons name="warning-outline" size={17} color={colors.secondaryPressed} />
+            <View style={[styles.chipSmall, { backgroundColor: yolk[500] }]}>
+              <Ionicons name="warning" size={16} color={colors.ink} />
+            </View>
             <Text style={styles.footnoteText}>{t('indents.issuedIsNotReceived')}</Text>
           </View>
         )}
@@ -392,40 +503,72 @@ const styles = StyleSheet.create({
     marginTop: spacing[1],
   },
 
+  // Yolk on the dark header: something is at a counter waiting for them.
+  heroSubtitleWaiting: {
+    alignSelf: 'flex-start',
+    opacity: 1,
+    color: colors.ink,
+    backgroundColor: yolk[500],
+    paddingHorizontal: spacing[3],
+    paddingVertical: 2,
+    marginTop: spacing[2],
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+    ...typography.label,
+  },
+
   // -- rows ------------------------------------------------------------------------------
   body: { padding: spacing[4] },
+  // Every row in the wash of where it has got to, the colour of its pill.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET + spacing[3],
-    padding: spacing[4],
+    padding: spacing[3],
     marginBottom: spacing[3],
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
   },
-  rowPressed: { backgroundColor: colors.background },
-  rowBody: { flex: 1 },
+  rowPressed: { opacity: 0.85 },
+  chip: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowBody: { flex: 1, gap: 3 },
   rowTitle: { ...typography.h3, color: colors.ink },
-  rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  // Amber, not red: something is waiting for them, and nothing is wrong.
-  rowMetaWaiting: { color: yolk[800] },
+  rowMeta: { ...typography.caption },
+  go: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
 
-  pill: { paddingHorizontal: spacing[3], paddingVertical: 3, borderRadius: radius.pill },
-  pill_plain: { backgroundColor: colors.background },
-  pill_info: { backgroundColor: colors.infoWash },
-  pill_waiting: { backgroundColor: colors.secondaryWash },
-  pill_good: { backgroundColor: colors.primaryWash },
-  pill_bad: { backgroundColor: colors.errorWash },
-  pillLabel: { ...typography.caption },
-  pillLabel_plain: { color: colors.textMuted },
-  pillLabel_info: { color: colors.info },
-  pillLabel_waiting: { color: yolk[800] },
-  pillLabel_good: { color: colors.primaryDark },
-  pillLabel_bad: { color: colors.error },
+  pill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  pillLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
 
   // -- status chips ----------------------------------------------------------------------
   filterWrap: { paddingTop: spacing[4] },
@@ -435,21 +578,23 @@ const styles = StyleSheet.create({
   filter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing[4],
-    minHeight: MIN_TOUCH_TARGET - 12,
+    gap: spacing[1],
+    paddingHorizontal: spacing[3],
+    minHeight: MIN_TOUCH_TARGET - 8,
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
   },
-  // Outlined rather than filled, the same way the chips on AI events are: green in this app
-  // means "do this", and choosing what to look at is not an action.
-  filterActive: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
-  filterLabel: { ...typography.label, color: colors.textMuted },
-  filterLabelActive: { color: colors.primaryDark },
-  filterCount: { ...typography.caption, color: colors.textDisabled },
+  filterLabel: { ...typography.label },
+  filterCount: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterCountLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
 
   footnote: {
     flexDirection: 'row',
@@ -459,7 +604,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: colors.secondaryWash,
     borderWidth: 1,
-    borderColor: colors.secondary,
+    borderColor: yolk[300],
   },
-  footnoteText: { ...typography.caption, color: colors.textMuted, flex: 1 },
+  footnoteText: { ...typography.caption, color: yolk[800], flex: 1 },
 });

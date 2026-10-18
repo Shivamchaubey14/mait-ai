@@ -51,9 +51,10 @@ import { AI_FLOW_STEPS } from '@/config/env';
 import {
   colors,
   fonts,
+  green,
+  ink,
   MIN_TOUCH_TARGET,
   radius,
-  shadows,
   spacing,
   typography,
   yolk,
@@ -677,19 +678,46 @@ export function FlowSpacer(): React.JSX.Element {
 // --------------------------------------------------------------------------------------
 type Tone = 'primary' | 'accent' | 'info' | 'neutral';
 
+/**
+ * The coloured screen pattern, for the flow's own pieces: every card in the wash of its tone
+ * and edged in it, its glyph on a solid chip of the tone. Green is done or chosen, yolk a
+ * person or something waiting, blue a fact or a place, slate a setting or nothing to say.
+ */
 const SWATCH: Record<Tone, string> = {
   primary: colors.primaryWash,
   accent: colors.secondaryWash,
   info: colors.infoWash,
-  neutral: colors.background,
+  neutral: ink[50],
 };
 
+/** The word colour on a wash — green and yolk read darker than their solids. */
 const SWATCH_TINT: Record<Tone, string> = {
   primary: colors.primaryDark,
-  accent: colors.secondaryPressed,
+  accent: yolk[800],
   info: colors.info,
-  neutral: colors.textMuted,
+  neutral: ink[600],
 };
+
+/** The solid of each tone, for a chip or a pill. */
+const SOLID: Record<Tone, string> = {
+  primary: colors.primary,
+  accent: yolk[500],
+  info: colors.info,
+  neutral: ink[400],
+};
+
+/** A card's edge in each tone. */
+const EDGE: Record<Tone, string> = {
+  primary: green[300],
+  accent: yolk[300],
+  info: colors.info,
+  neutral: ink[100],
+};
+
+/** What sits on a solid chip: white, except on yolk, which fails contrast under white. */
+function onSolid(tone: Tone): string {
+  return tone === 'accent' ? colors.ink : colors.surface;
+}
 
 interface OptionCardProps {
   title: string;
@@ -815,6 +843,9 @@ export function OptionCard({
       style={({ pressed }) => [
         styles.card,
         size === 'roomy' && styles.cardRoomy,
+        // In its tone's wash and edge, always — a chosen row goes green and draws its edge
+        // heavier, so the choice reads across a yard without the others going blank.
+        { backgroundColor: SWATCH[tone], borderColor: EDGE[tone] },
         selected && styles.cardSelected,
         blocked && styles.cardBlocked,
         pressed && !blocked && !selected && styles.cardPressed,
@@ -825,9 +856,8 @@ export function OptionCard({
         style={[
           styles.swatch,
           size === 'roomy' && styles.swatchRoomy,
-          { backgroundColor: blocked ? colors.disabledFill : SWATCH[tone] },
+          { backgroundColor: blocked ? colors.disabledFill : SOLID[selected ? 'primary' : tone] },
           round && styles.swatchRound,
-          selected && !blocked && styles.swatchSelected,
           !swatch && styles.swatchOff,
         ]}
       >
@@ -835,8 +865,9 @@ export function OptionCard({
           <Text
             style={[
               styles.swatchLabel,
-              { color: blocked ? colors.textDisabled : SWATCH_TINT[tone] },
-              selected && !blocked && styles.swatchLabelSelected,
+              {
+                color: blocked ? colors.textDisabled : onSolid(selected ? 'primary' : tone),
+              },
             ]}
           >
             {swatchLabel}
@@ -848,7 +879,7 @@ export function OptionCard({
               <Ionicons
                 name={icon}
                 size={20}
-                color={blocked ? colors.textDisabled : SWATCH_TINT[tone]}
+                color={blocked ? colors.textDisabled : onSolid(selected ? 'primary' : tone)}
               />
             )))}
       </View>
@@ -868,7 +899,10 @@ export function OptionCard({
           <Text style={styles.cardReason}>{blockedReason}</Text>
         ) : (
           !!subtitle && (
-            <Text style={styles.cardSubtitle} numberOfLines={1}>
+            <Text
+              style={[styles.cardSubtitle, { color: SWATCH_TINT[selected ? 'primary' : tone] }]}
+              numberOfLines={1}
+            >
               {subtitle}
             </Text>
           )
@@ -1074,14 +1108,19 @@ export function CaptureTile({
         </>
       ) : (
         <View style={styles.captureEmpty}>
-          <Ionicons name="camera-outline" size={22} color={colors.textMuted} />
+          <View style={styles.captureChip}>
+            <Ionicons name="camera" size={20} color={colors.surface} />
+          </View>
         </View>
       )}
 
       <Text style={styles.captureLabel} numberOfLines={1}>
         {label}
       </Text>
-      <Text style={styles.captureHint} numberOfLines={1}>
+      <Text
+        style={[styles.captureHint, { color: uri ? colors.primaryDark : colors.info }]}
+        numberOfLines={1}
+      >
         {uri ? t('aiFlow.retake') : hint}
       </Text>
     </Pressable>
@@ -1116,15 +1155,16 @@ export function AddCard({
       style={({ pressed }) => [styles.card, styles.addCard, pressed && styles.addCardPressed]}
       testID={testID}
     >
-      {/* Neutral, not green. The green on this screen belongs to the row already chosen and
-          to the button that acts on it; a green plus would compete with both for the eye of
-          someone who has come here to pick, not to register. */}
-      <View style={[styles.swatch, { backgroundColor: colors.background }]}>
-        <Ionicons name="add" size={22} color={colors.ink} />
+      {/* Blue, the colour of a new record to be written: distinct from the green the chosen
+          row and the button carry, so it never competes with the answer already given. */}
+      <View style={[styles.swatch, { backgroundColor: colors.info }]}>
+        <Ionicons name="add" size={22} color={colors.surface} />
       </View>
       <View style={styles.cardBody}>
         <Text style={styles.cardTitle}>{title}</Text>
-        {!!subtitle && <Text style={styles.cardSubtitle}>{subtitle}</Text>}
+        {!!subtitle && (
+          <Text style={[styles.cardSubtitle, { color: colors.info }]}>{subtitle}</Text>
+        )}
       </View>
     </Pressable>
   );
@@ -1156,10 +1196,18 @@ export function FieldCard({
 
   return (
     <View ref={wrap} style={styles.fieldWrap}>
-      <View style={[styles.card, !!error && styles.cardError]}>
-        <View style={[styles.swatch, { backgroundColor: SWATCH[tone] }]} />
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: SWATCH[tone], borderColor: EDGE[tone] },
+          !!error && styles.cardError,
+        ]}
+      >
+        <View style={[styles.swatch, { backgroundColor: SOLID[tone] }]}>
+          <Ionicons name="create" size={18} color={onSolid(tone)} />
+        </View>
         <View style={styles.cardBody}>
-          <Text style={styles.fieldLabel}>{label}</Text>
+          <Text style={[styles.fieldLabel, { color: SWATCH_TINT[tone] }]}>{label}</Text>
           <TextInput
             style={styles.fieldInput}
             placeholderTextColor={colors.textDisabled}
@@ -1284,7 +1332,11 @@ export function CheckboxRow({
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
       onPress={onToggle}
-      style={({ pressed }) => [styles.checkRow, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        styles.checkRow,
+        checked && styles.checkRowOn,
+        pressed && styles.cardPressed,
+      ]}
       testID={testID}
     >
       <View style={[styles.checkbox, checked && styles.checkboxOn]}>
@@ -1346,7 +1398,7 @@ export function Dropdown<T extends string>({
         >
           {chosen?.label ?? placeholder}
         </Text>
-        <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
+        <Ionicons name="chevron-down" size={20} color={chosen ? colors.primaryDark : colors.info} />
       </Pressable>
 
       {/* A sheet of its own rather than an inline expansion: an inline list would push the
@@ -1401,7 +1453,9 @@ export function SearchField({
 }: { placeholder: string } & TextInputProps): React.JSX.Element {
   return (
     <View style={styles.search}>
-      <Ionicons name="search" size={18} color={colors.textMuted} />
+      <View style={styles.searchChip}>
+        <Ionicons name="search" size={16} color={colors.surface} />
+      </View>
       <TextInput
         style={styles.searchInput}
         placeholder={placeholder}
@@ -1466,7 +1520,12 @@ export function IdentityCard({
       </View>
 
       <Text style={styles.identityName}>{name}</Text>
-      {!!code && <Text style={styles.identityCode}>{code}</Text>}
+      {!!code && (
+        <View style={styles.identityCodePill}>
+          <Ionicons name="card" size={13} color={colors.surface} />
+          <Text style={styles.identityCode}>{code}</Text>
+        </View>
+      )}
 
       {facts.length > 0 && <View style={styles.rule} />}
 
@@ -1534,7 +1593,7 @@ export function InfoTile({
       </View>
       {!!pill && (
         <View style={styles.tilePill}>
-          <Text style={styles.pillLabel}>{pill}</Text>
+          <Text style={[styles.pillLabel, { color: colors.surface }]}>{pill}</Text>
         </View>
       )}
     </View>
@@ -1579,7 +1638,7 @@ export function FlowNotice({
       glyph: 'checkmark' as const,
     },
     accent: {
-      swatch: colors.secondary,
+      swatch: yolk[500],
       wash: colors.secondaryWash,
       glyph: 'warning' as const,
     },
@@ -1604,7 +1663,11 @@ export function FlowNotice({
       {/* A glyph, not a blank square. A coloured block asks the reader to remember what the
           colour meant; a warning triangle does not. */}
       <View style={[styles.noticeSwatch, { backgroundColor: swatch }]}>
-        <Ionicons name={icon ?? glyph} size={15} color={colors.surface} />
+        <Ionicons
+          name={icon ?? glyph}
+          size={17}
+          color={tone === 'accent' ? colors.ink : colors.surface}
+        />
       </View>
       <View style={styles.cardBody}>
         {!!title && <Text style={styles.cardTitle}>{title}</Text>}
@@ -1614,8 +1677,15 @@ export function FlowNotice({
       </View>
 
       {!!pill && (
-        <View style={[styles.noticePill, { borderColor: swatch }]}>
-          <Text style={styles.noticePillLabel}>{pill}</Text>
+        <View style={[styles.noticePill, { borderColor: swatch, backgroundColor: swatch }]}>
+          <Text
+            style={[
+              styles.noticePillLabel,
+              { color: tone === 'accent' ? colors.ink : colors.surface },
+            ]}
+          >
+            {pill}
+          </Text>
         </View>
       )}
     </View>
@@ -1632,7 +1702,12 @@ export function FlowLabel({
   children: React.ReactNode;
   style?: ViewStyle;
 }): React.JSX.Element {
-  return <Text style={[styles.label, style]}>{children}</Text>;
+  return (
+    <View style={[styles.labelRow, style]}>
+      <View style={styles.labelDot} />
+      <Text style={styles.label}>{children}</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -1707,7 +1782,14 @@ const styles = StyleSheet.create({
   body: { flexGrow: 1, paddingTop: spacing[4] },
   bodyUnderSticky: { paddingTop: 0 },
   spacer: { flexGrow: 1, minHeight: spacing[5] },
-  label: { ...typography.label, color: colors.text, marginBottom: spacing[2] },
+  label: { ...typography.label, color: colors.primaryDark, flexShrink: 1 },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[2],
+  },
+  labelDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
 
   // Lifted off the page rather than outlined on it (DESIGN_SYSTEM — Cards). The border is
   // kept at zero-visibility width so the chosen row can take a green one without the card
@@ -1719,13 +1801,9 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_TARGET + spacing[4],
     backgroundColor: colors.surface,
     borderWidth: 1,
-    // Outlined even when it is not the chosen one. A transparent edge left the card leaning
-    // on its shadow alone, which on a cheap screen in daylight is nothing at all — and it is
-    // the same hairline every other card in the app now carries.
     borderColor: colors.border,
     borderRadius: radius.lg,
-    ...shadows.card,
-    padding: spacing[4],
+    padding: spacing[3],
     marginBottom: spacing[3],
   },
   // Stretched for a screen that holds two of them and nothing else. The height comes from the
@@ -1738,23 +1816,27 @@ const styles = StyleSheet.create({
     gap: spacing[4],
     marginBottom: spacing[4],
   },
-  cardSelected: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
-  cardPressed: { backgroundColor: colors.background },
-  cardBlocked: { backgroundColor: colors.background, borderColor: colors.border },
+  cardSelected: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+    backgroundColor: colors.primaryWash,
+  },
+  cardPressed: { opacity: 0.85 },
+  cardBlocked: { backgroundColor: ink[50], borderColor: ink[100] },
   swatch: {
     width: 40,
     height: 40,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   // On a chosen card the wash has already tinted the whole row, so the tile has to go white
   // or it dissolves into the card behind it.
   swatchRoomy: { width: 46, height: 46, borderRadius: radius.md },
-  swatchSelected: { backgroundColor: colors.surface },
+  swatchSelected: {},
   swatchRound: { borderRadius: 20 },
   swatchLabel: { ...typography.label, fontFamily: fonts.headingBold },
-  swatchLabelSelected: { color: colors.primaryDark },
+  swatchLabelSelected: {},
   // Collapsed rather than absent, so one component draws both kinds of row.
   swatchOff: { display: 'none' },
   cardBody: { flex: 1 },
@@ -1764,14 +1846,11 @@ const styles = StyleSheet.create({
   // record. No fill: a white card here would be indistinguishable from a real animal.
   addCard: {
     borderStyle: 'dashed',
-    borderColor: colors.textDisabled,
-    backgroundColor: 'transparent',
-    // Flat: a shadow would put it on the same plane as the records above it, which is the one
-    // thing the dashed outline is there to deny.
-    shadowOpacity: 0,
-    elevation: 0,
+    borderWidth: 1.5,
+    borderColor: colors.info,
+    backgroundColor: colors.infoWash,
   },
-  addCardPressed: { backgroundColor: colors.primaryWash },
+  addCardPressed: { opacity: 0.85 },
 
   // A rounded rectangle, not a pill. Every other surface in the flow is a rounded rectangle —
   // the cards, the button, the hero — and a capsule here would be the one shape on the screen
@@ -1782,7 +1861,9 @@ const styles = StyleSheet.create({
     gap: spacing[1],
     padding: spacing[1],
     marginBottom: spacing[4],
-    backgroundColor: colors.surface,
+    backgroundColor: colors.infoWash,
+    borderWidth: 1,
+    borderColor: colors.info,
     borderRadius: radius.lg,
   },
   segment2: {
@@ -1793,8 +1874,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
     borderRadius: radius.md,
   },
-  segment2Active: { backgroundColor: colors.primary },
-  segmentLabel: { ...typography.bodyStrong, color: colors.text },
+  segment2Active: { backgroundColor: colors.info },
+  segmentLabel: { ...typography.bodyStrong, color: colors.info },
   segmentLabelActive: { color: colors.surface, fontFamily: fonts.headingBold },
 
   // A form label inside the sheet: green, because on white it has to separate itself from the
@@ -1825,9 +1906,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    marginBottom: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.info,
+    backgroundColor: colors.infoWash,
   },
   dropdownOptionLabel: { ...typography.body, fontSize: 16, color: colors.ink },
   dropdownOptionOn: { ...typography.bodyStrong, fontSize: 16, color: colors.primaryDark },
@@ -1840,11 +1925,11 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_TARGET + 8,
     paddingHorizontal: spacing[4],
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: ink[200],
     borderRadius: radius.md,
   },
-  labelledBoxFocused: { borderColor: colors.primary },
+  labelledBoxFocused: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
   labelledBoxError: { borderColor: colors.error },
   labelledIcon: { opacity: 0.9 },
   // The value is set in the strong face and the placeholder is not, so a filled field reads
@@ -1863,17 +1948,19 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET,
     padding: spacing[4],
-    backgroundColor: colors.surface,
+    backgroundColor: colors.secondaryWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: yolk[300],
     borderRadius: radius.md,
   },
+  checkRowOn: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
   checkbox: {
     width: 26,
     height: 26,
     borderRadius: radius.sm,
     borderWidth: 1.5,
-    borderColor: colors.border,
+    borderColor: yolk[800],
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1884,12 +1971,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET + 4,
-    paddingHorizontal: spacing[4],
+    paddingLeft: spacing[2],
+    paddingRight: spacing[4],
     marginBottom: spacing[4],
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.infoWash,
+    borderWidth: 1.5,
+    borderColor: colors.info,
     borderRadius: radius.md,
+  },
+  searchChip: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.info,
   },
   searchInput: { flex: 1, ...typography.body, color: colors.ink, paddingVertical: spacing[2] },
 
@@ -1921,10 +2017,11 @@ const styles = StyleSheet.create({
   // one that gets confirmed unread, which is the exact failure the screen exists to prevent.
   identity: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.secondaryWash,
+    borderWidth: 1,
+    borderColor: yolk[300],
     borderRadius: radius.xl,
-    ...shadows.card,
-    paddingHorizontal: spacing[5],
+    paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
     marginBottom: spacing[3],
   },
@@ -1935,25 +2032,52 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: colors.primaryWash,
+    backgroundColor: yolk[500],
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing[2],
   },
-  avatarLabel: { ...typography.h3, color: colors.primaryDark },
+  avatarLabel: { ...typography.h3, color: colors.ink },
   identityName: { ...typography.h2, color: colors.ink, textAlign: 'center' },
   // The code is green because it is the thing that was typed: it is what a wrong tap gets
   // wrong, so it is the line the Mait should read back before saying yes.
-  identityCode: { ...typography.bodyStrong, color: colors.primaryDark, marginTop: 2 },
+  identityCode: {
+    ...typography.bodyStrong,
+    color: colors.surface,
+  },
+  identityCodePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing[1],
+    paddingHorizontal: spacing[3],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
   rule: {
     alignSelf: 'stretch',
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: yolk[300],
     marginTop: spacing[3],
   },
-  facts: { flexDirection: 'row', flexWrap: 'wrap', alignSelf: 'stretch' },
-  fact: { width: '50%', paddingTop: spacing[3], paddingRight: spacing[3] },
-  factLabel: { ...typography.caption, color: colors.textMuted },
+  facts: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignSelf: 'stretch',
+    gap: spacing[2],
+    marginTop: spacing[3],
+  },
+  fact: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    padding: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: yolk[300],
+    backgroundColor: colors.surface,
+  },
+  factLabel: { ...typography.caption, color: yolk[800] },
   factValue: { ...typography.bodyStrong, color: colors.ink, marginTop: 2 },
 
   infoRow: {
@@ -1963,53 +2087,60 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     paddingVertical: spacing[3],
   },
-  infoRowRuled: { borderBottomWidth: 1, borderBottomColor: colors.border },
-  infoLabel: { ...typography.body, color: colors.textMuted },
+  infoRowRuled: { borderBottomWidth: 1, borderBottomColor: ink[100] },
+  infoLabel: { ...typography.body, color: ink[500] },
   infoValue: { ...typography.bodyStrong, color: colors.ink, flexShrink: 1, textAlign: 'right' },
 
   tile: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    backgroundColor: colors.background,
+    backgroundColor: colors.primaryWash,
+    borderWidth: 1,
+    borderColor: green[300],
     borderRadius: radius.md,
     padding: spacing[4],
     marginBottom: spacing[3],
   },
-  tileLabel: { ...typography.caption, color: colors.textMuted },
+  tileLabel: { ...typography.caption, color: colors.primaryDark },
   tileValue: { ...typography.h1, color: colors.ink, marginTop: 2 },
   tilePill: {
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[1],
     borderRadius: radius.pill,
-    backgroundColor: colors.primaryWash,
+    backgroundColor: colors.primary,
   },
 
   pill: {
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[1],
     borderRadius: radius.pill,
-    backgroundColor: colors.primaryWash,
+    backgroundColor: colors.primary,
   },
   // Yolk fill with Ink on it, never yellow text on a pale surface (DESIGN_SYSTEM — Colour).
-  pillAccent: { backgroundColor: colors.secondaryWash },
-  pillError: { backgroundColor: colors.errorWash },
+  pillAccent: { backgroundColor: yolk[500] },
+  pillError: { backgroundColor: colors.error },
   // The page's own grey, outlined so it still reads as a pill on a white card rather than as
   // a hole in it.
-  pillMuted: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
-  pillBlocked: { backgroundColor: colors.errorWash },
-  pillLabel: { ...typography.caption, color: colors.primaryDark },
-  pillLabelAccent: { color: yolk[800] },
-  pillLabelError: { color: colors.error },
-  pillLabelMuted: { color: colors.textMuted },
-  pillLabelBlocked: { color: colors.error },
+  pillMuted: { backgroundColor: ink[400] },
+  pillBlocked: { backgroundColor: colors.error },
+  pillLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
+  pillLabelAccent: { color: colors.ink },
+  pillLabelError: { color: colors.surface },
+  pillLabelMuted: { color: colors.surface },
+  pillLabelBlocked: { color: colors.surface },
 
   radio: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: colors.border,
+    borderColor: colors.info,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2025,13 +2156,17 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET,
     paddingHorizontal: spacing[4],
-    backgroundColor: colors.surface,
+    backgroundColor: colors.infoWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.info,
     borderRadius: radius.md,
   },
-  radioOptionOn: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
-  radioLabel: { ...typography.body, color: colors.text, flexShrink: 1 },
+  radioOptionOn: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+    backgroundColor: colors.primaryWash,
+  },
+  radioLabel: { ...typography.body, color: colors.info, flexShrink: 1 },
   radioLabelOn: { ...typography.bodyStrong, color: colors.primaryDark },
 
   // A slot the height of the card it will hold, so the form does not jump when one is taken.
@@ -2039,10 +2174,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     padding: spacing[3],
-    backgroundColor: colors.surface,
-    borderWidth: 1,
+    backgroundColor: colors.infoWash,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.textDisabled,
+    borderColor: colors.info,
     borderRadius: radius.lg,
   },
   captureFilled: {
@@ -2056,7 +2191,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
+  },
+  captureChip: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.info,
   },
   captureShot: { width: '100%', height: 72, borderRadius: radius.md },
   captureTick: {
@@ -2106,11 +2249,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     backgroundColor: colors.surface,
   },
-  noticePillLabel: { ...typography.caption, color: colors.ink },
+  noticePillLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
   noticeSwatch: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },

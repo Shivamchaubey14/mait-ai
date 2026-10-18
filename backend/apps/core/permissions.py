@@ -24,8 +24,29 @@ class IsSuperAdmin(_RolePermission):
 
 
 class IsAdmin(_RolePermission):
-    """Super Admin or back-office Admin."""
+    """
+    An office/portal account: Super Admin, back-office Admin, or Normal User.
 
+    This is the "may reach the portal at all" gate, paired with ``in_section`` on nearly every
+    admin endpoint. A Normal User is admitted here because it works the portal as an Admin does;
+    the one thing it may not do — delete an AI event — is gated by ``CanDeleteAIEvent`` rather
+    than by this class, so broadening it here does not widen that.
+    """
+
+    allowed_roles = (Role.SUPER_ADMIN, Role.ADMIN, Role.NORMAL_USER)
+
+
+class CanDeleteAIEvent(_RolePermission):
+    """
+    Deleting an AI event — the one portal action a Normal User is held back from.
+
+    Super Admin or back-office Admin only. Deliberately not ``IsAdmin``: that now admits a
+    Normal User, and deletion is the single thing that role exists to withhold. Paired with
+    ``in_section(AI_EVENTS)`` exactly as the rest of the endpoint is, so the deleter still needs
+    the section too.
+    """
+
+    message = "Deleting an AI event is restricted to an Admin or Super Admin."
     allowed_roles = (Role.SUPER_ADMIN, Role.ADMIN)
 
 
@@ -86,7 +107,7 @@ class IsKnownRole(_RolePermission):
     having to audit forty views to find out.
     """
 
-    allowed_roles = (Role.SUPER_ADMIN, Role.ADMIN, Role.MAIT)
+    allowed_roles = (Role.SUPER_ADMIN, Role.ADMIN, Role.NORMAL_USER, Role.MAIT)
 
 
 class InPortalSection(BasePermission):
@@ -154,7 +175,7 @@ class IsAdminOrMaitReadOnly(BasePermission):
         user = request.user
         if not (user and user.is_authenticated):
             return False
-        if user.role in (Role.SUPER_ADMIN, Role.ADMIN):
+        if user.is_admin:
             return True
         return user.role == Role.MAIT and request.method in self.SAFE
 
@@ -170,7 +191,7 @@ class IsOwnMaitRecord(BasePermission):
 
     def has_object_permission(self, request, view, obj) -> bool:
         user = request.user
-        if user.role in (Role.SUPER_ADMIN, Role.ADMIN):
+        if user.is_admin:
             return True
         mait = getattr(user, "mait_profile", None)
         if mait is None:

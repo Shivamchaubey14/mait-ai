@@ -76,15 +76,14 @@ export default function OwnerTypeScreen({
           account-with-check, and the pair has to come from one family or the two cards read as
           two different weights of drawing. */}
       <OptionCard
+        tone="info"
         title={t('aiFlow.member')}
         subtitle={t('aiFlow.memberSubtitle')}
         // Two choices and a whole screen to make them in. A list-tight row here reads as an
         // item lifted out of a list that is not on the page, and the question deserves the
         // room — everything after this step is built on the answer.
         size="roomy"
-        iconNode={
-          <MaterialCommunityIcons name="account-check-outline" size={22} color={colors.primary} />
-        }
+        iconNode={<MaterialCommunityIcons name="account-check" size={24} color={colors.surface} />}
         selected={choice === 'member'}
         // A tick on the chosen card and nothing on the other, which is how every other choice
         // in this flow is drawn. An empty ring beside the option a Mait did not pick is a
@@ -101,10 +100,8 @@ export default function OwnerTypeScreen({
         // as final.
         subtitle={nonMemberSubtitle()}
         size="roomy"
-        iconNode={
-          <MaterialCommunityIcons name="account-outline" size={22} color={colors.textMuted} />
-        }
-        tone="neutral"
+        iconNode={<MaterialCommunityIcons name="account" size={24} color={colors.ink} />}
+        tone="accent"
         selected={choice === 'nonMember'}
         check
         onPress={() => setChoice('nonMember')}

@@ -32,15 +32,47 @@ import { useTranslation } from 'react-i18next';
 
 import type { PdOutcome, PregnancyCheck } from '@api/types';
 import { settlementFor } from './charge';
+import Glyph, { STRAW_GLYPH } from '@/components/glyph';
 import {
   colors,
+  green,
+  ink,
   MIN_TOUCH_TARGET,
   radius,
-  shadows,
   spacing,
   typography,
   yolk,
 } from '@theme/tokens';
+
+/**
+ * What the money card is, as a colour: blue for a member's deduction (a fact the dairy will
+ * settle), yolk for cash to collect or no price set (something to do before leaving), slate
+ * for a visit that is not billed.
+ */
+const SETTLE_PAINT = {
+  member: {
+    solid: colors.info,
+    on: colors.surface,
+    word: colors.info,
+    wash: colors.infoWash,
+    edge: colors.info,
+  },
+  nonMember: {
+    solid: yolk[500],
+    on: colors.ink,
+    word: yolk[800],
+    wash: colors.secondaryWash,
+    edge: yolk[300],
+  },
+  unpriced: {
+    solid: yolk[500],
+    on: colors.ink,
+    word: yolk[800],
+    wash: colors.secondaryWash,
+    edge: yolk[300],
+  },
+  none: { solid: ink[400], on: colors.surface, word: ink[600], wash: ink[50], edge: ink[100] },
+} as const;
 
 export default function PdDoneScreen({
   check,
@@ -87,30 +119,31 @@ export default function PdDoneScreen({
         amount: settlement.kind === 'member' ? settlement.amount : 0,
       }),
       body: t('pd.doneChargeMemberBody'),
-      icon: 'receipt-outline' as const,
+      icon: 'receipt' as const,
     },
     nonMember: {
       title: t('pd.doneChargeNonMemberTitle', {
         amount: settlement.kind === 'nonMember' ? settlement.amount : 0,
       }),
       body: t('pd.doneChargeNonMemberBody'),
-      icon: 'cash-outline' as const,
+      icon: 'cash' as const,
     },
     unpriced: {
       title: t('pd.doneChargeUnpricedTitle'),
       body: t('pd.doneChargeUnpricedBody'),
-      icon: 'help-circle-outline' as const,
+      icon: 'alert' as const,
     },
     none: {
       title: t('pd.doneChargeNoneTitle'),
       body: t('pd.doneChargeNoneBody'),
-      icon: 'remove-circle-outline' as const,
+      icon: 'remove-circle' as const,
     },
   }[settlement.kind];
 
   // Only where she is open to service. Offering it after a positive check would be offering
   // to inseminate a pregnant animal.
   const canServeAgain = outcome === 'not_pregnant';
+  const settle = SETTLE_PAINT[settlement.kind];
 
   return (
     <View style={styles.root}>
@@ -135,16 +168,20 @@ export default function PdDoneScreen({
           style={[styles.status, queued ? styles.statusQueued : styles.statusSent]}
           testID="pd-status"
         >
-          <Ionicons
-            name={queued ? 'time-outline' : 'cloud-done-outline'}
-            size={18}
-            color={queued ? colors.secondaryPressed : colors.primaryDark}
-          />
+          <View style={[styles.chip, { backgroundColor: queued ? yolk[500] : colors.primary }]}>
+            <Ionicons
+              name={queued ? 'time' : 'cloud-done'}
+              size={20}
+              color={queued ? colors.ink : colors.surface}
+            />
+          </View>
           <View style={styles.statusBody}>
             <Text style={styles.statusTitle}>
               {queued ? t('pd.queuedTitle') : t('pd.sentTitle')}
             </Text>
-            <Text style={styles.statusText}>{queued ? t('pd.queuedBody') : t('pd.sentBody')}</Text>
+            <Text style={[styles.statusText, { color: queued ? yolk[800] : colors.primaryDark }]}>
+              {queued ? t('pd.queuedBody') : t('pd.sentBody')}
+            </Text>
           </View>
           {queued && (
             <View style={styles.pill}>
@@ -157,19 +194,17 @@ export default function PdDoneScreen({
             uncollected is the failure this card exists to prevent, and it is only ever one
             tap from the end of the visit. */}
         <View
-          style={[styles.settlement, settlement.kind === 'nonMember' && styles.settlementCollect]}
+          style={[styles.settlement, { backgroundColor: settle.wash, borderColor: settle.edge }]}
           testID="pd-settlement"
         >
-          <View style={styles.settlementIcon}>
-            <Ionicons
-              name={settlementCopy.icon}
-              size={20}
-              color={settlement.kind === 'nonMember' ? colors.primaryDark : colors.textMuted}
-            />
+          <View style={[styles.chip, { backgroundColor: settle.solid }]}>
+            <Ionicons name={settlementCopy.icon} size={20} color={settle.on} />
           </View>
           <View style={styles.statusBody}>
             <Text style={styles.settlementTitle}>{settlementCopy.title}</Text>
-            <Text style={styles.settlementBody}>{settlementCopy.body}</Text>
+            <Text style={[styles.settlementBody, { color: settle.word }]}>
+              {settlementCopy.body}
+            </Text>
           </View>
         </View>
 
@@ -178,15 +213,27 @@ export default function PdDoneScreen({
             point: the row is closed, the walk counted, and the animal is not lost. */}
         {declined && (
           <View style={styles.aside} testID="pd-done-declined">
-            <Text style={styles.againTitle}>{t('pd.doneDeclinedTitle')}</Text>
-            <Text style={styles.againBody}>{t('pd.doneDeclinedBody')}</Text>
+            <View style={styles.cardHead}>
+              <View style={[styles.chip, { backgroundColor: ink[500] }]}>
+                <Ionicons name="hand-left" size={20} color={colors.surface} />
+              </View>
+              <Text style={[styles.againTitle, styles.cardTitle]}>{t('pd.doneDeclinedTitle')}</Text>
+            </View>
+            <Text style={[styles.againBody, { color: ink[600] }]}>{t('pd.doneDeclinedBody')}</Text>
           </View>
         )}
 
         {canServeAgain && (
           <View style={styles.again} testID="pd-serve-again">
-            <Text style={styles.againTitle}>{t('pd.againTitle')}</Text>
-            <Text style={styles.againBody}>{t('pd.againBody')}</Text>
+            <View style={styles.cardHead}>
+              <View style={[styles.chip, { backgroundColor: colors.primary }]}>
+                <Glyph name={STRAW_GLYPH} size={20} color={colors.surface} />
+              </View>
+              <Text style={[styles.againTitle, styles.cardTitle]}>{t('pd.againTitle')}</Text>
+            </View>
+            <Text style={[styles.againBody, { color: colors.primaryDark }]}>
+              {t('pd.againBody')}
+            </Text>
             <Pressable
               accessibilityRole="button"
               onPress={onStartAi}
@@ -208,6 +255,9 @@ export default function PdDoneScreen({
             style={({ pressed }) => [styles.next, pressed && styles.pressed]}
             testID="pd-next"
           >
+            <View style={[styles.chip, { backgroundColor: colors.info }]}>
+              <Ionicons name="navigate" size={19} color={colors.surface} />
+            </View>
             <View style={styles.nextBody}>
               <Text style={styles.nextTitle}>{t('pd.nextTitle', { count: 1 })}</Text>
               <Text style={styles.nextMeta} numberOfLines={1}>
@@ -220,10 +270,15 @@ export default function PdDoneScreen({
                 })}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            <View style={styles.go}>
+              <Ionicons name="chevron-forward" size={16} color={colors.info} />
+            </View>
           </Pressable>
         ) : (
           <View style={styles.allDone} testID="pd-all-done">
+            <View style={[styles.chip, { backgroundColor: colors.primary }]}>
+              <Ionicons name="checkmark-done" size={20} color={colors.surface} />
+            </View>
             <Text style={styles.allDoneText}>{t('pd.allDone')}</Text>
           </View>
         )}
@@ -236,6 +291,7 @@ export default function PdDoneScreen({
           style={({ pressed }) => [styles.back, pressed && styles.pressed]}
           testID="pd-back-to-list"
         >
+          <Ionicons name="list" size={18} color={ink[600]} />
           <Text style={styles.backLabel}>{t('pd.backToList')}</Text>
         </Pressable>
       </View>
@@ -263,8 +319,27 @@ const styles = StyleSheet.create({
     borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: colors.primary,
     marginBottom: spacing[4],
+  },
+  chip: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  cardTitle: { flex: 1 },
+  go: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.info,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
   },
   heroTitle: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
   heroSubtitle: {
@@ -285,22 +360,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
   },
-  statusQueued: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
-  statusSent: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
+  statusQueued: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  statusSent: { backgroundColor: colors.primaryWash, borderColor: green[300] },
   statusBody: { flex: 1 },
   statusTitle: { ...typography.bodyStrong, color: colors.ink },
-  statusText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  statusText: { ...typography.caption, marginTop: 2 },
   pill: {
     paddingHorizontal: spacing[3],
     paddingVertical: 3,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: yolk[500],
   },
-  pillLabel: { ...typography.caption, color: yolk[800] },
+  pillLabel: { ...typography.caption, fontFamily: typography.label.fontFamily, color: colors.ink },
 
-  // Quiet by default and green only when there is cash to take. A member's line is a
-  // statement about what the dairy will do later; a non-member's is an instruction for the
-  // next thirty seconds, and only that one earns the colour.
+  // In the colour of what it asks of the Mait — see SETTLE_PAINT.
   settlement: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -308,21 +381,10 @@ const styles = StyleSheet.create({
     marginTop: spacing[4],
     padding: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-  },
-  settlementCollect: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
-  settlementIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
   },
   settlementTitle: { ...typography.h3, color: colors.ink },
-  settlementBody: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  settlementBody: { ...typography.caption, marginTop: 2 },
 
   again: {
     marginTop: spacing[4],
@@ -330,17 +392,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: colors.primaryWash,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: green[300],
   },
-  // The same card without the green. Nothing here is an opportunity to act on — it is the
-  // screen confirming there is nothing left to do — and green would read as one.
+  // Slate, not green: nothing here is an opportunity to act on — it is the screen confirming
+  // there is nothing left to do — and green would read as one.
   aside: {
     marginTop: spacing[4],
     padding: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: ink[50],
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: ink[100],
   },
   againTitle: { ...typography.h3, color: colors.ink },
   againBody: {
@@ -361,42 +423,47 @@ const styles = StyleSheet.create({
   },
   againCtaLabel: { ...typography.bodyStrong, fontSize: 16, color: colors.surface, flexShrink: 1 },
 
+  // Blue, the colour of places: where the round goes next.
   next: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET + spacing[2],
-    padding: spacing[4],
+    padding: spacing[3],
     marginTop: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.infoWash,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
+    borderColor: colors.info,
   },
   nextBody: { flex: 1 },
   nextTitle: { ...typography.bodyStrong, color: colors.ink },
-  nextMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  nextMeta: { ...typography.caption, color: colors.info, marginTop: 2 },
 
   allDone: {
-    padding: spacing[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    padding: spacing[3],
     marginTop: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primaryWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: green[300],
   },
-  allDoneText: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
+  allDoneText: { ...typography.bodyStrong, color: colors.primaryDark, flex: 1 },
 
   foot: { paddingHorizontal: spacing[4], paddingTop: spacing[3] },
   back: {
+    flexDirection: 'row',
+    gap: spacing[2],
     minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    backgroundColor: ink[50],
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: ink[200],
   },
-  backLabel: { ...typography.bodyStrong, color: colors.primaryDark },
+  backLabel: { ...typography.bodyStrong, color: ink[600] },
 });

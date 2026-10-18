@@ -1,0 +1,47 @@
+# HTTPS edge for the office server — https://mait-ai.shwetdharamilk.com:8001
+#
+# The FortiGate owns 80 and 443 on the office IP, so the product lives on 8001, the port the
+# firewall already forwards here. Caddy terminates TLS with the dairy's wildcard
+# (*.shwetdharamilk.com) and hands everything — API, portal, media — to Django.
+#
+# Run from this directory, so the cert paths below resolve:
+#     cd D:\mait-ai\infra\caddy;  caddy run
+#
+# On this machine start-https.ps1 does that for you and also starts Django. The office server
+# runs Django on 127.0.0.1:8000 (the default below); this PC already uses 8000 for the Easy
+# Indent app, so the launcher sets MAIT_UPSTREAM=127.0.0.1:8010 to move Mait's Django aside.
+#
+# certs/ holds the chain and the private key and is never committed; docs/HANDOVER.md says
+# where each file comes from.
+{
+	# The certificate is bought, not issued by Let's Encrypt, and port 80 is the firewall's:
+	# nothing here should try to answer an ACME challenge or redirect plain HTTP.
+	auto_https disable_redirects
+}
+
+# Site address. Default (clean server) is the domain on 8001, host-matched. The launcher can
+# override MAIT_SITE with a bare ":8001" to answer on the port for ANY host — used while the
+# subdomain's DNS is not live yet, so the app is reachable over the forwarded public IP
+# (the wildcard cert is still presented; a browser hitting the IP shows a name-mismatch
+# warning, which goes away once the real subdomain is used).
+{$MAIT_SITE:mait-ai.shwetdharamilk.com:8001} {
+	tls certs/fullchain.crt certs/wildcard.shwetdharamilk.com.key {
+		protocols tls1.2 tls1.3
+	}
+
+	encode gzip
+
+	# SAP master uploads reach ~28 MB (SRS §6.1.6) — the same ceiling as infra/nginx/api.prod.conf.
+	request_body {
+		max_size 64MB
+	}
+
+	# Caddy sets X-Forwarded-Proto: https and keeps the Host header, which is how Django
+	# builds https photo URLs carrying the :8001 the handset used. The upstream defaults to
+	# the server's Django (127.0.0.1:8000); override with MAIT_UPSTREAM where 8000 is taken.
+	reverse_proxy {$MAIT_UPSTREAM:127.0.0.1:8000}
+
+	log {
+		output file logs/access.log
+	}
+}

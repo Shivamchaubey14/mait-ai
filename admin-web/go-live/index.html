@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MAIT AI · Go Live Event</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content="Official MAIT AI Go Live Event launch presentation." />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+
+  <body data-state="intro">
+    <!--
+      The launch surface. A single full-viewport stage with two layers that matter:
+      the banner (the content the guest reads) and, above it, a curtain overlay that is
+      inert until the launch button is pressed. Confetti and poppers are injected into
+      #fx-layer by main.js and removed when their animation ends — nothing is left behind.
+
+      No <img> is used for the mark or the banner: the official wordmark is the CSS text
+      mark from the portal's brand component, so it can never distort and needs no asset.
+    -->
+    <main class="stage" id="stage">
+      <!-- The celebration backdrop revealed behind the opening curtains. -->
+      <div class="reveal" aria-hidden="true">
+        <div class="reveal__glow"></div>
+      </div>
+
+      <!-- ===== The event banner (State A) ===== -->
+      <section class="banner" id="banner" aria-labelledby="banner-title">
+        <div class="banner__sheen" aria-hidden="true"></div>
+
+        <div class="banner__inner">
+          <div class="brandmark" role="img" aria-label="MAIT AI, NDDB Dairy Services">
+            <span class="brandmark__dot" aria-hidden="true"></span>
+            <span class="brandmark__text">
+              <span class="brandmark__name">MAIT&nbsp;AI</span>
+              <span class="brandmark__sub">NDDB DAIRY SERVICES</span>
+            </span>
+          </div>
+
+          <p class="banner__eyebrow">Official</p>
+          <h1 class="banner__title" id="banner-title">
+            <span class="banner__title-main">GO&nbsp;LIVE</span>
+            <span class="banner__title-accent">EVENT</span>
+          </h1>
+
+          <p class="banner__launching">Launching Tomorrow</p>
+
+          <div class="banner__dignitary">
+            <p class="banner__dignitary-pre">The event will be made live by our respected</p>
+            <p class="banner__dignitary-name">Dr. Raghu Mallegowda</p>
+            <p class="banner__dignitary-role">Executive Director &middot; NDDB Dairy Services</p>
+          </div>
+
+          <p class="banner__tagline">
+            &ldquo;Empowering Field Teams. Strengthening Dairy Livelihoods.&rdquo;
+          </p>
+
+          <div class="launch">
+            <button class="launch__btn" id="launch-btn" type="button">
+              <span class="launch__btn-glow" aria-hidden="true"></span>
+              <span class="launch__btn-label">CLICK TO LAUNCH MAIT&nbsp;AI</span>
+            </button>
+            <p class="launch__hint" id="launch-hint">Click to begin the official launch.</p>
+
+            <!--
+              No-JS and last-resort path. Always in the DOM so the event details and a real
+              link to the application survive a scripting failure. main.js hides it while the
+              scripted experience is in control and re-reveals it if the launch errors out.
+            -->
+            <noscript>
+              <a class="launch__fallback" href="https://mait-ai.shwetdharamilk.com:8001/login.html">
+                OPEN MAIT AI APPLICATION
+              </a>
+            </noscript>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== The stage curtains (overlay, inert until launch) ===== -->
+      <div class="curtains" id="curtains" aria-hidden="true">
+        <div class="curtain curtain--left"></div>
+        <div class="curtain curtain--right"></div>
+      </div>
+
+      <!-- ===== Particle layer: confetti + poppers injected here ===== -->
+      <div class="fx" id="fx-layer" aria-hidden="true"></div>
+
+      <!-- ===== Fallback control, shown only if the launch cannot complete ===== -->
+      <a
+        class="fallback-cta"
+        id="fallback-cta"
+        href="https://mait-ai.shwetdharamilk.com:8001/login.html"
+        hidden
+      >
+        OPEN MAIT AI APPLICATION
+      </a>
+    </main>
+
+    <!-- Polite announcement for assistive tech as the launch runs. -->
+    <p class="visually-hidden" role="status" aria-live="polite" id="status-region"></p>
+
+    <script src="js/main.js" defer></script>
+  </body>
+</html>

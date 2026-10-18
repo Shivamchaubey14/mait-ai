@@ -154,6 +154,77 @@
   text-align: center;
 }
 
+/* The way out of the lockout, right under the field it is about. Right-aligned and quiet —
+   it is the alternative, not the action, and the Sign in button below it is the action. */
+.auth__forgot {
+  margin-top: var(--space-2);
+  text-align: right;
+}
+
+.auth__forgot-link {
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.auth__forgot-link:hover,
+.auth__forgot-link:focus-visible {
+  text-decoration: underline;
+}
+
+/* --- reset flow (W1a) ----------------------------------------------------------------
+   The reset page reuses the split layout and every control above; these cover only what it
+   adds. Two panes in one form — ask for the code, then set the password — with one shown at
+   a time so the page never asks for a code it has not sent yet. */
+.auth__step[hidden] {
+  display: none;
+}
+
+/* A read-back of where the code went, so the person knows which phone to pick up. */
+.auth__sent {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  font-size: var(--text-caption);
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* Back to the first step without leaving the page — a mistyped username should not cost a
+   round trip through the login screen. Matches the reveal toggle: a quiet inline button. */
+.auth__back {
+  padding: var(--space-1) 0;
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-primary);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/* The way back to sign-in, once the password is set. */
+.auth__return {
+  margin-top: var(--space-4);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.auth__return a {
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.auth__return a:hover,
+.auth__return a:focus-visible {
+  text-decoration: underline;
+}
+
 /* --- the second door ----------------------------------------------------------------
    Django's admin, for a superuser. Ink rather than green: the screen already has one
    primary action and it is the form above. A rule with the reason written into it, because

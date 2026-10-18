@@ -31,15 +31,7 @@ import type { RouteOption, RouteStop } from '@api/types';
 import { routeMapHtml } from './routeMapHtml';
 import type { MapPoint } from './routeMapHtml';
 import { EmptyState } from '@/components/states';
-import {
-  colors,
-  MIN_TOUCH_TARGET,
-  radius,
-  shadows,
-  spacing,
-  typography,
-  yolk,
-} from '@theme/tokens';
+import { colors, ink, MIN_TOUCH_TARGET, radius, spacing, typography, yolk } from '@theme/tokens';
 
 /** "2h 40m", or "45m" where there is no hour to say. */
 export function readableTime(minutes: number): string {
@@ -261,11 +253,7 @@ function RouteMap({
 
       <View style={styles.plotFoot}>
         <View style={styles.sketchPill}>
-          <Ionicons
-            name={fromHere ? 'navigate' : 'help-circle-outline'}
-            size={12}
-            color={colors.info}
-          />
+          <Ionicons name={fromHere ? 'navigate' : 'help-circle'} size={12} color={colors.surface} />
           <Text style={styles.sketchPillLabel} numberOfLines={1}>
             {fromHere ? t('route2.youAreHere') : t('route2.noFix')}
           </Text>
@@ -362,20 +350,46 @@ export default function PdRouteScreen({
                   <Text style={styles.stopName} numberOfLines={1}>
                     {stop.owner_name}
                   </Text>
-                  <Text style={styles.stopMeta} numberOfLines={1}>
-                    {`${stop.note || stop.mpp_name} · ${dueLabel(stop, t)}`}
-                  </Text>
+                  <View style={styles.stopMetaLine}>
+                    <Ionicons
+                      name={stop.days_until < 0 ? 'alert-circle' : 'location'}
+                      size={12}
+                      color={
+                        stop.days_until < 0
+                          ? colors.error
+                          : index === 0
+                            ? colors.primaryDark
+                            : colors.info
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.stopMeta,
+                        index === 0 && { color: colors.primaryDark },
+                        stop.days_until < 0 && { color: colors.error },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {`${stop.note || stop.mpp_name} · ${dueLabel(stop, t)}`}
+                    </Text>
+                  </View>
                 </View>
 
                 {/* From the stop before it, not from the start — what this leg costs. */}
-                <Text style={styles.stopKm}>{`${stop.leg_km} km`}</Text>
+                <View style={styles.stopKm}>
+                  <Ionicons name="walk" size={12} color={colors.surface} />
+                  <Text style={styles.stopKmLabel}>{`${stop.leg_km} km`}</Text>
+                </View>
               </Pressable>
             ))}
 
             {withoutLocation > 0 && (
-              <Text style={styles.unplaced} testID="route-unplaced">
-                {t('route2.unplaced', { count: withoutLocation })}
-              </Text>
+              <View style={styles.unplacedBox}>
+                <Ionicons name="warning" size={16} color={yolk[800]} />
+                <Text style={styles.unplaced} testID="route-unplaced">
+                  {t('route2.unplaced', { count: withoutLocation })}
+                </Text>
+              </View>
             )}
           </>
         )}
@@ -405,6 +419,7 @@ export default function PdRouteScreen({
             style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
             testID="route-reorder"
           >
+            <Ionicons name="swap-vertical" size={18} color={ink[600]} />
             <Text style={styles.secondaryLabel}>{t('route2.reorder')}</Text>
           </Pressable>
         </View>
@@ -468,17 +483,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
     paddingVertical: 3,
     borderRadius: radius.pill,
-    backgroundColor: colors.infoWash,
+    backgroundColor: colors.info,
     flexShrink: 1,
   },
-  sketchPillLabel: { ...typography.caption, color: colors.info, flexShrink: 1 },
+  sketchPillLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+    flexShrink: 1,
+  },
+  // Blue, the colour of places.
   plot: {
     padding: spacing[3],
     marginBottom: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.infoWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.info,
   },
   // Clipped by the frame rather than by the map, which on Android ignores a border radius.
   mapFrame: {
@@ -535,19 +556,32 @@ const styles = StyleSheet.create({
     padding: spacing[3],
     marginBottom: spacing[3],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.infoWash,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
+    borderColor: colors.info,
   },
   // The one being walked to next, and the ones already late. Both keep their meaning wherever
   // the ordering has put them.
-  stopNext: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
+  stopNext: { backgroundColor: colors.primaryWash, borderColor: colors.primary, borderWidth: 2 },
   stopLate: { backgroundColor: colors.errorWash, borderColor: colors.error },
   stopBody: { flex: 1 },
   stopName: { ...typography.h3, color: colors.ink },
-  stopMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  stopKm: { ...typography.bodyStrong, color: colors.info },
+  stopMetaLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  stopMeta: { ...typography.caption, color: colors.info, flexShrink: 1 },
+  stopKm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: colors.info,
+  },
+  stopKmLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
 
   number: {
     width: 30,
@@ -555,13 +589,24 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.ink,
+    backgroundColor: colors.info,
   },
   numberNext: { backgroundColor: colors.primary },
   numberLate: { backgroundColor: colors.error },
   numberLabel: { ...typography.bodyStrong, fontSize: 13, color: colors.surface },
 
-  unplaced: { ...typography.caption, color: yolk[800], marginTop: spacing[2] },
+  unplacedBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginTop: spacing[2],
+    padding: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: yolk[300],
+    backgroundColor: colors.secondaryWash,
+  },
+  unplaced: { ...typography.caption, color: yolk[800], flex: 1 },
 
   foot: {
     flexDirection: 'row',
@@ -586,14 +631,16 @@ const styles = StyleSheet.create({
   ctaInert: { backgroundColor: colors.disabledFill },
   ctaLabel: { ...typography.bodyStrong, fontSize: 16, color: colors.surface },
   secondary: {
+    flexDirection: 'row',
+    gap: spacing[2],
     minHeight: 56,
-    paddingHorizontal: spacing[5],
+    paddingHorizontal: spacing[4],
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    backgroundColor: ink[50],
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: ink[200],
   },
-  secondaryLabel: { ...typography.bodyStrong, color: colors.textMuted },
+  secondaryLabel: { ...typography.bodyStrong, color: ink[600] },
 });

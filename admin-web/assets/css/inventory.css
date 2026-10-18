@@ -299,3 +299,282 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
+
+/* ---------------------------------------------------------------------------------------
+ * Add stock to a Mait
+ *
+ * A manual credit, below the three read-only cards. It sits on paper inside the ink-tinted
+ * panel — a card doing something, not a fourth card to read — and is stocked the same way the
+ * store shelf is, so an admin who knows one knows the other. The kind, quantity and preview
+ * classes are the store shelf's own (stores.css), redeclared here because that stylesheet is
+ * not loaded on this screen.
+ * ------------------------------------------------------------------------------------- */
+.addstock {
+  margin: 0 var(--space-4) var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+}
+
+.addstock__head {
+  margin-bottom: var(--space-3);
+}
+
+.addstock__title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-h3);
+  color: var(--color-text);
+}
+
+.addstock__note {
+  margin-top: 2px;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.addstock__form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Each step numbered on a green disc, so the short path reads as one. */
+.addstock__step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-label);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.addstock__step--quiet {
+  font-weight: 600;
+}
+
+.addstock__num {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  color: var(--color-surface);
+  background: var(--color-primary);
+  border-radius: 50%;
+}
+
+.addstock__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+@media (max-width: 560px) {
+  .addstock__pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Add or remove, as one segmented control: two halves of a single pill, the chosen half
+   filled. Add fills green (the portal's "go"); remove fills the error red so a destructive
+   choice is never mistaken for the default. The track carries the frame; the halves share it. */
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 3px;
+  background: var(--ink-50);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.segmented__option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 3px);
+  cursor: pointer;
+}
+
+.segmented__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.segmented__option:hover:not(.is-on) {
+  color: var(--color-text);
+}
+
+.segmented__option[data-dir='add'].is-on {
+  color: var(--color-surface);
+  background: var(--color-primary);
+}
+
+.segmented__option[data-dir='remove'].is-on {
+  color: var(--color-surface);
+  background: var(--color-error);
+}
+
+/* The three kinds, as three buttons in their own colours; the chosen one fills solid. */
+.stock-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-2);
+}
+
+.stock-kind {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 42px;
+  padding: 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  font-weight: 700;
+  border: 1.5px solid;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.stock-kind__icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.stock-kind__name {
+  min-width: 0;
+}
+
+.stock-kind__count {
+  margin-left: auto;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.stock-kind--info {
+  color: var(--color-info);
+  background: var(--color-info-wash);
+  border-color: var(--color-info);
+}
+
+.stock-kind--good {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+  border-color: var(--color-primary);
+}
+
+.stock-kind--warn {
+  color: var(--yolk-800);
+  background: var(--color-secondary-wash);
+  border-color: var(--color-secondary);
+}
+
+.stock-kind--info.is-on {
+  color: var(--color-surface);
+  background: var(--color-info);
+}
+
+.stock-kind--good.is-on {
+  color: var(--color-surface);
+  background: var(--color-primary);
+}
+
+/* Ink on yolk, never white — yolk fails contrast under white text (tokens.css). */
+.stock-kind--warn.is-on {
+  color: var(--color-ink);
+  background: var(--color-secondary);
+}
+
+.stock-kind[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* The number, with a step either side for the one-more-one-fewer an add usually is. */
+.stock-qty {
+  display: flex;
+  align-items: stretch;
+}
+
+.stock-qty__input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  font-weight: 700;
+  text-align: center;
+  border-radius: 0;
+}
+
+.stock-qty__step {
+  width: 40px;
+  font-size: var(--text-h3);
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.stock-qty__step:first-child {
+  border-right: 0;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.stock-qty__step:last-child {
+  border-left: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.stock-qty__step:hover {
+  background: var(--green-100);
+}
+
+/* What saving will do: green for an add, red for a number the server would refuse. */
+.stock-preview {
+  padding: var(--space-3);
+  font-size: var(--text-label);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.stock-preview--good {
+  background: var(--color-primary-wash);
+  border-color: var(--color-primary);
+}
+
+.stock-preview--bad {
+  color: var(--color-error);
+  background: var(--color-error-wash);
+  border-color: var(--color-error);
+}
+
+.stock-preview--quiet {
+  color: var(--color-text-muted);
+}
+
+/* A valid removal: not green (that reads as "all good" on a balance going down) and not red
+   (that is for a number the server would refuse) — the portal's caution yolk, so a reduction
+   looks like the deliberate, reversible-by-re-adding thing it is. */
+.stock-preview--take {
+  color: var(--yolk-800);
+  background: var(--color-secondary-wash);
+  border-color: var(--color-secondary);
+}

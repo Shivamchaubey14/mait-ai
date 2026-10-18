@@ -826,6 +826,25 @@ a.btn:hover {
   opacity: 1;
 }
 
+/* A count riding on a chip — how many rows the filter it toggles would turn up. Ink on yolk,
+   never white: yolk fails contrast under white text (tokens.css). */
+.chip__count {
+  min-width: 20px;
+  padding: 0 6px;
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  color: var(--color-ink);
+  background: var(--color-secondary);
+  border-radius: var(--radius-pill);
+}
+
+.chip__count[hidden] {
+  display: none;
+}
+
 /* --- stat tiles ------------------------------------------------------------------------- */
 .tiles {
   display: grid;
@@ -1291,6 +1310,59 @@ a.btn:hover {
 .table__sub--warn {
   color: var(--color-secondary-pressed);
   font-weight: 600;
+}
+
+/* A code that carries more behind it — the Mait's name and number on the events list. The
+   dotted underline and the help cursor are the only signal that resting on it reveals the
+   card; `ui.js` draws and positions the card itself. Focusable, so the same reveal is one
+   Tab away for anyone not using a pointer. */
+.table__sub--hover {
+  width: fit-content;
+  cursor: help;
+  text-decoration: underline dotted var(--color-text-muted);
+  text-underline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.table__sub--hover:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* The floating identity card. Fixed and appended to <body> by ui.js so the scrolling table
+   can never clip it; `pointer-events: none` so it never steals the pointer that summoned it. */
+.hovercard {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  max-width: 260px;
+  padding: 10px 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-raised);
+  pointer-events: none;
+}
+
+/* The `hidden` attribute is how ui.js parks the card between uses; `display: flex` above would
+   otherwise override its implicit `display: none`, leaving it stuck on screen. */
+.hovercard[hidden] {
+  display: none;
+}
+
+.hovercard__name {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.hovercard__detail {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* A row that is waiting or blocked says so in its own background, so a screenful of rows can

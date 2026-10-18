@@ -29,9 +29,10 @@ import PullToRefresh from '@/components/pullToRefresh';
 import { EmptyState, SkeletonList } from '@/components/states';
 import {
   colors,
+  green,
+  ink,
   MIN_TOUCH_TARGET,
   radius,
-  shadows,
   spacing,
   typography,
   yolk,
@@ -73,6 +74,33 @@ function outcomeWord(outcome: string, t: (key: string) => string): string {
 }
 
 type Urgency = 'late' | 'today' | 'soon';
+
+/**
+ * A row's paint, from the one thing it is read for: red late, yolk today, blue coming up —
+ * and once answered, green pregnant, red not, slate unsure or refused.
+ */
+type RowTone = 'late' | 'today' | 'soon' | 'good' | 'bad' | 'unsure';
+
+const PAINT: Record<RowTone, { solid: string; word: string; wash: string; edge: string }> = {
+  late: { solid: colors.error, word: colors.error, wash: colors.errorWash, edge: colors.error },
+  today: { solid: yolk[500], word: yolk[800], wash: colors.secondaryWash, edge: yolk[300] },
+  soon: { solid: colors.info, word: colors.info, wash: colors.infoWash, edge: colors.info },
+  good: {
+    solid: colors.primary,
+    word: colors.primaryDark,
+    wash: colors.primaryWash,
+    edge: green[300],
+  },
+  bad: { solid: colors.error, word: colors.error, wash: colors.errorWash, edge: colors.error },
+  unsure: { solid: ink[400], word: ink[600], wash: ink[50], edge: ink[100] },
+};
+
+function rowTone(check: PregnancyCheck): RowTone {
+  if (check.outcome) {
+    return (OUTCOMES.find(row => row.key === check.outcome) ?? OUTCOMES[2]).tone;
+  }
+  return urgencyOf(check.days_until);
+}
 
 /** Three states, because they call for three different decisions on the day. */
 export function urgencyOf(daysUntil: number): Urgency {
@@ -133,14 +161,24 @@ function Legend(): React.JSX.Element {
   const { t } = useTranslation();
   return (
     <View style={styles.legend} testID="pd-legend">
-      <Text style={styles.legendTitle}>{t('pd.legend')}</Text>
+      <View style={styles.legendHead}>
+        <Ionicons name="information-circle" size={15} color={ink[600]} />
+        <Text style={styles.legendTitle}>{t('pd.legend')}</Text>
+      </View>
       <View style={styles.legendRow}>
         {OUTCOMES.map(row => (
-          <View key={row.key} style={styles.legendItem}>
+          <View
+            key={row.key}
+            style={[
+              styles.legendItem,
+              { backgroundColor: PAINT[row.tone].wash, borderColor: PAINT[row.tone].edge },
+            ]}
+            testID={`pd-legend-${row.key}`}
+          >
             <View style={[styles.legendMark, styles[`outcome_${row.tone}`]]}>
-              <Ionicons name={row.icon} size={13} color={colors.surface} />
+              <Ionicons name={row.icon} size={16} color={colors.surface} />
             </View>
-            <Text style={styles.legendLabel} numberOfLines={1}>
+            <Text style={[styles.legendLabel, { color: PAINT[row.tone].word }]} numberOfLines={2}>
               {t(row.label)}
             </Text>
           </View>
@@ -158,7 +196,9 @@ function CheckRow({
   onPress: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const urgency = check.outcome ? null : urgencyOf(check.days_until);
+  const tone = rowTone(check);
+  const paint = PAINT[tone];
+  const member = check.owner_type === 'member';
 
   // A recorded row leads with the answer. The coloured mark is for scanning a column at a
   // glance; the word is what makes it mean anything, and this is the line a Mait is already
@@ -184,8 +224,7 @@ function CheckRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        urgency === 'late' && styles.rowLate,
-        urgency === 'today' && styles.rowToday,
+        { backgroundColor: paint.wash, borderColor: paint.edge },
         pressed && styles.rowPressed,
       ]}
       testID={`pd-check-${check.id}`}
@@ -196,12 +235,30 @@ function CheckRow({
         <Text style={styles.rowName} numberOfLines={1}>
           {check.owner_name}
         </Text>
-        <Text style={styles.rowMeta} numberOfLines={1}>
-          {meta}
-        </Text>
+        <View style={styles.rowMetaLine}>
+          <Ionicons name={check.outcome ? 'calendar' : 'location'} size={12} color={paint.word} />
+          <Text style={[styles.rowMeta, { color: paint.word }]} numberOfLines={1}>
+            {meta}
+          </Text>
+        </View>
+        <View
+          style={[styles.owner, member ? styles.owner_member : styles.owner_other]}
+          testID={`pd-owner-${check.id}`}
+        >
+          <Ionicons
+            name={member ? 'people' : 'person'}
+            size={11}
+            color={member ? colors.info : yolk[800]}
+          />
+          <Text style={[styles.ownerLabel, { color: member ? colors.info : yolk[800] }]}>
+            {t(member ? 'history.member' : 'history.nonMember')}
+          </Text>
+        </View>
       </View>
 
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <View style={[styles.go, { borderColor: paint.solid }]}>
+        <Ionicons name="chevron-forward" size={16} color={paint.word} />
+      </View>
     </Pressable>
   );
 }
@@ -242,7 +299,14 @@ export default function PdListScreen({
         <Text style={styles.heroTitle} testID="pd-headline">
           {headline}
         </Text>
-        <Text style={styles.heroSubtitle}>{subtitle}</Text>
+        <View style={[styles.heroPill, overdue > 0 && styles.heroPillLate]} testID="pd-subtitle">
+          <Ionicons
+            name={overdue > 0 ? 'alert-circle' : 'calendar'}
+            size={13}
+            color={colors.surface}
+          />
+          <Text style={styles.heroSubtitle}>{subtitle}</Text>
+        </View>
       </View>
 
       {/* Two answers, one control. "Done" is not an archive nobody opens — it is how a Mait
@@ -251,18 +315,50 @@ export default function PdListScreen({
         <View style={styles.tabs}>
           {(['week', 'done'] as const).map(key => {
             const active = key === tab;
+            // The week in blue, what is coming; Done in green, what is answered.
+            const paint = key === 'week' ? PAINT.soon : PAINT.good;
             return (
               <Pressable
                 key={key}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
                 onPress={() => setTab(key)}
-                style={[styles.tab, active && styles.tabActive]}
+                style={[
+                  styles.tab,
+                  active
+                    ? { backgroundColor: paint.solid, borderColor: paint.solid }
+                    : { backgroundColor: paint.wash, borderColor: paint.edge },
+                ]}
                 testID={`pd-tab-${key}`}
               >
-                <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1}>
+                <Ionicons
+                  name={key === 'week' ? 'calendar' : 'checkmark-done'}
+                  size={16}
+                  color={active ? colors.surface : paint.word}
+                />
+                <Text
+                  style={[styles.tabLabel, { color: active ? colors.surface : paint.word }]}
+                  numberOfLines={1}
+                >
                   {key === 'week' ? t('pd.tabWeek') : t('pd.tabDone')}
                 </Text>
+                {key === 'week' && dueThisWeek > 0 && (
+                  <View
+                    style={[
+                      styles.tabCount,
+                      { backgroundColor: active ? colors.surface : paint.solid },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tabCountLabel,
+                        { color: active ? paint.word : colors.surface },
+                      ]}
+                    >
+                      {dueThisWeek}
+                    </Text>
+                  </View>
+                )}
               </Pressable>
             );
           })}
@@ -321,7 +417,9 @@ export default function PdListScreen({
             style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
             testID="pd-plan-route"
           >
-            <Ionicons name="location-outline" size={19} color={colors.surface} />
+            <View style={styles.ctaChip}>
+              <Ionicons name="map" size={17} color={colors.primary} />
+            </View>
             <Text style={styles.ctaLabel}>{t('pd.planRoute')}</Text>
           </Pressable>
         </View>
@@ -351,31 +449,50 @@ const styles = StyleSheet.create({
   },
   heroSubtitle: {
     ...typography.caption,
+    fontFamily: typography.label.fontFamily,
     color: colors.surface,
-    opacity: 0.72,
-    marginTop: spacing[1],
+    flexShrink: 1,
   },
+  heroPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  heroPillLate: { backgroundColor: colors.error },
 
   tabsWrap: { paddingHorizontal: spacing[4], paddingTop: spacing[4] },
   tabs: { flexDirection: 'row', gap: spacing[2] },
   tab: {
     flex: 1,
-    minHeight: MIN_TOUCH_TARGET - 8,
+    flexDirection: 'row',
+    gap: spacing[2],
+    minHeight: MIN_TOUCH_TARGET - 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
   },
-  // Filled, unlike the chips on AI events: there are two of these and they are a place to be
-  // rather than a filter over one list.
-  tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tabLabel: { ...typography.bodyStrong, color: colors.textMuted },
-  tabLabelActive: { color: colors.surface },
+  tabLabel: { ...typography.bodyStrong, flexShrink: 1 },
+  tabCount: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabCountLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
 
   body: { padding: spacing[4] },
 
+  // The whole card in its colour, not a stripe: a thumb covers an edge, and a late row read
+  // through a thumb then looks like every other row.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -383,20 +500,36 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_TARGET + spacing[4],
     padding: spacing[3],
     marginBottom: spacing[3],
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
   },
-  // The whole card, not a stripe: a thumb covers an edge, and a late row read through a thumb
-  // then looks like every other row.
-  rowLate: { backgroundColor: colors.errorWash, borderColor: colors.error },
-  rowToday: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
   rowPressed: { opacity: 0.85 },
-  rowBody: { flex: 1 },
+  rowBody: { flex: 1, gap: 3 },
   rowName: { ...typography.h3, color: colors.ink },
-  rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  rowMetaLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  rowMeta: { ...typography.caption, flexShrink: 1 },
+  owner: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  owner_member: { backgroundColor: colors.surface, borderColor: colors.info },
+  owner_other: { backgroundColor: colors.surface, borderColor: yolk[300] },
+  ownerLabel: { ...typography.caption },
+  go: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
 
   badge: {
     width: 46,
@@ -406,13 +539,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badge_late: { backgroundColor: colors.error },
-  badge_today: { backgroundColor: colors.secondary },
-  badge_soon: { backgroundColor: colors.primaryWash },
+  badge_today: { backgroundColor: yolk[500] },
+  badge_soon: { backgroundColor: colors.info },
   badgeNumber: { ...typography.h2, fontSize: 19, lineHeight: 22 },
   badgeWord: { ...typography.caption, fontSize: 9, lineHeight: 11, letterSpacing: 0.5 },
   badgeText_late: { color: colors.surface },
   badgeText_today: { color: yolk[900] },
-  badgeText_soon: { color: colors.primaryDark },
+  badgeText_soon: { color: colors.surface },
 
   // The answer, where the countdown used to be. Green took, red did not, grey was unsure.
   outcome: {
@@ -424,34 +557,47 @@ const styles = StyleSheet.create({
   },
   outcome_good: { backgroundColor: colors.primary },
   outcome_bad: { backgroundColor: colors.error },
-  outcome_unsure: { backgroundColor: colors.textMuted },
+  outcome_unsure: { backgroundColor: ink[400] },
 
   legend: {
     padding: spacing[3],
     marginBottom: spacing[3],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: ink[50],
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: ink[100],
   },
-  legendTitle: {
-    ...typography.caption,
-    color: colors.textMuted,
-    letterSpacing: 0.5,
+  legendHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
     marginBottom: spacing[2],
   },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  // Wraps rather than truncates: "Not pregnant" in Hindi is longer than in English, and a
-  // legend that clips the word it exists to teach has taught nothing.
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], flexShrink: 1 },
+  legendTitle: { ...typography.label, color: ink[600] },
+  // Two to a row rather than four on one line. Four in a row left each word about sixty
+  // points and clipped "Pregnant" to "Pregn…" — a legend that clips the word it exists to
+  // teach has taught nothing, and Hindi runs longer still.
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    flexBasis: '48%',
+    flexGrow: 1,
+    minHeight: MIN_TOUCH_TARGET - 8,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
   legendMark: {
-    width: 22,
-    height: 22,
+    width: 28,
+    height: 28,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  legendLabel: { ...typography.caption, color: colors.text, flexShrink: 1 },
+  legendLabel: { ...typography.label, flex: 1 },
 
   foot: {
     paddingHorizontal: spacing[4],
@@ -471,4 +617,12 @@ const styles = StyleSheet.create({
   },
   ctaPressed: { backgroundColor: colors.primaryPressed },
   ctaLabel: { ...typography.bodyStrong, fontSize: 16, color: colors.surface },
+  ctaChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
 });

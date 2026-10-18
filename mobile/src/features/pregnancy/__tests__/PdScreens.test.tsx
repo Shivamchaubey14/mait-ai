@@ -27,6 +27,7 @@ import type { PdRoute, RouteOption, RouteStop } from '@api/types';
 import type { PregnancyCheck } from '@api/types';
 import { jsonResponse, renderWithStore } from '@/test-utils';
 import i18n from '@/i18n';
+import { colors } from '@theme/tokens';
 
 const METRICS = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -1004,5 +1005,107 @@ describe('the map document', () => {
 
     expect(html).toContain('ReactNativeWebView.postMessage');
     expect(html).toContain('window.onerror');
+  });
+});
+
+describe('in colour', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn() as jest.Mock;
+  });
+  afterEach(() => jest.resetAllMocks());
+
+  it('paints each row by when it is due — red late, yolk today, blue coming up', async () => {
+    mockList([
+      check({ id: 1, days_until: -3 }),
+      check({ id: 2, days_until: 0 }),
+      check({ id: 3, days_until: 4 }),
+    ]);
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
+
+    await screen.findByTestId('pd-check-1');
+    expect(screen.getByTestId('pd-check-1')).toHaveStyle({ backgroundColor: colors.errorWash });
+    expect(screen.getByTestId('pd-check-2')).toHaveStyle({
+      backgroundColor: colors.secondaryWash,
+    });
+    expect(screen.getByTestId('pd-check-3')).toHaveStyle({ backgroundColor: colors.infoWash });
+    expect(screen.getByTestId('pd-owner-1')).toHaveTextContent(/Member/);
+  });
+
+  it('paints an answered row by its answer', async () => {
+    mockList([check({ id: 9, outcome: 'pregnant', days_until: -30 })]);
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
+
+    expect(await screen.findByTestId('pd-check-9')).toHaveStyle({
+      backgroundColor: colors.primaryWash,
+    });
+  });
+
+  it('draws the week tab in blue and Done in green', async () => {
+    mockList([check()]);
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
+
+    await screen.findByTestId('pd-tab-week');
+    expect(screen.getByTestId('pd-tab-week')).toHaveStyle({ backgroundColor: colors.info });
+    expect(screen.getByTestId('pd-tab-done')).toHaveStyle({ backgroundColor: colors.primaryWash });
+  });
+
+  it('draws each finding in its colour, before it is chosen', () => {
+    render(
+      withArea(
+        <PdRecordScreen
+          check={check()}
+          onBack={jest.fn()}
+          onSave={jest.fn()}
+          photoUri={null}
+          onPhoto={jest.fn()}
+        />,
+      ),
+    );
+    fireEvent.press(screen.getByTestId('pd-consent-yes'));
+
+    expect(screen.getByTestId('pd-outcome-pregnant')).toHaveStyle({
+      backgroundColor: colors.primaryWash,
+    });
+    expect(screen.getByTestId('pd-outcome-not-pregnant')).toHaveStyle({
+      backgroundColor: colors.errorWash,
+    });
+    // A member's charge is a deduction the dairy settles: blue.
+    expect(screen.getByTestId('pd-charge')).toHaveStyle({ backgroundColor: colors.infoWash });
+  });
+
+  it('asks for cash in yolk once the visit is recorded', () => {
+    render(
+      withArea(
+        <PdDoneScreen
+          check={check({ owner_type: 'non_member' })}
+          outcome="pregnant"
+          queued={false}
+          next={null}
+          onStartAi={jest.fn()}
+          onOpenNext={jest.fn()}
+          onBackToList={jest.fn()}
+        />,
+      ),
+    );
+
+    expect(screen.getByTestId('pd-settlement')).toHaveStyle({
+      backgroundColor: colors.secondaryWash,
+    });
+    expect(screen.getByTestId('pd-all-done')).toHaveStyle({ backgroundColor: colors.primaryWash });
+  });
+
+  it('gives each mark its whole word, in its colour, two to a row', async () => {
+    mockList([check({ id: 9, outcome: 'pregnant', days_until: -30 })]);
+    renderWithStore(withArea(<PdListScreen onOpen={jest.fn()} onPlanRoute={jest.fn()} />));
+
+    fireEvent.press(await screen.findByTestId('pd-tab-done'));
+    const pregnant = await screen.findByTestId('pd-legend-pregnant');
+    expect(pregnant).toHaveStyle({ backgroundColor: colors.primaryWash });
+    expect(pregnant).toHaveTextContent(/Pregnant/);
+    expect(screen.getByTestId('pd-legend-not_pregnant')).toHaveStyle({
+      backgroundColor: colors.errorWash,
+    });
+    // Never clipped to one line.
+    expect(screen.getByText('Pregnant').props.numberOfLines).toBe(2);
   });
 });

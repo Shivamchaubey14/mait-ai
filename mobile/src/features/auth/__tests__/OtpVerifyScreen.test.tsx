@@ -14,6 +14,7 @@ import OtpVerifyScreen from '../OtpVerifyScreen';
 import { OTP_EXPIRY_SECONDS, OTP_LOCK_MINUTES } from '@/config/env';
 import i18n from '@/i18n';
 import { renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 const baseProps = {
   mobileNo: '9876543210',
@@ -225,5 +226,25 @@ describe('OtpVerifyScreen', () => {
       render({ otp: '492715', failure: 'wrong', attemptsUsed: 1 });
       expect(screen.queryByText(i18n.t('auth.needsSignalTitle'))).toBeNull();
     });
+  });
+});
+
+describe('OtpVerifyScreen in colour', () => {
+  it('shows the countdown as a blue pill', () => {
+    render({ resendIn: 24 });
+
+    expect(screen.getByTestId('otp-timer')).toHaveStyle({ backgroundColor: colors.infoWash });
+  });
+
+  it('turns Send again green once it can be pressed', () => {
+    render({ resendIn: 0 });
+
+    expect(screen.getByTestId('login-resend')).toHaveStyle({ backgroundColor: colors.primary });
+  });
+
+  it('marks a wrong code in solid red, under the cells', () => {
+    render({ failure: 'wrong', attemptsUsed: 1 });
+
+    expect(screen.getByTestId('otp-notice-wrong')).toHaveStyle({ backgroundColor: colors.error });
   });
 });

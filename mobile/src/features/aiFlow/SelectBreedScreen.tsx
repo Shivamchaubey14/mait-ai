@@ -54,7 +54,8 @@ import { useGetInventorySummaryQuery, useListBreedsQuery } from '@api/endpoints'
 import type { QueuedLabel } from '@api/queue';
 import type { AIEvent, AIEventDraft, AnimalTypeCode, BreedConfig, SuppliesLot } from '@api/types';
 import { LOW_STRAWS_PER_BREED } from '@/config/env';
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import Glyph, { STRAW_GLYPH } from '@/components/glyph';
+import { colors, ink, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
 
 import { FlowNotice, FlowScreen, FlowSpacer, OptionCard } from './components';
 
@@ -448,7 +449,9 @@ export default function SelectBreedScreen({
       footerNote={
         chosen ? (
           <View style={styles.tally} testID="use-tally">
-            <Ionicons name="checkmark" size={16} color={colors.primaryDark} />
+            <View style={styles.tallyChip}>
+              <Ionicons name="checkmark" size={14} color={colors.surface} />
+            </View>
             <Text style={styles.tallyLabel} numberOfLines={1}>
               {t('aiFlow.usedTally', {
                 doses: t('aiFlow.doseCount', { count: doses, breed: label(chosen.breed) }),
@@ -469,21 +472,40 @@ export default function SelectBreedScreen({
         <View style={styles.tabs}>
           {tabs.map(({ key, label: name, badge }) => {
             const active = key === tab;
+            // Straws blue with the syringe, consumables green with a flask — Inventory's own.
+            const solid = key === 'straws' ? colors.info : colors.primary;
+            const wash = key === 'straws' ? colors.infoWash : colors.primaryWash;
+            const word = key === 'straws' ? colors.info : colors.primaryDark;
             return (
               <Pressable
                 key={key}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
                 onPress={() => setTab(key)}
-                style={[styles.tab, active && styles.tabActive]}
+                style={[
+                  styles.tab,
+                  active
+                    ? { backgroundColor: solid, borderColor: solid }
+                    : { backgroundColor: wash, borderColor: solid },
+                ]}
                 testID={`use-tab-${key}`}
               >
-                <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1}>
+                <Glyph
+                  name={key === 'straws' ? STRAW_GLYPH : 'flask'}
+                  size={16}
+                  color={active ? colors.surface : word}
+                />
+                <Text
+                  style={[styles.tabLabel, { color: active ? colors.surface : word }]}
+                  numberOfLines={1}
+                >
                   {name}
                 </Text>
-                <View style={[styles.tabBadge, active && styles.tabBadgeActive]}>
+                <View
+                  style={[styles.tabBadge, { backgroundColor: active ? colors.surface : solid }]}
+                >
                   <Text
-                    style={[styles.tabBadgeLabel, active && styles.tabBadgeLabelActive]}
+                    style={[styles.tabBadgeLabel, { color: active ? word : colors.surface }]}
                     testID={`use-tab-${key}-count`}
                   >
                     {badge}
@@ -536,9 +558,16 @@ export default function SelectBreedScreen({
           return (
             <OptionCard
               key={breed.code}
-              // No swatch: a breed is a word, and a coloured tile beside each of eleven of
-              // them is eleven blocks of nothing.
-              swatch={false}
+              // The straw's syringe on a solid blue chip, as on Inventory: the colour says
+              // which kind of stock this row takes from.
+              tone="info"
+              iconNode={
+                <Glyph
+                  name={STRAW_GLYPH}
+                  size={20}
+                  color={straws === 0 ? colors.textDisabled : colors.surface}
+                />
+              }
               size="roomy"
               title={label(breed)}
               subtitle={t('aiFlow.strawsWithSpecies', {
@@ -606,7 +635,8 @@ export default function SelectBreedScreen({
             return (
               <OptionCard
                 key={item.code}
-                swatch={false}
+                tone="primary"
+                icon="flask"
                 size="roomy"
                 title={item.name}
                 subtitle={t('aiFlow.suppliesWithYou', {
@@ -653,24 +683,17 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     minHeight: MIN_TOUCH_TARGET - 4,
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
   },
-  tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tabLabel: { ...typography.bodyStrong, color: colors.text },
-  tabLabelActive: { color: colors.surface },
+  tabLabel: { ...typography.bodyStrong },
   tabBadge: {
     minWidth: 22,
     paddingHorizontal: spacing[2],
     paddingVertical: 1,
     borderRadius: radius.pill,
-    backgroundColor: colors.background,
     alignItems: 'center',
   },
-  tabBadgeActive: { backgroundColor: 'rgba(255,255,255,0.28)' },
-  tabBadgeLabel: { ...typography.caption, color: colors.textMuted },
-  tabBadgeLabelActive: { color: colors.surface },
+  tabBadgeLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
 
   stepper: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   step: {
@@ -680,10 +703,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: ink[300],
   },
-  stepPressed: { backgroundColor: colors.background },
+  stepPressed: { opacity: 0.8 },
   stepInert: { opacity: 0.5 },
   // The one that adds is the green one: taking a second dose is the decision this row exists
   // to let a Mait make.
@@ -697,6 +720,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[2],
     paddingBottom: spacing[3],
+  },
+  tallyChip: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
   },
   tallyLabel: { ...typography.label, color: colors.primaryDark, flex: 1 },
 });

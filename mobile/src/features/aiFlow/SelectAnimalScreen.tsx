@@ -284,7 +284,7 @@ export default function SelectAnimalScreen({
             }
             title={title(animal)}
             subtitle={describe(animal)}
-            tone="neutral"
+            tone="accent"
             check
             selected={selectedId === animal.id}
             onPress={() => setSelectedId(animal.id)}

@@ -143,6 +143,7 @@
                   <th class="table__num" scope="col">Straws</th>
                   <th class="table__num" scope="col">Set aside</th>
                   <th class="table__num" scope="col">Waiting</th>
+                  <th scope="col" class="table__action">Stock</th>
                 </tr>
               </thead>
               <tbody id="store-rows"></tbody>
@@ -211,6 +212,146 @@
             </button>
           </div>
           <div class="holding" id="holding-body"></div>
+
+          <!-- Add stock to this Mait: a manual credit the oversight screen needs for the stock
+               that never came through an indent — an opening balance, straws carried by hand, a
+               correction. Three short steps, with a sentence saying what saving will do before it
+               is done — the same path the store shelf is stocked by. -->
+          <section class="addstock" id="holding-add" hidden>
+            <div class="addstock__head">
+              <h3 class="addstock__title" id="addstock-title">Adjust stock</h3>
+              <p class="addstock__note" id="addstock-note">
+                A manual adjustment straight to this Mait, recorded against the office. The
+                everyday way stock reaches a Mait is a store handing an approved
+                <a href="indents.html">indent</a> over.
+              </p>
+            </div>
+
+            <form class="addstock__form" id="holding-add-form" novalidate>
+              <!-- Add or take off. A count got wrong one way is got wrong the other, so the one
+                   form does both; the segmented control keeps them a single deliberate choice
+                   rather than two buttons that could both be pressed. -->
+              <div class="segmented" id="add-dir" role="radiogroup" aria-label="Add or remove stock">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked="true"
+                  class="segmented__option is-on"
+                  data-dir="add"
+                >
+                  <svg
+                    class="segmented__icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.9"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Add stock
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked="false"
+                  class="segmented__option"
+                  data-dir="remove"
+                >
+                  <svg
+                    class="segmented__icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.9"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12h14" />
+                  </svg>
+                  Remove stock
+                </button>
+              </div>
+
+              <p class="addstock__step"><span class="addstock__num">1</span>Which kind of stock?</p>
+              <div
+                class="stock-kinds"
+                id="add-kinds"
+                role="radiogroup"
+                aria-label="Which kind of stock"
+              ></div>
+
+              <div class="field">
+                <label class="addstock__step" for="add-item">
+                  <span class="addstock__num">2</span>Which item?
+                </label>
+                <select class="select field__control" id="add-item"></select>
+                <p class="field__hint" id="add-item-hint">—</p>
+              </div>
+
+              <div class="addstock__pair">
+                <div class="field">
+                  <label class="addstock__step" for="add-qty">
+                    <span class="addstock__num">3</span><span id="add-qty-label">How many to add?</span>
+                  </label>
+                  <div class="stock-qty">
+                    <button
+                      class="stock-qty__step"
+                      type="button"
+                      data-step="-1"
+                      aria-label="One fewer"
+                    >
+                      −
+                    </button>
+                    <input
+                      class="input stock-qty__input"
+                      id="add-qty"
+                      type="number"
+                      inputmode="numeric"
+                      min="0"
+                      max="100000"
+                      step="1"
+                    />
+                    <button
+                      class="stock-qty__step"
+                      type="button"
+                      data-step="1"
+                      aria-label="One more"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                <div class="field">
+                  <label class="addstock__step addstock__step--quiet" for="add-note">
+                    Note <span class="field__hint">optional</span>
+                  </label>
+                  <input
+                    class="input field__control"
+                    id="add-note"
+                    type="text"
+                    maxlength="255"
+                    placeholder="Opening balance · carried from Barsana"
+                  />
+                </div>
+              </div>
+
+              <!-- What saving will do, in one sentence, before it is done. -->
+              <div class="stock-preview" id="add-preview" aria-live="polite"></div>
+
+              <div class="form-actions">
+                <!-- One save for both directions: its label and colour follow the toggle —
+                     green primary to add, danger-outline red to remove (the same red ai-events
+                     and users use for a destructive action). -->
+                <button class="btn btn--primary" id="add-save" type="submit">Add to stock</button>
+                <button class="btn btn--soft" id="add-reset" type="button">Clear</button>
+                <p class="field__hint" id="add-status"></p>
+              </div>
+            </form>
+          </section>
         </section>
 
         <section class="panel panel--flush" aria-label="Stock by Mait">

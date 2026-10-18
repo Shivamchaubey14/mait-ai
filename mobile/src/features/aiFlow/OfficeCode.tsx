@@ -39,7 +39,7 @@ export function OfficeCodeAsk({
     return (
       <View style={styles.asked} testID={`${testID}-asked`}>
         <View style={styles.icon}>
-          <Ionicons name="call-outline" size={18} color={colors.primaryDark} />
+          <Ionicons name="call" size={17} color={colors.surface} />
         </View>
         <View style={styles.body}>
           <Text style={styles.title}>{t('aiFlow.officeAskedTitle')}</Text>
@@ -63,7 +63,7 @@ export function OfficeCodeAsk({
       {busy ? (
         <ActivityIndicator color={colors.primaryDark} />
       ) : (
-        <Ionicons name="help-buoy-outline" size={16} color={colors.primaryDark} />
+        <Ionicons name="help-buoy" size={16} color={colors.primaryDark} />
       )}
       <Text style={styles.linkLabel}>{t('aiFlow.officeAsk')}</Text>
     </Pressable>
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary,
   },
   body: { flex: 1 },
   title: { ...typography.bodyStrong, color: colors.ink },

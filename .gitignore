@@ -10,6 +10,13 @@ google-services.json
 GoogleService-Info.plist
 backend/config/settings/local.py
 
+# ---------- Caddy HTTPS edge (infra/caddy) ----------
+# The purchased wildcard cert + key and Caddy's runtime files never belong in git; copy the
+# certs onto each machine by hand. See docs/HANDOVER.md and infra/caddy/Caddyfile.
+infra/caddy/certs/
+infra/caddy/logs/*
+!infra/caddy/logs/.gitkeep
+
 # ---------- Python / Django ----------
 __pycache__/
 *.py[cod]

@@ -29,8 +29,19 @@
         <section class="panel" aria-label="Activation">
           <form id="activate-form" class="form-grid" novalidate>
             <div class="field">
-              <label class="field__label" for="sahayak">Pending Mait</label>
-              <select class="select field__control" id="sahayak" required>
+              <label class="field__label" for="mait-search">Pending Mait</label>
+              <!-- The queue can run to hundreds, and scrolling a dropdown to find one person by
+                   eye is how the wrong one gets activated. Typing a name or a code narrows the
+                   list below to the matches before it is opened. -->
+              <input
+                class="input field__control"
+                id="mait-search"
+                type="search"
+                placeholder="Search by name or code"
+                autocomplete="off"
+                aria-label="Search pending Maits"
+              />
+              <select class="select field__control" id="sahayak" required aria-label="Pending Mait">
                 <option value="">Loading…</option>
               </select>
               <p class="field__hint" id="pending-hint">—</p>

@@ -42,7 +42,16 @@ import {
   OTP_LOCK_MINUTES,
   OTP_MAX_ATTEMPTS,
 } from '@/config/env';
-import { colors, ink, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import {
+  colors,
+  green,
+  ink,
+  MIN_TOUCH_TARGET,
+  radius,
+  spacing,
+  typography,
+  yolk,
+} from '@theme/tokens';
 
 /** What went wrong last, which decides the notice, the cell colour and the button. */
 export type OtpFailure = 'wrong' | 'expired' | 'locked' | null;
@@ -167,7 +176,7 @@ function FailureNotice({
       <View style={styles.inlineError} accessibilityRole="alert" testID="otp-notice-wrong">
         {/* A glyph as well as a colour — colour alone excludes colour-blind users, and the
             wrong/expired pair is exactly the distinction they would lose. */}
-        <Ionicons name="alert-circle" size={15} color={colors.error} />
+        <Ionicons name="alert-circle" size={16} color={colors.surface} />
         <Text style={styles.inlineErrorText}>
           {`${t('auth.wrongCodeTitle')}. ${t('auth.wrongCodeBody', { count: attemptsLeft })}`}
         </Text>
@@ -178,10 +187,10 @@ function FailureNotice({
   const config =
     failure === 'expired'
       ? {
-          tint: colors.secondaryPressed,
+          tint: yolk[500],
           wash: colors.secondaryWash,
-          border: colors.secondary,
-          icon: 'time-outline' as const,
+          border: yolk[300],
+          icon: 'time' as const,
           title: t('auth.expiredTitle'),
           body: t('auth.expiredBody', { minutes: OTP_EXPIRY_SECONDS / 60 }),
         }
@@ -189,7 +198,7 @@ function FailureNotice({
           tint: colors.error,
           wash: colors.errorWash,
           border: colors.error,
-          icon: 'warning-outline' as const,
+          icon: 'warning' as const,
           title: t('auth.lockedTitle'),
           body: lockLifted
             ? t('auth.lockedLiftedBody')
@@ -202,7 +211,13 @@ function FailureNotice({
       accessibilityRole="alert"
       testID={`otp-notice-${failure}`}
     >
-      <Ionicons name={config.icon} size={20} color={config.tint} style={styles.noticeIcon} />
+      <View style={[styles.noticeChip, { backgroundColor: config.tint }]}>
+        <Ionicons
+          name={config.icon}
+          size={20}
+          color={failure === 'expired' ? colors.ink : colors.surface}
+        />
+      </View>
       <View style={styles.noticeBody}>
         <Text style={styles.noticeTitle}>{config.title}</Text>
         <Text style={styles.noticeText}>{config.body}</Text>
@@ -327,7 +342,10 @@ export default function OtpVerifyScreen({
               >
                 <Ionicons name="arrow-back" size={20} color={colors.surface} />
               </Pressable>
-              <Text style={styles.heroNumber}>{displayMobile}</Text>
+              <View style={styles.heroNumberPill}>
+                <Ionicons name="call" size={13} color={colors.surface} />
+                <Text style={styles.heroNumber}>{displayMobile}</Text>
+              </View>
             </View>
 
             <Text style={styles.heroTitle}>{t('auth.verifyTitle')}</Text>
@@ -378,11 +396,14 @@ export default function OtpVerifyScreen({
             {!locked && failure !== 'expired' && (
               <View style={styles.resendRow}>
                 {resendIn > 0 ? (
-                  <Text style={styles.timerLabel}>
-                    {beforeTime}
-                    <Text style={styles.timerValue}>{countdown}</Text>
-                    {afterTime}
-                  </Text>
+                  <View style={styles.timerPill} testID="otp-timer">
+                    <Ionicons name="time" size={14} color={colors.info} />
+                    <Text style={styles.timerLabel}>
+                      {beforeTime}
+                      <Text style={styles.timerValue}>{countdown}</Text>
+                      {afterTime}
+                    </Text>
+                  </View>
                 ) : (
                   <View style={styles.flex} />
                 )}
@@ -392,9 +413,14 @@ export default function OtpVerifyScreen({
                   accessibilityState={{ disabled: !canResend }}
                   onPress={onResend}
                   disabled={!canResend}
-                  style={styles.resendButton}
+                  style={[styles.resendButton, canResend && styles.resendButtonOn]}
                   testID="login-resend"
                 >
+                  <Ionicons
+                    name="refresh"
+                    size={15}
+                    color={canResend ? colors.surface : ink[400]}
+                  />
                   <Text style={[styles.resendLabel, !canResend && styles.resendLabelDisabled]}>
                     {t('auth.resend')}
                   </Text>
@@ -413,11 +439,13 @@ export default function OtpVerifyScreen({
               // was rejected does not need a second card explaining network coverage.
               <View style={styles.help}>
                 <View style={styles.helpIcon}>
-                  <Ionicons name="cellular-outline" size={18} color={colors.info} />
+                  <Ionicons name="cellular" size={18} color={colors.surface} />
                 </View>
                 <View style={styles.helpBody}>
                   <Text style={styles.noticeTitle}>{t('auth.needsSignalTitle')}</Text>
-                  <Text style={styles.noticeText}>{t('auth.needsSignalBody')}</Text>
+                  <Text style={[styles.noticeText, { color: colors.info }]}>
+                    {t('auth.needsSignalBody')}
+                  </Text>
                 </View>
               </View>
             )}
@@ -430,7 +458,7 @@ export default function OtpVerifyScreen({
               (askedOffice ? (
                 <View style={styles.office} testID="otp-office-asked">
                   <View style={styles.officeIcon}>
-                    <Ionicons name="call-outline" size={18} color={colors.primaryDark} />
+                    <Ionicons name="call" size={18} color={colors.surface} />
                   </View>
                   <View style={styles.helpBody}>
                     <Text style={styles.noticeTitle}>{t('auth.officeAskedTitle')}</Text>
@@ -448,8 +476,11 @@ export default function OtpVerifyScreen({
                   style={styles.officeLink}
                   testID="otp-ask-office"
                 >
-                  <Ionicons name="help-buoy-outline" size={16} color={colors.primaryDark} />
+                  <View style={styles.officeLinkChip}>
+                    <Ionicons name="help-buoy" size={16} color={colors.ink} />
+                  </View>
                   <Text style={styles.officeLinkLabel}>{t('auth.askOffice')}</Text>
+                  <Ionicons name="chevron-forward" size={16} color={yolk[800]} />
                 </Pressable>
               ))}
 
@@ -469,6 +500,11 @@ export default function OtpVerifyScreen({
               ]}
               testID="login-verify"
             >
+              <Ionicons
+                name={locked && !lockLifted ? 'lock-closed' : resendMode ? 'refresh' : 'log-in'}
+                size={18}
+                color={canPress ? colors.surface : colors.textDisabled}
+              />
               <Text style={[styles.ctaLabel, !canPress && styles.ctaLabelDisabled]}>
                 {primary.label}
               </Text>
@@ -484,6 +520,7 @@ export default function OtpVerifyScreen({
                 style={styles.callIt}
                 testID="otp-call-it"
               >
+                <Ionicons name="call" size={16} color={colors.error} />
                 <Text style={styles.callItLabel}>{t('auth.callIt')}</Text>
               </Pressable>
             )}
@@ -500,30 +537,44 @@ const styles = StyleSheet.create({
   officeLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: spacing[2],
+    gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET,
     marginTop: spacing[3],
+    padding: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: yolk[300],
+    backgroundColor: colors.secondaryWash,
   },
-  officeLinkLabel: { ...typography.label, color: colors.primaryDark },
+  officeLinkChip: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: yolk[500],
+  },
+  officeLinkLabel: { ...typography.label, color: yolk[800], flex: 1 },
   // Green, not blue: it is not a caution about the network, it is help on its way.
   office: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing[3],
     marginTop: spacing[4],
-    padding: spacing[4],
+    padding: spacing[3],
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: green[300],
     backgroundColor: colors.primaryWash,
   },
   officeIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary,
   },
   flex: { flex: 1 },
   scroll: { flexGrow: 1 },
@@ -559,6 +610,15 @@ const styles = StyleSheet.create({
     marginTop: spacing[2],
   },
   heroNumber: { ...typography.bodyStrong, color: colors.surface },
+  heroNumberPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing[3],
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.info,
+  },
 
   // flexGrow rather than flex: the sheet fills whatever the hero leaves over, but keeps its
   // natural height when the notice pushes the content past the fold and the screen scrolls.
@@ -573,20 +633,20 @@ const styles = StyleSheet.create({
     maxWidth: 60,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: colors.info,
+    backgroundColor: colors.infoWash,
     alignItems: 'center',
     justifyContent: 'center',
   },
   // A typed digit firms the outline up. Only the outline — a fill or a shadow here would
   // make the six cells read as two groups, when the point is that they are one code.
-  cellFilled: { borderColor: ink[200] },
-  cellNext: { borderColor: colors.primary, borderWidth: 2, backgroundColor: colors.surface },
+  cellFilled: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
+  cellNext: { borderColor: colors.primary, borderWidth: 2.5, backgroundColor: colors.surface },
   // The outline carries the refusal, not a fill. The digits stay Ink and fully legible,
   // because the next thing the user does is read them back against the SMS.
-  cellWrong: { borderColor: colors.error },
-  cellExpired: { borderColor: colors.warning },
-  cellLocked: { borderColor: colors.error },
+  cellWrong: { borderColor: colors.error, backgroundColor: colors.errorWash },
+  cellExpired: { borderColor: yolk[500], backgroundColor: colors.secondaryWash },
+  cellLocked: { borderColor: colors.error, backgroundColor: colors.errorWash },
   cellDigit: { ...typography.h2, fontSize: 24, lineHeight: 30, color: colors.ink },
   caret: { width: 2, height: 24, borderRadius: radius.pill, backgroundColor: colors.primary },
 
@@ -610,18 +670,36 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     marginTop: spacing[4],
   },
-  timerLabel: { ...typography.label, color: colors.textMuted },
+  timerLabel: { ...typography.label, color: colors.info },
+  timerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing[3],
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.info,
+    backgroundColor: colors.infoWash,
+  },
   /** The seconds, in Ink — the one part of the line that moves. */
   timerValue: { ...typography.label, fontFamily: typography.h2.fontFamily, color: colors.ink },
   resendButton: {
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     minHeight: MIN_TOUCH_TARGET - 12,
-    paddingLeft: spacing[4],
+    paddingHorizontal: spacing[3],
+    borderRadius: radius.pill,
+    backgroundColor: ink[50],
+    borderWidth: 1,
+    borderColor: ink[100],
   },
+  resendButtonOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   // Green only once it can actually do something. Before that it is grey, which is the
   // honest signal that pressing it now achieves nothing.
-  resendLabel: { ...typography.label, color: colors.primaryDark },
-  resendLabelDisabled: { color: colors.textMuted },
+  resendLabel: { ...typography.label, color: colors.surface },
+  resendLabelDisabled: { color: ink[400] },
 
   // -- notice ---------------------------------------------------------------------------
   /** Sits directly under the cells, where the correction is being typed. */
@@ -630,16 +708,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[2],
     marginTop: spacing[3],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    backgroundColor: colors.error,
   },
-  inlineErrorText: { ...typography.caption, color: colors.error, flex: 1 },
+  inlineErrorText: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+    flex: 1,
+  },
   notice: {
     flexDirection: 'row',
     gap: spacing[3],
-    alignItems: 'flex-start',
+    alignItems: 'center',
     borderRadius: radius.md,
     borderWidth: 1,
-    padding: spacing[4],
+    padding: spacing[3],
     marginTop: spacing[4],
+  },
+  noticeChip: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   noticeIcon: { marginTop: 1 },
   noticeBody: { flex: 1 },
@@ -662,12 +756,18 @@ const styles = StyleSheet.create({
   ctaLabelDisabled: { color: colors.textDisabled },
 
   callIt: {
+    flexDirection: 'row',
+    gap: spacing[2],
     minHeight: MIN_TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.error,
+    backgroundColor: colors.errorWash,
   },
-  callItLabel: { ...typography.bodyStrong, color: colors.primaryDark },
+  callItLabel: { ...typography.bodyStrong, color: colors.error },
 
   /** Holds the CTA at the bottom when the content is short, and collapses when it is not. */
   spacer: { flexGrow: 1, minHeight: spacing[6] },
@@ -678,15 +778,17 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     alignItems: 'center',
     backgroundColor: colors.infoWash,
+    borderWidth: 1,
+    borderColor: colors.info,
     borderRadius: radius.md,
     padding: spacing[3],
     marginTop: spacing[4],
   },
   helpIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.info,
     alignItems: 'center',
     justifyContent: 'center',
   },

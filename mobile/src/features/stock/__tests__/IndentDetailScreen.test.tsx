@@ -12,6 +12,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import IndentDetailScreen, { rejectionReason } from '../IndentDetailScreen';
 import type { Indent } from '@api/types';
 import { jsonResponse, problemResponse, renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 function indent(overrides: Partial<Indent> = {}): Indent {
   return {
@@ -394,6 +395,44 @@ describe('IndentDetailScreen', () => {
       expect(screen.getByTestId('indent-part-open')).toHaveTextContent(/7 still open/);
       expect(screen.getByText(/18 issued at Barsana depot/)).toBeTruthy();
       expect(screen.getByText(/25 approved · Zonal manager/)).toBeTruthy();
+    });
+  });
+
+  describe('in colour', () => {
+    it('draws the asked-for figure blue and the agreed one slate until it is agreed', async () => {
+      mockIndent(indent());
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('indent-qty-requested'));
+      expect(screen.getByTestId('indent-qty-requested')).toHaveStyle({
+        backgroundColor: colors.infoWash,
+      });
+      expect(screen.getByTestId('indent-qty-requested')).toHaveTextContent(/needle/);
+      expect(screen.getByTestId('indent-qty-approved')).not.toHaveStyle({
+        backgroundColor: colors.primaryWash,
+      });
+    });
+
+    it('turns the agreed figure green once the office has agreed', async () => {
+      mockIndent(indent({ status: 'approved', status_display: 'Approved' }));
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('indent-qty-approved'));
+      expect(screen.getByTestId('indent-qty-approved')).toHaveStyle({
+        backgroundColor: colors.primaryWash,
+      });
+      expect(screen.getByTestId('indent-status')).toHaveStyle({ backgroundColor: colors.info });
+    });
+
+    it('draws a refused indent red, from its status to its figures', async () => {
+      mockIndent(indent({ status: 'rejected', status_display: 'Rejected' }));
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('indent-status'));
+      expect(screen.getByTestId('indent-status')).toHaveStyle({ backgroundColor: colors.error });
+      expect(screen.getByTestId('indent-qty-approved')).toHaveStyle({
+        backgroundColor: colors.errorWash,
+      });
     });
   });
 });

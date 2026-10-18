@@ -3,12 +3,11 @@
   "compilerOptions": {
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "baseUrl": ".",
     "types": ["jest", "node"],
     "paths": {
-      "@/*": ["src/*"],
-      "@theme/*": ["src/theme/*"],
-      "@api/*": ["src/api/*"]
+      "@/*": ["./src/*"],
+      "@theme/*": ["./src/theme/*"],
+      "@api/*": ["./src/api/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "types.d.ts"],

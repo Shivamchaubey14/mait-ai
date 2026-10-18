@@ -109,6 +109,48 @@ class TestMaitActivation:
         assert response.status_code == 400
         assert "already uses this number" in str(response.json())
 
+    def test_activating_with_the_number_already_on_the_record(self, admin_client, mait):
+        """
+        The commonest activation there is, and it used to be refused.
+
+        A Sahayak record routinely arrives from SAP carrying its number, the activation screen
+        shows that number, and the operator confirms it. The uniqueness check matched the
+        record against itself and answered with the Mait's own name — "BHANMANI YADAV
+        (9900000044) already uses this number" — which reads as though somebody else had it.
+        """
+        mait.user = None
+        mait.mobile_no = "9794794894"
+        mait.save(update_fields=["user", "mobile_no"])
+
+        response = admin_client.post(
+            f"{BASE}/admin/users/activate-mait/",
+            {"sahayak_vendor_code": mait.sahayak_vendor_code, "mobile_no": "9794794894"},
+            format="json",
+        )
+        assert response.status_code == 201, response.json()
+
+        mait.refresh_from_db()
+        assert mait.user is not None
+        assert mait.mobile_no == "9794794894"
+        assert mait.user.mobile_no == "9794794894"
+
+    def test_another_mait_still_blocks_the_number_it_holds(self, admin_client, mait):
+        """The fix excludes one record — the one being activated — and nothing else."""
+        Mait.objects.create(
+            sahayak_vendor_code="SAH-HOLDER", name="Number Holder", mobile_no="9794794894"
+        )
+        mait.user = None
+        mait.mobile_no = "9794794894"
+        mait.save(update_fields=["user", "mobile_no"])
+
+        response = admin_client.post(
+            f"{BASE}/admin/users/activate-mait/",
+            {"sahayak_vendor_code": mait.sahayak_vendor_code, "mobile_no": "9794794894"},
+            format="json",
+        )
+        assert response.status_code == 400
+        assert "Number Holder" in str(response.json())
+
     def test_pending_list_flags_maits_with_no_mobile(self, admin_client, mait):
         mait.user = None
         mait.mobile_no = ""
@@ -117,6 +159,28 @@ class TestMaitActivation:
         body = admin_client.get(f"{BASE}/admin/users/pending-maits/").json()
         assert body["summary"]["without_mobile"] >= 1
         assert any(row["needs_mobile"] for row in body["results"])
+
+    def test_pending_list_is_searchable_by_name_or_code(self, admin_client):
+        Mait.objects.create(sahayak_vendor_code="SAH-RAMESH", name="RAMESH KUMAR")
+        Mait.objects.create(sahayak_vendor_code="SAH-SUNITA", name="SUNITA DEVI")
+
+        by_name = admin_client.get(f"{BASE}/admin/users/pending-maits/?search=ramesh").json()
+        assert [r["sahayak_vendor_code"] for r in by_name["results"]] == ["SAH-RAMESH"]
+
+        by_code = admin_client.get(f"{BASE}/admin/users/pending-maits/?search=SUNITA").json()
+        assert [r["sahayak_vendor_code"] for r in by_code["results"]] == ["SAH-SUNITA"]
+
+    def test_the_search_does_not_shrink_the_backlog_count(self, admin_client):
+        """The hint under the form reports the whole queue, not the size of the search."""
+        Mait.objects.create(sahayak_vendor_code="SAH-A1", name="Aarav")
+        Mait.objects.create(sahayak_vendor_code="SAH-B1", name="Bhavna")
+
+        full = admin_client.get(f"{BASE}/admin/users/pending-maits/").json()["summary"]
+        searched = admin_client.get(
+            f"{BASE}/admin/users/pending-maits/?search=Aarav"
+        ).json()["summary"]
+
+        assert searched["pending_total"] == full["pending_total"]
 
 
 @pytest.fixture
@@ -212,6 +276,55 @@ class TestOfficeAccounts:
             format="json",
         )
         assert response.status_code == 400
+
+    def test_changes_the_username(self, admin_client):
+        user = User.objects.create_user(
+            username="oldname", password="a-long-enough-password", full_name="Nn", role=Role.ADMIN
+        )
+        response = admin_client.patch(
+            f"{BASE}/admin/users/{user.id}/", {"username": "newname"}, format="json"
+        )
+        assert response.status_code == 200
+        user.refresh_from_db()
+        assert user.username == "newname"
+
+    def test_resets_the_password(self, admin_client):
+        user = User.objects.create_user(
+            username="pwuser", password="old-long-password", full_name="Pw", role=Role.ADMIN
+        )
+        response = admin_client.patch(
+            f"{BASE}/admin/users/{user.id}/",
+            {"password": "a-brand-new-password"},
+            format="json",
+        )
+        assert response.status_code == 200
+        user.refresh_from_db()
+        assert user.check_password("a-brand-new-password")
+
+    def test_rejects_a_username_already_taken(self, admin_client):
+        User.objects.create_user(username="taken", full_name="T", role=Role.ADMIN)
+        mine = User.objects.create_user(username="mine", full_name="M", role=Role.ADMIN)
+        # Case-insensitive, the same way creation checks it.
+        response = admin_client.patch(
+            f"{BASE}/admin/users/{mine.id}/", {"username": "TAKEN"}, format="json"
+        )
+        assert response.status_code == 400
+
+    def test_saving_the_same_username_is_not_a_clash_with_itself(self, admin_client):
+        user = User.objects.create_user(username="steady", full_name="S", role=Role.ADMIN)
+        response = admin_client.patch(
+            f"{BASE}/admin/users/{user.id}/", {"username": "steady"}, format="json"
+        )
+        assert response.status_code == 200
+
+    def test_a_blank_username_is_refused(self, admin_client):
+        user = User.objects.create_user(username="keepme", full_name="K", role=Role.ADMIN)
+        response = admin_client.patch(
+            f"{BASE}/admin/users/{user.id}/", {"username": "   "}, format="json"
+        )
+        assert response.status_code == 400
+        user.refresh_from_db()
+        assert user.username == "keepme"
 
     def test_updating_a_mait_mobile_updates_the_sap_record_too(
         self, admin_client, mait, mait_user_placeholder

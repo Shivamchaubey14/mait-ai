@@ -242,6 +242,126 @@ class TestOTPLogin:
         assert response.status_code == 400
 
 
+class TestPasswordReset:
+    """
+    Admin password reset by OTP (SRS §6.8.1).
+
+    The account gets back in on the number already on file. The cases that matter are the
+    negative ones: a Mait reaching it, a username being probed, or a stale code working.
+    """
+
+    @pytest.fixture
+    def resettable_admin(self, db):
+        return User.objects.create_user(
+            username="backoffice",
+            password="the-old-password",
+            full_name="Back Office",
+            role=Role.ADMIN,
+            mobile_no="9569061304",
+        )
+
+    def test_full_reset_flow(self, api_client, resettable_admin):
+        requested = api_client.post(
+            f"{BASE}/password/reset/request/", {"username": "backoffice"}, format="json"
+        )
+        assert requested.status_code == 200
+        assert OTPLog.objects.filter(
+            mobile_no="9569061304", purpose=OTPLog.Purpose.PASSWORD_RESET
+        ).exists()
+
+        response = api_client.post(
+            f"{BASE}/password/reset/verify/",
+            {
+                "username": "backoffice",
+                "otp": latest_otp_code("9569061304"),
+                "new_password": "a-brand-new-password",
+            },
+            format="json",
+        )
+        assert response.status_code == 200, response.json()
+
+        resettable_admin.refresh_from_db()
+        assert resettable_admin.check_password("a-brand-new-password")
+        assert not resettable_admin.check_password("the-old-password")
+
+        # And the new password actually logs in.
+        login = api_client.post(
+            f"{BASE}/login/",
+            {"username": "backoffice", "password": "a-brand-new-password"},
+            format="json",
+        )
+        assert login.status_code == 200
+
+    def test_unknown_username_is_indistinguishable(self, api_client, resettable_admin):
+        """A differing response would let anyone probe which office accounts exist."""
+        real = api_client.post(
+            f"{BASE}/password/reset/request/", {"username": "backoffice"}, format="json"
+        )
+        invented = api_client.post(
+            f"{BASE}/password/reset/request/", {"username": "nobody"}, format="json"
+        )
+        assert real.status_code == invented.status_code == 200
+        assert real.json() == invented.json()
+
+    def test_mait_is_not_eligible(self, api_client, mait_login):
+        """A Mait has no password; a reset must not mint an OTP onto a field handset."""
+        user, mait = mait_login
+        response = api_client.post(
+            f"{BASE}/password/reset/request/", {"username": user.username}, format="json"
+        )
+        assert response.status_code == 200
+        assert not OTPLog.objects.filter(
+            mobile_no=mait.mobile_no, purpose=OTPLog.Purpose.PASSWORD_RESET
+        ).exists()
+
+    def test_admin_with_no_mobile_gets_no_code(self, api_client, admin_user):
+        """`admin_user` has no number on file — there is nowhere to send the code."""
+        response = api_client.post(
+            f"{BASE}/password/reset/request/", {"username": "backoffice"}, format="json"
+        )
+        assert response.status_code == 200
+        assert not OTPLog.objects.filter(purpose=OTPLog.Purpose.PASSWORD_RESET).exists()
+
+    def test_wrong_code_is_rejected(self, api_client, resettable_admin):
+        api_client.post(
+            f"{BASE}/password/reset/request/", {"username": "backoffice"}, format="json"
+        )
+        response = api_client.post(
+            f"{BASE}/password/reset/verify/",
+            {"username": "backoffice", "otp": "000000", "new_password": "a-brand-new-password"},
+            format="json",
+        )
+        assert response.status_code == 400
+        assert response.json()["type"].endswith("otp-invalid")
+        resettable_admin.refresh_from_db()
+        assert resettable_admin.check_password("the-old-password")
+
+    def test_verify_for_unknown_username_looks_like_a_bad_code(self, api_client):
+        """Must not tell a real username from an invented one at the verify step either."""
+        response = api_client.post(
+            f"{BASE}/password/reset/verify/",
+            {"username": "nobody", "otp": "123456", "new_password": "a-brand-new-password"},
+            format="json",
+        )
+        assert response.status_code == 400
+        assert response.json()["type"].endswith("otp-invalid")
+
+    def test_short_password_is_rejected(self, api_client, resettable_admin):
+        api_client.post(
+            f"{BASE}/password/reset/request/", {"username": "backoffice"}, format="json"
+        )
+        response = api_client.post(
+            f"{BASE}/password/reset/verify/",
+            {
+                "username": "backoffice",
+                "otp": latest_otp_code("9569061304"),
+                "new_password": "short",
+            },
+            format="json",
+        )
+        assert response.status_code == 400
+
+
 class TestSessionLifecycle:
     def _tokens(self, api_client, admin_user):
         return api_client.post(

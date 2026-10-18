@@ -61,7 +61,16 @@ import type { PdOutcome, PregnancyCheck } from '@api/types';
 import { settlementFor } from './charge';
 import FlowCamera from '@/features/aiFlow/FlowCamera';
 import { useRevealOnFocus } from '@/features/aiFlow/components';
-import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
+import {
+  colors,
+  green,
+  ink,
+  MIN_TOUCH_TARGET,
+  radius,
+  spacing,
+  typography,
+  yolk,
+} from '@theme/tokens';
 
 import { shortDate } from './PdListScreen';
 
@@ -94,6 +103,30 @@ export function calvingPreview(servedOn: string | null, animalType: string): str
   return `${due.getDate()} ${MONTHS[due.getMonth()] ?? ''} ${due.getFullYear()}`;
 }
 
+/**
+ * Each answer's colour, the same the list's marks wear: green pregnant, red not, slate not
+ * sure or refused. Always drawn in it — the glyph on a solid chip, the card in its wash — and
+ * chosen is the colour's full border and a filled tick.
+ */
+type ChoiceTone = 'good' | 'bad' | 'unsure' | 'plain';
+
+const PAINT: Record<
+  ChoiceTone | 'info' | 'warm',
+  { solid: string; word: string; wash: string; edge: string }
+> = {
+  good: {
+    solid: colors.primary,
+    word: colors.primaryDark,
+    wash: colors.primaryWash,
+    edge: green[300],
+  },
+  bad: { solid: colors.error, word: colors.error, wash: colors.errorWash, edge: colors.error },
+  unsure: { solid: ink[400], word: ink[600], wash: ink[50], edge: ink[100] },
+  plain: { solid: ink[500], word: ink[600], wash: ink[50], edge: ink[100] },
+  info: { solid: colors.info, word: colors.info, wash: colors.infoWash, edge: colors.info },
+  warm: { solid: yolk[500], word: yolk[800], wash: colors.secondaryWash, edge: yolk[300] },
+};
+
 function Choice({
   icon,
   label,
@@ -117,9 +150,10 @@ function Choice({
    * reader that tapping it selects something.
    */
   role?: 'radio' | 'button';
-  /** A refusal is not a finding, so it does not turn the card green when chosen. */
-  tone?: 'good' | 'plain';
+  /** A refusal is not a finding, so it is slate rather than a result's colour. */
+  tone?: ChoiceTone;
 }): React.JSX.Element {
+  const paint = PAINT[tone];
   return (
     <Pressable
       accessibilityRole={role}
@@ -128,24 +162,20 @@ function Choice({
       onPress={onPress}
       style={({ pressed }) => [
         styles.choice,
-        selected && (tone === 'plain' ? styles.choiceOnPlain : styles.choiceOn),
+        { backgroundColor: paint.wash, borderColor: selected ? paint.solid : paint.edge },
+        selected && styles.choiceOn,
         pressed && styles.pressed,
       ]}
       testID={testID}
     >
-      <View
-        style={[
-          styles.choiceIcon,
-          selected && (tone === 'plain' ? styles.choiceIconOnPlain : styles.choiceIconOn),
-        ]}
-      >
-        <Ionicons name={icon} size={20} color={selected ? colors.surface : colors.textMuted} />
+      <View style={[styles.choiceIcon, { backgroundColor: paint.solid }]}>
+        <Ionicons name={icon} size={20} color={colors.surface} />
       </View>
 
       <View style={styles.choiceBody}>
         <Text style={styles.choiceLabel}>{label}</Text>
         {/* What this answer *does*, before it is chosen. */}
-        <Text style={styles.choiceHint} numberOfLines={2}>
+        <Text style={[styles.choiceHint, { color: paint.word }]} numberOfLines={2}>
           {hint}
         </Text>
       </View>
@@ -154,15 +184,41 @@ function Choice({
           ring inside it is not a shape that survives that. */}
       {role === 'radio' ? (
         <View
-          style={[styles.tick, selected && (tone === 'plain' ? styles.tickOnPlain : styles.tickOn)]}
+          style={[
+            styles.tick,
+            { borderColor: paint.solid },
+            selected && { backgroundColor: paint.solid },
+          ]}
         >
           {selected && <Ionicons name="checkmark" size={15} color={colors.surface} />}
         </View>
       ) : (
-        // A chevron, not a tick: this one goes somewhere rather than marking an answer.
-        <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        // An arrow, not a tick: this one goes somewhere rather than marking an answer.
+        <View style={[styles.go, { borderColor: paint.solid }]}>
+          <Ionicons name="chevron-forward" size={16} color={paint.word} />
+        </View>
       )}
     </Pressable>
+  );
+}
+
+/** A labelled section heading with its glyph on a small chip. */
+function Section({
+  icon,
+  label,
+  tone,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  tone: keyof typeof PAINT;
+}): React.JSX.Element {
+  return (
+    <View style={styles.sectionRow}>
+      <View style={[styles.sectionChip, { backgroundColor: PAINT[tone].solid }]}>
+        <Ionicons name={icon} size={13} color={colors.surface} />
+      </View>
+      <Text style={[styles.sectionLabel, { color: PAINT[tone].word }]}>{label}</Text>
+    </View>
   );
 }
 
@@ -237,6 +293,9 @@ export default function PdRecordScreen({
       : settlement.kind === 'nonMember'
         ? t('pd.chargeNonMember', { amount: settlement.amount })
         : t('pd.chargeUnpriced');
+  // Blue: a member's deduction is a fact the dairy settles. Yolk: cash to collect in the yard,
+  // or no price set — both something the Mait has to act on.
+  const chargeTone: 'info' | 'warm' = settlement.kind === 'member' ? 'info' : 'warm';
   const chargeHint =
     settlement.kind === 'member'
       ? t('pd.chargeMemberHint')
@@ -321,7 +380,7 @@ export default function PdRecordScreen({
         </View>
 
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionLabel}>{t('pd.found')}</Text>
+          <Section icon="clipboard" label={t('pd.found')} tone={tone} />
 
           <View style={[styles.settled, styles[`settled_${tone}`]]} testID="pd-recorded">
             <View style={[styles.settledIcon, styles[`settledIcon_${tone}`]]}>
@@ -351,17 +410,29 @@ export default function PdRecordScreen({
 
           {/* The two things a farmer actually asks about afterwards. */}
           {!!check.calving_due_on && (
-            <Text style={styles.settledNote} testID="pd-recorded-calving">
-              {t('pd.recordedCalving', { date: shortDate(check.calving_due_on) })}
-            </Text>
+            <View style={[styles.note, styles.note_good]}>
+              <Ionicons name="calendar" size={15} color={colors.primaryDark} />
+              <Text
+                style={[styles.noteText, { color: colors.primaryDark }]}
+                testID="pd-recorded-calving"
+              >
+                {t('pd.recordedCalving', { date: shortDate(check.calving_due_on) })}
+              </Text>
+            </View>
           )}
           {check.outcome === 'unsure' && (
-            <Text style={styles.settledNote}>{t('pd.recordedRecheck')}</Text>
+            <View style={[styles.note, styles.note_warm]}>
+              <Ionicons name="repeat" size={15} color={yolk[800]} />
+              <Text style={[styles.noteText, { color: yolk[800] }]}>{t('pd.recordedRecheck')}</Text>
+            </View>
           )}
           {check.outcome === 'declined' && (
-            <Text style={styles.settledNote} testID="pd-recorded-declined">
-              {t('pd.recordedDeclined')}
-            </Text>
+            <View style={[styles.note, styles.note_slate]}>
+              <Ionicons name="hand-left" size={15} color={ink[600]} />
+              <Text style={[styles.noteText, { color: ink[600] }]} testID="pd-recorded-declined">
+                {t('pd.recordedDeclined')}
+              </Text>
+            </View>
           )}
 
           {/* What the Mait wrote at the time, read back verbatim. This is the half of the
@@ -369,14 +440,16 @@ export default function PdRecordScreen({
               cannot say the animal was thin or that she bulled again on the 5th. */}
           {!!check.note && (
             <View style={styles.remarkRead} testID="pd-recorded-remark">
-              <Text style={styles.sectionLabel}>{t('pd.recordedRemark')}</Text>
+              <Section icon="chatbubble-ellipses" label={t('pd.recordedRemark')} tone="info" />
               <Text style={styles.remarkReadText}>{check.note}</Text>
             </View>
           )}
 
           {/* Why there is nothing to tap, said rather than left to be discovered. */}
           <View style={styles.locked} testID="pd-locked">
-            <Ionicons name="lock-closed-outline" size={17} color={colors.textMuted} />
+            <View style={[styles.sectionChip, styles.lockChip]}>
+              <Ionicons name="lock-closed" size={14} color={colors.surface} />
+            </View>
             <Text style={styles.lockedText}>{t('pd.cannotChange')}</Text>
           </View>
         </ScrollView>
@@ -405,7 +478,7 @@ export default function PdRecordScreen({
         </View>
 
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionLabel}>{t('pd.consentLabel')}</Text>
+          <Section icon="chatbubbles" label={t('pd.consentLabel')} tone="info" />
 
           <Choice
             icon="checkmark"
@@ -417,7 +490,7 @@ export default function PdRecordScreen({
             testID="pd-consent-yes"
           />
           <Choice
-            icon="hand-left-outline"
+            icon="hand-left"
             tone="plain"
             label={t('pd.consentNo')}
             hint={t('pd.consentNoHint')}
@@ -430,7 +503,7 @@ export default function PdRecordScreen({
               writes the animal off will avoid the button and leave the row open instead. */}
           {declining && (
             <View style={styles.aside} testID="pd-decline-note">
-              <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+              <Ionicons name="information-circle" size={18} color={colors.info} />
               <Text style={styles.asideText}>{t('pd.declineWhatHappens')}</Text>
             </View>
           )}
@@ -486,20 +559,34 @@ export default function PdRecordScreen({
         {/* Before the findings, not after them. The Mait says this to the owner while the
             animal is still standing there, and a price produced once the work is done is a
             bill rather than a quote. */}
-        <Text style={styles.sectionLabel}>{t('pd.chargeLabel')}</Text>
-        <View style={styles.charge} testID="pd-charge">
-          <View style={styles.chargeIcon}>
+        <Section icon="cash" label={t('pd.chargeLabel')} tone={chargeTone} />
+        <View
+          style={[
+            styles.charge,
+            { backgroundColor: PAINT[chargeTone].wash, borderColor: PAINT[chargeTone].edge },
+          ]}
+          testID="pd-charge"
+        >
+          <View style={[styles.chargeIcon, { backgroundColor: PAINT[chargeTone].solid }]}>
             <Ionicons
-              name={settlement.kind === 'nonMember' ? 'cash-outline' : 'receipt-outline'}
+              name={
+                settlement.kind === 'nonMember'
+                  ? 'cash'
+                  : settlement.kind === 'member'
+                    ? 'receipt'
+                    : 'alert'
+              }
               size={20}
-              color={settlement.kind === 'unpriced' ? colors.secondaryPressed : colors.primaryDark}
+              color={chargeTone === 'warm' ? colors.ink : colors.surface}
             />
           </View>
           <View style={styles.chargeBody}>
             <Text style={styles.chargeTitle}>{chargeLine}</Text>
-            <Text style={styles.chargeHint}>{chargeHint}</Text>
+            <Text style={[styles.chargeHint, { color: PAINT[chargeTone].word }]}>{chargeHint}</Text>
           </View>
         </View>
+
+        <Section icon="medkit" label={t('pd.found')} tone="good" />
 
         <Choice
           icon="checkmark"
@@ -513,6 +600,7 @@ export default function PdRecordScreen({
         />
         <Choice
           icon="close"
+          tone="bad"
           label={t('pd.notPregnant')}
           hint={t('pd.notPregnantHint')}
           selected={outcome === 'not_pregnant'}
@@ -521,6 +609,7 @@ export default function PdRecordScreen({
         />
         <Choice
           icon="help"
+          tone="unsure"
           label={t('pd.unsure')}
           hint={t('pd.unsureHint', { days: RECHECK_DAYS })}
           selected={outcome === 'unsure'}
@@ -536,6 +625,7 @@ export default function PdRecordScreen({
           onPress={() => setCamera(true)}
           style={({ pressed }) => [
             styles.photo,
+            photoUri && styles.photoTaken,
             needsPhoto && styles.photoRequired,
             pressed && styles.pressed,
           ]}
@@ -544,12 +634,13 @@ export default function PdRecordScreen({
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={styles.thumb} resizeMode="cover" />
           ) : (
-            <View style={styles.photoIcon}>
-              <Ionicons
-                name="camera-outline"
-                size={20}
-                color={needsPhoto ? colors.error : colors.textMuted}
-              />
+            <View
+              style={[
+                styles.photoIcon,
+                { backgroundColor: needsPhoto ? colors.error : colors.info },
+              ]}
+            >
+              <Ionicons name="camera" size={20} color={colors.surface} />
             </View>
           )}
 
@@ -563,16 +654,29 @@ export default function PdRecordScreen({
             </Text>
           </View>
 
-          <Text style={styles.photoAction}>
-            {photoUri ? t('pd.photoRetake') : t('pd.photoTake')}
-          </Text>
+          <View
+            style={[
+              styles.photoAction,
+              {
+                backgroundColor: needsPhoto
+                  ? colors.error
+                  : photoUri
+                    ? colors.primary
+                    : colors.info,
+              },
+            ]}
+          >
+            <Text style={styles.photoActionLabel}>
+              {photoUri ? t('pd.photoRetake') : t('pd.photoTake')}
+            </Text>
+          </View>
         </Pressable>
 
         {/* Only once there is an answer to remark on. Before that it is a fourth question
             asked ahead of the first, and a Mait reading four things chooses none of them. */}
         {!!outcome && (
           <View ref={remarkRef} style={styles.remark} testID="pd-remark">
-            <Text style={styles.remarkLabel}>{t('pd.remarkLabel')}</Text>
+            <Section icon="create" label={t('pd.remarkLabel')} tone="plain" />
             <TextInput
               style={styles.remarkInput}
               value={remark}
@@ -666,46 +770,67 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
 
   // -- a result already found --------------------------------------------------------------
-  sectionLabel: {
-    ...typography.label,
-    color: colors.textMuted,
-    letterSpacing: 1,
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
     marginBottom: spacing[2],
   },
+  sectionChip: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockChip: { backgroundColor: ink[500] },
+  sectionLabel: { ...typography.label, letterSpacing: 0.5 },
   settled: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     padding: spacing[4],
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   settled_good: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
   settled_bad: { backgroundColor: colors.errorWash, borderColor: colors.error },
-  settled_unsure: { backgroundColor: colors.background, borderColor: colors.border },
+  settled_unsure: { backgroundColor: ink[50], borderColor: ink[300] },
   settledIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.sm,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   settledIcon_good: { backgroundColor: colors.primary },
   settledIcon_bad: { backgroundColor: colors.error },
-  settledIcon_unsure: { backgroundColor: colors.textMuted },
-  settledNote: { ...typography.caption, color: colors.textMuted, marginTop: spacing[3] },
+  settledIcon_unsure: { backgroundColor: ink[400] },
+  note: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginTop: spacing[3],
+    padding: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  note_good: { backgroundColor: colors.primaryWash, borderColor: green[300] },
+  note_warm: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  note_slate: { backgroundColor: ink[50], borderColor: ink[100] },
+  noteText: { ...typography.caption, fontFamily: typography.label.fontFamily, flex: 1 },
   locked: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing[3],
     marginTop: spacing[5],
     padding: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: ink[50],
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: ink[100],
   },
-  lockedText: { ...typography.caption, color: colors.textMuted, flex: 1, lineHeight: 18 },
+  lockedText: { ...typography.caption, color: ink[600], flex: 1, lineHeight: 18 },
 
   charge: {
     flexDirection: 'row',
@@ -713,67 +838,62 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     padding: spacing[4],
     marginBottom: spacing[4],
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   chargeIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.sm,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
   },
   chargeBody: { flex: 1 },
   chargeTitle: { ...typography.bodyStrong, color: colors.ink },
-  chargeHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  chargeHint: { ...typography.caption, marginTop: 2 },
 
   choice: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET + spacing[3],
-    padding: spacing[4],
+    padding: spacing[3],
     marginBottom: spacing[3],
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
   },
-  choiceOn: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
-  // Chosen, but not an achievement. Green is this app's colour for a result that went well,
-  // and a refusal is neither good nor bad — it is a visit that did not happen.
-  choiceOnPlain: { backgroundColor: colors.background, borderColor: colors.textMuted },
+  // Chosen: the colour's full border, drawn heavier, so the answer reads across the yard.
+  choiceOn: { borderWidth: 2 },
   choiceIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.sm,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
   },
-  choiceIconOn: { backgroundColor: colors.primary },
-  choiceIconOnPlain: { backgroundColor: colors.textMuted },
   choiceBody: { flex: 1 },
   choiceLabel: { ...typography.h3, color: colors.ink },
-  choiceHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  choiceHint: { ...typography.caption, marginTop: 2 },
   tick: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surface,
   },
-  tickOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tickOnPlain: { backgroundColor: colors.textMuted, borderColor: colors.textMuted },
+  go: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
 
-  // What the chosen answer is about to do. Same construction as the locked notice below it,
-  // so the two things this screen says out loud are said the same way.
+  // What the chosen answer is about to do: blue, a fact rather than a warning.
   aside: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -781,11 +901,11 @@ const styles = StyleSheet.create({
     marginTop: spacing[2],
     padding: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.infoWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.info,
   },
-  asideText: { ...typography.caption, color: colors.textMuted, flex: 1, lineHeight: 18 },
+  asideText: { ...typography.caption, color: colors.info, flex: 1, lineHeight: 18 },
 
   photo: {
     flexDirection: 'row',
@@ -794,10 +914,15 @@ const styles = StyleSheet.create({
     padding: spacing[3],
     marginTop: spacing[2],
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: colors.info,
+    backgroundColor: colors.infoWash,
+  },
+  photoTaken: {
+    borderStyle: 'solid',
+    borderColor: green[300],
+    backgroundColor: colors.primaryWash,
   },
   // Solid and red once the chosen answer requires it: the border asks, so no error message
   // has to appear and then be read.
@@ -809,28 +934,35 @@ const styles = StyleSheet.create({
   photoIcon: {
     width: 40,
     height: 40,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
   },
-  thumb: { width: 40, height: 40, borderRadius: radius.sm },
+  thumb: { width: 40, height: 40, borderRadius: radius.md },
   photoBody: { flex: 1 },
   photoTitle: { ...typography.bodyStrong, color: colors.ink },
-  photoHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  photoHint: { ...typography.caption, color: ink[600], marginTop: 2 },
   photoHintRequired: { color: colors.error },
-  photoAction: { ...typography.bodyStrong, color: colors.primaryDark },
+  photoAction: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: radius.pill,
+  },
+  photoActionLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
 
   // -- the Mait's own line -----------------------------------------------------------------
   remark: {
     marginTop: spacing[4],
     padding: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: ink[50],
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: ink[100],
   },
-  remarkLabel: { ...typography.label, color: colors.textMuted, letterSpacing: 1 },
   remarkInput: {
     ...typography.body,
     color: colors.ink,
@@ -840,16 +972,20 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_TARGET,
     // Android centres a single line in a multiline box and leaves the text floating.
     textAlignVertical: 'top',
-    padding: 0,
+    padding: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: ink[200],
+    backgroundColor: colors.surface,
   },
-  remarkFoot: { ...typography.caption, color: colors.textMuted, marginTop: spacing[2] },
+  remarkFoot: { ...typography.caption, color: ink[500], marginTop: spacing[2] },
   remarkRead: {
     marginTop: spacing[4],
     padding: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.infoWash,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.info,
   },
   remarkReadText: { ...typography.body, color: colors.ink, marginTop: spacing[2], lineHeight: 20 },
 

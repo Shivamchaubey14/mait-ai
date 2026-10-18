@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import django_filters
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Case, Count, IntegerField, Q, Value, When
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -22,10 +23,11 @@ from rest_framework.response import Response
 from apps.accounts.models import PortalSection, Role
 from apps.core.idempotency import idempotent
 from apps.core.models import AuditLog
-from apps.core.permissions import IsMait, in_section
+from apps.core.permissions import CanDeleteAIEvent, IsAdmin, IsMait, in_section
+from apps.payments.models import Payment
 from apps.core.scoping import apply_scope
 from apps.core.services import record_audit
-from apps.core.timeframe import end_of_day, start_of_day
+from apps.core.timeframe import end_of_day, event_day_expr, start_of_day
 
 from .models import AIEvent
 from .serializers import (
@@ -47,11 +49,17 @@ from .storage import store_photo
 
 def search_events(queryset, term: str):
     """
-    The three things someone actually has to hand when chasing an event.
+    Everything someone has to hand when chasing one event, from one box.
 
-    A straw number comes off a complaint, a farmer's name off a phone call, a Mait's name off
-    a roster. Searching all three from one box means the operator does not have to know which
-    kind of thing they are holding.
+    A straw number comes off a complaint, a farmer's name or phone off a call, a code off a
+    roster or a collection slip, an event number off another screen or an export. The operator
+    should not have to know which kind of thing they are holding, so the box matches any of
+    them: the event's own number, the farmer (member or non-member) by name, code or mobile,
+    their MPP's code, and the Mait by name or code.
+
+    An all-digits term is treated as an event number as well — matched against the id exactly,
+    so "228" jumps to event 228 rather than only dragging in every straw and phone number that
+    happens to contain 228.
 
     Shared with the CSV export rather than reimplemented there: a report is defined by the
     filters that produced it, and an export that quietly ignored the search would hand back a
@@ -60,12 +68,39 @@ def search_events(queryset, term: str):
     term = (term or "").strip()
     if not term:
         return queryset
-    return queryset.filter(
+    conditions = (
         Q(straw_unique_no__icontains=term)
         | Q(member__member_name__icontains=term)
+        | Q(member__member_code__icontains=term)
+        | Q(member__mobile_no__icontains=term)
         | Q(non_member__name__icontains=term)
+        | Q(non_member__mobile_no__icontains=term)
+        | Q(mpp__mpp_code__icontains=term)
         | Q(mait__name__icontains=term)
+        # A Mait's own code off the roster, so "show me SAH-0421's events this week" is one box
+        # and a date range — the same name-or-code search the roster screen offers.
+        | Q(mait__sahayak_vendor_code__icontains=term)
     )
+    # Up to the signed 64-bit ceiling a BIGINT primary key can hold; a longer run of digits is a
+    # straw or a phone number, never an event id, so it stays a plain contains-search.
+    if term.isdigit() and int(term) <= 9223372036854775807:
+        # The event number is the shortest, most exact thing someone can type, so a digits-only
+        # search puts the event with that id at the very top — ahead of every row whose straw or
+        # phone number merely contains those digits — then falls back to the list's own recency
+        # order for the rest.
+        event_id = int(term)
+        return (
+            queryset.filter(conditions | Q(pk=event_id))
+            .annotate(
+                _event_match=Case(
+                    When(pk=event_id, then=Value(0)),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by("_event_match", "-created_at")
+        )
+    return queryset.filter(conditions)
 
 
 class AIEventFilter(django_filters.FilterSet):
@@ -73,11 +108,19 @@ class AIEventFilter(django_filters.FilterSet):
 
     mpp = django_filters.CharFilter(field_name="mpp__mpp_code")
     mait = django_filters.NumberFilter(field_name="mait_id")
+    # By the code on the roster rather than the internal id, so a link or a saved report can
+    # name a Mait the way the rest of the portal does.
+    mait_code = django_filters.CharFilter(field_name="mait__sahayak_vendor_code")
     # Compared against instants, never against `created_at__date`. On a MySQL without the
     # timezone tables loaded that lookup compiles to a CONVERT_TZ returning NULL, and a NULL
     # comparison matches nothing — so every date-filtered request answered zero on a day full
     # of events, and nothing in the answer said the filter was the problem rather than the
     # data. See `apps.core.timeframe`, which the dashboard already goes through.
+    #
+    # And the field is the event's *day*, not when its draft row happened to be created — a
+    # capture started at 23:50 and finished at 00:05 belongs to the day it finished, which is
+    # the day the dashboard counts it on. See `event_day_expr`. An unfinished capture has no
+    # completion instant, so it is dated by when it was started, which is all there is.
     date_from = django_filters.DateFilter(method="filter_date_from")
     date_to = django_filters.DateFilter(method="filter_date_to")
     search = django_filters.CharFilter(method="filter_search")
@@ -85,18 +128,34 @@ class AIEventFilter(django_filters.FilterSet):
 
     class Meta:
         model = AIEvent
-        fields = ["status", "mpp", "mait", "date_from", "date_to", "search", "unfinished"]
+        fields = [
+            "status",
+            "mpp",
+            "mait",
+            "mait_code",
+            "date_from",
+            "date_to",
+            "search",
+            "unfinished",
+        ]
 
     def filter_search(self, queryset, name, value):
         return search_events(queryset, value)
 
+    @staticmethod
+    def _dated(queryset):
+        """Annotate the event day once — a second date filter must not re-add the alias."""
+        if "event_day" in queryset.query.annotations:
+            return queryset
+        return queryset.annotate(event_day=event_day_expr())
+
     def filter_date_from(self, queryset, name, value):
-        return queryset.filter(created_at__gte=start_of_day(value)) if value else queryset
+        return self._dated(queryset).filter(event_day__gte=start_of_day(value)) if value else queryset
 
     def filter_date_to(self, queryset, name, value):
         # Half-open: everything up to the instant the next local day begins, which includes
         # the last microsecond of `date_to` without the off-by-one `__lte` on a date invites.
-        return queryset.filter(created_at__lt=end_of_day(value)) if value else queryset
+        return self._dated(queryset).filter(event_day__lt=end_of_day(value)) if value else queryset
 
     def filter_unfinished(self, queryset, name, value):
         """
@@ -121,11 +180,24 @@ class AIEventFilter(django_filters.FilterSet):
         )
 
 
+class AIEventBulkDeleteSerializer(serializers.Serializer):
+    """The ids of the events a bulk delete should remove."""
+
+    # Capped so one request cannot try to erase the whole table in a single transaction. The
+    # list screen pages at 25, which is the ordinary selection; the ceiling is headroom.
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=200,
+    )
+
+
 @extend_schema(tags=["ai-events"])
 class AIEventViewSet(
     mixins.CreateModelMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
     """Capture and read AI events (SRS §6.3, §11)."""
@@ -135,7 +207,7 @@ class AIEventViewSet(
     # the `id` path parameter as a string.
     queryset = AIEvent.objects.none()
     filterset_class = AIEventFilter
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_permissions(self):
         # Capture happens in the field, by the Mait standing with the animal — including the
@@ -143,6 +215,14 @@ class AIEventViewSet(
         # wider: an admin resolving a dispute needs the same record.
         if self.action in ("create", "photo", "complete"):
             return [IsMait()]
+        # Deleting a record is the one thing a Mait can never do to their own history, and the
+        # one thing on this endpoint that is not reversible. It is a back-office correction —
+        # a test row, a duplicate, an event captured against the wrong farmer — so it is gated
+        # to a real admin holding the AI events section, never to the field. `CanDeleteAIEvent`
+        # rather than `IsAdmin` on purpose: a Normal User reaches every other part of this
+        # endpoint as an admin does, but deletion is the single thing that role withholds.
+        if self.action in ("destroy", "bulk_delete"):
+            return [CanDeleteAIEvent(), in_section(PortalSection.AI_EVENTS)()]
         # Reading is where the portal comes in, and two of its screens read this: the AI
         # events roster and the Reports query builder, which runs the same filters.
         return [
@@ -170,7 +250,7 @@ class AIEventViewSet(
             base = base.prefetch_related("pregnancy_checks__ai_event__semen_batch")
 
         user = self.request.user
-        if getattr(user, "role", None) in (Role.SUPER_ADMIN, Role.ADMIN):
+        if getattr(user, "role", None) in (Role.SUPER_ADMIN, Role.ADMIN, Role.NORMAL_USER):
             # An office account sees the whole network unless it has been given zones, in
             # which case it sees the chilling centres those zones hold. Applied to the
             # queryset rather than to the response, so the detail route, the count and any
@@ -388,12 +468,136 @@ class AIEventViewSet(
         entries = event.timeline_entries.select_related("actor").all()
         return Response(AIEventTimelineSerializer(entries, many=True).data)
 
+    # -- delete --------------------------------------------------------------------------
+    def _purge(self, event, request):
+        """
+        Remove one event and the records that hang off it, leaving a trail of what was there.
+
+        Audited before anything is touched, because the event is about to stop existing and the
+        audit log is the only place the fact of it — who deleted whose insemination, and what
+        money it carried — will survive. The straws, consumables, timeline and pregnancy checks
+        cascade with the row (their FKs say so); the payment is `PROTECT`, so it is removed
+        explicitly here in the same transaction rather than blocking the delete.
+
+        The inventory ledger is deliberately left alone. Its rows are an append-only record of
+        straws that genuinely left a flask (`ref_id` is a plain id, not a cascading FK), so a
+        completed event's deduction stays on the books — deleting the event does not put a spent
+        straw back, it only removes the service record, and a report reconciling the two reads
+        the deletion from the audit log.
+        """
+        try:
+            payment = event.payment
+        except Payment.DoesNotExist:
+            payment = None
+
+        record_audit(
+            action=AuditLog.Action.DELETE,
+            entity_type="ai_event",
+            entity_id=event.id,
+            request=request,
+            meta={
+                "status": event.status,
+                "mpp_code": event.mpp.mpp_code,
+                "mait_code": event.mait.sahayak_vendor_code,
+                "mait_name": event.mait.name,
+                "owner_type": event.owner_type,
+                "straw": event.straw_unique_no,
+                "doses": event.doses,
+                "completed_at": event.completed_at.isoformat() if event.completed_at else None,
+                "payment": (
+                    {
+                        "amount": str(payment.amount),
+                        "mode": payment.mode,
+                        "status": payment.status,
+                    }
+                    if payment is not None
+                    else None
+                ),
+            },
+        )
+        if payment is not None:
+            payment.delete()
+        event.delete()
+
+    @extend_schema(
+        summary="Delete an AI event",
+        description=(
+            "Admin only, and the one irreversible action on this endpoint. Removes the event "
+            "and the records attached to it — straws, consumables, timeline and pregnancy "
+            "checks — in one transaction, together with its payment row. For a back-office "
+            "correction: a test capture, a duplicate, or an event recorded against the wrong "
+            "farmer.\n\n"
+            "The inventory ledger is not rewound: a straw a completed event spent stays spent. "
+            "Every deletion is written to the audit log with the event's key details and any "
+            "payment it carried."
+        ),
+    )
+    def destroy(self, request, *args, **kwargs):
+        event = self.get_object()
+        with transaction.atomic():
+            self._purge(event, request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        summary="Delete several AI events at once",
+        description=(
+            "Admin only. The same delete as the single route, for a selection of events — the "
+            "portal's bulk action. Ids outside the caller's scope (a zonal manager's) are "
+            "silently skipped and returned in `missing`; everything deletable goes in one "
+            "transaction, so the call either removes them all or, on an error, none.\n\n"
+            "Returns `deleted` (the ids removed), `deleted_count`, and `missing` (ids that were "
+            "not found or not in scope)."
+        ),
+        request=AIEventBulkDeleteSerializer,
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["post"], url_path="bulk-delete")
+    def bulk_delete(self, request):
+        payload = AIEventBulkDeleteSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        ids = payload.validated_data["ids"]
+
+        # Through get_queryset, so an admin's zone scope narrows what can be deleted exactly as
+        # it narrows what can be read — a selection cannot reach an event the operator could not
+        # open. Dropping duplicates keeps the count honest if the client sends an id twice.
+        events = list(self.get_queryset().filter(id__in=set(ids)))
+        # Captured before the loop: `Model.delete()` clears the instance's pk, so reading
+        # `event.id` afterwards would give None for every one of them.
+        found = sorted(event.id for event in events)
+
+        with transaction.atomic():
+            for event in events:
+                self._purge(event, request)
+
+        missing = sorted(set(ids) - set(found))
+        return Response({"deleted": found, "deleted_count": len(found), "missing": missing})
+
     @extend_schema(
         summary="List AI events",
         description=(
             "Scoped to the caller: a Mait sees their own captures, an admin sees all of "
-            "them. Filter with `status`, `mpp`, `mait`, `date_from` and `date_to`."
+            "them. Filter with `status`, `mpp`, `mait` (id) or `mait_code`, `date_from` and "
+            "`date_to`, or `search` — one box that matches the event number, the farmer by "
+            "name, member code or mobile, the MPP code, the straw number, and the Mait by name "
+            "or code — so one term and a date range answers 'this event' or 'this person's "
+            "events for this period'.\n\n"
+            "Alongside the page, `summary` carries the status split of the **whole** filtered "
+            "set, not just the rows on this page: `completed`, `unfinished` (the captures still "
+            "waiting on a Mait) and `cancelled`. The dashboard counts only the completed ones, "
+            "so this is what reconciles the two — a day the dashboard calls seven and this list "
+            "shows eight is seven completed and one still unfinished."
         ),
     )
     def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
+        response = super().list(request, *args, **kwargs)
+        # Over the whole filtered set, before pagination — a breakdown of the page's 25 rows
+        # would say nothing about the thousands behind them. Three bounded counts on an indexed
+        # column, which the same filter (and date window) already narrows.
+        counts = self.filter_queryset(self.get_queryset()).aggregate(
+            completed=Count("id", filter=Q(status=AIEvent.Status.COMPLETED)),
+            unfinished=Count("id", filter=Q(status__in=AIEvent.UNFINISHED_STATUSES)),
+            cancelled=Count("id", filter=Q(status=AIEvent.Status.CANCELLED)),
+        )
+        if isinstance(response.data, dict):
+            response.data["summary"] = {key: value or 0 for key, value in counts.items()}
+        return response

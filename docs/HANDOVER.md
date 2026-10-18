@@ -490,6 +490,54 @@ Included on the same terms, and it was always the easier call: an animal row cos
 money. The ear tag is the only uniqueness the server enforces, most animals carry none, and a
 rejection reaches the Mait on the waiting list with nothing having been taken from anyone.
 
+## HTTPS edge (Caddy) and the office launcher
+
+Added 2026-09-30. The app is served to the phones over real HTTPS on the dairy's own
+domain, terminated by [Caddy](https://caddyserver.com) in front of Django:
+
+```
+phone / browser ──https──▶  mait-ai.shwetdharamilk.com:8001   Caddy (TLS, *.shwetdharamilk.com)
+                                          │ reverse_proxy, X-Forwarded-Proto: https
+                                          ▼
+                                 127.0.0.1:8010                Django (plain HTTP, loopback only)
+```
+
+- **Why 8001, not 443:** the FortiGate owns 80/443 on the office IP for its own login page,
+  so each app gets a port the firewall forwards — Mait AI is 8001 (GPS is 8443).
+- **Why Django on 8010, not 8000:** on this machine the Easy Indent app already listens on
+  8000. The committed `Caddyfile` still *defaults* its upstream to `127.0.0.1:8000` (the
+  clean-server value); the launcher overrides it with `MAIT_UPSTREAM=127.0.0.1:8010`.
+- **The certificate** is a purchased wildcard for `*.shwetdharamilk.com`, not Let's Encrypt
+  (`auto_https disable_redirects` keeps Caddy from touching port 80 or ACME). The in-use
+  pair is `infra/caddy/certs/fullchain.crt` + `wildcard.shwetdharamilk.com.key`
+  (RapidSSL/DigiCert, expires **16 Feb 2027**). A newer SSL.com 4096-bit chain is staged
+  beside it as `fullchain.sslcom-2027-03-09.crt` (expires 9 Mar 2027) — swap it in once its
+  key arrives. **The domain `shwetdharamilk.com` itself expires 17 Jan 2027.** These certs
+  and `infra/caddy/logs/` are git-ignored; copy them onto each machine by hand.
+- **`config/settings/dev.py`** now sets `SECURE_PROXY_SSL_HEADER`, so Django trusts Caddy's
+  `X-Forwarded-Proto` and emits `https://…:8001` photo/media URLs instead of `http://`
+  (which the app would block as mixed content). Verified 2026-09-30: `/api/v1/health/`
+  returns 200 with the cert fully trusted (no `-k`), and `/` redirects to a `https://` URL.
+
+**Starting it.** `D:\mait-ai\start-https.ps1` opens two tabs in the shared "Shwetdhara"
+Windows Terminal window — Django on `127.0.0.1:8010` and Caddy on `:8001` — and the master
+`D:\start_all.ps1` calls it as step 3. Caddy is installed via
+`winget install CaddyServer.Caddy`. The old `start-lan.ps1` (plain HTTP on 8001 + a static
+portal on 9000) stays in the repo for a quick local run without TLS, but the office server
+uses the HTTPS launcher. To verify on the server itself, where the domain may not resolve
+locally:
+
+```powershell
+curl.exe --resolve mait-ai.shwetdharamilk.com:8001:127.0.0.1 https://mait-ai.shwetdharamilk.com:8001/api/v1/health/
+```
+
+Still open before going public: the fixed dev OTP (`DEV_FIXED_OTP_NUMBERS=…,*` in
+`backend/.env` lets `123456` sign in as anyone) and `DEBUG=True` must both be dealt with,
+and `runserver` should give way to waitress. See the HTTPS kit's README for the full
+checklist.
+
+---
+
 ## Where to start next
 
 Phase 4, payments, in the order the roadmap gives: the OTP service and `initiate` +

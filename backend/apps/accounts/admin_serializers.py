@@ -88,6 +88,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
             "role",
             "role_display",
             "is_active",
+            "fixed_otp_enabled",
             "last_login_at",
             "created_at",
             "mait_name",
@@ -139,7 +140,7 @@ class AdminUserCreateSerializer(serializers.Serializer):
     mobile_no = serializers.CharField(
         required=False, allow_blank=True, validators=[mobile_validator]
     )
-    role = serializers.ChoiceField(choices=[Role.ADMIN, Role.SUPER_ADMIN])
+    role = serializers.ChoiceField(choices=[Role.ADMIN, Role.SUPER_ADMIN, Role.NORMAL_USER])
     password = serializers.CharField(write_only=True, min_length=10)
     portal_sections = portal_sections_field(required=False)
     zones = serializers.ListField(
@@ -191,18 +192,37 @@ class AdminUserCreateSerializer(serializers.Serializer):
 class AdminUserUpdateSerializer(serializers.Serializer):
     """Activate, deactivate or amend an account (SRS §6.8.1)."""
 
+    # Settable so an admin can correct a sign-in name that was typed wrong, or rotate it — the
+    # same privileged screen that hands out roles. Unique the way creation checks it
+    # (case-insensitive), excluding this account so saving an unchanged username is not a clash
+    # with itself.
+    username = serializers.CharField(max_length=64, required=False)
     full_name = serializers.CharField(max_length=150, required=False)
     email = serializers.EmailField(required=False, allow_blank=True)
     mobile_no = serializers.CharField(
         required=False, allow_blank=True, validators=[mobile_validator]
     )
     is_active = serializers.BooleanField(required=False)
+    # The admin's training / SMS-outage switch: on, this account signs in with the fixed code
+    # (123456) instead of a texted one. Takes effect on the next OTP the account asks for.
+    fixed_otp_enabled = serializers.BooleanField(required=False)
     role = serializers.ChoiceField(choices=Role.choices, required=False)
     password = serializers.CharField(write_only=True, required=False, min_length=10)
     portal_sections = portal_sections_field(required=False)
     zones = serializers.ListField(
         child=serializers.CharField(max_length=20), required=False, allow_empty=True
     )
+
+    def validate_username(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("A username cannot be blank.")
+        clash = User.objects.filter(username__iexact=value)
+        if self.instance is not None:
+            clash = clash.exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise serializers.ValidationError("That username is already taken.")
+        return value
 
     def validate_zones(self, value):
         """
@@ -212,7 +232,7 @@ class AdminUserUpdateSerializer(serializers.Serializer):
         to narrow: their scope is the MPPs they cover, which the assignment sheet already
         decides. Storing zones on either would be a set of ticks that changes nothing.
         """
-        if self.instance and self.instance.role != Role.ADMIN:
+        if self.instance and self.instance.role not in (Role.ADMIN, Role.NORMAL_USER):
             raise serializers.ValidationError(
                 "Only an Admin account can be limited to a zone. A Super Admin always sees "
                 "the whole network, and a Mait's scope is the MPPs assigned to them."
@@ -227,7 +247,7 @@ class AdminUserUpdateSerializer(serializers.Serializer):
         is never read and show an operator a set of ticks that decides nothing. A Mait has no
         portal at all.
         """
-        if self.instance and self.instance.role != Role.ADMIN:
+        if self.instance and self.instance.role not in (Role.ADMIN, Role.NORMAL_USER):
             raise serializers.ValidationError(
                 "Only an Admin account has portal access to assign. "
                 "A Super Admin already reaches every section, and a Mait has no portal."
@@ -309,15 +329,30 @@ class MaitActivationSerializer(serializers.Serializer):
 
     def validate_mobile_no(self, value: str) -> str:
         """
-        The number must be unique across Maits.
+        The number must be unique across *other* Maits.
 
         Two Maits sharing one number would make the login OTP ambiguous — whoever asked
         first would get a code that signs in as the wrong person.
+
+        Across *other* Maits, not across every Mait: a Sahayak record often arrives from SAP
+        with a number already on it, and activating that Mait means confirming the number the
+        screen has just shown the operator. Matching the record against itself refused the
+        commonest activation there is — with its own name in the error, which reads as though
+        somebody else had taken the number.
         """
-        clash = Mait.objects.filter(mobile_no=value).exclude(mobile_no="").first()
-        if clash is not None:
+        clash = Mait.objects.filter(mobile_no=value).exclude(mobile_no="")
+
+        # Set by `validate_sahayak_vendor_code`, which DRF runs first because it is declared
+        # first. Only when that passed, though — a bad vendor code leaves nothing to exclude,
+        # and the error on that field is the one worth reading anyway.
+        mait = self.context.get("mait")
+        if mait is not None:
+            clash = clash.exclude(pk=mait.pk)
+
+        first = clash.first()
+        if first is not None:
             raise serializers.ValidationError(
-                f"{clash.name} ({clash.sahayak_vendor_code}) already uses this number."
+                f"{first.name} ({first.sahayak_vendor_code}) already uses this number."
             )
         return value
 

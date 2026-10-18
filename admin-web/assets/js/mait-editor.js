@@ -239,6 +239,13 @@ window.MaitAI = window.MaitAI || {};
 
   const SUGGEST_LIMIT = 8;
 
+  /** Whether this MPP is currently covered by a Mait other than the one being edited. */
+  function heldByOther(mpp) {
+    return (
+      !!mpp.mait_code && !(state.mait && mpp.mait_code === state.mait.sahayak_vendor_code)
+    );
+  }
+
   /** Which Mait holds this MPP today, as a pill — the reason to read the row. */
   function heldBy(mpp) {
     if (state.codes.indexOf(mpp.mpp_code) >= 0) {
@@ -250,8 +257,29 @@ window.MaitAI = window.MaitAI || {};
     if (state.mait && mpp.mait_code === state.mait.sahayak_vendor_code) {
       return ui().pill('Theirs already', 'good');
     }
-    // The one that costs something. Adding it here takes it off the Mait named.
-    return ui().pill('Moves from ' + mpp.mait_name, 'bad');
+    // The one that costs something: adding it here takes it off the Mait named on the line
+    // below. The pill is the flag; the name and code are spelled out beneath it.
+    return ui().pill('Assigned', 'bad');
+  }
+
+  /**
+   * The Mait this MPP already belongs to, name and code side by side.
+   *
+   * Only when it is somebody else's: an unassigned MPP has nobody to name, and one that is
+   * already this Mait's own is not news. Spelled out because a code says who pays the cost of
+   * adding it — these members move off the Mait named here the moment this is saved.
+   */
+  function holderLine(mpp) {
+    if (state.codes.indexOf(mpp.mpp_code) >= 0 || !heldByOther(mpp)) {
+      return '';
+    }
+    return (
+      '<span class="suggest__holder">Already assigned to <strong>' +
+      ui().escapeHtml(mpp.mait_name || '—') +
+      '</strong> · ' +
+      ui().escapeHtml(mpp.mait_code) +
+      '</span>'
+    );
   }
 
   function suggestRow(mpp, index) {
@@ -277,6 +305,7 @@ window.MaitAI = window.MaitAI || {};
       (where ? ui().escapeHtml(where) + ' · ' : '') +
       ui().number(mpp.member_count || 0) +
       ' members</span>' +
+      holderLine(mpp) +
       '</span>' +
       heldBy(mpp) +
       '</button>'

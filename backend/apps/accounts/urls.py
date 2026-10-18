@@ -19,6 +19,8 @@ from .views import (
     OTPSendView,
     OTPVerifyView,
     PasswordLoginView,
+    PasswordResetRequestView,
+    PasswordResetVerifyView,
     ServerTimeView,
     SuperOTPRequestView,
 )
@@ -30,6 +32,16 @@ urlpatterns = [
     path("otp/send/", OTPSendView.as_view(), name="otp-send"),
     path("otp/verify/", OTPVerifyView.as_view(), name="otp-verify"),
     path("otp/super/request/", SuperOTPRequestView.as_view(), name="otp-super-request"),
+    path(
+        "password/reset/request/",
+        PasswordResetRequestView.as_view(),
+        name="password-reset-request",
+    ),
+    path(
+        "password/reset/verify/",
+        PasswordResetVerifyView.as_view(),
+        name="password-reset-verify",
+    ),
     path("refresh/", TokenRefreshView.as_view(), name="refresh"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", CurrentUserView.as_view(), name="me"),

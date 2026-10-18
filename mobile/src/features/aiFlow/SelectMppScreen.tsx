@@ -133,7 +133,7 @@ export default function SelectMppScreen({ onSelect, onBack }: Props): React.JSX.
           // later. Square, not round: a village is a place, and the circles in this flow are
           // people.
           swatchLabel={initials(mpp.mpp_name)}
-          tone="neutral"
+          tone="info"
           size="roomy"
           pill={mpp.mpp_code === lastUsed ? t('aiFlow.lastUsed') : undefined}
           selected={selected === mpp.mpp_code}

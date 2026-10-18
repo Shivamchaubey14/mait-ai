@@ -44,12 +44,20 @@ import {
   useListMppsQuery,
 } from '@api/endpoints';
 import type { Indent } from '@api/types';
+import Glyph, { GlyphName, STRAW_GLYPH } from '@/components/glyph';
 import Problem, { useOnline } from '@/components/problem';
 import { SkeletonList } from '@/components/states';
 import { Toast } from '@/components/toast';
 import { FlowNotice } from '@/features/aiFlow/components';
-import { shortDate, shortTime, statusTone } from '@/features/stock/IndentsScreen';
-import { colors, radius, shadows, spacing, typography } from '@theme/tokens';
+import {
+  indentState,
+  shortDate,
+  shortTime,
+  STATE_GLYPH,
+  statusTone,
+  TONE_PAINT,
+} from '@/features/stock/IndentsScreen';
+import { colors, green, ink, radius, spacing, typography, yolk } from '@theme/tokens';
 
 type StepState = 'done' | 'current' | 'waiting' | 'refused';
 
@@ -108,6 +116,54 @@ function stateOf(indent: Indent, step: number): StepState {
   // The step immediately after issue is the one waiting on the Mait, so it reads as current
   // rather than as something still to be done to them.
   return waitingOnYou && step === 4 ? 'current' : 'waiting';
+}
+
+/** Each step's glyph, drawn in its dot once the step is reached. */
+const STEP_GLYPH: Record<string, GlyphName> = {
+  requested: 'paper-plane',
+  approved: 'thumbs-up',
+  issued: 'storefront',
+  received: 'checkmark-done',
+  rejected: 'close',
+};
+
+/**
+ * A figure on a coloured row: its glyph on a chip, what it is, and the number on a badge.
+ * Blue asked, green agreed or in hand, yolk waiting at a counter, slate not yet, red refused.
+ */
+function QtyRow({
+  icon,
+  tone,
+  label,
+  meta,
+  value,
+  testID,
+}: {
+  icon: GlyphName;
+  tone: keyof typeof TONE_PAINT;
+  label: string;
+  meta: string;
+  value: string | number;
+  testID?: string;
+}): React.JSX.Element {
+  const paint = TONE_PAINT[tone];
+  return (
+    <View
+      style={[styles.qtyRow, { backgroundColor: paint.wash, borderColor: paint.edge }]}
+      testID={testID}
+    >
+      <View style={[styles.chip, { backgroundColor: paint.solid }]}>
+        <Glyph name={icon} size={18} color={paint.onSolid} />
+      </View>
+      <View style={styles.qtyBody}>
+        <Text style={styles.qtyLabel}>{label}</Text>
+        <Text style={[styles.qtyMeta, { color: paint.word }]}>{meta}</Text>
+      </View>
+      <View style={[styles.qtyBadge, { backgroundColor: paint.solid }]}>
+        <Text style={[styles.qtyValue, { color: paint.onSolid }]}>{value}</Text>
+      </View>
+    </View>
+  );
 }
 
 /** Date and time on one line, in the order a timeline is read. */
@@ -204,6 +260,7 @@ export default function IndentDetailScreen({
   }
 
   const status = statusTone(indent, t);
+  const statusPaint = TONE_PAINT[status.tone];
 
   /**
    * A refused indent is a different shape of screen, not the same one with a red word on it.
@@ -353,8 +410,14 @@ export default function IndentDetailScreen({
             question that brought the Mait here, and the number is only how they found it. */}
         <View style={styles.heroTitleRow}>
           <Text style={styles.heroTitle}>{`IND-${indent.id}`}</Text>
-          <View style={styles.heroPill} testID="indent-status">
-            <Text style={styles.heroPillLabel}>{status.label}</Text>
+          <View
+            style={[styles.heroPill, { backgroundColor: statusPaint.solid }]}
+            testID="indent-status"
+          >
+            <Glyph name={STATE_GLYPH[indentState(indent)]} size={13} color={statusPaint.onSolid} />
+            <Text style={[styles.heroPillLabel, { color: statusPaint.onSolid }]}>
+              {status.label}
+            </Text>
           </View>
         </View>
 
@@ -376,7 +439,7 @@ export default function IndentDetailScreen({
           />
         }
       >
-        <View style={styles.timeline}>
+        <View style={styles.timeline} testID="indent-timeline">
           {steps.map((step, index) => {
             // The refused trail carries its own states; the ordinary one is derived.
             const state = step.state ?? stateOf(indent, index + 1);
@@ -391,11 +454,30 @@ export default function IndentDetailScreen({
                       state === 'current' && styles.dotCurrent,
                       state === 'refused' && styles.dotRefused,
                     ]}
-                  />
+                  >
+                    <Glyph
+                      name={state === 'current' ? 'time' : (STEP_GLYPH[step.key] ?? 'ellipse')}
+                      size={13}
+                      color={
+                        state === 'waiting'
+                          ? ink[300]
+                          : state === 'current'
+                            ? colors.ink
+                            : colors.surface
+                      }
+                    />
+                  </View>
                   {!last && <View style={[styles.line, state === 'done' && styles.lineDone]} />}
                 </View>
 
-                <View style={styles.stepBody}>
+                <View
+                  style={[
+                    styles.stepBody,
+                    state === 'done' && styles.stepBodyDone,
+                    state === 'current' && styles.stepBodyCurrent,
+                    state === 'refused' && styles.stepBodyRefused,
+                  ]}
+                >
                   <Text
                     style={[
                       styles.stepLabel,
@@ -414,71 +496,81 @@ export default function IndentDetailScreen({
           })}
         </View>
 
-        <Text style={styles.section}>{t('indents.quantities')}</Text>
-
-        <View style={styles.qtyRow} testID="indent-qty-requested">
-          <View style={styles.qtyBody}>
-            <Text style={styles.qtyLabel}>{t('indents.requested')}</Text>
-            <Text style={styles.qtyMeta}>{breedLabel || indent.item}</Text>
+        <View style={styles.sectionRow}>
+          <View style={[styles.chipSmall, { backgroundColor: colors.info }]}>
+            <Ionicons name="stats-chart" size={14} color={colors.surface} />
           </View>
-          <Text style={styles.qtyValue}>{indent.qty_requested}</Text>
+          <Text style={styles.section}>{t('indents.quantities')}</Text>
         </View>
 
-        <View style={styles.qtyRow} testID="indent-qty-approved">
-          <View style={styles.qtyBody}>
-            <Text style={styles.qtyLabel}>{t('indents.approved')}</Text>
-            <Text style={styles.qtyMeta}>
-              {approvedReached ? breedLabel || indent.item : t('indents.notApprovedYet')}
-            </Text>
-          </View>
-          <Text style={[styles.qtyValue, !approvedReached && styles.qtyValueMuted]}>
-            {approvedReached ? indent.qty_requested : '—'}
-          </Text>
-        </View>
+        <QtyRow
+          icon={indent.breed ? STRAW_GLYPH : 'flask'}
+          tone="info"
+          label={t('indents.requested')}
+          meta={breedLabel || indent.item}
+          value={indent.qty_requested}
+          testID="indent-qty-requested"
+        />
 
-        <View
-          style={[styles.qtyRow, issuedPending && styles.qtyRowWaiting]}
+        <QtyRow
+          icon={rejected ? 'close-circle' : 'thumbs-up'}
+          tone={rejected ? 'bad' : approvedReached ? 'good' : 'plain'}
+          label={t('indents.approved')}
+          meta={approvedReached ? breedLabel || indent.item : t('indents.notApprovedYet')}
+          value={approvedReached ? indent.qty_requested : '—'}
+          testID="indent-qty-approved"
+        />
+
+        {/* Where to go and get it — except when there is nothing to go and get. Amber and a
+            depot name on a refused indent are both promises of a delivery. */}
+        <QtyRow
+          icon="storefront"
+          tone={
+            rejected
+              ? 'plain'
+              : issuedPending || collectable
+                ? 'waiting'
+                : indent.qty_issued > 0
+                  ? 'good'
+                  : 'plain'
+          }
+          label={t('indents.issuedSoFar')}
+          meta={rejected ? t('indents.nothingToIssue') : depot}
+          value={indent.qty_issued}
           testID="indent-qty-issued"
-        >
-          <View style={styles.qtyBody}>
-            <Text style={styles.qtyLabel}>{t('indents.issuedSoFar')}</Text>
-            {/* Where to go and get it — except when there is nothing to go and get. Amber and
-                a depot name on a refused indent are both promises of a delivery. */}
-            <Text style={styles.qtyMeta}>{rejected ? t('indents.nothingToIssue') : depot}</Text>
-          </View>
-          <Text style={[styles.qtyValue, issuedPending && styles.qtyValueWaiting]}>
-            {indent.qty_issued}
-          </Text>
-        </View>
+        />
 
         {/* One row per trip across the counter. The figures above are running totals, and an
             indent the store fills in two batches has to say which straws came when — or the
             Mait who collected 2 reads "5" and believes five went into the flask. */}
         {handovers.length > 0 && (
           <>
-            <Text style={[styles.section, styles.sectionSpaced]}>{t('indents.tripsTitle')}</Text>
-            {handovers.map(trip => (
-              <View key={trip.id} style={styles.qtyRow} testID={`indent-trip-${trip.id}`}>
-                <View style={styles.qtyBody}>
-                  <Text style={styles.qtyLabel}>
-                    {t('indents.tripLine', { qty: trip.qty, item: itemName })}
-                  </Text>
-                  <Text style={styles.qtyMeta}>
-                    {trip.collected_at
-                      ? t('indents.tripCollected', {
-                          store: trip.store_name,
-                          when: stamp(trip.collected_at),
-                        })
-                      : t('indents.tripWaiting', {
-                          store: trip.store_name,
-                          when: stamp(trip.issued_at),
-                        })}
-                  </Text>
-                </View>
-                <Text
-                  style={[styles.qtyValue, !trip.collected_at && styles.qtyValueWaiting]}
-                >{`+${trip.qty}`}</Text>
+            <View style={[styles.sectionRow, styles.sectionSpaced]}>
+              <View style={[styles.chipSmall, { backgroundColor: colors.primary }]}>
+                <Ionicons name="swap-horizontal" size={14} color={colors.surface} />
               </View>
+              <Text style={styles.section}>{t('indents.tripsTitle')}</Text>
+            </View>
+            {handovers.map(trip => (
+              <QtyRow
+                key={trip.id}
+                icon={trip.collected_at ? 'checkmark-done' : 'time'}
+                tone={trip.collected_at ? 'good' : 'waiting'}
+                label={t('indents.tripLine', { qty: trip.qty, item: itemName })}
+                meta={
+                  trip.collected_at
+                    ? t('indents.tripCollected', {
+                        store: trip.store_name,
+                        when: stamp(trip.collected_at),
+                      })
+                    : t('indents.tripWaiting', {
+                        store: trip.store_name,
+                        when: stamp(trip.issued_at),
+                      })
+                }
+                value={`+${trip.qty}`}
+                testID={`indent-trip-${trip.id}`}
+              />
             ))}
           </>
         )}
@@ -536,6 +628,9 @@ export default function IndentDetailScreen({
             number pad only, because it is read aloud across a counter and typed by a thumb. */}
         {needsCode && (
           <View style={styles.codeWrap} testID="indent-code">
+            <View style={[styles.chipSmall, { backgroundColor: yolk[500] }]}>
+              <Ionicons name="keypad" size={16} color={colors.ink} />
+            </View>
             <View style={styles.codeText}>
               <Text style={styles.codeLabel}>{t('indents.codeLabel')}</Text>
               <Text style={styles.codeHint}>
@@ -636,10 +731,26 @@ const styles = StyleSheet.create({
   },
 
   heroPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: spacing[3],
     paddingVertical: 3,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+  chip: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   cta: {
@@ -661,65 +772,100 @@ const styles = StyleSheet.create({
   heroDotWarn: { backgroundColor: colors.secondary },
   heroPillLabel: { ...typography.label, color: colors.surface },
 
-  timeline: { marginBottom: spacing[5] },
+  // Slate, the colour of a trail — what has happened to this indent, in order.
+  timeline: {
+    padding: spacing[3],
+    marginBottom: spacing[5],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: ink[100],
+    backgroundColor: ink[50],
+  },
   step: { flexDirection: 'row', gap: spacing[3] },
-  rail: { alignItems: 'center', width: 18 },
+  rail: { alignItems: 'center', width: 26 },
   dot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 2,
-    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderColor: ink[200],
     backgroundColor: colors.surface,
   },
   dotDone: { backgroundColor: colors.primary, borderColor: colors.primary },
-  // Hollow yellow: this is the step the indent is sitting on, not one that has happened.
-  dotCurrent: { borderColor: colors.secondary, backgroundColor: colors.surface },
-  // Solid red, and the trail stops here. A hollow dot would read as a step still to come.
+  // Yolk: this is the step the indent is sitting on, not one that has happened.
+  dotCurrent: { backgroundColor: yolk[500], borderColor: yolk[500] },
+  // Solid red, and the trail stops here.
   dotRefused: { backgroundColor: colors.error, borderColor: colors.error },
-  line: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
+  line: { flex: 1, width: 2, backgroundColor: ink[200], marginVertical: 2 },
   lineDone: { backgroundColor: colors.primary },
 
-  stepBody: { flex: 1, paddingBottom: spacing[4] },
+  stepBody: {
+    flex: 1,
+    padding: spacing[3],
+    marginBottom: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: ink[100],
+    backgroundColor: colors.surface,
+  },
+  stepBodyDone: { backgroundColor: colors.primaryWash, borderColor: green[300] },
+  stepBodyCurrent: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  stepBodyRefused: { backgroundColor: colors.errorWash, borderColor: colors.error },
   stepLabel: { ...typography.bodyStrong, color: colors.ink },
-  stepLabelWaiting: { color: colors.textMuted },
+  stepLabelWaiting: { color: ink[400] },
   stepLabelRefused: { color: colors.error },
-  stepMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  stepMeta: { ...typography.caption, color: ink[500], marginTop: 2 },
   stepMetaRefused: { color: colors.error },
 
-  section: { ...typography.h3, color: colors.ink, marginBottom: spacing[3] },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[3],
+  },
+  section: { ...typography.h3, color: colors.ink },
   sectionSpaced: { marginTop: spacing[3] },
 
   qtyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    padding: spacing[4],
+    padding: spacing[3],
     marginBottom: spacing[2],
-    backgroundColor: colors.surface,
     borderRadius: radius.md,
-    ...shadows.card,
+    borderWidth: 1,
   },
-  qtyRowWaiting: { backgroundColor: colors.secondaryWash },
   qtyBody: { flex: 1 },
   qtyLabel: { ...typography.bodyStrong, color: colors.ink },
-  qtyMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  qtyValue: { ...typography.h2, color: colors.ink },
-  qtyValueMuted: { color: colors.textDisabled },
-  qtyValueWaiting: { color: colors.secondaryPressed },
+  qtyMeta: { ...typography.caption, marginTop: 2 },
+  qtyBadge: {
+    minWidth: 44,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+  },
+  qtyValue: { ...typography.h3 },
 
   codeWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
+    padding: spacing[3],
     marginBottom: spacing[3],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: yolk[300],
+    backgroundColor: colors.secondaryWash,
   },
   codeText: { flex: 1 },
   codeLabel: { ...typography.bodyStrong, color: colors.ink },
-  codeHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  codeHint: { ...typography.caption, color: yolk[800], marginTop: 2 },
   codeInput: {
     ...typography.h1,
-    width: 132,
+    width: 112,
     minHeight: 54,
     textAlign: 'center',
     letterSpacing: 8,

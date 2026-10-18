@@ -8,29 +8,75 @@
 
 @import url('portal.css');
 
-/* --- the period ------------------------------------------------------------------------------
-   From and To are one filter in two boxes, so they are boxed together with an arrow between
-   them. Loose in the bar they read as two unrelated dates, and — before the sizing bug behind
-   this was fixed — they were also the two controls most likely to be pushed onto a line of
-   their own, which is exactly how they were reported. */
+/* --- the filter bar, aligned to one height --------------------------------------------------
+   Every direct child of the bar is pinned to the same 38px box and centred on the line, so the
+   row reads as one strip of controls. The two that broke it were the replaced selects (All MPPs,
+   Status): each is a `.pick` — an inline-flex wrapper that was taking its own, taller height and
+   sinking below the search box. Pinning the WRAPPER (not just the button inside it) is what holds
+   it to the row. The Unfinished chip (34px) and the date range (its own frame over two 38px
+   fields, 40px) are brought to 38px the same way. Nothing moves horizontally. Scoped to this
+   screen's stylesheet, so no other filter bar is touched. */
+.filters {
+  align-items: center;
+}
+
+.filters > .input,
+.filters > .select,
+.filters > .pick,
+.filters > .chip,
+.filters > .range {
+  height: 38px;
+  min-height: 38px;
+  align-self: center;
+}
+
+/* The replaced select stays sized to its content (not stretched full-width), while still being
+   held to the row's height above. Without this the wrapper's own inline-flex height could creep
+   back up on a long option label. */
+.filters > .pick {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The button a select is replaced by fills its pinned wrapper, so the whole 38px box is the
+   clickable control and its text sits on the same line as the search box's. The child combinator
+   keeps this off the date range's own nested pickers, which are sized to the range below. */
+.filters > .pick > .pick__button {
+  height: 100%;
+  min-height: 0;
+}
+
+/* From and To are one filter in two boxes, boxed together with an arrow between them — loose in
+   the bar they read as two unrelated dates. The group is the 38px field; the two date controls
+   inside drop their own frames and fill its height, so it is one box rather than a taller box
+   with two boxes rattling inside it. */
 .range {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-2);
+  gap: var(--space-1);
+  height: 38px;
+  padding: 0 var(--space-1);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
 
-/* The boxes inside lose their own frames — the group carries one. */
+.range .pick {
+  height: 100%;
+}
+
+/* The boxes inside lose their own frame and take the group's height — a hover tint rather than
+   a border, so pointing at one does not nudge the row 1px taller. */
 .range .pick__button {
-  border-color: transparent;
+  min-height: 0;
+  height: 100%;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 1px);
   background: transparent;
 }
 
 .range .pick__button:hover {
-  border-color: var(--color-border);
+  background: var(--ink-50);
 }
 
 .range__arrow {
@@ -83,4 +129,77 @@
   color: var(--yolk-800);
   background: var(--color-secondary-wash);
   border-radius: var(--radius-pill);
+}
+
+/* --- selecting rows to delete ----------------------------------------------------------------
+   Deleting is the one write this screen allows, and only for an admin (the API enforces it).
+   The tick column and the bar that appears over a selection match the Users screen exactly, so
+   a bulk action is the same shape wherever it is met. The sample rows carry an empty tick cell
+   so they line up without ever offering a checkbox over data that is not there. */
+.col-pick {
+  width: 1%;
+  padding-right: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.pick {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.events--sample .col-pick {
+  cursor: default;
+}
+
+/* Deletion is admin-only, so for anyone else the tick column is collapsed entirely — header
+   cell and body cells together — rather than left as a dead first column. Set by ai-events.js
+   from the signed-in role; the API is the real gate, this just keeps the control off a screen
+   that could never use it. */
+.table--no-pick .col-pick {
+  display: none;
+}
+
+/* Only while something is ticked, so it is allowed to be loud: Ink above pale rows, saying how
+   many and what will happen to them. */
+.bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-ink);
+  border-radius: var(--radius-md);
+}
+
+.bulk__count {
+  font-weight: 600;
+  color: var(--color-surface);
+}
+
+.bulk__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* The outlined buttons carry their own pale wash, which against Ink would read as filled, so
+   they are set back to white — red still means delete, grey still means never mind. */
+.bulk .btn--danger-outline,
+.bulk .btn--soft {
+  background: var(--color-surface);
+}
+
+.bulk .btn--danger-outline:hover {
+  background: var(--color-error-wash);
+}
+
+/* Pushed to the far end so the progress line does not shuffle the buttons as the count grows. */
+.bulk__status {
+  margin-left: auto;
+  font-size: var(--text-caption);
+  color: var(--ink-200);
 }

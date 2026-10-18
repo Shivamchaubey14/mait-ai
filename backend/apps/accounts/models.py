@@ -26,6 +26,11 @@ class Role(models.TextChoices):
 
     SUPER_ADMIN = "super_admin", "Super Admin"
     ADMIN = "admin", "Admin / Back-office"
+    # A back-office account that works the portal exactly as an Admin does — same sections, same
+    # screens — with one thing withheld: it cannot delete AI events. For a desk that needs to see
+    # and correct the work but should not be able to erase a capture. Everywhere other than that
+    # one irreversible action it is treated as an Admin (see `is_admin`).
+    NORMAL_USER = "normal_user", "Normal User"
     MAIT = "mait", "Mait (Field Agent)"
     # The person behind the counter at a depot, who hands approved stock to a Mait. Signs in
     # to the same app by OTP, because the store is a room with a phone in it rather than a desk
@@ -94,7 +99,7 @@ class UserManager(BaseUserManager):
         # the behaviour every admin had before access was assignable, and the same default
         # the migration backfilled with. A caller that means "none" passes an empty list and
         # is left alone; silently creating a locked-out admin is what this avoids.
-        if extra.get("role") == Role.ADMIN and "portal_sections" not in extra:
+        if extra.get("role") in (Role.ADMIN, Role.NORMAL_USER) and "portal_sections" not in extra:
             extra["portal_sections"] = list(PortalSection.values)
         user = self.model(username=username, **extra)
         if password:
@@ -162,6 +167,12 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     )
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    #: Admin-enabled fixed login code. When on, this account signs in with the fixed training
+    #: code (``FIXED_LOGIN_OTP_CODE``, "123456") instead of a texted one — for a Mait being
+    #: shown the app, and for keeping sign-ins working while the SMS gateway is down. Deliberately
+    #: a per-account switch an admin flips (and the audit log records), never a blanket bypass:
+    #: the real code path is unchanged, so turning this off restores an ordinary OTP at once.
+    fixed_otp_enabled = models.BooleanField(default=False)
     last_login_at = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
@@ -178,7 +189,11 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
 
     @property
     def is_admin(self) -> bool:
-        return self.role in (Role.SUPER_ADMIN, Role.ADMIN)
+        # A Normal User is an office account treated as an Admin for everything the portal does
+        # — section access, the screens, what each queryset returns. The one place the two part
+        # company is deleting an AI event, which is gated by its own permission rather than by
+        # this property (see apps/core/permissions.py).
+        return self.role in (Role.SUPER_ADMIN, Role.ADMIN, Role.NORMAL_USER)
 
     @property
     def is_zonal_manager(self) -> bool:
@@ -215,7 +230,9 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         """
         if self.role == Role.SUPER_ADMIN:
             return list(PortalSection.values)
-        if self.role != Role.ADMIN:
+        # An Admin and a Normal User are both section-scoped: they see the pages their
+        # `portal_sections` list holds. Every other role (a Mait, a store keeper) has no portal.
+        if self.role not in (Role.ADMIN, Role.NORMAL_USER):
             return []
         held = set(self.portal_sections or [])
         return [section for section in PortalSection.values if section in held]

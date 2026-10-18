@@ -41,7 +41,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { AI_FLOW_STEPS } from '@/config/env';
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, MIN_TOUCH_TARGET, radius, spacing, typography, yolk } from '@theme/tokens';
 
 import type { CaptureProgress } from '@api/capture';
 
@@ -439,9 +439,25 @@ export default function CapturePhotoScreen({
       >
         <Image source={{ uri: shot.uri }} style={styles.preview} resizeMode="cover" />
 
-        <View style={styles.stamp}>
-          <Ionicons name="location-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.stampText}>
+        <View
+          style={[styles.stamp, shot.gpsLat == null ? styles.stampNone : styles.stampPinned]}
+          testID="photo-stamp"
+        >
+          <View
+            style={[
+              styles.stampChip,
+              { backgroundColor: shot.gpsLat == null ? yolk[500] : colors.info },
+            ]}
+          >
+            <Ionicons
+              name="location"
+              size={15}
+              color={shot.gpsLat == null ? colors.ink : colors.surface}
+            />
+          </View>
+          <Text
+            style={[styles.stampText, { color: shot.gpsLat == null ? yolk[800] : colors.info }]}
+          >
             {shot.gpsLat == null
               ? t('aiFlow.noPin')
               : shot.gpsSource === 'photo'
@@ -744,8 +760,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
-    minHeight: MIN_TOUCH_TARGET - 12,
+    minHeight: MIN_TOUCH_TARGET - 8,
     marginTop: spacing[3],
+    padding: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
   },
-  stampText: { ...typography.caption, color: colors.textMuted },
+  stampPinned: { backgroundColor: colors.infoWash, borderColor: colors.info },
+  stampNone: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  stampChip: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stampText: { ...typography.caption, fontFamily: typography.label.fontFamily, flex: 1 },
 });

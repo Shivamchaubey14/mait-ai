@@ -7,7 +7,10 @@
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
     <link rel="stylesheet" href="assets/css/portal.css" />
-    <link rel="stylesheet" href="assets/css/event.css" />
+    <!-- Versioned so a browser holding the pre-farmer-card stylesheet fetches this one rather
+         than reusing a heuristically-"fresh" cached copy (the portal is served by Django's
+         static serve, which sets no Cache-Control). Bump on any change to the file. -->
+    <link rel="stylesheet" href="assets/css/event.css?v=20261007" />
   </head>
 
   <body>
@@ -178,6 +181,33 @@
                of when. The wrapper is what keeps them one grid cell — dropped straight into
                the grid they would have become a second row, with the photo beside a gap. -->
           <div class="event__side">
+            <!-- Who the insemination was for, and the animal it was on. For a member the code
+                 looks her up in SAP; for a non-member there is no SAP record, so the details
+                 she registered with — her number, her Aadhaar (masked), the card on file — are
+                 the only way to settle who she is. The ear tag identifies the animal where a
+                 farmer owns several of one breed. -->
+            <section class="panel panel--owner" aria-labelledby="owner-title">
+              <div class="panel__head">
+                <h2 class="panel__title" id="owner-title">
+                  <span class="panel__icon owner__icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M5 21a7 7 0 0 1 14 0" />
+                    </svg>
+                  </span>
+                  Farmer &amp; animal
+                </h2>
+                <span class="panel__count" id="owner-kind">—</span>
+              </div>
+              <dl class="facts" id="owner"></dl>
+            </section>
+
             <!-- What came off the Mait's stock for this event: the doses of semen and every
                  consumable they said they used. It is the half of the record the flask is
                  reconciled against at month end, and until now it lived nowhere an admin
@@ -269,6 +299,8 @@
     <script src="assets/js/controls.js"></script>
     <script src="assets/js/shell.js"></script>
     <script src="assets/js/lightbox.js"></script>
-    <script src="assets/js/ai-event.js"></script>
+    <!-- Versioned so the Farmer & animal card's code is fetched even when the browser has the
+         older ai-event.js cached (Django's static serve sends no Cache-Control). Bump on change. -->
+    <script src="assets/js/ai-event.js?v=20261007"></script>
   </body>
 </html>

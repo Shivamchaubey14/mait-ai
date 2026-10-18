@@ -60,11 +60,15 @@
 }
 
 .event__side > .panel--used,
-.event__side > .panel--chain {
+.event__side > .panel--chain,
+.event__side > .panel--owner {
   flex: 0 0 auto;
 }
 
-.event__side > .panel:not(.panel--used):not(.panel--chain) {
+/* Only the audit trail grows to take the slack. The owner card is excluded here as well as
+   named above — the :not() chain out-specifies a lone `.panel--owner` rule, so without it the
+   card would stretch to share the column with the trail. */
+.event__side > .panel:not(.panel--used):not(.panel--chain):not(.panel--owner) {
   flex: 1 1 auto;
 }
 
@@ -152,6 +156,70 @@
   flex-direction: column;
   margin-bottom: 0;
   min-height: 0;
+}
+
+/* --- farmer & animal --------------------------------------------------------------------
+   Who the event was for and the animal it was on. Reference rather than a verdict, so it is a
+   plain card kept to its content — the sizing rule that keeps it from growing sits with the
+   other two fixed panels near the top of this file. */
+
+/* White tile, muted glyph: a quieter head than the blue "what was used" beside it. */
+.owner__icon {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.facts {
+  margin: 0;
+}
+
+.facts__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.facts__row:last-child {
+  border-bottom: 0;
+}
+
+/* The label, quiet and in small caps — the value beside it is what gets read. */
+.facts__key {
+  flex: none;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.facts__val {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+  color: var(--color-ink);
+}
+
+/* "Not recorded" is a fact about the event, not an apology: a member often has no Aadhaar on
+   file here, and that is normal rather than missing data. */
+.facts__none {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* A small rider on a value — the relation on a name, "card on file" on an Aadhaar. */
+.facts__tag {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+  border-radius: var(--radius-pill);
 }
 
 /* --- the evidence cards ------------------------------------------------------------------

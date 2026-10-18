@@ -14,7 +14,13 @@
   const ui = MaitAI.ui;
   const LIMIT = 25;
 
-  const state = { offset: 0, rows: [], needsMobile: false, pendingOnly: false };
+  const state = {
+    offset: 0,
+    rows: [],
+    needsMobile: false,
+    pendingOnly: false,
+    deactivatedOnly: false,
+  };
 
   function statusCell(mait) {
     if (!mait.is_active) {
@@ -26,15 +32,22 @@
     if (!mait.activated) {
       return ui.pill('Not activated', 'warn');
     }
+    // Activated, then switched off on the Users screen. Checked after "Not activated" because a
+    // deactivated account is by definition one that activated first — `account_active` is null
+    // for anyone who never did, and only `false` says the login was turned off.
+    if (mait.account_active === false) {
+      return ui.pill('Deactivated', 'bad');
+    }
     return ui.pill('Active', 'good');
   }
 
   function row(mait) {
-    const cls = mait.needs_mobile
-      ? ' class="is-blocked"'
-      : !mait.activated
-        ? ' class="is-waiting"'
-        : '';
+    const cls =
+      mait.needs_mobile || mait.account_active === false
+        ? ' class="is-blocked"'
+        : !mait.activated
+          ? ' class="is-waiting"'
+          : '';
     return (
       '<tr' +
       cls +
@@ -81,6 +94,9 @@
     }
     if (state.pendingOnly) {
       params.activated = 'false';
+    }
+    if (state.deactivatedOnly) {
+      params.account_active = 'false';
     }
     return params;
   }
@@ -211,6 +227,15 @@
       $(this)
         .toggleClass('is-active', state.pendingOnly)
         .attr('aria-pressed', String(state.pendingOnly));
+      load();
+    });
+
+    $('#filter-deactivated').on('click', function () {
+      state.deactivatedOnly = !state.deactivatedOnly;
+      state.offset = 0;
+      $(this)
+        .toggleClass('is-active', state.deactivatedOnly)
+        .attr('aria-pressed', String(state.deactivatedOnly));
       load();
     });
   });

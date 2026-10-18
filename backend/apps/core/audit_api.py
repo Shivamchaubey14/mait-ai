@@ -103,6 +103,9 @@ FIELD_LABELS = {
     "mpp_code": "MPP",
     "mpp_id": "MPP",
     "mait_id": "Mait",
+    # The column SAP calls the Sahayak vendor code is the Mait's own code in this product — the
+    # audit trail should name it the way the rest of the portal does, not the way the import did.
+    "sahayak_vendor_code": "Mait vendor code",
     "net_payable": "Net payable",
     "recheck_id": "Recheck",
     "stock_deducted": "Stock deducted",

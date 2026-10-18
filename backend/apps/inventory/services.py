@@ -11,9 +11,13 @@ anything in ``consume_straw``.
 from __future__ import annotations
 
 import logging
+import secrets
+from datetime import date
 
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
+from django.utils import timezone
+from rest_framework import serializers
 
 from apps.core.exceptions import BreedRequired, InsufficientStock, StrawAlreadyConsumed
 
@@ -322,12 +326,17 @@ def credit_stock(
     ref_id: int | None = None,
     actor=None,
     note: str = "",
+    txn_type: str = MaitInventoryLedger.TxnType.ISSUE,
 ) -> MaitInventory:
     """
     Add stock to a Mait, normally when they collect an indent at a store (SRS §6.6.8).
 
     Idempotency is the caller's responsibility: the webhook handler dedupes on the Indent
     Easy reference before calling this, so a redelivered callback does not double-credit.
+
+    ``txn_type`` is ``issue`` for the ordinary path — stock arriving against an indent. The
+    office's own correction passes ``adjustment`` (with ``ref_type=manual``), so the ledger
+    tells apart what a store handed over from what a desk credited by hand.
     """
     if qty <= 0:
         raise ValueError("credit_stock requires a positive quantity.")
@@ -343,7 +352,7 @@ def credit_stock(
 
     MaitInventoryLedger.objects.create(
         inventory=inventory,
-        txn_type=MaitInventoryLedger.TxnType.ISSUE,
+        txn_type=txn_type,
         qty=qty,
         balance_after=inventory.qty_available,
         ref_type=ref_type,
@@ -352,6 +361,278 @@ def credit_stock(
         note=note,
     )
     return inventory
+
+
+def _new_placeholder_straw(breed: str) -> SemenBatch:
+    """
+    One unnumbered placeholder straw, with a number short enough to store.
+
+    ``unique_straw_no`` is 30 characters. The number only has to be unique and recognisable as
+    a manual adjustment — the breed lives in its own column and the ledger note says where the
+    straw came from — so it is a short random token rather than the breed, the Mait id and the
+    clock strung together, which ran past 30 for a long breed code (``SEX_SORTED_SEMEN``) and
+    failed the write with "Data too long".
+
+    Each attempt is its own savepoint, so the one-in-astronomical collision that trips the
+    unique constraint rolls back cleanly and retries rather than poisoning the transaction the
+    credit runs in.
+    """
+    for _ in range(6):
+        number = f"ADJ-{secrets.token_hex(6)}"  # 16 chars, well inside the column
+        try:
+            with transaction.atomic():
+                return SemenBatch.objects.create(
+                    unique_straw_no=number,
+                    breed=breed,
+                    received_date=timezone.localdate(),
+                    is_unnumbered=True,
+                )
+        except IntegrityError:
+            continue
+    raise IntegrityError("Could not allocate a unique placeholder straw number.")
+
+
+@transaction.atomic
+def add_mait_stock(
+    *,
+    mait,
+    product_type: str,
+    qty: int,
+    breed: str = "",
+    product_ref_id: int = 0,
+    actor=None,
+    note: str = "",
+    request=None,
+) -> None:
+    """
+    Credit stock straight to a Mait from the office — a manual adjustment, not an indent.
+
+    The ordinary path is a store handing an approved indent over the counter (SRS §6.6.7).
+    This is the exception the oversight screen needs for the stock that never walked that path:
+    an opening balance when the platform goes live mid-season, straws carried over by hand, a
+    count the desk has to put right. Recorded as an ``adjustment`` against ``manual`` so the
+    ledger still sums to the balance and the audit trail still names who did it.
+
+    Straws are credited by breed — one unnumbered placeholder row per straw, exactly as an
+    unnumbered indent collection makes them (``apps.indents.services``) — so the number the
+    Mait reads off the straw at the AI step still claims a row they already hold. Everything
+    else is credited against its catalogue id.
+
+    The caller is trusted to have validated ``breed`` / ``product_ref_id`` against the
+    catalogue (see ``MaitStockCreditSerializer``); the ``qty`` guard here is the last word.
+    """
+    # Imported here rather than at module scope: the core services module reaches back into
+    # inventory in places, and naming it at the top would risk closing the loop at startup.
+    from apps.core.models import AuditLog
+    from apps.core.services import record_audit
+
+    if qty <= 0:
+        raise serializers.ValidationError({"qty": ["Add at least one."]})
+
+    if product_type == ProductType.STRAW:
+        code = (breed or "").strip().upper()
+        if not code:
+            raise serializers.ValidationError({"breed": ["Say which breed is being added."]})
+        for _ in range(qty):
+            straw = _new_placeholder_straw(code)
+            credit_stock(
+                mait=mait,
+                product_type=ProductType.STRAW,
+                product_ref_id=straw.id,
+                qty=1,
+                ref_type=MaitInventoryLedger.RefType.MANUAL,
+                txn_type=MaitInventoryLedger.TxnType.ADJUSTMENT,
+                actor=actor,
+                note=(note or f"Office adjustment · {code}")[:255],
+            )
+        item = code
+    else:
+        if not product_ref_id:
+            raise serializers.ValidationError(
+                {"product_ref_id": ["Say which product is being added."]}
+            )
+        credit_stock(
+            mait=mait,
+            product_type=product_type,
+            product_ref_id=product_ref_id,
+            qty=qty,
+            ref_type=MaitInventoryLedger.RefType.MANUAL,
+            txn_type=MaitInventoryLedger.TxnType.ADJUSTMENT,
+            actor=actor,
+            note=(note or "Office adjustment")[:255],
+        )
+        item = product_ref_id
+
+    record_audit(
+        action=AuditLog.Action.CREATE,
+        entity_type="mait_stock",
+        entity_id=mait.id,
+        actor=actor,
+        request=request,
+        meta={
+            "mait": mait.sahayak_vendor_code,
+            "product_type": product_type,
+            "item": item,
+            "qty": qty,
+            "note": (note or "")[:255],
+        },
+    )
+
+
+def _remove_supply(mait, product_type: str, product_ref_id: int, qty: int, actor, note: str) -> None:
+    """Take a quantity of one consumable or asset off a Mait, as an office adjustment."""
+    try:
+        inventory = MaitInventory.objects.select_for_update().get(
+            mait=mait, product_type=product_type, product_ref_id=product_ref_id
+        )
+    except MaitInventory.DoesNotExist:
+        raise serializers.ValidationError(
+            {"qty": ["This Mait is not carrying that product, so there is nothing to remove."]}
+        ) from None
+
+    if inventory.qty_available < qty:
+        raise serializers.ValidationError(
+            {
+                "qty": [
+                    f"They hold only {inventory.qty_available}, so {qty} cannot be removed."
+                ]
+            }
+        )
+
+    inventory.qty_available -= qty
+    inventory.save(update_fields=["qty_available", "updated_at"])
+    MaitInventoryLedger.objects.create(
+        inventory=inventory,
+        txn_type=MaitInventoryLedger.TxnType.ADJUSTMENT,
+        qty=-qty,
+        balance_after=inventory.qty_available,
+        ref_type=MaitInventoryLedger.RefType.MANUAL,
+        ref_id=None,
+        created_by=actor,
+        note=(note or "Office adjustment · removed")[:255],
+    )
+
+
+def _remove_straws_of_breed(mait, code: str, qty: int, actor, note: str) -> None:
+    """
+    Take ``qty`` straws of a breed off a Mait, oldest first — the mirror of crediting them.
+
+    Each straw is its own row (``add_mait_stock`` makes one placeholder per straw), so this
+    zeroes whole rows rather than decrementing a tally, writing a ``-1`` adjustment against
+    each. Straws already held by an unfinished capture on the Mait's phone are left alone: a
+    capture that still has to complete needs the straw it is standing on, and removing it
+    underneath would strand an event that can never be closed (``take_straw_of_breed`` keeps
+    the same ones back for the same reason).
+    """
+    from apps.ai_events.models import AIEvent, AIEventStraw
+
+    rows = list(
+        MaitInventory.objects.select_for_update().filter(
+            mait=mait, product_type=ProductType.STRAW, qty_available__gt=0
+        )
+    )
+    batches = SemenBatch.objects.in_bulk([row.product_ref_id for row in rows])
+    of_breed = [row for row in rows if getattr(batches.get(row.product_ref_id), "breed", None) == code]
+
+    spoken_for = set(
+        AIEventStraw.objects.filter(
+            ai_event__mait=mait, ai_event__status__in=AIEvent.UNFINISHED_STATUSES
+        ).values_list("semen_batch_id", flat=True)
+    )
+    free = [row for row in of_breed if row.product_ref_id not in spoken_for]
+    # Oldest first, so a correction spends the straws nearest to expiring; an unknown received
+    # date sorts last rather than jumping the queue.
+    free.sort(key=lambda row: (batches[row.product_ref_id].received_date or date.max, row.id))
+
+    if qty > len(free):
+        held = sum(row.qty_available for row in of_breed)
+        if held >= qty:
+            raise serializers.ValidationError(
+                {
+                    "qty": [
+                        f"{qty - len(free)} of those {code} straws are held by unfinished "
+                        "captures and cannot be removed. Finish or cancel those events first."
+                    ]
+                }
+            )
+        raise serializers.ValidationError(
+            {"qty": [f"This Mait holds only {held} {code} straw(s)."]}
+        )
+
+    for row in free[:qty]:
+        row.qty_available = 0
+        row.save(update_fields=["qty_available", "updated_at"])
+        MaitInventoryLedger.objects.create(
+            inventory=row,
+            txn_type=MaitInventoryLedger.TxnType.ADJUSTMENT,
+            qty=-1,
+            balance_after=0,
+            ref_type=MaitInventoryLedger.RefType.MANUAL,
+            ref_id=None,
+            created_by=actor,
+            note=(note or f"Office adjustment · removed {code}")[:255],
+        )
+
+
+@transaction.atomic
+def remove_mait_stock(
+    *,
+    mait,
+    product_type: str,
+    qty: int,
+    breed: str = "",
+    product_ref_id: int = 0,
+    actor=None,
+    note: str = "",
+    request=None,
+) -> None:
+    """
+    Take stock off a Mait from the office — the mirror of :func:`add_mait_stock`.
+
+    The one correction the oversight screen could not make: a count entered too high, stock
+    recorded against the wrong Mait, equipment handed back. Recorded as an ``adjustment``
+    against ``manual`` with a negative quantity, so the ledger still sums to the balance and the
+    audit trail still names who did it — a balance is never *set* by hand, only moved.
+
+    Straws come off by breed (oldest first); everything else by its catalogue id. The caller is
+    trusted to have validated ``breed`` / ``product_ref_id`` against the catalogue
+    (``MaitStockCreditSerializer``); the ``qty`` and holding guards here are the last word.
+    """
+    from apps.core.models import AuditLog
+    from apps.core.services import record_audit
+
+    if qty <= 0:
+        raise serializers.ValidationError({"qty": ["Remove at least one."]})
+
+    if product_type == ProductType.STRAW:
+        code = (breed or "").strip().upper()
+        if not code:
+            raise serializers.ValidationError({"breed": ["Say which breed is being removed."]})
+        _remove_straws_of_breed(mait, code, qty, actor, note)
+        item = code
+    else:
+        if not product_ref_id:
+            raise serializers.ValidationError(
+                {"product_ref_id": ["Say which product is being removed."]}
+            )
+        _remove_supply(mait, product_type, product_ref_id, qty, actor, note)
+        item = product_ref_id
+
+    record_audit(
+        action=AuditLog.Action.UPDATE,
+        entity_type="mait_stock",
+        entity_id=mait.id,
+        actor=actor,
+        request=request,
+        meta={
+            "mait": mait.sahayak_vendor_code,
+            "product_type": product_type,
+            "item": item,
+            # Negative, so the audit trail reads a removal as a removal rather than a credit.
+            "qty": -qty,
+            "note": (note or "")[:255],
+        },
+    )
 
 
 def available_straw_count(mait) -> int:

@@ -23,7 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import type { PdRoute, RouteOption } from '@api/types';
-import { colors, radius, shadows, spacing, typography } from '@theme/tokens';
+import { colors, radius, spacing, typography } from '@theme/tokens';
 
 import { readableTime } from './PdRouteScreen';
 
@@ -47,14 +47,25 @@ export function villagePath(option: RouteOption): string {
   return seen.join(' → ');
 }
 
+/**
+ * Each order in a colour of its own: the shortest in blue, the colour of places; late first in
+ * red, the colour the late rows wear on the list — so the choice reads before its words do.
+ */
+const OPTION_PAINT = {
+  info: { solid: colors.info, word: colors.info, wash: colors.infoWash, icon: 'trail-sign' },
+  late: { solid: colors.error, word: colors.error, wash: colors.errorWash, icon: 'alert-circle' },
+} as const;
+
 function Option({
   label,
   path,
   option,
   selected,
   onPress,
+  tone,
   testID,
 }: {
+  tone: keyof typeof OPTION_PAINT;
   label: string;
   path: string;
   option: RouteOption;
@@ -63,6 +74,7 @@ function Option({
   testID: string;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const paint = OPTION_PAINT[tone];
 
   return (
     <Pressable
@@ -72,19 +84,29 @@ function Option({
       onPress={onPress}
       style={({ pressed }) => [
         styles.option,
+        { backgroundColor: paint.wash, borderColor: paint.solid },
         selected && styles.optionOn,
         pressed && styles.pressed,
       ]}
       testID={testID}
     >
       <View style={styles.optionHead}>
+        <View style={[styles.chip, { backgroundColor: paint.solid }]}>
+          <Ionicons name={paint.icon} size={20} color={colors.surface} />
+        </View>
         <View style={styles.optionText}>
           <Text style={styles.optionLabel}>{label}</Text>
-          <Text style={styles.optionPath} numberOfLines={2}>
+          <Text style={[styles.optionPath, { color: paint.word }]} numberOfLines={2}>
             {path}
           </Text>
         </View>
-        <View style={[styles.tick, selected && styles.tickOn]}>
+        <View
+          style={[
+            styles.tick,
+            { borderColor: paint.solid },
+            selected && { backgroundColor: paint.solid },
+          ]}
+        >
           {selected && <Ionicons name="checkmark" size={15} color={colors.surface} />}
         </View>
       </View>
@@ -93,11 +115,17 @@ function Option({
           without arithmetic. */}
       <View style={styles.figures}>
         <View style={styles.figure}>
-          <Text style={styles.figureLabel}>{t('route2.distance')}</Text>
+          <View style={styles.figureHead}>
+            <Ionicons name="map" size={13} color={paint.word} />
+            <Text style={[styles.figureLabel, { color: paint.word }]}>{t('route2.distance')}</Text>
+          </View>
           <Text style={styles.figureValue}>{`${option.total_km} km`}</Text>
         </View>
         <View style={styles.figure}>
-          <Text style={styles.figureLabel}>{t('route2.onTheRoad')}</Text>
+          <View style={styles.figureHead}>
+            <Ionicons name="time" size={13} color={paint.word} />
+            <Text style={[styles.figureLabel, { color: paint.word }]}>{t('route2.onTheRoad')}</Text>
+          </View>
           <Text style={styles.figureValue}>{readableTime(option.minutes_on_road)}</Text>
         </View>
       </View>
@@ -160,6 +188,7 @@ export default function PdReorderScreen({
           option={route.options.shortest}
           selected={chosen === 'shortest'}
           onPress={() => setChosen('shortest')}
+          tone="info"
           testID="reorder-shortest"
         />
         <Option
@@ -168,12 +197,13 @@ export default function PdReorderScreen({
           option={route.options.late_first}
           selected={chosen === 'late_first'}
           onPress={() => setChosen('late_first')}
+          tone="late"
           testID="reorder-late"
         />
 
         {/* Where the numbers come from, in the place the numbers are being weighed. */}
         <View style={styles.note} testID="reorder-note">
-          <Ionicons name="information-circle-outline" size={17} color={colors.info} />
+          <Ionicons name="information-circle" size={18} color={colors.info} />
           <Text style={styles.noteText}>{t('route2.estimate')}</Text>
         </View>
       </ScrollView>
@@ -185,6 +215,7 @@ export default function PdReorderScreen({
           style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
           testID="reorder-use"
         >
+          <Ionicons name="checkmark" size={18} color={colors.surface} />
           <Text style={styles.ctaLabel}>{t('route2.useThisOrder')}</Text>
         </Pressable>
       </View>
@@ -234,35 +265,40 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     marginBottom: spacing[3],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
   },
-  optionOn: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
-  optionHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+  // Chosen: the colour's border drawn heavier and the tick filled.
+  optionOn: { borderWidth: 2.5 },
+  chip: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionHead: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   optionText: { flex: 1 },
   optionLabel: { ...typography.h3, color: colors.ink },
-  optionPath: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  optionPath: { ...typography.caption, marginTop: 2 },
   tick: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surface,
   },
-  tickOn: { backgroundColor: colors.primary, borderColor: colors.primary },
 
   figures: { flexDirection: 'row', gap: spacing[3], marginTop: spacing[4] },
   figure: {
     flex: 1,
     padding: spacing[3],
     borderRadius: radius.md,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
   },
-  figureLabel: { ...typography.caption, color: colors.textMuted },
+  figureHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  figureLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
   figureValue: { ...typography.h3, color: colors.ink, marginTop: 2 },
 
   note: {
@@ -276,7 +312,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.info,
   },
-  noteText: { ...typography.caption, color: colors.text, flex: 1, lineHeight: 18 },
+  noteText: { ...typography.caption, color: colors.info, flex: 1, lineHeight: 18 },
 
   foot: {
     paddingHorizontal: spacing[4],
@@ -286,6 +322,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   cta: {
+    flexDirection: 'row',
+    gap: spacing[2],
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 56,

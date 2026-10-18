@@ -134,7 +134,11 @@ class AdminUserViewSet(
             )
 
         before = {
+            "username": user.username,
             "is_active": user.is_active,
+            # The fixed-login switch is a sign-in bypass, so who turned it on or off for whom is
+            # exactly the kind of thing the audit trail exists to answer.
+            "fixed_otp_enabled": user.fixed_otp_enabled,
             "role": user.role,
             "mobile_no": user.mobile_no,
             "portal_sections": user.allowed_sections,
@@ -155,7 +159,9 @@ class AdminUserViewSet(
             meta={
                 "before": before,
                 "after": {
+                    "username": user.username,
                     "is_active": user.is_active,
+                    "fixed_otp_enabled": user.fixed_otp_enabled,
                     "role": user.role,
                     "mobile_no": user.mobile_no,
                     "portal_sections": user.allowed_sections,
@@ -224,14 +230,27 @@ class AdminUserViewSet(
         description=(
             "Maits with no login yet, so an admin can work through them. "
             "`needs_mobile` flags the ones whose SAP record has no number — those cannot "
-            "receive an OTP until one is supplied at activation."
+            "receive an OTP until one is supplied at activation.\n\n"
+            "Filter the list with `?search=<name or code>` — the queue runs to hundreds, and "
+            "the activation form searches it so the right person is found without scrolling. "
+            "The `summary` counts stay on the whole backlog, not the search."
         ),
         responses={200: dict},
     )
     @action(detail=False, methods=["get"], url_path="pending-maits")
     def pending_maits(self, request):
-        pending = Mait.objects.filter(user__isnull=True, is_active=True).order_by("name")
-        without_mobile = pending.filter(mobile_no="").count()
+        base = Mait.objects.filter(user__isnull=True, is_active=True)
+        # Counted over the whole backlog, before any search narrows it — the hint under the form
+        # reports the size of the queue, which a search-filtered count would understate.
+        pending_total = base.count()
+        without_mobile = base.filter(mobile_no="").count()
+
+        pending = base.order_by("name")
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            pending = pending.filter(
+                Q(name__icontains=search) | Q(sahayak_vendor_code__icontains=search)
+            )
 
         page = self.paginate_queryset(pending)
         rows = [
@@ -246,7 +265,7 @@ class AdminUserViewSet(
         ]
         response = self.get_paginated_response(rows)
         response.data["summary"] = {
-            "pending_total": pending.count(),
+            "pending_total": pending_total,
             "without_mobile": without_mobile,
         }
         return response
@@ -339,7 +358,8 @@ class AdminUserViewSet(
             "Separate from `/admin/users/` because much of the roster has no login yet, and "
             "a user-only list would show the handful already activated and silently omit "
             "everyone still waiting.\n\n"
-            "Filter with `?needs_mobile=true`, `?activated=false`, `?mpp=<code>` or "
+            "Filter with `?needs_mobile=true`, `?activated=false`, "
+            "`?account_active=false` (activated but since deactivated), `?mpp=<code>` or "
             "`?search=<name or code>`.\n\n"
             "Retired records are excluded unless `?include_retired=true`. Those are the "
             "pseudo-Maits the MPP master used to mint from its Sahayak column, kept so old "
@@ -377,6 +397,16 @@ class AdminUserViewSet(
         elif activated in ("false", "0"):
             roster = roster.filter(user__isnull=True)
 
+        # A Mait who activated and then had their login switched off on the Users screen. This
+        # is `User.is_active`, not `Mait.is_active` above: the SAP record is still live, but the
+        # account cannot sign in. `user__is_active=False` only matches rows that have a user, so
+        # it never sweeps in the never-activated — those are "Not activated", a different state.
+        account_active = request.query_params.get("account_active")
+        if account_active in ("true", "1"):
+            roster = roster.filter(user__is_active=True)
+        elif account_active in ("false", "0"):
+            roster = roster.filter(user__is_active=False)
+
         mpp_code = request.query_params.get("mpp")
         if mpp_code:
             roster = roster.filter(mpps__mpp_code=mpp_code)
@@ -397,6 +427,10 @@ class AdminUserViewSet(
                 "needs_mobile": not mait.mobile_no,
                 "is_active": mait.is_active,
                 "activated": mait.user_id is not None,
+                # Whether the login is switched on, or None for a Mait who never activated. The
+                # Maits screen reads this to tell a working account from a deactivated one — both
+                # of which have `activated: true`.
+                "account_active": mait.user.is_active if mait.user_id else None,
                 "mpp_codes": [mpp.mpp_code for mpp in mait.mpps.all()],
                 "mpp_count": len(mait.mpps.all()),
             }
@@ -407,5 +441,6 @@ class AdminUserViewSet(
             "total": everyone.count(),
             "activated": everyone.filter(user__isnull=False).count(),
             "without_mobile": everyone.filter(mobile_no="").count(),
+            "deactivated": everyone.filter(user__is_active=False).count(),
         }
         return response

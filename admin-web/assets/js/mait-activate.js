@@ -56,33 +56,79 @@
     $('#submit').prop('disabled', !(chosen && validNumber && matches));
   }
 
-  function renderPending(page) {
-    state.pending = page.results || [];
+  /** Name or code contains the typed term — the two things an operator has in hand. */
+  function matchesTerm(mait, term) {
+    if (!term) {
+      return true;
+    }
+    const t = term.toLowerCase();
+    return (
+      String(mait.name || '')
+        .toLowerCase()
+        .indexOf(t) >= 0 ||
+      String(mait.sahayak_vendor_code || '')
+        .toLowerCase()
+        .indexOf(t) >= 0
+    );
+  }
 
-    // Sorted by MPP so an operator working through one village at a time — which is how the
-    // activation backlog is actually cleared — finds them together.
-    const options = state.pending
+  /**
+   * Fill the dropdown with the pending Maits that match the search box, in name order.
+   *
+   * The current choice is kept if it still matches, so narrowing the list does not quietly drop
+   * the person already picked. `change` is triggered so the replaced control (controls.js) and
+   * the form's own validation both see the new state.
+   */
+  function renderOptions() {
+    const term = ($('#mait-search').val() || '').trim();
+    const chosen = $('#sahayak').val();
+
+    const matches = state.pending
       .slice()
       .sort(function (a, b) {
         return String(a.name).localeCompare(String(b.name));
       })
-      .map(function (mait) {
-        return (
-          '<option value="' +
-          ui.escapeHtml(mait.sahayak_vendor_code) +
-          '">' +
-          ui.escapeHtml(mait.name) +
-          ' · ' +
-          ui.escapeHtml(mait.sahayak_vendor_code) +
-          '</option>'
-        );
+      .filter(function (mait) {
+        return matchesTerm(mait, term);
       });
 
-    $('#sahayak').html(
-      options.length
-        ? '<option value="">Choose a Mait…</option>' + options.join('')
-        : '<option value="">Nobody is waiting for activation</option>'
-    );
+    const options = matches.map(function (mait) {
+      return (
+        '<option value="' +
+        ui.escapeHtml(mait.sahayak_vendor_code) +
+        '">' +
+        ui.escapeHtml(mait.name) +
+        ' · ' +
+        ui.escapeHtml(mait.sahayak_vendor_code) +
+        '</option>'
+      );
+    });
+
+    let html;
+    if (!state.pending.length) {
+      html = '<option value="">Nobody is waiting for activation</option>';
+    } else if (!options.length) {
+      html = '<option value="">No Mait matches that search</option>';
+    } else {
+      html = '<option value="">Choose a Mait…</option>' + options.join('');
+    }
+    $('#sahayak').html(html);
+
+    // Keep the person already chosen selected, as long as they are still in the narrowed list.
+    if (
+      chosen &&
+      matches.some(function (mait) {
+        return mait.sahayak_vendor_code === chosen;
+      })
+    ) {
+      $('#sahayak').val(chosen);
+    }
+    $('#sahayak').trigger('change');
+  }
+
+  function renderPending(page) {
+    state.pending = page.results || [];
+    renderOptions();
 
     const summary = page.summary || {};
     $('#pending-hint').text(
@@ -143,6 +189,32 @@
       });
 
     loadRecent();
+
+    // Two layers, so the search is both instant and complete. The client-side filter narrows
+    // what is already loaded the moment a key is pressed; the debounced server fetch then brings
+    // back every match in the whole backlog, not only the first few hundred that happened to load
+    // first — a queue this size does not fit one page.
+    let searchTimer = null;
+    let searchSeq = 0;
+    $('#mait-search').on('input', function () {
+      renderOptions();
+      const term = ($(this).val() || '').trim();
+      window.clearTimeout(searchTimer);
+      const mine = (searchSeq += 1);
+      searchTimer = window.setTimeout(function () {
+        MaitAI.api
+          .pendingMaits({ search: term, limit: 500 })
+          .done(function (page) {
+            // A slow answer for "ram" must not replace a newer list for "ramesh".
+            if (mine === searchSeq) {
+              renderPending(page);
+            }
+          })
+          .fail(function () {
+            // A failed lookup is not a failed screen — the list already loaded can still be used.
+          });
+      }, 250);
+    });
 
     $('#sahayak').on('change', function () {
       const chosen = selected();

@@ -12,6 +12,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import LoginScreen from '../LoginScreen';
 import i18n from '@/i18n';
 import { jsonResponse, problemResponse, renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 const MOBILE = '9795402473';
 
@@ -238,5 +239,40 @@ describe('LoginScreen', () => {
 
     await waitFor(() => expect(screen.getByTestId('login-otp')).toBeTruthy());
     expect(screen.queryByTestId('login-error')).toBeNull();
+  });
+});
+
+describe('LoginScreen in colour', () => {
+  it('lays out the three steps of signing in, each in its colour', () => {
+    renderWithStore(<LoginScreen />);
+
+    const steps = screen.getByTestId('login-steps');
+    expect(steps).toHaveTextContent(/Your number/);
+    expect(steps).toHaveTextContent(/A code by SMS/);
+    expect(steps).toHaveTextContent(/You're in/);
+  });
+
+  it('draws the number field blue while it fills and green once it can be sent', () => {
+    renderWithStore(<LoginScreen />);
+
+    expect(screen.getByTestId('login-phone-field')).toHaveStyle({ borderColor: colors.info });
+    expect(screen.queryByTestId('login-mobile-valid')).toBeNull();
+
+    fireEvent.changeText(screen.getByTestId('login-mobile'), '9876543210');
+
+    expect(screen.getByTestId('login-phone-field')).toHaveStyle({
+      borderColor: colors.primary,
+      backgroundColor: colors.primaryWash,
+    });
+    expect(screen.getByTestId('login-mobile-valid')).toBeTruthy();
+    expect(screen.getByText('10/10')).toBeTruthy();
+  });
+
+  it('puts the no-password notice in yolk', () => {
+    renderWithStore(<LoginScreen />);
+
+    expect(screen.getByTestId('login-no-password')).toHaveStyle({
+      backgroundColor: colors.secondaryWash,
+    });
   });
 });

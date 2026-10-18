@@ -17,7 +17,27 @@
 
   const ui = MaitAI.ui;
 
-  const state = { rows: [], breeds: [], threshold: 10, lowFirst: true };
+  const state = {
+    rows: [],
+    breeds: [],
+    threshold: 10,
+    lowFirst: true,
+    // The add-stock form's own world: which Mait is open, what it can be credited with, what
+    // it already holds (so the preview can say 3 → 13), and which kind is chosen right now.
+    add: {
+      maitId: null,
+      maitName: '',
+      catalogue: { breeds: [], products: [] },
+      heldStraws: {},
+      heldItems: {},
+      // What the Mait actually holds, split by kind — the pool a removal picks from, since you
+      // cannot take off what is not there. Built in openAddForm from the loaded stock.
+      heldByKind: { straw: [], consumable: [], asset: [] },
+      kind: 'straw',
+      // 'add' credits stock, 'remove' takes it off. The one form does both.
+      dir: 'add',
+    },
+  };
 
   function statusFor(total) {
     if (total === 0) {
@@ -194,6 +214,9 @@
     $('#holding').prop('hidden', false);
     $('#holding-title').text(holder ? holder.name : 'Mait stock');
     $('#holding-count').text('');
+    // The add-stock form stays out of the way until the stock it adds to has loaded — it has
+    // nothing to offer until the catalogue and the held counts are in hand.
+    $('#holding-add').prop('hidden', true);
     // Placeholders rather than an empty panel: the card keeps its shape while the request is
     // in flight, so the page does not jump when the answer lands.
     $('#holding-body').html('<div class="holding__skeleton"></div>'.repeat(3));
@@ -246,12 +269,492 @@
               'items'
             )
         );
+
+        openAddForm(data);
       })
       .fail(function (problem) {
         $('#holding-count').text('');
         $('#holding-body').html(
           '<p class="holding__error">' + ui.escapeHtml(problem.detail) + '</p>'
         );
+      });
+  }
+
+  /* --- adding stock to a Mait ------------------------------------------------------------
+   * A manual credit, the one the oversight screen needs for stock that never came through an
+   * indent. The item is chosen the way the store shelf is stocked — kind, then item, then a
+   * number — and a sentence says what saving will do before the button is pressed.
+   */
+
+  /** The three kinds, each in the tone and glyph the store shelf uses, so they read the same. */
+  const KINDS = {
+    straw: {
+      label: 'Straws',
+      tone: 'info',
+      icon: '<path d="m18 2 4 4M17 7l3-3M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5M9 11l4 4M5 19l-3 3M14 4l6 6" />',
+    },
+    consumable: {
+      label: 'Consumables',
+      tone: 'good',
+      icon: '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3M7.5 15h9" />',
+    },
+    asset: {
+      label: 'Equipment',
+      tone: 'warn',
+      icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z" />',
+    },
+  };
+
+  function kindGlyph(kind) {
+    return (
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+      'stroke-linecap="round" stroke-linejoin="round">' +
+      KINDS[kind].icon +
+      '</svg>'
+    );
+  }
+
+  /**
+   * What the chosen kind offers for the current direction.
+   *
+   * Adding draws from the whole catalogue — the point is to credit stock a Mait may not hold
+   * yet. Removing draws only from what they actually hold, because taking off what is not there
+   * is not a thing the form should let anyone try.
+   */
+  function addItemsOf(kind) {
+    if (state.add.dir === 'remove') {
+      return state.add.heldByKind[kind] || [];
+    }
+    const catalogue = state.add.catalogue;
+    if (kind === 'straw') {
+      return (catalogue.breeds || []).map(function (breed) {
+        return {
+          key: 'straw:' + breed.code,
+          code: breed.code,
+          name: breed.name,
+          group: breed.animal_type === 'BUFF' ? 'Buffalo' : 'Cow',
+        };
+      });
+    }
+    return (catalogue.products || [])
+      .filter(function (product) {
+        return product.category === kind;
+      })
+      .map(function (product) {
+        return {
+          key: 'consumable:' + product.id,
+          code: product.code,
+          name: product.name,
+          unit: product.unit,
+        };
+      });
+  }
+
+  /** The item behind the chosen dropdown value, whichever kind it belongs to. */
+  function addItemByKey(key) {
+    if (!key) {
+      return null;
+    }
+    // A breed is only ever under straws; a product can be matched whatever kind is showing.
+    const pools = key.indexOf('straw:') === 0 ? ['straw'] : ['consumable', 'asset'];
+    for (let i = 0; i < pools.length; i += 1) {
+      const found = addItemsOf(pools[i]).filter(function (item) {
+        return item.key === key;
+      })[0];
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  /** How many of the chosen item the Mait already holds, so the preview can read 3 → 13. */
+  function heldQtyFor(item) {
+    if (!item) {
+      return 0;
+    }
+    if (item.key.indexOf('straw:') === 0) {
+      return state.add.heldStraws[item.code] || 0;
+    }
+    return state.add.heldItems[item.code] || 0;
+  }
+
+  function renderAddKinds() {
+    $('#add-kinds').html(
+      Object.keys(KINDS)
+        .map(function (kind) {
+          const count = addItemsOf(kind).length;
+          return (
+            '<button type="button" role="radio" aria-checked="' +
+            (kind === state.add.kind) +
+            '" class="stock-kind stock-kind--' +
+            KINDS[kind].tone +
+            (kind === state.add.kind ? ' is-on' : '') +
+            '" data-kind="' +
+            kind +
+            '"' +
+            (count ? '' : ' disabled') +
+            '>' +
+            '<span class="stock-kind__icon" aria-hidden="true">' +
+            kindGlyph(kind) +
+            '</span>' +
+            '<span class="stock-kind__name">' +
+            KINDS[kind].label +
+            '</span>' +
+            '<span class="stock-kind__count">' +
+            count +
+            '</span>' +
+            '</button>'
+          );
+        })
+        .join('')
+    );
+  }
+
+  /**
+   * Fill the item dropdown for the chosen kind.
+   *
+   * The animal rides in the label rather than an `<optgroup>`: controls.js draws its own flat
+   * menu over the native select, and a heading would silently vanish from it. `change` is
+   * triggered so that drawn menu repaints to the value set here.
+   */
+  function fillAddItems(keep) {
+    const items = addItemsOf(state.add.kind);
+    const $item = $('#add-item').empty();
+    $item.append($('<option></option>').val('').text('Pick the item'));
+    items.forEach(function (entry) {
+      $item.append(
+        $('<option></option>')
+          .val(entry.key)
+          .text(
+            entry.name +
+              (entry.group ? ' · ' + entry.group : '') +
+              (entry.unit ? ' (' + entry.unit + ')' : '')
+          )
+      );
+    });
+    const known = items.some(function (entry) {
+      return entry.key === keep;
+    });
+    $item.val(keep && known ? keep : '').trigger('change');
+  }
+
+  function setAddKind(kind) {
+    state.add.kind = kind;
+    renderAddKinds();
+    fillAddItems('');
+    renderAddPreview();
+  }
+
+  /** What saving will do, in one sentence, before the button is pressed — for either direction. */
+  function renderAddPreview() {
+    const removing = state.add.dir === 'remove';
+    const key = $('#add-item').val();
+    const item = addItemByKey(key);
+    const raw = ($('#add-qty').val() || '').trim();
+    const qty = raw === '' ? null : Number(raw);
+    const now = heldQtyFor(item);
+    const name = item ? $('#add-item option:selected').text() : '';
+
+    $('#add-item-hint').text(
+      item
+        ? now
+          ? ui.number(now) + ' held now'
+          : removing
+            ? 'None of this held — nothing to remove'
+            : 'None of this held yet'
+        : removing
+          ? 'Pick what is being removed'
+          : 'Pick what is being added'
+    );
+
+    // Remove works on the *new quantity*, not an amount to take off: the field is prefilled with
+    // what the Mait holds (the original value), and the operator edits it down. Add works on an
+    // amount, the way it always has. So the number in the box means different things, and the
+    // preview reads it accordingly.
+    let tone = 'quiet';
+    let text = removing
+      ? item
+        ? 'Set the new quantity below what is held, and this says what removing will do.'
+        : 'Pick what is being removed, and its current quantity appears to edit down.'
+      : 'Pick the item and the number, and this says what saving will do.';
+    let ok = false;
+    if (item && qty !== null && !isNaN(qty)) {
+      if (Math.floor(qty) !== qty || qty < 0) {
+        tone = 'bad';
+        text = removing ? 'A whole number, zero or more.' : 'A whole number of at least one, please.';
+      } else if (removing) {
+        if (qty > now) {
+          tone = 'bad';
+          text =
+            'They hold only ' +
+            ui.number(now) +
+            '. To add more, switch to Add stock.';
+        } else if (qty === now) {
+          tone = 'quiet';
+          text = 'That is the quantity already held — nothing to change.';
+        } else {
+          tone = 'take';
+          ok = true;
+          text =
+            '<strong>' +
+            ui.escapeHtml(name) +
+            '</strong>: ' +
+            ui.number(now) +
+            ' → <strong>' +
+            ui.number(qty) +
+            '</strong> held (−' +
+            ui.number(now - qty) +
+            ')';
+        }
+      } else if (qty < 1) {
+        tone = 'bad';
+        text = 'A whole number of at least one, please.';
+      } else {
+        tone = 'good';
+        ok = true;
+        text =
+          '<strong>' +
+          ui.escapeHtml(name) +
+          '</strong>: ' +
+          ui.number(now) +
+          ' → <strong>' +
+          ui.number(now + qty) +
+          '</strong> held (+' +
+          ui.number(qty) +
+          ')';
+      }
+    }
+    $('#add-preview')
+      .attr('class', 'stock-preview stock-preview--' + tone)
+      .html(text);
+    $('#add-save').prop('disabled', !ok);
+  }
+
+  /**
+   * In Remove mode, show the item's current quantity in the number box — the "original value" —
+   * so the operator edits it down rather than working out a difference in their head. Called
+   * when the item changes and when Remove is first chosen; never in Add, where the box is an
+   * amount to add and starts empty.
+   */
+  function prefillRemoveQty() {
+    if (state.add.dir !== 'remove') {
+      return;
+    }
+    const item = addItemByKey($('#add-item').val());
+    $('#add-qty').val(item ? heldQtyFor(item) : '');
+  }
+
+  function resetAddForm() {
+    $('#add-qty, #add-note').val('');
+    $('#add-item').val('').trigger('change');
+    $('#add-status').text('');
+    renderAddPreview();
+  }
+
+  /**
+   * Make the form ready for the Mait whose stock has just loaded: remember what it can be
+   * credited with and what it already holds, draw the kinds, and start on straws.
+   */
+  function openAddForm(data) {
+    state.add.maitId = data.mait_id;
+    state.add.maitName = data.mait_name;
+    state.add.catalogue = data.catalogue || { breeds: [], products: [] };
+    state.add.heldStraws = data.by_breed || {};
+
+    const held = {};
+    (data.consumables || []).concat(data.assets || []).forEach(function (line) {
+      if (line.code) {
+        held[line.code] = line.qty;
+      }
+    });
+    state.add.heldItems = held;
+    state.add.heldByKind = buildHeldByKind(data);
+
+    // Reopen on Add every time: it is the common case, and starting on Remove would put a
+    // destructive default in front of somebody who came to credit stock.
+    state.add.dir = 'add';
+    state.add.kind = 'straw';
+    renderAddDir();
+    renderAddKinds();
+    fillAddItems('');
+    $('#add-qty, #add-note').val('');
+    $('#add-status').text('');
+    renderAddPreview();
+    $('#holding-add').prop('hidden', false);
+  }
+
+  /**
+   * What the Mait holds, in the same item shape the dropdown uses, split by kind.
+   *
+   * Straws come from `by_breed`, joined to the catalogue for a readable name and the cow/buffalo
+   * group; consumables and equipment come from the held lines, joined to the catalogue by code
+   * so the removal carries the product id the API keys on. A held item the catalogue no longer
+   * lists (a retired product) is left out — there is no id to remove it by.
+   */
+  function buildHeldByKind(data) {
+    const catalogue = state.add.catalogue;
+    const breedBy = {};
+    (catalogue.breeds || []).forEach(function (breed) {
+      breedBy[breed.code] = breed;
+    });
+    const straw = Object.keys(data.by_breed || {})
+      .filter(function (code) {
+        return (data.by_breed[code] || 0) > 0;
+      })
+      .map(function (code) {
+        const known = breedBy[code];
+        return {
+          key: 'straw:' + code,
+          code: code,
+          name: known ? known.name : code,
+          group: known ? (known.animal_type === 'BUFF' ? 'Buffalo' : 'Cow') : '',
+          qty: data.by_breed[code],
+        };
+      });
+
+    const consumable = [];
+    const asset = [];
+    (catalogue.products || []).forEach(function (product) {
+      const qty = state.add.heldItems[product.code] || 0;
+      if (qty <= 0) {
+        return;
+      }
+      const entry = {
+        key: 'consumable:' + product.id,
+        code: product.code,
+        name: product.name,
+        unit: product.unit,
+        qty: qty,
+      };
+      (product.category === 'asset' ? asset : consumable).push(entry);
+    });
+
+    return { straw: straw, consumable: consumable, asset: asset };
+  }
+
+  /** Reflect the chosen direction on the toggle, the headings, and the save button. */
+  function renderAddDir() {
+    const removing = state.add.dir === 'remove';
+    $('#add-dir .segmented__option').each(function () {
+      const on = $(this).data('dir') === state.add.dir;
+      $(this).toggleClass('is-on', on).attr('aria-checked', String(on));
+    });
+    $('#addstock-title').text(removing ? 'Remove stock' : 'Add stock');
+    $('#addstock-note').html(
+      removing
+        ? 'Take stock off this Mait — a count entered too high, or stock recorded against the ' +
+            'wrong person. Recorded as an office adjustment, oldest straws first.'
+        : 'A manual credit straight to this Mait, recorded as an office adjustment. The ' +
+            'everyday way stock reaches a Mait is a store handing an approved ' +
+            '<a href="indents.html">indent</a> over.'
+    );
+    $('#add-qty-label').text(removing ? 'New quantity' : 'How many to add?');
+    $('#add-save')
+      .text(removing ? 'Remove from stock' : 'Add to stock')
+      .toggleClass('btn--primary', !removing)
+      .toggleClass('btn--danger-outline', removing);
+  }
+
+  /**
+   * Switch direction, keeping the chosen kind where it still has something to offer.
+   *
+   * Removing is restricted to what the Mait holds, so a kind they carry none of has nothing to
+   * remove — if the current kind empties, fall to the first kind that does, and failing that
+   * leave it as it is so the empty-state hint can explain itself.
+   */
+  function setAddDir(dir) {
+    if (state.add.dir === dir) {
+      return;
+    }
+    state.add.dir = dir;
+    if (!addItemsOf(state.add.kind).length) {
+      const firstWithItems = Object.keys(KINDS).filter(function (kind) {
+        return addItemsOf(kind).length;
+      })[0];
+      if (firstWithItems) {
+        state.add.kind = firstWithItems;
+      }
+    }
+    renderAddDir();
+    renderAddKinds();
+    fillAddItems('');
+    $('#add-qty').val('');
+    $('#add-status').text('');
+    renderAddPreview();
+  }
+
+  function submitAdd(event) {
+    event.preventDefault();
+    const removing = state.add.dir === 'remove';
+    const key = $('#add-item').val();
+    const item = addItemByKey(key);
+    const field = Number($('#add-qty').val());
+    if (!state.add.maitId || !item || isNaN(field)) {
+      return;
+    }
+
+    const now = heldQtyFor(item);
+    // The field means the *new quantity* when removing and the *amount to add* when adding, so
+    // the move sent to the server is the difference in the first case and the number itself in
+    // the second. Both guards mirror the preview, so a stale field cannot slip a bad move past.
+    let qty;
+    if (removing) {
+      if (field < 0 || field >= now) {
+        renderAddPreview();
+        return;
+      }
+      qty = now - field;
+    } else {
+      if (field < 1) {
+        return;
+      }
+      qty = field;
+    }
+
+    const parts = key.split(':');
+    const body = {
+      qty: qty,
+      direction: state.add.dir,
+      note: ($('#add-note').val() || '').trim(),
+    };
+    if (parts[0] === 'straw') {
+      body.product_type = 'straw';
+      body.breed = parts[1];
+    } else {
+      body.product_type = 'consumable';
+      body.product_ref_id = Number(parts[1]);
+    }
+    const name = $('#add-item option:selected').text();
+
+    $('#add-save, #add-reset').prop('disabled', true);
+    $('#add-status').text(removing ? 'Removing…' : 'Adding…');
+    MaitAI.shell.clearAlert();
+    MaitAI.api
+      .creditMaitStock(state.add.maitId, body)
+      .done(function (fresh) {
+        MaitAI.shell.alert(
+          ui.number(qty) +
+            ' ' +
+            name +
+            (removing ? ' removed from ' : ' added to ') +
+            (fresh.mait_name || state.add.maitName) +
+            '.',
+          'good'
+        );
+        // The panel redraws straight from the response, so the cards and the held counts the
+        // preview reads are the Mait's stock as it now stands — then the qty is cleared,
+        // because the next change is a different one.
+        showHolding(state.add.maitId);
+        // And the list behind it, so the Mait's total and status move without a manual reload.
+        load();
+      })
+      .fail(function (problem) {
+        MaitAI.shell.alert(MaitAI.api.problemToLines(problem).join(' · '));
+        $('#add-status').text(removing ? 'Not removed.' : 'Not added.');
+      })
+      .always(function () {
+        $('#add-save, #add-reset').prop('disabled', false);
       });
   }
 
@@ -322,6 +825,17 @@
         ? '<a href="indents.html?status=approved">' + ui.number(store.open_indents) + '</a>'
         : '<span class="table__sub">none</span>') +
       '</td>' +
+      // Add a delivery or correct the count — the same editor the Stores screen opens, reached
+      // from here so a stock-out spotted on this oversight screen can be put right without
+      // leaving to hunt the depot down on another one. Deep-links straight to its shelf.
+      '<td class="table__action">' +
+      '<a class="btn btn--good-outline" href="stores.html?stock=' +
+      store.id +
+      '">' +
+      '<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M12 5v14M5 12h14" /></svg>Add / reduce</a>' +
+      '</td>' +
       '</tr>'
     );
   }
@@ -334,7 +848,7 @@
       stores,
       storeRow,
       'No store serves this part of the network yet — set one up on the Stores screen.',
-      6
+      7
     );
   }
 
@@ -424,7 +938,30 @@
 
     $('#holding-close').on('click', function () {
       $('#holding').prop('hidden', true);
+      state.add.maitId = null;
     });
+
+    // The add-stock form, inside the holding panel.
+    $('#add-dir').on('click', '[data-dir]', function () {
+      setAddDir($(this).data('dir'));
+    });
+    $('#add-kinds').on('click', '[data-kind]:not([disabled])', function () {
+      setAddKind($(this).data('kind'));
+    });
+    // On a new item, Remove shows that item's current quantity to edit down; Add leaves the box
+    // as an amount to type. Either way the preview then redraws.
+    $('#add-item').on('change', function () {
+      prefillRemoveQty();
+      renderAddPreview();
+    });
+    $('#add-qty').on('input', renderAddPreview);
+    $('#holding-add').on('click', '.stock-qty__step', function () {
+      const now = Number($('#add-qty').val()) || 0;
+      $('#add-qty').val(Math.max(0, now + Number($(this).data('step'))));
+      renderAddPreview();
+    });
+    $('#holding-add-form').on('submit', submitAdd);
+    $('#add-reset').on('click', resetAddForm);
 
     $('#search').on('input', render);
 

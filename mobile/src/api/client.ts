@@ -172,11 +172,57 @@ function unreachable(error: FetchBaseQueryError | undefined): boolean {
 }
 
 /**
+ * How long a cached read waits for the network before it is served from disk instead.
+ *
+ * The difference between a picker that opens instantly and one a Mait watches spin. A weak
+ * signal is not no signal: the request will land, in eight seconds or in twenty, and until it
+ * does the old behaviour showed a spinner over a screen whose answer was already on the handset
+ * from this morning's round. Past this grace the stored answer is shown at once and the network
+ * keeps going in the background to refresh it for next time — stale-while-revalidate (SRS §6.9).
+ *
+ * Short enough to feel immediate, long enough that a healthy connection still returns the fresh
+ * answer rather than the stored one: on good signal the fetch beats the timer and nothing is
+ * stale. It only ever applies to a read that has a stored copy to fall back on — a first-ever
+ * visit to an MPP has nothing to show and waits for the network as before.
+ */
+const STALE_REVALIDATE_GRACE_MS = 1_000;
+
+/** A sentinel for "the grace period won the race", distinct from any base-query result. */
+const GRACE_ELAPSED = Symbol('grace-elapsed');
+
+/**
+ * A promise that resolves to {@link GRACE_ELAPSED} after `ms`, with the timer it can be told to
+ * drop.
+ *
+ * Cancelled when the network wins the race, so a read answered quickly leaves no timer ticking
+ * behind it — on a handset a stray timer per read is battery, and under the test runner it is an
+ * open handle the suite is right to complain about.
+ */
+function grace(ms: number): { promise: Promise<typeof GRACE_ELAPSED>; cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const promise = new Promise<typeof GRACE_ELAPSED>(resolve => {
+    timer = setTimeout(() => resolve(GRACE_ELAPSED), ms);
+  });
+  return { promise, cancel: () => clearTimeout(timer) };
+}
+
+/**
  * The same base query, with the last good answer behind it (see `offlineCache.ts`).
  *
  * Wrapped rather than rewritten: the token, the silent refresh and the tunnel header all
  * still happen exactly once, in `baseQueryWithReauth`, and this only decides what to do with
  * what comes back. Every endpoint in the app is unchanged and unaware.
+ *
+ * Two jobs, in order of how often they matter:
+ *
+ * 1. **Serve a stored read instantly when the network is slow, not only when it is dead.** A
+ *    weak signal used to be the worst case — too alive to fall back, too slow to use — and it
+ *    is the case a Mait is in all day. So an allowlisted read with a stored copy races the
+ *    network against a short grace window: whichever is first wins, and a network that is
+ *    merely slow loses to the copy already on disk while it keeps going to refresh it.
+ * 2. **Fall back to the stored read when the network is gone.** The original job, unchanged:
+ *    an unreachable server is answered from disk where there is a copy, and a refusal — the
+ *    server's considered "no" — is passed straight through, never masked by a stale yes.
  *
  * Reads that are not on the allowlist, and every write, pass through untouched.
  */
@@ -186,31 +232,70 @@ export const baseQueryWithOfflineReads: BaseQueryFn<
   FetchBaseQueryError
 > = async (args, api, extraOptions) => {
   const key = cacheKeyFor(args);
-  const result = await baseQueryWithReauth(args, api, extraOptions);
 
   // Keyed by the signed-in user, so a shared handset never serves one Mait's farmers to the
   // next one to sign in. With nobody signed in there is nothing to key on and nothing worth
   // storing.
   const owner = (api.getState() as RootState).auth?.user?.id ?? null;
+
+  // Not a read we keep, or nobody to key it to: the plain query, with none of the below.
   if (!key || owner === null) {
-    return result;
+    return baseQueryWithReauth(args, api, extraOptions);
   }
 
-  if (!result.error && result.data !== undefined) {
-    // Deliberately not awaited: the screen waiting on this read must not also wait on a disk
-    // write, and a write that fails costs a later fallback rather than this answer.
-    writeCached(owner, key, result.data);
-    return result;
-  }
-
-  if (unreachable(result.error)) {
-    const stored = await readCached(owner, key);
-    if (stored) {
-      return { data: stored.data, meta: { fromCache: true, savedAt: stored.savedAt } };
+  // Start the network immediately and keep the fresh answer on disk when it lands — whether or
+  // not anybody is still waiting on it. Never awaited for its write: a read must not wait on a
+  // disk write, and the request resolves to a result object rather than throwing, so this
+  // promise is always safe to leave running in the background.
+  const networking = baseQueryWithReauth(args, api, extraOptions).then(result => {
+    if (!result.error && result.data !== undefined) {
+      writeCached(owner, key, result.data);
     }
+    return result;
+  });
+
+  const fromCache = (stored: { data: unknown; savedAt: number }) => ({
+    data: stored.data,
+    meta: { fromCache: true, savedAt: stored.savedAt },
+  });
+
+  const stored = await readCached(owner, key);
+
+  // Nothing stored yet. Wait for the network as before, and fall back only if it turns out to
+  // be unreachable and a copy has appeared since (it has not, but the check is cheap and true).
+  if (!stored) {
+    const result = await networking;
+    if (!result.error && result.data !== undefined) {
+      return result;
+    }
+    if (unreachable(result.error)) {
+      const late = await readCached(owner, key);
+      if (late) {
+        return fromCache(late);
+      }
+    }
+    return result;
   }
 
-  return result;
+  // A stored copy exists: give the network a short head start, then serve the copy if it has
+  // not answered. The losing network request keeps running and refreshes the cache above.
+  const graced = grace(STALE_REVALIDATE_GRACE_MS);
+  const raced = await Promise.race([networking, graced.promise]);
+  graced.cancel();
+  if (raced === GRACE_ELAPSED) {
+    return fromCache(stored);
+  }
+
+  // The network beat the grace window. A fresh answer is returned as itself; a server that was
+  // unreachable falls back to the copy; a refusal is passed through so the screen that asked
+  // hears the server's "no" rather than a stale "yes".
+  if (!raced.error && raced.data !== undefined) {
+    return raced;
+  }
+  if (unreachable(raced.error)) {
+    return fromCache(stored);
+  }
+  return raced;
 };
 
 export const api = createApi({

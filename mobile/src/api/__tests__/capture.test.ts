@@ -306,6 +306,27 @@ describe('attaching the proof photo', () => {
     expect((await readQueue())[0]?.kind).toBe('attachPhoto');
   });
 
+  it('queues it when a weak link runs past the upload cap', async () => {
+    // The case that matters most, and the one a Mait is in all day: the signal is not dead, so
+    // the upload starts — but it is too weak to finish, and the platform fires `ontimeout` at
+    // the cap set on `request.timeout`. A capture must go to the queue and let the Mait move on,
+    // not hold them at the last screen watching a bar that never fills.
+    FakeXhr.answer = request => request.ontimeout?.();
+
+    const outcome = await attachPhoto(7, 'uuid-1', PHOTO, TOKEN, LABEL);
+
+    expect(outcome.queued).toBe(true);
+    expect((await readQueue())[0]?.kind).toBe('attachPhoto');
+  });
+
+  it('caps the upload so a slow link cannot hold it for ever', async () => {
+    // The cap itself: without it the XHR waits on the platform's default, which on a weak link
+    // is tens of seconds of a blocked final screen.
+    await attachPhoto(7, 'uuid-1', PHOTO, TOKEN, LABEL);
+
+    expect((FakeXhr.sent[0] as unknown as { timeout: number }).timeout).toBeGreaterThan(0);
+  });
+
   it('queues it where the handset has no XMLHttpRequest at all', async () => {
     // Belt and braces. The send is wrapped for a reason: an insemination that happened must
     // never be lost to a platform that cannot make the request.

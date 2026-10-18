@@ -104,6 +104,7 @@ export default function SelectFarmerScreen({
           <OptionCard
             key={member.member_code}
             swatchLabel={initials(member.member_name)}
+            tone="info"
             round
             // Stretched like the two steps before it. It costs about one row per screenful on
             // a long roster, which is the trade — but a Mait picking the wrong Kavita is a

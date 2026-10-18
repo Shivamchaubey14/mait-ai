@@ -110,6 +110,28 @@
             </svg>
             Not activated
           </button>
+          <!-- Accounts that activated and were then switched off on the Users screen — a
+               blocked state like Needs mobile, so the same red when it is on. -->
+          <button
+            class="chip chip--bad"
+            id="filter-deactivated"
+            type="button"
+            aria-pressed="false"
+          >
+            <svg
+              class="chip__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M5.6 5.6l12.8 12.8" />
+            </svg>
+            Deactivated
+          </button>
         </section>
 
         <!-- The shared Mait editor renders itself here (assets/js/mait-editor.js). -->

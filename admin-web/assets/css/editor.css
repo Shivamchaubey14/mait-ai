@@ -294,6 +294,21 @@
   color: var(--color-text-muted);
 }
 
+/* The Mait this MPP already belongs to, named in full under the row. Red like the "Assigned"
+   pill beside it, because adding the MPP here takes those members off the Mait named — so who
+   that is, and their code, is the one thing an operator must read before they do it. */
+.suggest__holder {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-error);
+}
+
+.suggest__holder strong {
+  font-weight: 700;
+}
+
 .suggest__retired {
   font-size: var(--text-caption);
   font-weight: 600;

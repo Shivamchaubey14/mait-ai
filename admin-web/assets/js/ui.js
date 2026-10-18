@@ -31,6 +31,12 @@ window.MaitAI = window.MaitAI || {};
       .html();
   }
 
+  // Same, for a value going into a double-quoted attribute: escapeHtml does not touch quotes,
+  // and a name carrying one would otherwise break out of the attribute.
+  function escapeAttr(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;');
+  }
+
   // ------------------------------------------------------------------------------------
   // Rolling figures
   // ------------------------------------------------------------------------------------
@@ -427,13 +433,32 @@ window.MaitAI = window.MaitAI || {};
       $control.prop('hidden', !open).closest('.panel').toggleClass('panel--linked', open);
     },
 
-    /** Identity cell: the name, with its code beneath in muted type. */
-    identity: function (name, code) {
+    /**
+     * Identity cell: the name, with its code beneath in muted type.
+     *
+     * Pass `hover` ({ title, detail }) to turn the code into a trigger that reveals those two
+     * lines in a floating card on hover or keyboard focus — used by the events list so the
+     * vendor code carries the Mait's name and number without opening the record. The card
+     * itself is drawn by the delegated handler below.
+     */
+    identity: function (name, code, hover) {
+      if (!code) {
+        return '<span class="table__name">' + escapeHtml(name || '—') + '</span>';
+      }
+      let codeAttrs = ' class="table__sub"';
+      if (hover && (hover.title || hover.detail)) {
+        const label = [hover.title, hover.detail].filter(Boolean).join(', ');
+        codeAttrs =
+          ' class="table__sub table__sub--hover" tabindex="0"' +
+          ' data-hovercard-title="' + escapeAttr(hover.title || '') + '"' +
+          ' data-hovercard-detail="' + escapeAttr(hover.detail || '') + '"' +
+          ' aria-label="' + escapeAttr(code + ' — ' + label) + '"';
+      }
       return (
         '<span class="table__name">' +
         escapeHtml(name || '—') +
         '</span>' +
-        (code ? '<span class="table__sub">' + escapeHtml(code) + '</span>' : '')
+        '<span' + codeAttrs + '>' + escapeHtml(code) + '</span>'
       );
     },
 
@@ -530,4 +555,77 @@ window.MaitAI = window.MaitAI || {};
       });
     },
   };
+
+  // ------------------------------------------------------------------------------------
+  // Hover card — the name and number behind a code
+  // ------------------------------------------------------------------------------------
+  // Floating, fixed-positioned and appended to <body> rather than drawn inside the cell: the
+  // data tables scroll inside `.table-wrap` (overflow-x: auto, which makes overflow-y compute
+  // to auto), so a card drawn in the cell would be clipped by the wrap and open a stray
+  // scrollbar. One card is reused for every trigger, and the triggers are matched by delegation,
+  // so rows rebuilt on a filter or a pager click keep working with no re-binding.
+  const HOVER_SELECTOR = '[data-hovercard-title], [data-hovercard-detail]';
+  let $hoverCard = null;
+
+  function hoverCardEl() {
+    if (!$hoverCard) {
+      $hoverCard = $(
+        '<div class="hovercard" role="tooltip" hidden>' +
+          '<span class="hovercard__name"></span>' +
+          '<span class="hovercard__detail"></span>' +
+          '</div>'
+      ).appendTo(document.body);
+    }
+    return $hoverCard;
+  }
+
+  function showHoverCard(trigger) {
+    const title = trigger.getAttribute('data-hovercard-title') || '';
+    const detail = trigger.getAttribute('data-hovercard-detail') || '';
+    if (!title && !detail) {
+      return;
+    }
+    const $card = hoverCardEl();
+    $card.find('.hovercard__name').text(title || '—');
+    $card
+      .find('.hovercard__detail')
+      .text(detail || '')
+      .toggle(Boolean(detail));
+    $card.prop('hidden', false);
+
+    // Placed above the code, centred on it, flipping below when there is no room at the top.
+    // Coordinates come from the trigger's own viewport rect, so where the table is scrolled to
+    // never enters into it.
+    const r = trigger.getBoundingClientRect();
+    const cw = $card.outerWidth();
+    const ch = $card.outerHeight();
+    const gap = 8;
+    let left = r.left + r.width / 2 - cw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - cw - 8));
+    let top = r.top - ch - gap;
+    let place = 'top';
+    if (top < 8) {
+      top = r.bottom + gap;
+      place = 'bottom';
+    }
+    $card.css({ left: left + 'px', top: top + 'px' }).attr('data-place', place);
+  }
+
+  function hideHoverCard() {
+    if ($hoverCard) {
+      $hoverCard.prop('hidden', true);
+    }
+  }
+
+  $(document)
+    .on('mouseenter focusin', HOVER_SELECTOR, function () {
+      showHoverCard(this);
+    })
+    .on('mouseleave focusout', HOVER_SELECTOR, hideHoverCard);
+
+  // A card pinned to a viewport point goes stale the moment the page or a table scrolls under
+  // it, so it is dismissed rather than left floating. Capture phase, because a scroll inside
+  // `.table-wrap` does not bubble to the window.
+  window.addEventListener('scroll', hideHoverCard, true);
+  window.addEventListener('resize', hideHoverCard);
 })(window.MaitAI, jQuery);

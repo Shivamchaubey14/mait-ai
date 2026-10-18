@@ -1,0 +1,766 @@
+/**
+ * MAIT AI — Go Live Event launch presentation.
+ *
+ * Palette, fonts and radii are the portal's own design tokens (admin-web/assets/css/
+ * tokens.css), reproduced here so this folder is self-contained and can be served from
+ * its own host. The theme is dairy-technology: deep ink navy, nest green, white, a sky-blue
+ * wash and restrained gold — never a theatrical red.
+ *
+ * Motion is driven off `body[data-state]`: INTRO (banner at rest), LAUNCHING (curtains
+ * drawing open, celebration running) and REDIRECTING (held at the visual peak before
+ * navigation). main.js only ever swaps that attribute and injects particles into #fx-layer.
+ */
+
+/* ---- Self-hosted webfonts (copied from the portal) ---------------------------------- */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('../assets/fonts/NunitoSans.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Quicksand';
+  font-style: normal;
+  font-weight: 600 700;
+  font-display: swap;
+  src: url('../assets/fonts/Quicksand.woff2') format('woff2');
+}
+
+:root {
+  --font-heading: 'Quicksand', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Nunito Sans', -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Nest Green */
+  --green-300: #71cca1;
+  --green-400: #52c08d;
+  --green-500: #3bb77e;
+  --green-600: #329c6b;
+  --green-700: #287d56;
+  --green-800: #1e5e41;
+  --green-900: #143e2b;
+
+  /* Cream Yolk — the gold accent */
+  --gold-300: #fed578;
+  --gold-400: #fdcb5c;
+  --gold-500: #fdc040;
+  --gold-600: #e0a52f;
+
+  /* Ink — the navy carrying every dark surface */
+  --ink-500: #3d566a;
+  --ink-600: #253d4e;
+  --ink-700: #1d303d;
+  --ink-800: #15232d;
+  --ink-900: #0c151b;
+
+  /* Sky */
+  --sky: #3e92e5;
+  --sky-soft: #8fc3f2;
+
+  --white: #ffffff;
+
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-curtain: cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--white);
+  background: var(--ink-900);
+  overflow: hidden; /* no horizontal or vertical scroll on the stage */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* ===================================================================================== */
+/* Stage                                                                                 */
+/* ===================================================================================== */
+.stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* ---- Celebration backdrop revealed behind the curtains ------------------------------ */
+.reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(120% 90% at 50% 10%, rgba(82, 192, 141, 0.28), transparent 60%),
+    radial-gradient(90% 70% at 50% 120%, rgba(62, 146, 229, 0.22), transparent 55%),
+    linear-gradient(160deg, var(--ink-800) 0%, var(--ink-900) 100%);
+}
+
+.reveal__glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(60% 55% at 50% 45%, rgba(255, 255, 255, 0.5), transparent 70%);
+  transition: opacity 900ms var(--ease-out);
+}
+
+body[data-state='launching'] .reveal__glow,
+body[data-state='redirecting'] .reveal__glow {
+  opacity: 1;
+}
+
+/* ===================================================================================== */
+/* Banner (State A)                                                                      */
+/* ===================================================================================== */
+.banner {
+  position: relative;
+  z-index: 1;
+  width: min(1120px, 92vw);
+  max-height: 94vh;
+  padding: clamp(28px, 5vw, 64px) clamp(22px, 5vw, 72px);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  overflow: hidden;
+  background:
+    radial-gradient(130% 120% at 18% 0%, rgba(59, 183, 126, 0.26), transparent 52%),
+    radial-gradient(120% 120% at 100% 100%, rgba(62, 146, 229, 0.2), transparent 55%),
+    linear-gradient(155deg, var(--ink-700) 0%, var(--ink-800) 55%, var(--ink-900) 100%);
+  border: 1px solid rgba(253, 192, 64, 0.26);
+  box-shadow:
+    0 30px 80px rgba(6, 15, 20, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition:
+    transform 700ms var(--ease-out),
+    opacity 700ms var(--ease-out),
+    filter 700ms var(--ease-out);
+}
+
+/* The banner brightens, lifts, then settles behind the particles as the curtains open. */
+body[data-state='launching'] .banner,
+body[data-state='redirecting'] .banner {
+  filter: brightness(1.12) saturate(1.05);
+}
+
+/* A slow light sweep so the banner never feels static before the launch. */
+.banner__sheen {
+  position: absolute;
+  top: -40%;
+  left: -60%;
+  width: 55%;
+  height: 180%;
+  transform: rotate(16deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  animation: sheen 7s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sheen {
+  0%,
+  100% {
+    transform: translateX(0) rotate(16deg);
+    opacity: 0;
+  }
+  45% {
+    opacity: 1;
+  }
+  60% {
+    transform: translateX(320%) rotate(16deg);
+    opacity: 0;
+  }
+}
+
+.banner__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(10px, 1.6vh, 18px);
+}
+
+/* ---- Wordmark ----------------------------------------------------------------------- */
+.brandmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px 10px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(2px);
+}
+
+.brandmark__dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, var(--green-300), var(--green-600) 70%);
+  box-shadow:
+    0 0 0 4px rgba(59, 183, 126, 0.18),
+    0 6px 14px rgba(40, 125, 86, 0.5);
+}
+
+.brandmark__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
+}
+
+.brandmark__name {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(1.1rem, 2.4vw, 1.5rem);
+  letter-spacing: 0.1em;
+  color: var(--white);
+}
+
+.brandmark__sub {
+  margin-top: 4px;
+  font-size: clamp(0.5rem, 1vw, 0.62rem);
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  color: var(--green-300);
+}
+
+/* ---- Headline ----------------------------------------------------------------------- */
+.banner__eyebrow {
+  margin: 6px 0 0;
+  font-size: clamp(0.7rem, 1.4vw, 0.85rem);
+  font-weight: 600;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  text-transform: uppercase;
+  color: var(--gold-500);
+}
+
+.banner__title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 0.95;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.banner__title-main {
+  font-size: clamp(2.6rem, 9vw, 6rem);
+  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, #ffffff 0%, #d7efe3 60%, var(--green-300) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 6px 30px rgba(59, 183, 126, 0.25);
+}
+
+.banner__title-accent {
+  font-size: clamp(1.4rem, 4.6vw, 3rem);
+  letter-spacing: 0.44em;
+  text-indent: 0.44em;
+  color: var(--gold-500);
+}
+
+.banner__launching {
+  margin: 2px 0 0;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: clamp(1rem, 2.6vw, 1.5rem);
+  letter-spacing: 0.08em;
+  color: var(--sky-soft);
+}
+
+/* ---- Dignitary ---------------------------------------------------------------------- */
+.banner__dignitary {
+  margin-top: clamp(4px, 1.2vh, 12px);
+  padding-top: clamp(10px, 1.6vh, 16px);
+  border-top: 1px solid rgba(253, 192, 64, 0.22);
+}
+
+.banner__dignitary-pre {
+  margin: 0;
+  font-size: clamp(0.78rem, 1.5vw, 0.95rem);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.banner__dignitary-name {
+  margin: 6px 0 2px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(1.3rem, 3.6vw, 2.1rem);
+  letter-spacing: 0.02em;
+  color: var(--white);
+}
+
+.banner__dignitary-role {
+  margin: 0;
+  font-size: clamp(0.72rem, 1.4vw, 0.9rem);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--green-300);
+}
+
+.banner__tagline {
+  margin: clamp(6px, 1.4vh, 14px) auto 0;
+  max-width: 48ch;
+  font-style: italic;
+  font-size: clamp(0.82rem, 1.6vw, 1rem);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* ===================================================================================== */
+/* Launch button                                                                         */
+/* ===================================================================================== */
+.launch {
+  margin-top: clamp(14px, 2.4vh, 28px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.launch__btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(14px, 1.8vh, 20px) clamp(28px, 4vw, 54px);
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(0.95rem, 2vw, 1.25rem);
+  letter-spacing: 0.1em;
+  color: var(--white);
+  background: linear-gradient(
+    135deg,
+    var(--green-400) 0%,
+    var(--green-600) 60%,
+    var(--green-700) 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+    0 0 0 3px rgba(253, 192, 64, 0.28),
+    0 16px 36px rgba(40, 125, 86, 0.5);
+  overflow: hidden;
+  transition:
+    transform 160ms var(--ease-out),
+    box-shadow 200ms var(--ease-out),
+    filter 200ms var(--ease-out);
+  animation: breathe 3.4s ease-in-out infinite;
+}
+
+.launch__btn-label {
+  position: relative;
+  z-index: 1;
+}
+
+/* A soft gold highlight that glides across on hover and flares on activation. */
+.launch__btn-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(60% 120% at 20% 0%, rgba(255, 255, 255, 0.55), transparent 55%);
+  opacity: 0;
+  transition: opacity 220ms var(--ease-out);
+}
+
+.launch__btn:hover,
+.launch__btn:focus-visible {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.3) inset,
+    0 0 0 4px rgba(253, 192, 64, 0.45),
+    0 22px 46px rgba(40, 125, 86, 0.6);
+  filter: brightness(1.05);
+}
+
+.launch__btn:hover .launch__btn-glow,
+.launch__btn:focus-visible .launch__btn-glow {
+  opacity: 1;
+}
+
+/* Keyboard focus must always be visible. */
+.launch__btn:focus-visible {
+  outline: 3px solid var(--gold-300);
+  outline-offset: 3px;
+}
+
+.launch__btn:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* The brief acknowledgement when pressed: scale pop + gold flare, then disabled. */
+.launch__btn.is-pressed {
+  animation: none;
+  transform: scale(1.06);
+  filter: brightness(1.18) saturate(1.1);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+    0 0 0 6px rgba(253, 192, 64, 0.6),
+    0 0 60px rgba(253, 192, 64, 0.55);
+}
+
+.launch__btn.is-pressed .launch__btn-glow {
+  opacity: 1;
+}
+
+.launch__btn:disabled {
+  cursor: default;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+      0 0 0 3px rgba(253, 192, 64, 0.28),
+      0 16px 36px rgba(40, 125, 86, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.22) inset,
+      0 0 0 4px rgba(253, 192, 64, 0.4),
+      0 16px 40px rgba(40, 125, 86, 0.62);
+  }
+}
+
+.launch__hint {
+  margin: 0;
+  font-size: clamp(0.72rem, 1.4vw, 0.88rem);
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Fade the controls out as the launch takes over. */
+body[data-state='launching'] .launch__hint,
+body[data-state='redirecting'] .launch__hint,
+body[data-state='launching'] .launch__btn,
+body[data-state='redirecting'] .launch__btn {
+  transition: opacity 500ms var(--ease-out);
+}
+
+body[data-state='redirecting'] .launch__hint {
+  opacity: 0;
+}
+
+/* ---- The in-document fallback link (noscript) --------------------------------------- */
+.launch__fallback {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 12px 26px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  color: var(--ink-800);
+  background: var(--gold-500);
+}
+
+/* ===================================================================================== */
+/* Stage curtains (overlay)                                                              */
+/* ===================================================================================== */
+.curtains {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  /* Inert at rest: the overlay only materialises once the launch begins, so it can never
+     obscure the banner or the button before the click. */
+  opacity: 0;
+  visibility: hidden;
+}
+
+body[data-state='launching'] .curtains,
+body[data-state='redirecting'] .curtains {
+  opacity: 1;
+  visibility: visible;
+}
+
+.curtain {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 52%;
+  /* Vertical folds built from layered gradients — rich green over deep navy, with gold
+     seam detailing. No red, no image. */
+  background-image:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.32) 0%,
+      transparent 10%,
+      transparent 90%,
+      rgba(0, 0, 0, 0.32) 100%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      var(--green-800) 0,
+      var(--green-700) 3.5%,
+      var(--green-900) 7%,
+      var(--green-800) 10.5%
+    );
+  box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.45);
+  transition: transform 1400ms var(--ease-curtain);
+  will-change: transform;
+}
+
+/* The gold braided trim along the meeting edge. */
+.curtain::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  background: linear-gradient(180deg, var(--gold-400), var(--gold-600) 50%, var(--gold-400));
+  box-shadow: 0 0 18px rgba(253, 192, 64, 0.55);
+}
+
+.curtain--left {
+  left: 0;
+  transform: translateX(0);
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+.curtain--left::after {
+  right: 0;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.curtain--right {
+  right: 0;
+  transform: translateX(0);
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+.curtain--right::after {
+  left: 0;
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+/* The opening: both panels glide outward past the edges simultaneously. */
+body[data-state='launching'] .curtain--left,
+body[data-state='redirecting'] .curtain--left {
+  transform: translateX(-102%);
+}
+
+body[data-state='launching'] .curtain--right,
+body[data-state='redirecting'] .curtain--right {
+  transform: translateX(102%);
+}
+
+/* ===================================================================================== */
+/* Particle layer                                                                        */
+/* ===================================================================================== */
+.fx {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Base particle. Trajectory, size, colour, rotation and duration are set inline by
+   main.js via custom properties, so the stylesheet owns only the shared mechanics. */
+.particle {
+  position: absolute;
+  top: var(--p-top, 50%);
+  left: var(--p-left, 50%);
+  width: var(--p-w, 10px);
+  height: var(--p-h, 16px);
+  background: var(--p-color, var(--green-500));
+  opacity: 0;
+  will-change: transform, opacity;
+  transform: translate(-50%, -50%);
+  animation: particle-fly var(--p-dur, 2600ms) var(--p-ease, cubic-bezier(0.18, 0.7, 0.3, 1))
+    var(--p-delay, 0ms) forwards;
+}
+
+.particle--rect {
+  border-radius: 1px;
+}
+.particle--ribbon {
+  width: var(--p-w, 7px);
+  height: var(--p-h, 26px);
+  border-radius: 40%;
+}
+.particle--paper {
+  border-radius: 2px;
+}
+.particle--round {
+  border-radius: 50%;
+}
+
+@keyframes particle-fly {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  8% {
+    opacity: var(--p-opacity, 1);
+  }
+  70% {
+    opacity: var(--p-opacity, 1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), calc(-50% + var(--p-dy, -240px)))
+      rotate(var(--p-rot, 540deg));
+  }
+}
+
+/* A popper burst flash at each corner. */
+.popper {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.95),
+    rgba(253, 192, 64, 0.6) 55%,
+    transparent 70%
+  );
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.2);
+  animation: popper-flash 620ms var(--ease-out) forwards;
+}
+
+@keyframes popper-flash {
+  0% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(7);
+  }
+}
+
+/* ===================================================================================== */
+/* Fallback CTA (shown only on launch failure)                                           */
+/* ===================================================================================== */
+.fallback-cta {
+  position: absolute;
+  z-index: 6;
+  bottom: clamp(24px, 6vh, 56px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 16px 34px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  color: var(--ink-900);
+  background: linear-gradient(135deg, var(--gold-400), var(--gold-600));
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 3px rgba(255, 255, 255, 0.25) inset;
+}
+
+.fallback-cta[hidden] {
+  display: none;
+}
+
+.fallback-cta:focus-visible {
+  outline: 3px solid var(--white);
+  outline-offset: 3px;
+}
+
+/* ===================================================================================== */
+/* Responsive                                                                            */
+/* ===================================================================================== */
+@media (max-width: 720px) {
+  .banner {
+    width: 94vw;
+    padding: 26px 18px;
+  }
+  .brandmark__sub {
+    letter-spacing: 0.2em;
+  }
+  .banner__title-accent {
+    letter-spacing: 0.3em;
+    text-indent: 0.3em;
+  }
+  .curtain {
+    width: 54%;
+  }
+}
+
+/* Landscape phones: the viewport is short, so tighten vertical rhythm to keep the button
+   on screen without scrolling. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .banner {
+    max-height: 98vh;
+    padding: 16px 28px;
+  }
+  .banner__inner {
+    gap: 6px;
+  }
+  .banner__dignitary {
+    margin-top: 2px;
+    padding-top: 6px;
+  }
+}
+
+/* ===================================================================================== */
+/* Reduced motion — shorten or bypass elaborate animation, still allow launching         */
+/* ===================================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .banner__sheen,
+  .launch__btn {
+    animation: none !important;
+  }
+
+  /* Curtains and banner change instantly rather than gliding. */
+  .curtain,
+  .banner {
+    transition: none !important;
+  }
+
+  /* Particles become a single brief, still flash instead of flying shapes. */
+  .particle {
+    animation-duration: 500ms !important;
+  }
+  @keyframes particle-fly {
+    0% {
+      opacity: var(--p-opacity, 1);
+      transform: translate(-50%, -50%);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%);
+    }
+  }
+}

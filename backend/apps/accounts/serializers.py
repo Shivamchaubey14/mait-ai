@@ -79,6 +79,31 @@ class OTPVerifySerializer(serializers.Serializer):
     otp = serializers.CharField(min_length=4, max_length=8)
 
 
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """
+    Ask for a password-reset OTP by username (SRS §6.8.1).
+
+    Only the username is taken: the code is sent to the number already on the account, never
+    to one the caller supplies, so a reset cannot be aimed at a phone the account holder does
+    not hold. Whether the username exists is never revealed — see the view.
+    """
+
+    username = serializers.CharField(max_length=64)
+
+
+class PasswordResetVerifySerializer(serializers.Serializer):
+    """
+    Verify the reset OTP and set a new password.
+
+    ``min_length`` matches the account serializers (``admin_serializers.py``) so a password set
+    here is held to the same bar as one an administrator would set.
+    """
+
+    username = serializers.CharField(max_length=64)
+    otp = serializers.CharField(min_length=4, max_length=8)
+    new_password = serializers.CharField(write_only=True, min_length=10)
+
+
 class LogoutSerializer(serializers.Serializer):
     """Blacklist a refresh token so a stolen one cannot outlive the session (SRS §16)."""
 

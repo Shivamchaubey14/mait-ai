@@ -46,6 +46,8 @@ from .serializers import (
     OTPSendSerializer,
     OTPVerifySerializer,
     PasswordLoginSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetVerifySerializer,
     SuperOTPRequestSerializer,
     TokenPairSerializer,
 )
@@ -275,6 +277,121 @@ class SuperOTPRequestView(APIView):
                 "expires_in_seconds": settings.SUPER_OTP_EXPIRY_SECONDS,
             }
         )
+
+
+def _resolve_reset_user(username: str) -> User | None:
+    """
+    The password-holding account behind a username, or ``None``.
+
+    Narrow on purpose, and for the same reasons the OTP login is: only an **office** account
+    resets a password here. A Mait has no usable password at all (they sign in by OTP), so there
+    is nothing to reset and admitting them would invent a password door onto a field account. A
+    deactivated account is not found — there is nothing to sign back in to — and neither is one
+    with no number on file, because the code has nowhere to go.
+    """
+    username = (username or "").strip()
+    if not username:
+        return None
+    user = User.objects.filter(username__iexact=username, is_active=True).first()
+    if user is None or user.role not in (Role.ADMIN, Role.SUPER_ADMIN, Role.NORMAL_USER):
+        return None
+    if not user.has_usable_password() or not user.mobile_no:
+        return None
+    return user
+
+
+@extend_schema(tags=["auth"])
+class PasswordResetRequestView(APIView):
+    """Send a password-reset OTP to the number on an Admin account (SRS §6.8.1)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+    throttle_scope = "password_reset_request"
+
+    @extend_schema(
+        summary="Request a password-reset OTP",
+        description=(
+            "For an Admin who has forgotten their portal password. The code goes to the mobile "
+            "number already on the account, never to one the caller supplies.\n\n"
+            "Always returns 200 with the same body, whether or not the username exists or has a "
+            "number on file — confirming either would let anyone enumerate office accounts. "
+            "Maits have no password and are never eligible. Throttled `password_reset_request`."
+        ),
+        request=PasswordResetRequestSerializer,
+        responses={200: dict},
+        examples=[OpenApiExample("Request", value={"username": "admin"})],
+    )
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        username = serializer.validated_data["username"]
+
+        user = _resolve_reset_user(username)
+        if user is not None:
+            issue_otp(mobile_no=user.mobile_no, purpose=OTPLog.Purpose.PASSWORD_RESET)
+        else:
+            # Logged, not returned. The caller gets the same response either way.
+            logger.info("Password reset requested for an account that cannot reset here")
+
+        return Response(
+            {
+                "detail": "If that account exists and has a mobile number on file, an OTP has "
+                "been sent to it.",
+                "expires_in_seconds": settings.OTP_EXPIRY_SECONDS,
+            }
+        )
+
+
+@extend_schema(tags=["auth"])
+class PasswordResetVerifyView(APIView):
+    """Verify the reset OTP and set a new password (SRS §6.8.1)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+    throttle_scope = "password_reset_verify"
+
+    @extend_schema(
+        summary="Verify a reset OTP and set a new password",
+        description=(
+            "Checks the OTP sent by `/auth/password/reset/request/` and, if it holds, sets the "
+            "new password. The same OTP rules apply — five-minute expiry, three attempts. A "
+            "wrong username, a wrong code and an expired code are deliberately indistinguishable "
+            "so neither the account nor the code can be probed. Throttled `password_reset_verify`."
+        ),
+        request=PasswordResetVerifySerializer,
+        responses={200: dict},
+    )
+    def post(self, request):
+        serializer = PasswordResetVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        username = serializer.validated_data["username"]
+
+        user = _resolve_reset_user(username)
+        if user is None:
+            # No account to reset. Answered as a bad code rather than "no such user", so this
+            # endpoint cannot be used to tell a real username from an invented one.
+            raise OTPInvalid("That code is not valid. Request a new one.")
+
+        # Raises OTPInvalid / OTPExpired / OTPAttemptsExceeded on failure — the same problem
+        # types the login OTP raises, so the page can tell the user what to do next.
+        verify_otp(
+            mobile_no=user.mobile_no,
+            purpose=OTPLog.Purpose.PASSWORD_RESET,
+            code=serializer.validated_data["otp"],
+        )
+
+        user.set_password(serializer.validated_data["new_password"])
+        user.save(update_fields=["password", "updated_at"])
+
+        record_audit(
+            action=AuditLog.Action.UPDATE,
+            entity_type="user",
+            entity_id=user.id,
+            actor=user,
+            request=request,
+            meta={"event": "password_reset", "via": "otp"},
+        )
+        return Response({"detail": "Your password has been reset. You can now sign in."})
 
 
 @extend_schema(tags=["auth"])

@@ -335,6 +335,68 @@ class TestReading:
         verified = mait_client.get(f"{BASE}/?status=straw_verified").json()["results"]
         assert [row["status"] for row in verified] == [AIEvent.Status.STRAW_VERIFIED]
 
+    def test_search_finds_a_mait_by_code(self, admin_client, mait_client, payload, mait):
+        """'This Mait's events' is one search box — by name on the roster, or by the code."""
+        mait_client.post(f"{BASE}/", payload(), format="json")
+
+        results = admin_client.get(f"{BASE}/?search={mait.sahayak_vendor_code}").json()["results"]
+        assert len(results) == 1
+
+    def test_filters_by_mait_code(self, admin_client, mait_client, payload, mait):
+        mait_client.post(f"{BASE}/", payload(), format="json")
+
+        results = admin_client.get(
+            f"{BASE}/?mait_code={mait.sahayak_vendor_code}"
+        ).json()["results"]
+        assert len(results) == 1
+        assert admin_client.get(f"{BASE}/?mait_code=SAH-NOBODY").json()["count"] == 0
+
+    def test_search_finds_an_event_by_its_number(self, admin_client, mait_client, payload):
+        event_id = mait_client.post(f"{BASE}/", payload(), format="json").json()["id"]
+
+        results = admin_client.get(f"{BASE}/?search={event_id}").json()["results"]
+        assert [row["id"] for row in results] == [event_id]
+        # The number is matched exactly, so a different id is not dragged in by a substring.
+        assert admin_client.get(f"{BASE}/?search={event_id + 7000}").json()["count"] == 0
+
+    def test_the_event_number_match_comes_first(self, admin_client, mait_client, payload):
+        """Typing a number surfaces that event above rows whose straw/phone merely contains it."""
+        import uuid
+
+        from apps.ai_events.models import AIEvent
+
+        target = mait_client.post(f"{BASE}/", payload(), format="json").json()["id"]
+        # A newer event whose straw number contains the target id. By recency it would sort above
+        # the target; the exact-id ordering must still put the target first.
+        AIEvent.objects.filter(pk=target).update(straw_unique_no="")
+        noise = mait_client.post(
+            f"{BASE}/", payload(), format="json"
+        ).json()["id"]
+        AIEvent.objects.filter(pk=noise).update(straw_unique_no=f"STRAW-{target}-X")
+
+        results = admin_client.get(f"{BASE}/?search={target}").json()["results"]
+        ids = [row["id"] for row in results]
+        assert ids[0] == target
+        assert noise in ids
+
+    def test_search_finds_a_member_by_code(self, admin_client, mait_client, payload, member):
+        mait_client.post(f"{BASE}/", payload(), format="json")
+
+        results = admin_client.get(f"{BASE}/?search={member.member_code}").json()["results"]
+        assert len(results) == 1
+
+    def test_search_finds_events_by_mpp_code(self, admin_client, mait_client, payload, mpp):
+        mait_client.post(f"{BASE}/", payload(), format="json")
+
+        results = admin_client.get(f"{BASE}/?search={mpp.mpp_code}").json()["results"]
+        assert len(results) == 1
+
+    def test_search_finds_a_member_by_mobile(self, admin_client, mait_client, payload, member):
+        mait_client.post(f"{BASE}/", payload(), format="json")
+
+        results = admin_client.get(f"{BASE}/?search={member.mobile_no}").json()["results"]
+        assert len(results) == 1
+
     def test_carries_the_names_the_offline_list_renders(self, mait_client, payload, member):
         """A cached row holding only foreign keys would render blank with no signal."""
         event_id = mait_client.post(f"{BASE}/", payload(), format="json").json()["id"]

@@ -16,6 +16,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import AiEventDetailScreen from '../AiEventDetailScreen';
 import type { AIEvent, AIEventTimelineEntry } from '@api/types';
 import { jsonResponse, renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 const BREEDS = [
   {
@@ -330,5 +331,49 @@ describe('AiEventDetailScreen', () => {
     fireEvent.press(screen.getByTestId('ai-event-back'));
 
     expect(onBack).toHaveBeenCalled();
+  });
+
+  describe('in colour', () => {
+    it('draws every fact in a colour, with the straw as a syringe', async () => {
+      mockApi(event());
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('tile-breed'));
+      expect(screen.getByTestId('tile-breed')).toHaveStyle({ backgroundColor: colors.infoWash });
+      expect(screen.getByTestId('tile-breed')).toHaveTextContent(/needle/);
+      // A member's deduction is settled once it is recorded.
+      expect(screen.getByTestId('tile-payment')).toHaveStyle({
+        backgroundColor: colors.primaryWash,
+      });
+      expect(screen.getByTestId('tile-recorded')).toHaveStyle({
+        backgroundColor: colors.primaryWash,
+      });
+      expect(screen.getByTestId('ai-event-owner')).toHaveTextContent(/MEM00000412/);
+    });
+
+    it('says a missing payment in red and a record still on the phone in yolk', async () => {
+      mockApi(event({ status: 'photo_captured', payment: null, completed_at: null }));
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('tile-payment'));
+      expect(screen.getByTestId('tile-payment')).toHaveStyle({ backgroundColor: colors.errorWash });
+      expect(screen.getByTestId('tile-recorded')).toHaveStyle({
+        backgroundColor: colors.secondaryWash,
+      });
+    });
+
+    it('lists what was used in green, the colour of consumables', async () => {
+      mockApi(
+        event({
+          consumables: [{ code: 'SHEATH', name: 'AI sheaths', qty: 2, unit: 'piece' }],
+        }),
+      );
+      renderScreen();
+
+      await waitFor(() => screen.getByTestId('ai-event-used'));
+      expect(screen.getByTestId('ai-event-used')).toHaveStyle({
+        backgroundColor: colors.primaryWash,
+      });
+    });
   });
 });

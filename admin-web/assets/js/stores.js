@@ -1034,7 +1034,7 @@
   /* --- loading ----------------------------------------------------------------------- */
 
   /** `reopen` is the store to leave the editor open on once the list is fresh. */
-  function load(reopen) {
+  function load(reopen, openStockId) {
     MaitAI.shell.clearAlert();
     $.when(api.stores(), api.storePlants(), api.zones())
       .done(function (stores, plants, zones) {
@@ -1053,6 +1053,17 @@
             openEditor(fresh);
           }
         }
+        // Arrived from the Inventory oversight screen's "Add / reduce" link, which names a store
+        // to put right. Open its shelf straight away so the delivery or correction is one screen
+        // from where the shortage was spotted.
+        if (openStockId) {
+          const target = state.stores.filter(function (store) {
+            return store.id === openStockId;
+          })[0];
+          if (target) {
+            openStock(target);
+          }
+        }
       })
       .fail(function (problem) {
         MaitAI.shell.alert(problem.detail || 'Could not load the stores.');
@@ -1066,7 +1077,10 @@
     }
     MaitAI.shell.mount();
 
-    load();
+    // A store id in the URL opens that store's shelf on load — the deep link the Inventory
+    // screen's "Add / reduce" button uses. An unknown or missing id just shows the list.
+    const stockId = Number(MaitAI.shell.param('stock')) || null;
+    load(null, stockId);
 
     // Filtered as it is typed: a handful of stores is not worth a round trip, and the list
     // already carries every name and number the search looks at.

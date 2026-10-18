@@ -16,6 +16,7 @@ import MemberNothingToCollectScreen from '../MemberNothingToCollectScreen';
 import RecordPaymentScreen from '../RecordPaymentScreen';
 import type { AIEvent } from '@api/types';
 import { renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 const EVENT = {
   id: 51,
@@ -98,6 +99,45 @@ describe('C10a — a member is asked for nothing', () => {
     // Never "₹ 0": a rate nobody entered must not reach a farmer as free.
     expect(screen.queryByText('₹ 0')).toBeNull();
     expect(screen.getByText(/Not priced yet/i)).toBeTruthy();
+  });
+
+  describe('in colour', () => {
+    it('says no cash first, in red, and why', () => {
+      renderScreen();
+
+      const noCash = screen.getByTestId('payment-no-cash');
+      expect(noCash).toHaveStyle({ backgroundColor: colors.errorWash });
+      expect(noCash).toHaveTextContent(/pay twice/);
+    });
+
+    it('draws the deduction in blue, the colour of a member’s charge everywhere', () => {
+      renderScreen();
+
+      expect(screen.getByTestId('payment-deduction')).toHaveStyle({
+        backgroundColor: colors.infoWash,
+      });
+    });
+
+    it('explains the settlement in three steps, only the first of them done', () => {
+      renderScreen();
+
+      expect(screen.getByTestId('payment-settle-1')).toHaveTextContent(/Recorded now/);
+      expect(screen.getByTestId('payment-settle-2')).toHaveTextContent(/Deducted by finance/);
+      expect(screen.getByTestId('payment-settle-3')).toHaveTextContent(/payment slip/);
+    });
+
+    it('names the member in blue and the animal in yolk', () => {
+      renderScreen();
+
+      expect(screen.getByTestId('payment-member')).toHaveTextContent(/KAVITA DEVI/);
+      expect(screen.getByTestId('payment-member')).toHaveStyle({
+        backgroundColor: colors.infoWash,
+      });
+      expect(screen.getByTestId('payment-animal')).toHaveTextContent(/tag 4821/);
+      expect(screen.getByTestId('payment-animal')).toHaveStyle({
+        backgroundColor: colors.secondaryWash,
+      });
+    });
   });
 });
 

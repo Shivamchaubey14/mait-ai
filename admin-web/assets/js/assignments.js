@@ -65,7 +65,16 @@
       // The number is the only way in. Without one they cannot be activated at all.
       return ui.pill('No mobile', 'bad');
     }
-    return mait.activated ? ui.pill('Active', 'good') : ui.pill('Not activated', 'warn');
+    if (!mait.activated) {
+      return ui.pill('Not activated', 'warn');
+    }
+    // Activated, then switched off on the Users screen — the same "Deactivated" the Maits screen
+    // shows. `account_active` is null for anyone who never activated, so only `false` means a
+    // login that was turned off.
+    if (mait.account_active === false) {
+      return ui.pill('Deactivated', 'bad');
+    }
+    return ui.pill('Active', 'good');
   }
 
   function row(mait) {

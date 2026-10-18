@@ -125,6 +125,10 @@ class OTPLog(models.Model):
         FARMER_VERIFY = "farmer_verify", "Farmer identity verification"
         PAYMENT_ONLINE = "payment_online", "Online payment authorisation"
         PAYMENT_COD = "payment_cod", "COD confirmation"
+        # An Admin resetting their own portal password, when the one thing they have is the
+        # mobile number on their account. Maits never reach this — they have no password to
+        # reset — so it is only ever the office's own door back in (SRS §6.8.1).
+        PASSWORD_RESET = "password_reset", "Admin password reset"
 
     purpose = models.CharField(max_length=20, choices=Purpose.choices, db_index=True)
     mobile_no = models.CharField(max_length=15, db_index=True)

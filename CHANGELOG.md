@@ -19,6 +19,122 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   events, opening the form directly, and Inventory's Raise an indent button is gone — one form,
   one place. After an indent is sent, Done opens My indents.
 
+- **Signing in, in the coloured pattern.**
+  - *The number.* Three step tiles above the field — Your number (blue, phone), A code by SMS
+    (yolk, message), You're in (green, double tick). The field's label has a phone chip and a
+    live `n/10` count that turns green at ten; the field is edged blue with a solid blue `+91`
+    block, and turns green with a tick once it holds a number that can be sent. No password is
+    a yolk card with a solid key chip, and Send code carries a paper plane on a white chip.
+  - *The code.* The number the code went to is a blue pill in the header. The six cells are
+    blue while empty and green as each digit lands, with the wash of the failure on a refusal —
+    red wrong or locked, yolk expired. The countdown is a blue pill with a clock; Send again is
+    a green pill with a refresh glyph once it can be pressed, slate before. A wrong code is a
+    solid red strip under the cells; expired and locked are cards with solid chips; the signal
+    card is blue with a solid chip; asking the office is a dashed yolk card with a solid chip,
+    and once asked a green card with a solid call chip. The button carries a sign-in, refresh
+    or lock glyph, and Call IT is a red outlined button with a phone.
+
+- **Nothing to collect, rebuilt.** A member's payment screen is now a full page, top to bottom:
+  a red *No cash from a member* card with a struck-through cash chip, saying taking cash would
+  make her pay twice; the deduction as a blue card with a receipt chip, the amount large and
+  *at the next payout* on a solid blue pill (yolk when no rate is set); *How it is settled* as
+  three steps on a slate rail — recorded now in green, deducted by finance and on her payment
+  slip still to come; and *This visit* as two rows, the member in blue with her code on a pill
+  and the animal in yolk. New strings in English and Hindi.
+
+- **The capture flow, steps 1 to 6, in the coloured pattern — member and non-member alike.**
+  The colour lives in the flow's shared pieces, so every step carries it:
+  - *Option cards* are always in their tone's wash and edge with the glyph (or initials) on a
+    solid chip; a chosen row turns green with a heavier edge and a green chip, and pills are
+    solid. Collection points and members are blue, non-members and animals yolk, straws blue
+    with the syringe, consumables green with a flask, cash green and UPI blue; on the first
+    step Member is blue and Non-member yolk.
+  - *Cow / Buffalo* is a blue control with the chosen half filled; the Straws / Consumables
+    tabs on step 4 are blue with the syringe and green with a flask, each with its count.
+  - *Add a record* is a dashed blue card with a solid plus; *photo slots* are dashed blue with
+    a solid camera chip until taken, then green; the photo's pin is a blue card, yolk when
+    there is none; search is blue with a solid magnifier chip; radio choices are blue, green
+    once chosen; the consent tick is yolk until agreed, green once it is.
+  - *The farmer being confirmed* is a yolk card — the colour of people — with a solid yolk
+    avatar, the code on a green pill and each fact in a white tile.
+  - *Notices* carry a solid chip and a solid pill; section labels lead with a green dot.
+  - *Payment*: the cash to collect is a yolk card with a cash chip; a member's facts read back
+    in slate. *Done*: what she paid is green (blue for a member's deduction), straws left blue
+    with the syringe, and the day's line green when all is sent, yolk while work waits.
+
+- **Pregnancy checks in the coloured pattern, all five screens.**
+  - *The list.* Every row wears the wash of when it is due — red late, yolk today, blue coming
+    up — or, once answered, of its answer: green pregnant, red not, slate unsure or refused.
+    The day badge for a coming check is solid blue; each row has a pin or calendar glyph on
+    its line, a Member / Non-member pill and a round arrow. The week tab is blue with a
+    calendar and its count, Done green with a double tick, each filled when chosen. The late
+    count in the header is a red pill, and Plan route carries a map glyph on a white chip. The
+    legend is a slate card of four tiles, two to a row, each in its answer's wash with its
+    mark on a solid chip and the whole word beside it — it had set all four on one line and
+    clipped "Pregnant" to "Pregn…".
+  - *Recording a check.* The owner question, the charge and the findings each have a heading
+    with a glyph chip. Each answer is always in its colour — pregnant green, not pregnant red,
+    not sure and refused slate, yes-go-ahead green — with its glyph on a solid chip, and
+    chosen is a heavier border in that colour with a filled tick. A member's charge is blue,
+    cash to collect or no price yolk. The photo box is dashed blue, green once taken and red
+    when not pregnant needs one; its Take / Retake is a solid pill. The remark sits in slate;
+    a recorded result reads back with the calving date in green, a recheck in yolk, a refusal
+    in slate, the remark in blue and the lock in slate.
+  - *Recorded.* A solid green tick in the header; queued yolk and sent green with solid chips;
+    the money card blue for a member's deduction, yolk for cash to collect or no price, slate
+    for no charge; inseminate-again green with the syringe; the next check blue with a navigate
+    chip and round arrow; all done green; Back to list slate with a list glyph.
+  - *The route.* The map card and each stop are blue, the next stop green and a late stop red;
+    each stop's line has a pin glyph and its leg is a solid blue pill with a walking glyph. The
+    missing-location note is yolk, and Reorder is slate with a swap glyph.
+  - *Choosing the order.* Shortest is blue with a trail sign and late-first red with an alert,
+    each with its glyph on a solid chip, the figures under map and clock glyphs, chosen drawn
+    heavier with a filled tick.
+
+- **Your indents in the coloured pattern.** Each status chip wears its state's colour and
+  glyph — Requested slate, Approved blue, Issued yolk, Collected green, Rejected red, All in
+  ink — outlined until chosen and filled when it is, its count on a badge. Every indent is a
+  row in the wash of where it has got to, with a syringe (straws) or flask on a solid chip, the
+  next step in the state's colour, a solid state pill with its glyph and a round arrow. The
+  headline turns into a yolk pill when something is waiting to be collected, and the
+  issued-is-not-received note has a solid yolk chip.
+
+- **An indent's detail in the coloured pattern.** The status pill in the header is solid in
+  its state's colour with its glyph. The timeline is a slate card: each step's glyph in its dot,
+  green once done, yolk for the step it is sitting on, red where it was turned down, and each
+  step's card in the same wash. Quantities have a heading chip and each figure is a coloured
+  row with its glyph and its number on a solid badge — Requested blue, Approved green once
+  agreed (slate before, red when refused), Issued so far yolk while it waits at a counter and
+  green once collected. Trips across the counter are green when collected and yolk while
+  waiting. The store's code sits in a yolk card with a keypad chip.
+
+- **Profile's MPP list opens under its row.** The list is blue and hangs from the row that
+  opened it — the row's lower corners square off and the list carries on beneath in the same
+  wash — each MPP a white row with a numbered blue chip, its dairy and member count, and its
+  code on a solid blue pill. The arrow turns down as it opens and back as it closes, and the
+  list fades and slides in and out rather than blinking.
+
+- **The Mait's Profile in the coloured pattern.** The Mait code rides in the header as a pill
+  with an ID-card glyph. This month and Cash on hand are the shared coloured tiles with their
+  glyphs — the month green, the cash yolk while there is cash to hand in. Every row carries
+  its glyph on a solid chip and the wash of what it says: MPPs blue (the opened list with a pin
+  and each code on a blue pill), pregnancy checks and indents yolk while something is due or
+  open and green when not, Language and Help slate, Sync green when all is sent and yolk while
+  work waits, with a solid Online / Offline pill. Openable rows end in a round arrow in their
+  colour, and the unsent-work warning has a solid yolk chip.
+
+- **An AI event's detail in the coloured pattern.** The header carries the event number, the
+  member code (blue) or Non-member (yolk) and the MPP as pills, and the date and animal with
+  their glyphs; the status pill has its own glyph. The four fact tiles are always coloured, each
+  with its glyph on a solid chip: Breed blue with the syringe; Payment green once settled (a
+  member's deduction, or a non-member's confirmed cash), yolk while cash is unconfirmed, red
+  when nothing is recorded; Location blue, or slate with none; Recorded green on the server,
+  yolk while still on the phone. What was used is green, the consumables colour, with a flask
+  chip, a count and each quantity on a badge. The proof photo sits in a blue card with a camera
+  chip, yolk when it was chosen from the gallery. The trail is slate: numbered steps, the
+  latest in green, and the cannot-be-edited note behind a lock. The missing-step alert has a
+  solid red chip.
+
 - **The Mait's AI events in the coloured pattern.** Synced, Queued and Needs attention as three
   coloured tiles with their counts, each one a filter — tapped again it comes off, and a state
   with nothing in it says so in a green note. Every row is tinted by its state (green synced,
@@ -99,11 +215,48 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **AI events now count a day the way the dashboard does.** A capture started before midnight
+  and finished after it was counted by the dashboard on the day it *finished* (`completed_at`)
+  but filtered into the AI events list — and the CSV export — on the day its draft was *started*
+  (`created_at`), so the screen read six for a day the dashboard called seven. The list and the
+  export now date an event on its completion for a finished capture, and on when it was started
+  only while it is still unfinished (`core.timeframe.event_day_expr`); the list's Captured column
+  shows that same date. The two screens agree.
+
+- **A non-member's details no longer read as missing on an AI event.** The event detail only
+  named the farmer in its title, which for a non-member — the one farmer with no SAP record to
+  look up — left her number, parentage and Aadhaar nowhere to be seen. A new **Farmer & animal**
+  panel lays them out (Aadhaar masked, with a "card on file" note where one was photographed),
+  and the animal's **ear tag** sits alongside. The ear tag is also now a column in the AI events
+  CSV export — it identifies the animal, not the farmer, so it belongs in the file a dispute is
+  reconciled against while the file stays free of Aadhaar and bank details. New `owner_detail` on
+  `GET /ai-events/{id}/`.
+
 - **Sign out reads whole in Hindi.** On Android it showed "साइन" alone: the label was measured
   in Nunito, which has no Devanagari, and "आउट" wrapped out of sight. The label now spans the
   button with the simple line breaker.
 
 ### Added
+
+- **An account's sign-in can be corrected from its row (Users & roles).** Clicking a
+  **username** opens a credentials panel — the same "click the field to change it" pattern the
+  Pages and Scope columns already use — where an Admin can rename the account and/or set a new
+  password. The password is optional on every save (blank leaves it untouched), confirmed to
+  catch a typo before it reaches the person's desk, and hidden entirely for a Mait, who signs in
+  with a one-time code. Admin-only, enforced by the endpoint, and every change is audited with
+  the username before and after. `username` is now accepted by `PATCH /admin/users/{id}/`
+  (unique, case-insensitive, excluding the account itself); the password path was already there.
+
+- **Adding stock to a Mait, from the office.** Inventory oversight's one write: a Mait's
+  holding panel now carries an **Add stock** form below its three cards — kind (straws,
+  consumables, equipment) as three coloured buttons, the item, and how many, with a green
+  sentence saying `3 → 13` before the button is pressed. It is the exception the screen needs
+  for stock that never came through an indent — an opening balance, straws carried by hand, a
+  correction — so it is credited as a manual `adjustment` against `manual` (never an `issue`),
+  straws as unnumbered placeholders a Mait claims at the AI step, and the ledger still sums to
+  the balance. Audited as `mait_stock`. The everyday path is still a store handing an approved
+  indent over the counter. New `POST /admin/inventory/{mait_id}/`; its `GET` now also returns a
+  `catalogue` to add from.
 
 - **The keeper's Profile in colour.** Today at your counter first — waiting, ready now, issued
   today and not collected, each with its glyph — then the store in green with its code and zone

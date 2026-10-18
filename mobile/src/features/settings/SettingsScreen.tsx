@@ -19,8 +19,17 @@
  * closes in a day.
  */
 
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,15 +44,18 @@ import {
 } from '@api/endpoints';
 import { SignOutButton } from '@/components';
 import { LanguageToggle } from '@/components/brand';
+import { Tile, Tiles } from '@/components/frame';
+import Glyph, { GlyphName } from '@/components/glyph';
 import { fitTitleSize } from '@/components/hero';
 import PullToRefresh from '@/components/pullToRefresh';
 import { loggedOut } from '@/features/auth/authSlice';
 import { useAppDispatch, useAppSelector } from '@/store';
 import {
   colors,
+  green,
+  ink,
   MIN_TOUCH_TARGET,
   radius,
-  shadows,
   spacing,
   typography,
   yolk,
@@ -70,33 +82,28 @@ function initialsOf(name: string): string {
 // --------------------------------------------------------------------------------------
 // Pieces
 // --------------------------------------------------------------------------------------
-/** One of the two figures at the top: what it is, the number, and what the number counts. */
-function Tile({
-  label,
-  value,
-  foot,
-  tone = 'plain',
-  testID,
-}: {
-  label: string;
-  value: string;
-  foot: string;
-  tone?: 'plain' | 'good';
-  testID?: string;
-}): React.JSX.Element {
-  return (
-    <View style={[styles.tile, tone === 'good' && styles.tileGood]} testID={testID}>
-      <Text style={styles.tileLabel} numberOfLines={1}>
-        {label}
-      </Text>
-      <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
-      <Text style={styles.tileFoot} numberOfLines={1}>
-        {foot}
-      </Text>
-    </View>
-  );
+/**
+ * A row's colour, by what it says: green all in order, yolk something waiting, blue a fact
+ * about places, slate a setting or a note.
+ */
+type Tone = 'good' | 'warm' | 'info' | 'slate';
+
+const SOLID: Record<Tone, string> = {
+  good: colors.primary,
+  warm: yolk[500],
+  info: colors.info,
+  slate: ink[500],
+};
+
+const WORD: Record<Tone, string> = {
+  good: colors.primaryDark,
+  warm: yolk[800],
+  info: colors.info,
+  slate: ink[600],
+};
+
+function onSolid(tone: Tone): string {
+  return tone === 'warm' ? colors.ink : colors.surface;
 }
 
 /**
@@ -111,38 +118,60 @@ function Tile({
 function Row({
   title,
   body,
+  icon,
+  tone,
   onPress,
   chevron,
+  expanded,
   right,
   testID,
 }: {
   title: string;
+  /** The row's glyph, on a solid chip of its colour. */
+  icon: GlyphName;
+  tone: Tone;
   body?: string;
   onPress?: () => void;
   /** Defaults to "yes if it opens something". Set false for a tap that acts in place. */
   chevron?: boolean;
+  /**
+   * Set on a row that opens a list under itself rather than a screen: the arrow turns down
+   * while it is open.
+   */
+  expanded?: boolean;
   right?: React.ReactNode;
   testID?: string;
 }): React.JSX.Element {
   const showChevron = chevron ?? !!onPress;
   const content = (
     <>
+      <View style={[styles.chip, { backgroundColor: SOLID[tone] }]}>
+        <Glyph name={icon} size={20} color={onSolid(tone)} />
+      </View>
       <View style={styles.rowBody}>
         <Text style={styles.rowTitle}>{title}</Text>
         {!!body && (
-          <Text style={styles.rowText} numberOfLines={2}>
+          <Text style={[styles.rowText, { color: WORD[tone] }]} numberOfLines={2}>
             {body}
           </Text>
         )}
       </View>
       {right}
-      {showChevron && <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
+      {showChevron && (
+        <View style={[styles.go, { borderColor: SOLID[tone] }]}>
+          {expanded === undefined ? (
+            <Ionicons name="chevron-forward" size={16} color={WORD[tone]} />
+          ) : (
+            <TurningChevron open={expanded} color={WORD[tone]} />
+          )}
+        </View>
+      )}
     </>
   );
 
   if (!onPress) {
     return (
-      <View style={styles.row} testID={testID}>
+      <View style={[styles.row, styles[`row_${tone}`]]} testID={testID}>
         {content}
       </View>
     );
@@ -151,12 +180,87 @@ function Row({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={expanded === undefined ? undefined : { expanded }}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={({ pressed }) => [
+        styles.row,
+        styles[`row_${tone}`],
+        expanded && styles.rowOpen,
+        pressed && styles.rowPressed,
+      ]}
       testID={testID}
     >
       {content}
     </Pressable>
+  );
+}
+
+/** How long a row takes to open or close. Quick enough not to wait on, slow enough to see. */
+const OPEN_MS = 220;
+
+/**
+ * The arrow on a row that opens in place: right while shut, turned down while open, and
+ * turning between the two — so the arrow says the list is *under* this row, not on another
+ * screen.
+ */
+function TurningChevron({ open, color }: { open: boolean; color: string }): React.JSX.Element {
+  const turn = useRef(new Animated.Value(open ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(turn, {
+      toValue: open ? 1 : 0,
+      duration: OPEN_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [open, turn]);
+  const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
+  return (
+    <Animated.View style={{ transform: [{ rotate }] }} testID="row-chevron">
+      <Ionicons name="chevron-forward" size={16} color={color} />
+    </Animated.View>
+  );
+}
+
+/**
+ * The part of the page a row opens in place — faded and slid down into view, and back up
+ * again before it goes, rather than blinking in and out.
+ */
+function Unfold({
+  open,
+  children,
+  testID,
+}: {
+  open: boolean;
+  children: React.ReactNode;
+  testID?: string;
+}): React.JSX.Element | null {
+  const [shown, setShown] = useState(open);
+  const progress = useRef(new Animated.Value(open ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (open) {
+      setShown(true);
+    }
+    Animated.timing(progress, {
+      toValue: open ? 1 : 0,
+      duration: OPEN_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished && !open) {
+        setShown(false);
+      }
+    });
+  }, [open, progress]);
+
+  if (!shown) {
+    return null;
+  }
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] });
+  return (
+    <Animated.View style={{ opacity: progress, transform: [{ translateY }] }} testID={testID}>
+      {children}
+    </Animated.View>
   );
 }
 
@@ -304,9 +408,14 @@ export default function SettingsScreen({
             {user?.fullName ?? ''}
           </Text>
           {!!meta && (
-            <Text style={styles.heroMeta} numberOfLines={1}>
-              {meta}
-            </Text>
+            <View style={styles.heroPills}>
+              <View style={styles.heroPill} testID="profile-code">
+                <Ionicons name="id-card" size={12} color={colors.surface} />
+                <Text style={styles.heroMeta} numberOfLines={1}>
+                  {meta}
+                </Text>
+              </View>
+            </View>
           )}
         </View>
       </View>
@@ -329,19 +438,25 @@ export default function SettingsScreen({
             {...scrollProps}
           >
             <View style={styles.tiles}>
-              <Tile
-                tone="good"
-                label={t('settings.thisMonth')}
-                value={month.isLoading ? '—' : String(month.data?.count ?? 0)}
-                foot={t('settings.inseminations')}
-                testID="profile-month"
-              />
-              <Tile
-                label={t('settings.cashOnHand')}
-                value={todays.isLoading ? '—' : `₹ ${Math.round(cash)}`}
-                foot={t('settings.collectionsToday', { count: collections.length })}
-                testID="profile-cash"
-              />
+              <Tiles>
+                <Tile
+                  tone="good"
+                  icon="checkmark-done"
+                  label={t('settings.thisMonth')}
+                  value={month.isLoading ? '—' : String(month.data?.count ?? 0)}
+                  note={t('settings.inseminations')}
+                  testID="profile-month"
+                />
+                {/* Yolk: cash in a pocket is money waiting to be handed in. */}
+                <Tile
+                  tone={cash > 0 ? 'waiting' : 'info'}
+                  icon="cash"
+                  label={t('settings.cashOnHand')}
+                  value={todays.isLoading ? '—' : `₹ ${Math.round(cash)}`}
+                  note={t('settings.collectionsToday', { count: collections.length })}
+                  testID="profile-cash"
+                />
+              </Tiles>
             </View>
 
             {/* Tapping opens the names rather than a screen: a Mait asked which MPPs they cover
@@ -360,22 +475,46 @@ export default function SettingsScreen({
                       .join(' · ')
                   : undefined
               }
+              icon="home"
+              tone={assigned.length ? 'info' : 'slate'}
               onPress={assigned.length ? () => setMppsOpen(open => !open) : undefined}
+              expanded={assigned.length ? mppsOpen : undefined}
               testID="profile-mpps"
             />
 
-            {mppsOpen && (
+            {/* Blue, the colour of places, hung from the row that opened it: the row's bottom
+                corners square off and the list carries on in the same wash. */}
+            <Unfold open={mppsOpen}>
               <View style={styles.mppList} testID="profile-mpp-list">
-                {assigned.map(mpp => (
+                {assigned.map((mpp, index) => (
                   <View key={mpp.mpp_code} style={styles.mppRow}>
-                    <Text style={styles.mppName} numberOfLines={1}>
-                      {mpp.mpp_name}
-                    </Text>
-                    <Text style={styles.mppCode}>{mpp.mpp_code}</Text>
+                    <View style={styles.mppChip}>
+                      <Text style={styles.mppChipLabel}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.mppBody}>
+                      <Text style={styles.mppName} numberOfLines={1}>
+                        {mpp.mpp_name}
+                      </Text>
+                      <View style={styles.mppPlace}>
+                        {!!mpp.plant_name && (
+                          <>
+                            <Ionicons name="business" size={11} color={colors.info} />
+                            <Text style={styles.mppPlaceLabel} numberOfLines={1}>
+                              {mpp.plant_name}
+                            </Text>
+                          </>
+                        )}
+                        <Ionicons name="people" size={11} color={colors.info} />
+                        <Text style={styles.mppPlaceLabel}>{mpp.member_count}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.mppCode}>
+                      <Text style={styles.mppCodeLabel}>{mpp.mpp_code}</Text>
+                    </View>
                   </View>
                 ))}
               </View>
-            )}
+            </Unfold>
 
             {/* Here rather than only under Inventory. Raising an indent is a stock job and belongs
             with the flask; chasing one is a "where is my order" question, and a Mait asks it
@@ -392,6 +531,8 @@ export default function SettingsScreen({
                     ? t('settings.upcomingPdMeta', { count: pdDue })
                     : t('settings.upcomingPdNone')
               }
+              icon="calendar"
+              tone={pdDue > 0 ? 'warm' : 'good'}
               onPress={onOpenPd}
               testID="profile-pd"
             />
@@ -405,12 +546,16 @@ export default function SettingsScreen({
                     ? t('settings.indentsOpen', { count: openIndents })
                     : t('settings.indentsNone')
               }
+              icon="document-text"
+              tone={openIndents > 0 ? 'warm' : 'good'}
               onPress={onOpenIndents}
               testID="profile-indents"
             />
 
             <Row
               title={t('settings.language')}
+              icon="language"
+              tone="slate"
               right={<LanguageToggle variant="light" />}
               testID="profile-language"
             />
@@ -418,11 +563,18 @@ export default function SettingsScreen({
             <Row
               title={t('settings.sync')}
               body={syncBody}
+              icon={pending > 0 ? 'cloud-upload' : 'cloud-done'}
+              tone={pending > 0 ? 'warm' : 'good'}
               onPress={onSync}
               chevron={false}
               right={
                 <View style={[styles.pill, online ? styles.pillOnline : styles.pillOffline]}>
-                  <Text style={[styles.pillLabel, online ? styles.pillLabelOnline : undefined]}>
+                  <Ionicons
+                    name={online ? 'wifi' : 'cloud-offline'}
+                    size={12}
+                    color={colors.surface}
+                  />
+                  <Text style={styles.pillLabel}>
                     {online ? t('settings.online') : t('settings.offline')}
                   </Text>
                 </View>
@@ -436,12 +588,16 @@ export default function SettingsScreen({
             <Row
               title={t('settings.help')}
               body={t('settings.helpFoot', { version })}
+              icon="help-buoy"
+              tone="slate"
               testID="profile-help"
             />
 
             {confirming && (
               <View style={styles.warning} testID="signout-warning">
-                <Ionicons name="warning-outline" size={18} color={colors.secondaryPressed} />
+                <View style={[styles.chip, { backgroundColor: yolk[500] }]}>
+                  <Ionicons name="warning" size={20} color={colors.ink} />
+                </View>
                 <View style={styles.rowBody}>
                   <Text style={styles.warningTitle}>
                     {t('settings.signOutWarnTitle', { count: pending })}
@@ -502,24 +658,27 @@ const styles = StyleSheet.create({
   avatarLabel: { ...typography.h2, color: colors.surface },
   heroBody: { flex: 1 },
   heroTitle: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
-  heroMeta: { ...typography.caption, color: colors.surface, opacity: 0.72, marginTop: 2 },
+  heroMeta: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+    flexShrink: 1,
+  },
+  heroPills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginTop: spacing[2] },
+  heroPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: '100%',
+    paddingHorizontal: spacing[2],
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
 
   // -- tiles -----------------------------------------------------------------------------
   body: { padding: spacing[4] },
-  tiles: { flexDirection: 'row', gap: spacing[3], marginBottom: spacing[3] },
-  tile: {
-    flex: 1,
-    padding: spacing[4],
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
-  },
-  tileGood: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
-  tileLabel: { ...typography.caption, color: colors.textMuted },
-  tileValue: { ...typography.display, fontSize: 30, lineHeight: 38, color: colors.ink },
-  tileFoot: { ...typography.caption, color: colors.textMuted },
+  tiles: { marginBottom: spacing[3] },
 
   // -- rows ------------------------------------------------------------------------------
   row: {
@@ -527,56 +686,123 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
     minHeight: MIN_TOUCH_TARGET + spacing[3],
-    padding: spacing[4],
+    padding: spacing[3],
     marginBottom: spacing[3],
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
   },
-  rowPressed: { backgroundColor: colors.background },
+  row_good: { backgroundColor: colors.primaryWash, borderColor: green[300] },
+  row_warm: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  row_info: { backgroundColor: colors.infoWash, borderColor: colors.info },
+  row_slate: { backgroundColor: ink[50], borderColor: ink[100] },
+  rowPressed: { opacity: 0.85 },
+  chip: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rowBody: { flex: 1 },
   rowTitle: { ...typography.h3, color: colors.ink },
-  rowText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-
-  // The expanded MPP list sits under its row rather than inside it, so the row keeps one
-  // height whether it is open or closed.
-  mppList: {
-    marginTop: -spacing[2],
-    marginBottom: spacing[3],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+  rowText: { ...typography.caption, marginTop: 2 },
+  go: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+
+  // Joined to the row above it while open: the row's lower corners square off and the list
+  // carries straight on beneath in the same blue, so the two read as one card that opened.
+  rowOpen: {
+    marginBottom: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  mppList: {
+    marginBottom: spacing[3],
+    padding: spacing[3],
+    paddingTop: spacing[2],
+    gap: spacing[2],
+    borderBottomLeftRadius: radius.lg,
+    borderBottomRightRadius: radius.lg,
+    backgroundColor: colors.infoWash,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: colors.info,
   },
   mppRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: MIN_TOUCH_TARGET - 12,
+    gap: spacing[3],
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.info,
+    backgroundColor: colors.surface,
   },
-  mppName: { ...typography.body, color: colors.ink, flexShrink: 1 },
-  mppCode: { ...typography.caption, color: colors.textMuted },
+  mppChip: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.info,
+  },
+  mppChipLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
+  mppBody: { flex: 1 },
+  mppName: { ...typography.bodyStrong, color: colors.ink },
+  mppPlace: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
+  mppPlaceLabel: { ...typography.caption, color: colors.info, flexShrink: 1 },
+  mppCode: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.info,
+  },
+  mppCodeLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
 
-  pill: { paddingHorizontal: spacing[3], paddingVertical: 3, borderRadius: radius.pill },
-  pillOnline: { backgroundColor: colors.primaryWash },
-  pillOffline: { backgroundColor: colors.background },
-  pillLabel: { ...typography.caption, color: colors.textMuted },
-  pillLabelOnline: { color: colors.primaryDark },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing[3],
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  pillOnline: { backgroundColor: colors.primary },
+  pillOffline: { backgroundColor: colors.error },
+  pillLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
 
   // -- sign out --------------------------------------------------------------------------
   warning: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing[3],
     padding: spacing[4],
     marginBottom: spacing[3],
     borderRadius: radius.lg,
     backgroundColor: colors.secondaryWash,
     borderWidth: 1,
-    borderColor: colors.secondary,
+    borderColor: yolk[300],
   },
   warningTitle: { ...typography.bodyStrong, color: yolk[800] },
   warningText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },

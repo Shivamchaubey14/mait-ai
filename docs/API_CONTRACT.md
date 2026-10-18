@@ -57,6 +57,8 @@ returns `429` with `Retry-After`.
 | POST | `/auth/login/` | Username/password login for Admin accounts | Public |
 | POST | `/auth/otp/send/` | Send login OTP to a Mait's registered mobile | Public |
 | POST | `/auth/otp/verify/` | Verify OTP, issue JWT access + refresh | Public |
+| POST | `/auth/password/reset/request/` | `{"username"}` — send a reset OTP to the number on that Admin account. Always `200` with the same body, whether or not the account exists or has a number. Maits are never eligible. Throttled `password_reset_request` | Public |
+| POST | `/auth/password/reset/verify/` | `{"username", "otp", "new_password"}` — verify the reset OTP and set the password (`new_password` ≥ 10 chars). A wrong username, a wrong code and an expired one are indistinguishable. Throttled `password_reset_verify` | Public |
 | POST | `/auth/refresh/` | Exchange refresh token for a new access token | Public |
 | POST | `/auth/logout/` | Blacklist current refresh token | JWT |
 | GET | `/auth/me/` | Current user's profile & role | JWT |
@@ -348,6 +350,7 @@ record is refused at `send` with 400 rather than at the end of the capture.
 | GET | `/mait/inventory/` | Logged-in Mait's current stock balance by product | Mait |
 | GET | `/mait/inventory/ledger/` | Stock movement history (issues, consumption, returns) | Mait |
 | GET | `/admin/inventory/` | Stock across every Mait, with low/at-zero counts | Admin |
+| GET/POST | `/admin/inventory/{mait_id}/` | One Mait's full stock plus the `catalogue` to add from. `POST` credits stock as a manual adjustment — straws by `breed`, else `product_ref_id`; `qty`≥1 | Admin · `inventory` |
 | GET/POST | `/admin/products/` | The consumable & equipment catalogue | Admin |
 | GET/PATCH/DELETE | `/admin/products/{id}/` | Edit or remove one | Admin |
 | GET/POST | `/admin/breeds/` | The semen list — breeds, labels in both languages, rate | Admin |
@@ -487,6 +490,7 @@ nothing else — every section-gated and default-permission endpoint refuses the
 | POST | `/store/stock/receive/` | Record a delivery — straws by `breed`, anything else by `product_ref_id`. Idempotent | Store keeper |
 | GET | `/store/catalogue/` | Breeds and products a delivery can be | Store keeper |
 | GET | `/admin/inventory/?zone=<id>` | Stock with every Mait **and on every store's shelf** (`stores`: `lines`, `straws_on_hand`, `straws_set_aside`, `open_indents`), narrowed to the account's zones and optionally one zone. `/admin/inventory/{mait_id}/` answers `404` outside them | Admin · `inventory` |
+| GET/POST | `/admin/inventory/{mait_id}/` | GET is the Mait's full stock + `catalogue`. POST credits stock straight to them — a manual `adjustment` against `manual`, audited: `{"product_type","breed"\|"product_ref_id","qty","note"}`. The everyday path is a store handover, not this | Admin · `inventory` |
 | GET/POST/PATCH/DELETE | `/admin/stores/` | Stores, the BMC/MCCs each serves (`plants`, the whole set on write), keepers and shelf | Admin · `stores` |
 | GET / POST | `/admin/stores/{id}/stock/` | A store's shelf and changing it from the portal. `GET`: `lines` (each item with `on_hand`, `set_aside`, `available`, `category` — `straw` / `consumable` / `asset`) and `catalogue` (breeds and products). `POST` `{mode, product_type, breed | product_ref_id, qty, note}`: `mode: receive` adds a delivery; `mode: count` sets the shelf to what was counted, writes the difference to the store ledger as an adjustment, and is refused below what is packed for Maits. Audited | Admin · `stores` |
 | GET | `/admin/stores/plants/` | Every BMC/MCC and the store serving it | Admin · `stores` |

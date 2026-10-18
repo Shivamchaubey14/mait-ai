@@ -7,10 +7,10 @@ means changing those two files, not hunting hex codes across screens.
 
 ## Typography
 
-| Use | Font | Weight |
-| --- | --- | --- |
-| Headings / display — app bar titles, section headers, dashboard KPIs, numbers | **Quicksand** | 600–700 |
-| Body / UI — copy, form labels, buttons | **Nunito Sans** | 400–600 |
+| Use                                                                            | Font                  | Weight   |
+| ------------------------------------------------------------------------------ | --------------------- | -------- |
+| Headings / display — app bar titles, section headers, dashboard KPIs, numbers | **Quicksand**   | 600–700 |
+| Body / UI — copy, form labels, buttons                                        | **Nunito Sans** | 400–600 |
 
 ```css
 --font-heading: 'Quicksand', -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -26,15 +26,15 @@ column.
 
 ### Scale
 
-| Token | Size / line-height | Use |
-| --- | --- | --- |
-| `--text-display` | 32 / 40 | Dashboard KPI numbers |
-| `--text-h1` | 24 / 32 | Screen titles |
-| `--text-h2` | 20 / 28 | Section headers |
-| `--text-h3` | 17 / 24 | Card titles |
-| `--text-body` | 15 / 22 | Default copy |
-| `--text-label` | 13 / 18 | Form labels, table headers |
-| `--text-caption` | 12 / 16 | Helper and timestamp text |
+| Token              | Size / line-height | Use                        |
+| ------------------ | ------------------ | -------------------------- |
+| `--text-display` | 32 / 40            | Dashboard KPI numbers      |
+| `--text-h1`      | 24 / 32            | Screen titles              |
+| `--text-h2`      | 20 / 28            | Section headers            |
+| `--text-h3`      | 17 / 24            | Card titles                |
+| `--text-body`    | 15 / 22            | Default copy               |
+| `--text-label`   | 13 / 18            | Form labels, table headers |
+| `--text-caption` | 12 / 16            | Helper and timestamp text  |
 
 On mobile, body text never goes below 15px and touch targets are never smaller than 48×48dp.
 
@@ -46,45 +46,45 @@ place; `#3BB77E` scattered across forty files cannot.
 
 ### Roles
 
-| Token | Hex | Role |
-| --- | --- | --- |
-| `--color-primary` | `#3BB77E` green-500 | The one screen-owning action: filled buttons, selected states, progress fill |
-| `--color-primary-pressed` | `#329C6B` green-600 | Pressed state of that fill |
-| `--color-primary-dark` | `#287D56` green-700 | Green **text** and glyphs on a light surface — never a fill |
-| `--color-primary-wash` | `#EAF7F1` green-50 | The tint behind a chosen row, a green card, a success notice |
-| `--color-secondary` | `#FDC040` yolk-500 | Attention, waiting, pending. Fill or border only |
-| `--color-secondary-pressed` | `#E0A52F` yolk-600 | Yellow glyphs |
-| `--color-secondary-wash` | `#FFF8E9` yolk-50 | The tint behind a "something to do" notice |
-| `--color-ink` | `#253D4E` ink-600 | All primary text; every dark surface — sidebar, hero, banner |
-| `--color-success` | `#3BB77E` | Completed AI, payment verified |
-| `--color-warning` | `#FDC040` | Pending OTP, low straw count |
-| `--color-error` | `#E54D42` | Validation errors, blocked work, destructive actions |
-| `--color-error-pressed` | `#C43A30` | Pressed state of the above |
-| `--color-error-wash` | `#FDECEA` | The tint behind a red notice or a blocked row |
-| `--color-info` | `#3E92E5` | Informational banners, neutral state, links |
-| `--color-info-wash` | `#D8E7FA` | The tint behind a blue notice |
-| `--color-text` | `#253D4E` | Primary text on a light background |
-| `--color-text-muted` | `#7A8893` | Secondary text, captions, subtitles |
-| `--color-text-disabled` | `#8897A3` ink-300 | Unavailable text |
-| `--color-border` | `#E3E7E9` | Every hairline |
-| `--color-surface` | `#FFFFFF` | Cards, sheets, inputs |
-| `--color-background` | `#F4F5F3` | The page behind the cards |
-| `--color-disabled-fill` | `#D4DBE0` ink-100 | A disabled button's fill |
+| Token                         | Hex                   | Role                                                                         |
+| ----------------------------- | --------------------- | ---------------------------------------------------------------------------- |
+| `--color-primary`           | `#3BB77E` green-500 | The one screen-owning action: filled buttons, selected states, progress fill |
+| `--color-primary-pressed`   | `#329C6B` green-600 | Pressed state of that fill                                                   |
+| `--color-primary-dark`      | `#287D56` green-700 | Green**text** and glyphs on a light surface — never a fill            |
+| `--color-primary-wash`      | `#EAF7F1` green-50  | The tint behind a chosen row, a green card, a success notice                 |
+| `--color-secondary`         | `#FDC040` yolk-500  | Attention, waiting, pending. Fill or border only                             |
+| `--color-secondary-pressed` | `#E0A52F` yolk-600  | Yellow glyphs                                                                |
+| `--color-secondary-wash`    | `#FFF8E9` yolk-50   | The tint behind a "something to do" notice                                   |
+| `--color-ink`               | `#253D4E` ink-600   | All primary text; every dark surface — sidebar, hero, banner                |
+| `--color-success`           | `#3BB77E`           | Completed AI, payment verified                                               |
+| `--color-warning`           | `#FDC040`           | Pending OTP, low straw count                                                 |
+| `--color-error`             | `#E54D42`           | Validation errors, blocked work, destructive actions                         |
+| `--color-error-pressed`     | `#C43A30`           | Pressed state of the above                                                   |
+| `--color-error-wash`        | `#FDECEA`           | The tint behind a red notice or a blocked row                                |
+| `--color-info`              | `#3E92E5`           | Informational banners, neutral state, links                                  |
+| `--color-info-wash`         | `#D8E7FA`           | The tint behind a blue notice                                                |
+| `--color-text`              | `#253D4E`           | Primary text on a light background                                           |
+| `--color-text-muted`        | `#7A8893`           | Secondary text, captions, subtitles                                          |
+| `--color-text-disabled`     | `#8897A3` ink-300   | Unavailable text                                                             |
+| `--color-border`            | `#E3E7E9`           | Every hairline                                                               |
+| `--color-surface`           | `#FFFFFF`           | Cards, sheets, inputs                                                        |
+| `--color-background`        | `#F4F5F3`           | The page behind the cards                                                    |
+| `--color-disabled-fill`     | `#D4DBE0` ink-100   | A disabled button's fill                                                     |
 
 ### Using the scales
 
 Reach past a role only when none exists for what you need. Each step has a job:
 
-| Step | Job |
-| --- | --- |
-| **50** | Wash — the tint of a whole card, notice or row |
-| **100** | The border of something washed in 50 |
-| **200** | A visible border or divider on a tinted surface |
-| **300** | The disabled version of the role; a secondary chart series |
-| **500** | **The role itself** — the fill everyone recognises |
-| **600** | Pressed state of that fill |
-| **700** | **Text and glyphs** of that colour on a light surface |
-| **800–900** | Deep surfaces, and rare high-contrast text on a wash |
+| Step               | Job                                                         |
+| ------------------ | ----------------------------------------------------------- |
+| **50**       | Wash — the tint of a whole card, notice or row             |
+| **100**      | The border of something washed in 50                        |
+| **200**      | A visible border or divider on a tinted surface             |
+| **300**      | The disabled version of the role; a secondary chart series  |
+| **500**      | **The role itself** — the fill everyone recognises   |
+| **600**      | Pressed state of that fill                                  |
+| **700**      | **Text and glyphs** of that colour on a light surface |
+| **800–900** | Deep surfaces, and rare high-contrast text on a wash        |
 
 Two rules that catch most mistakes. A **wash is a surface, never a small fill** — a 50-step green
 behind a card reads as a tint, and the same green on a 20px chip is invisible. And where a card
@@ -103,12 +103,12 @@ described above.
 
 ### Status coding — consistent everywhere
 
-| Meaning | Colour | Word |
-| --- | --- | --- |
-| Success / completed | `--color-success` | `Completed`, `Verified`, `Synced` |
-| Pending / needs attention | `--color-warning` | `Pending`, `Queued`, `Waiting` |
-| Error / blocked | `--color-error` | `Blocked`, `Failed` |
-| Informational | `--color-info` | `Draft`, `Syncing` |
+| Meaning                   | Colour              | Word                                    |
+| ------------------------- | ------------------- | --------------------------------------- |
+| Success / completed       | `--color-success` | `Completed`, `Verified`, `Synced` |
+| Pending / needs attention | `--color-warning` | `Pending`, `Queued`, `Waiting`    |
+| Error / blocked           | `--color-error`   | `Blocked`, `Failed`                 |
+| Informational             | `--color-info`    | `Draft`, `Syncing`                  |
 
 Colour never carries the meaning alone — the word is always there too.
 
@@ -119,15 +119,15 @@ the dashboard chart. No exceptions — field users learn colour faster than labe
 
 4px base scale: `--space-1: 4px` through `--space-8: 48px`.
 
-| Token | Value | Use |
-| --- | --- | --- |
-| `--radius-sm` | 10px | Chips, glyph tiles, inner surfaces |
-| `--radius-md` | 12px | Cards, inputs, buttons, menus |
-| `--radius-lg` | 18px | Sheets, large surfaces, a hero's bottom corners |
-| `--radius-xl` | 30px | Rare — a full-bleed feature surface |
-| `--radius-pill` | 999px | Status pills, chips, badges |
-| `--shadow-card` | `0 1px 3px rgb(37 61 78 / 10%)` | Resting card |
-| `--shadow-raised` | `0 18px 40px rgb(37 61 78 / 12%)` | Menus, dropdowns, active sheets |
+| Token               | Value                               | Use                                             |
+| ------------------- | ----------------------------------- | ----------------------------------------------- |
+| `--radius-sm`     | 10px                                | Chips, glyph tiles, inner surfaces              |
+| `--radius-md`     | 12px                                | Cards, inputs, buttons, menus                   |
+| `--radius-lg`     | 18px                                | Sheets, large surfaces, a hero's bottom corners |
+| `--radius-xl`     | 30px                                | Rare — a full-bleed feature surface            |
+| `--radius-pill`   | 999px                               | Status pills, chips, badges                     |
+| `--shadow-card`   | `0 1px 3px rgb(37 61 78 / 10%)`   | Resting card                                    |
+| `--shadow-raised` | `0 18px 40px rgb(37 61 78 / 12%)` | Menus, dropdowns, active sheets                 |
 
 Two elevation levels only. Rounded corners in the 10–18px range match the tone of the two
 faces. Nothing is square.
@@ -269,8 +269,7 @@ secondary (`Export`) and at most one green primary. Never two greens.
 - **Status pill** — the same vocabulary everywhere, matching the app: `Complete`, `Queued`,
   `Payment failed`, `Needs mobile`, `Blocked`, `Stale`. Colour never carries the meaning
   alone; the word is always there.
-- **Notice** — blue explains a rule that is not obvious (`Personal data is masked for
-  everyone below Admin`), yellow flags a backlog worth acting on, red states something
+- **Notice** — blue explains a rule that is not obvious (`Personal data is masked for everyone below Admin`), yellow flags a backlog worth acting on, red states something
   blocked. Full width, above the content it qualifies.
 - **Progress bar** — for a proportion that has a target: coverage, leaderboard standing.
   Green when on track, yellow when behind.
@@ -297,13 +296,13 @@ on a record, the record's number on a yolk `tag` pill. The page is grey; cards s
 **Colour is meaning, the same everywhere.** A card is a *wash with a matching border* in its
 tone, never white and never an edge stripe:
 
-| Tone | Wash / border | Means |
-| --- | --- | --- |
-| Green | `primaryWash` / `green[300]` | done, ready, collected, approved, a member, work landing |
-| Yolk | `secondaryWash` / `yolk[300]` | waiting, short, a code not yet typed — and the people cards (who is asking, who is working) |
-| Red | `errorWash` / `error` | none on the shelf, at zero, rejected, locked, depot empty with someone asking |
-| Blue | `infoWash` / `info` | a fact about the situation: places, depots, filters, the date picker, a fixed record |
-| Slate | `ink[50]` / `ink[200]` | the trail, settings (language), put back, a note |
+| Tone  | Wash / border                     | Means                                                                                        |
+| ----- | --------------------------------- | -------------------------------------------------------------------------------------------- |
+| Green | `primaryWash` / `green[300]`  | done, ready, collected, approved, a member, work landing                                     |
+| Yolk  | `secondaryWash` / `yolk[300]` | waiting, short, a code not yet typed — and the people cards (who is asking, who is working) |
+| Red   | `errorWash` / `error`         | none on the shelf, at zero, rejected, locked, depot empty with someone asking                |
+| Blue  | `infoWash` / `info`           | a fact about the situation: places, depots, filters, the date picker, a fixed record         |
+| Slate | `ink[50]` / `ink[200]`        | the trail, settings (language), put back, a note                                             |
 
 The **three kinds of stock** always wear the same three: **Straws blue, Consumables green,
 Equipment yolk** — on tiles, section heads, rows, chips and the delivery sheet, app and portal.
@@ -352,11 +351,9 @@ refetch on returning to the front; the hero says when the figures landed.
 
 **Hindi.** Every string in `en.json` and `hi.json`. Add keys with a check that the key did not
 already exist under another meaning — `store.approvedBy` did, and a card showed raw
-`{{date}}`. A button label spans the button (`alignSelf: 'stretch'`, `textBreakStrategy:
-'simple'`): Android measures Devanagari in a font without it and hides the last word.
+`{{date}}`. A button label spans the button (`alignSelf: 'stretch'`, `textBreakStrategy: 'simple'`): Android measures Devanagari in a font without it and hides the last word.
 
-**Tests** assert the colour, not only the words: `toHaveStyle({ backgroundColor:
-colors.secondaryWash })` on the card, and the glyph by name (`needle` for the syringe — both
+**Tests** assert the colour, not only the words: `toHaveStyle({ backgroundColor: colors.secondaryWash })` on the card, and the glyph by name (`needle` for the syringe — both
 icon sets render their names under Jest).
 
 ## Language

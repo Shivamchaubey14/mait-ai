@@ -378,6 +378,13 @@ def _send_via_smsfortius(*, mobile_no: str, code: str, purpose: str) -> str:
         "templateid": template["template_id"],
         "number": mobile_no,
         "message": template["text"].replace("{#var#}", code),
+        # Both DLT templates are Devanagari, so the body must go as Unicode (UCS-2). `unicode=2`
+        # is the gateway's flag for that — it is in both of the dairy's own registered URLs.
+        # Without it the message is submitted as GSM-7: the gateway still answers "submitted
+        # successfully" (submission is not delivery), but the operator's DLT layer sees a body
+        # that does not match the Unicode-registered template and silently drops it, so nothing
+        # ever reaches the handset. That is the whole failure — an accepted send that never lands.
+        "unicode": "2",
     }
     response = requests.get(cfg["BASE_URL"], params=params, timeout=10)
     response.raise_for_status()

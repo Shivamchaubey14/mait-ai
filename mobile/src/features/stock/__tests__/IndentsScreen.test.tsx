@@ -17,6 +17,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import IndentsScreen from '../IndentsScreen';
 import type { Indent } from '@api/types';
 import { jsonResponse, renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 function indent(overrides: Partial<Indent> & Pick<Indent, 'id'>): Indent {
   return {
@@ -224,5 +225,39 @@ describe('IndentsScreen', () => {
     fireEvent.press(await screen.findByTestId('indents-back'));
 
     expect(onBack).toHaveBeenCalled();
+  });
+
+  describe('in colour', () => {
+    it('tints each row by where it has got to — yolk to collect, green collected', async () => {
+      mockIndents([WAITING, STILL_WITH_THE_STORE, COLLECTED]);
+      render();
+
+      await waitFor(() => screen.getByTestId('indent-2291'));
+      expect(screen.getByTestId('indent-2291')).toHaveStyle({
+        backgroundColor: colors.secondaryWash,
+      });
+      expect(screen.getByTestId('indent-2210')).toHaveStyle({
+        backgroundColor: colors.primaryWash,
+      });
+      // A straw indent carries the syringe.
+      expect(screen.getByTestId('indent-2291')).toHaveTextContent(/needle/);
+    });
+
+    it('draws each status chip in its colour, filled when chosen', async () => {
+      mockIndents([WAITING, STILL_WITH_THE_STORE, COLLECTED]);
+      render();
+
+      await waitFor(() => screen.getByTestId('indent-filter-collected'));
+      expect(screen.getByTestId('indent-filter-collected')).toHaveStyle({
+        backgroundColor: colors.primaryWash,
+      });
+      fireEvent.press(screen.getByTestId('indent-filter-collected'));
+      expect(screen.getByTestId('indent-filter-collected')).toHaveStyle({
+        backgroundColor: colors.primary,
+      });
+      expect(screen.getByTestId('indent-filter-issued')).toHaveStyle({
+        backgroundColor: colors.secondaryWash,
+      });
+    });
   });
 });

@@ -81,6 +81,10 @@ class AIEventSerializer(serializers.ModelSerializer):
     # be read without opening every one of 31,000 rows.
     mait_name = serializers.CharField(source="mait.name", read_only=True)
     mait_code = serializers.CharField(source="mait.sahayak_vendor_code", read_only=True)
+    # The Mait's number, for the portal's hover card over the vendor code — so an admin chasing
+    # an event can ring the Mait without opening the record. Just the number; the name is already
+    # on the row. Defaulted blank because the oldest imported Maits predate the mobile column.
+    mait_mobile = serializers.CharField(source="mait.mobile_no", read_only=True, default="")
     payment = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
     animal_type = serializers.CharField(source="animal.animal_type", read_only=True)
@@ -103,6 +107,7 @@ class AIEventSerializer(serializers.ModelSerializer):
             "mait",
             "mait_name",
             "mait_code",
+            "mait_mobile",
             "payment",
             "owner_type",
             "member",
@@ -183,9 +188,47 @@ class AIEventDetailSerializer(AIEventSerializer):
     """
 
     pregnancy_checks = serializers.SerializerMethodField()
+    # The farmer behind the event, in enough detail to settle a dispute: who she is, how to
+    # reach her, and — for a non-member, who has no SAP record to look up — the Aadhaar she
+    # registered with. Detail only and never on the list, which renders 25 rows at a time and
+    # has no room for it. The Aadhaar is **masked** here (SRS §16): the full number lives
+    # behind the per-record endpoint that logs the read, which this screen does not need.
+    owner_detail = serializers.SerializerMethodField()
 
     class Meta(AIEventSerializer.Meta):
-        fields = [*AIEventSerializer.Meta.fields, "pregnancy_checks"]
+        fields = [*AIEventSerializer.Meta.fields, "pregnancy_checks", "owner_detail"]
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_owner_detail(self, event):
+        owner = event.owner
+        if owner is None:
+            return None
+        if event.owner_type == AIEvent.OwnerType.MEMBER:
+            return {
+                "type": "member",
+                "name": owner.member_name,
+                "code": owner.member_code,
+                "mobile_no": owner.mobile_no,
+                "father_husband_name": owner.father_husband_name,
+                "aadhar_masked": owner.masked_aadhar,
+                "has_aadhar": bool(owner.aadhar_no),
+            }
+        return {
+            "type": "non_member",
+            "name": owner.name,
+            # A non-member has no membership number — the field is here for shape, blank by
+            # definition, so the screen reads a member and a non-member the same way.
+            "code": "",
+            "mobile_no": owner.mobile_no,
+            "father_husband_name": owner.father_husband_name,
+            "relation": owner.get_relation_display() if owner.relation else "",
+            "address": owner.address,
+            "aadhar_masked": owner.masked_aadhar,
+            "has_aadhar": bool(owner.aadhar_no),
+            # Whether a card photo was taken at registration — the thing the non-member record
+            # screen shows in full, linked to from here rather than reproduced.
+            "has_aadhar_image": bool(owner.aadhar_front_url or owner.aadhar_back_url),
+        }
 
     def get_pregnancy_checks(self, event) -> list:
         # Imported here rather than at module scope: `apps.pregnancy` imports the AI event

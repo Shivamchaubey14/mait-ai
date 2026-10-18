@@ -28,6 +28,14 @@
   background: var(--color-info-wash);
 }
 
+/* A Normal User is an Admin bar one capability (it cannot delete AI events), so it reads as a
+   quieter sibling of the admin pill — muted ink on a plain wash rather than its own colour, to
+   say "office account" without claiming the admin's blue or the super admin's ink. */
+.pill--normal {
+  color: var(--color-text-muted);
+  background: var(--ink-50);
+}
+
 /* --- the row's one action ---------------------------------------------------------------------
    Outlined, not filled — `.btn--danger-outline` / `.btn--good-outline` in portal.css. A table of
    fifteen solid red buttons reads as fifteen problems; the colour belongs to what the button
@@ -44,6 +52,19 @@
 .user-action {
   width: 1%;
   white-space: nowrap;
+}
+
+/* The name is a button, so it needs a button's defaults taken off it before
+   `.table__name--link` can make it look like the name it is. Nothing here adds width: this
+   table already runs past its wrapper, and the column must not grow by a pixel. */
+.user-name {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
 }
 
 /* --- create panel ------------------------------------------------------------------------------
@@ -138,4 +159,127 @@
 .pages-link:hover svg,
 .pages-link:focus-visible svg {
   color: var(--color-primary-dark);
+}
+
+/* --- picking accounts, and acting on several ---------------------------------------------------
+   The tick column is deliberately the narrowest thing on the row. This table already runs about
+   150px past its wrapper at 1280, so every pixel here is one more that the Action column at the
+   far end is pushed out of sight. */
+.col-pick {
+  width: 1%;
+  padding-right: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.pick {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+/* The bar only exists while something is ticked, so it is allowed to be loud: it sits in Ink
+   above a table of pale rows and says how many and what will happen to them. */
+.bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-ink);
+  border-radius: var(--radius-md);
+}
+
+.bulk__count {
+  font-weight: 600;
+  color: var(--color-surface);
+}
+
+.bulk__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* The two outlined buttons carry their wash, which is pale — against Ink they would read as
+   filled. Their own colour on a white chip keeps green meaning go and red meaning stop. */
+.bulk .btn--good-outline,
+.bulk .btn--danger-outline,
+.bulk .btn--warn-outline,
+.bulk .btn--soft {
+  background: var(--color-surface);
+}
+
+.bulk .btn--good-outline:hover {
+  background: var(--color-primary-wash);
+}
+
+.bulk .btn--danger-outline:hover {
+  background: var(--color-error-wash);
+}
+
+.bulk .btn--warn-outline:hover {
+  background: var(--color-secondary-wash);
+}
+
+/* Pushed to the far end so progress does not shuffle the buttons sideways as the count grows. */
+.bulk__status {
+  margin-left: auto;
+  font-size: var(--text-caption);
+  color: var(--ink-200);
+}
+
+/* --- the fixed-login switch ------------------------------------------------------------------
+   A sign-in bypass, so it is drawn as a deliberate card rather than a checkbox lost among the
+   contact fields: a yolk-washed panel the eye stops on, spanning the editor so it reads as its
+   own decision. On, the card fills yolk so an open editor shows at a glance that this account
+   is on the training code. */
+.fixed-login {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  grid-column: 1 / -1;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.fixed-login:hover {
+  border-color: var(--color-secondary);
+}
+
+.fixed-login:has(.fixed-login__check:checked) {
+  background: var(--color-secondary-wash);
+  border-color: var(--color-secondary);
+}
+
+.fixed-login__check {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  flex: none;
+  accent-color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.fixed-login__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fixed-login__title {
+  font-size: var(--text-label);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.fixed-login__note {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
 }

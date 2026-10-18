@@ -35,15 +35,17 @@ import { useTranslation } from 'react-i18next';
 import { useGetAiEventQuery, useGetAiEventTimelineQuery, useListBreedsQuery } from '@api/endpoints';
 import type { AIEvent } from '@api/types';
 import { BrandMark } from '@/components/brand';
+import Glyph, { GlyphName, STRAW_GLYPH } from '@/components/glyph';
 import Problem, { useOnline } from '@/components/problem';
 import { SkeletonList } from '@/components/states';
 import { whatIsMissing } from '@/features/aiFlow/resume';
 import { mediaUrl } from '@/config/env';
 import {
   colors,
+  green,
+  ink,
   MIN_TOUCH_TARGET,
   radius,
-  shadows,
   spacing,
   typography,
   yolk,
@@ -93,27 +95,55 @@ function standingOf(event: AIEvent): Standing {
  * One fact in a box: what it is, the figure, and the qualifier that stops the figure being
  * misread. "₹ 50" alone is a number a farmer can argue with; "₹ 50 / deducted from milk" is
  * an answer.
+ *
+ * Always in a colour — green settled, yolk waiting, red missing, blue a fact, slate nothing to
+ * say — with its glyph on a solid chip, so the four read before a word of them is.
  */
+type Tone = 'good' | 'warn' | 'bad' | 'info' | 'slate';
+
+const SOLID: Record<Tone, string> = {
+  good: colors.primary,
+  warn: yolk[500],
+  bad: colors.error,
+  info: colors.info,
+  slate: ink[400],
+};
+
+/** A word on a wash: green and yolk read darker than their solids. */
+const WORD: Record<Tone, string> = {
+  good: colors.primaryDark,
+  warn: yolk[800],
+  bad: colors.error,
+  info: colors.info,
+  slate: ink[500],
+};
+
+function onSolid(tone: Tone): string {
+  return tone === 'warn' ? colors.ink : colors.surface;
+}
+
 function Tile({
   icon,
   label,
   value,
   note,
-  tone = 'plain',
+  tone,
   testID,
 }: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: GlyphName;
   label: string;
   value: string;
   note?: string;
-  tone?: 'plain' | 'good' | 'info' | 'warn';
+  tone: Tone;
   testID?: string;
 }): React.JSX.Element {
   return (
-    <View style={[styles.tile, styles[`tile_${tone}`]]} testID={testID}>
+    <View style={[styles.tile, styles[`tone_${tone}`]]} testID={testID}>
       <View style={styles.tileHead}>
-        <Ionicons name={icon} size={13} color={colors.textMuted} />
-        <Text style={styles.tileLabel} numberOfLines={1}>
+        <View style={[styles.chip, { backgroundColor: SOLID[tone] }]}>
+          <Glyph name={icon} size={15} color={onSolid(tone)} />
+        </View>
+        <Text style={[styles.tileLabel, { color: WORD[tone] }]} numberOfLines={1}>
           {label}
         </Text>
       </View>
@@ -121,7 +151,7 @@ function Tile({
         {value}
       </Text>
       {!!note && (
-        <Text style={styles.tileNote} numberOfLines={2}>
+        <Text style={[styles.tileNote, { color: WORD[tone] }]} numberOfLines={2}>
           {note}
         </Text>
       )}
@@ -136,10 +166,12 @@ function Tile({
  * thing that happened in order — a column of loose dots reads as four unrelated notes.
  */
 function TrailStep({
+  n,
   note,
   meta,
   last,
 }: {
+  n: number;
   note: string;
   meta: string;
   last: boolean;
@@ -147,12 +179,18 @@ function TrailStep({
   return (
     <View style={styles.step}>
       <View style={styles.stepRail}>
-        <View style={styles.stepDot} />
+        {/* Numbered, and the latest in green: where the capture has got to. */}
+        <View style={[styles.stepDot, last && styles.stepDotLast]}>
+          <Text style={styles.stepDotLabel}>{n}</Text>
+        </View>
         {!last && <View style={styles.stepLine} />}
       </View>
-      <View style={styles.stepBody}>
+      <View style={[styles.stepBody, last && styles.stepBodyLast]}>
         <Text style={styles.stepNote}>{note}</Text>
-        <Text style={styles.stepMeta}>{meta}</Text>
+        <View style={styles.stepMetaLine}>
+          <Ionicons name="time-outline" size={12} color={ink[500]} />
+          <Text style={styles.stepMeta}>{meta}</Text>
+        </View>
       </View>
     </View>
   );
@@ -307,6 +345,17 @@ export default function AiEventDetailScreen({
           <BrandMark size="small" />
 
           <View style={[styles.standing, styles[`standing_${standing}`]]} testID="ai-event-status">
+            <Ionicons
+              name={
+                standing === 'completed'
+                  ? 'checkmark-circle'
+                  : standing === 'waiting'
+                    ? 'time'
+                    : 'close-circle'
+              }
+              size={14}
+              color={standing === 'waiting' ? colors.ink : colors.surface}
+            />
             <Text style={[styles.standingLabel, styles[`standingLabel_${standing}`]]}>
               {t(`aiEvent.state_${standing}`)}
             </Text>
@@ -319,18 +368,41 @@ export default function AiEventDetailScreen({
         {/* Two quiet lines rather than one long one: the first identifies the record for
             somebody on a phone call, the second identifies the animal for somebody in a yard.
             They are different questions asked by different people. */}
-        <Text style={styles.heroLine}>
-          {[
-            t('aiEvent.eventNo', { id: event.id }),
-            member ? event.member_code : t('aiEvent.nonMember'),
-            event.mpp_name,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </Text>
-        <Text style={styles.heroLine}>
-          {stamp(event.performed_at ?? event.created_at)} · {animal}
-        </Text>
+        <View style={styles.heroPills}>
+          <View style={[styles.heroPill, styles.heroPillSlate]}>
+            <Ionicons name="document-text" size={12} color={colors.surface} />
+            <Text style={styles.heroPillLabel}>{t('aiEvent.eventNo', { id: event.id })}</Text>
+          </View>
+          <View
+            style={[styles.heroPill, member ? styles.heroPillInfo : styles.heroPillWarm]}
+            testID="ai-event-owner"
+          >
+            <Ionicons
+              name={member ? 'people' : 'person'}
+              size={12}
+              color={member ? colors.surface : colors.ink}
+            />
+            <Text style={[styles.heroPillLabel, !member && { color: colors.ink }]}>
+              {member ? event.member_code : t('aiEvent.nonMember')}
+            </Text>
+          </View>
+          {!!event.mpp_name && (
+            <View style={[styles.heroPill, styles.heroPillSlate]}>
+              <Ionicons name="home" size={12} color={colors.surface} />
+              <Text style={styles.heroPillLabel} numberOfLines={1}>
+                {event.mpp_name}
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.heroFacts}>
+          <Ionicons name="calendar" size={13} color={colors.surface} />
+          <Text style={styles.heroLine}>{stamp(event.performed_at ?? event.created_at)}</Text>
+          <Ionicons name="paw" size={13} color={colors.surface} />
+          <Text style={[styles.heroLine, styles.heroLineShrink]} numberOfLines={1}>
+            {animal}
+          </Text>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -338,7 +410,9 @@ export default function AiEventDetailScreen({
             opened it because of this sentence. */}
         {waiting && (
           <View style={styles.alert} testID="ai-event-alert">
-            <Ionicons name="alert-circle" size={18} color={colors.error} />
+            <View style={[styles.chipLarge, { backgroundColor: colors.error }]}>
+              <Ionicons name="alert" size={20} color={colors.surface} />
+            </View>
             <View style={styles.alertBody}>
               <Text style={styles.alertTitle}>{t(`aiEvent.missing_${missing}`)}</Text>
               <Text style={styles.alertText}>
@@ -355,7 +429,8 @@ export default function AiEventDetailScreen({
 
         <View style={styles.tiles}>
           <Tile
-            icon="git-branch-outline"
+            icon={STRAW_GLYPH}
+            tone="info"
             label={t('aiEvent.breed')}
             value={breedName(event.semen_breed || event.breed)}
             note={t('aiEvent.doseCount', {
@@ -365,15 +440,17 @@ export default function AiEventDetailScreen({
             testID="tile-breed"
           />
           <Tile
-            icon="pricetag-outline"
+            icon="cash"
             label={t('aiEvent.payment')}
             value={chargeLabel}
             note={paymentNote}
-            tone={event.payment?.is_verified ? 'good' : event.payment ? 'warn' : 'plain'}
+            // A member's deduction is settled the moment it is recorded — the dairy takes it
+            // from her milk — so only a non-member's unconfirmed cash waits.
+            tone={!event.payment ? 'bad' : member || event.payment.is_verified ? 'good' : 'warn'}
             testID="tile-payment"
           />
           <Tile
-            icon="location-outline"
+            icon="location"
             label={t('aiEvent.location')}
             value={
               located
@@ -387,15 +464,15 @@ export default function AiEventDetailScreen({
                   : t('aiEvent.fromTheHandset')
                 : undefined
             }
-            tone={located ? 'info' : 'plain'}
+            tone={located ? 'info' : 'slate'}
             testID="tile-location"
           />
           <Tile
-            icon="cloud-done-outline"
+            icon={event.completed_at ? 'cloud-done' : 'phone-portrait'}
             label={t('aiEvent.recorded')}
             value={event.completed_at ? clock(event.completed_at) : t('aiEvent.notYet')}
             note={event.completed_at ? t('aiEvent.onTheServer') : t('aiEvent.stillOnThisPhone')}
-            tone={event.completed_at ? 'good' : 'plain'}
+            tone={event.completed_at ? 'good' : 'warn'}
             testID="tile-recorded"
           />
         </View>
@@ -409,8 +486,13 @@ export default function AiEventDetailScreen({
         {event.consumables?.length > 0 && (
           <View style={styles.used} testID="ai-event-used">
             <View style={styles.usedHead}>
-              <Ionicons name="cube-outline" size={16} color={colors.info} />
-              <Text style={[styles.usedTitle, styles.usedTitleTone]}>{t('aiEvent.used')}</Text>
+              <View style={[styles.chip, { backgroundColor: colors.primary }]}>
+                <Ionicons name="flask" size={15} color={colors.surface} />
+              </View>
+              <Text style={styles.usedTitle}>{t('aiEvent.used')}</Text>
+              <View style={styles.usedCount}>
+                <Text style={styles.usedCountLabel}>{event.consumables.length}</Text>
+              </View>
             </View>
 
             {event.consumables.map(line => (
@@ -421,9 +503,11 @@ export default function AiEventDetailScreen({
                   </Text>
                   <Text style={styles.usedMeta}>{line.code}</Text>
                 </View>
-                <Text style={styles.usedQty}>
-                  {t('aiEvent.usedQty', { count: line.qty, unit: line.unit })}
-                </Text>
+                <View style={styles.usedQty}>
+                  <Text style={styles.usedQtyLabel}>
+                    {t('aiEvent.usedQty', { count: line.qty, unit: line.unit })}
+                  </Text>
+                </View>
               </View>
             ))}
           </View>
@@ -432,7 +516,19 @@ export default function AiEventDetailScreen({
         {/* The photo, at the size it is worth showing. Never a thumbnail: it is the evidence
             the whole record hangs on, and a farmer has to be able to recognise her own animal
             in it from arm's length. */}
-        <View style={styles.photoCard}>
+        <View style={[styles.photoCard, chosen ? styles.tone_warn : styles.tone_info]}>
+          <View style={styles.photoHead}>
+            <View style={[styles.chip, { backgroundColor: chosen ? yolk[500] : colors.info }]}>
+              <Ionicons
+                name={chosen ? 'images' : 'camera'}
+                size={15}
+                color={chosen ? colors.ink : colors.surface}
+              />
+            </View>
+            <Text style={[styles.photoTitle, { color: chosen ? yolk[800] : colors.info }]}>
+              {t('aiEvent.proofPhoto')}
+            </Text>
+          </View>
           {/* Tapping it opens it whole. The card crops to a 180pt band so the page below it
               stays reachable, and a cropped photograph is exactly the wrong thing to settle
               an argument with — the ear tag a farmer is being asked to recognise is as often
@@ -468,9 +564,16 @@ export default function AiEventDetailScreen({
               </View>
             )}
           </Pressable>
-          <Text style={[styles.photoCaption, chosen && styles.photoCaptionChosen]}>
-            {photoCaption}
-          </Text>
+          <View style={styles.photoCaptionLine}>
+            <Ionicons
+              name={chosen ? 'warning' : photo ? 'time' : 'hourglass'}
+              size={13}
+              color={chosen ? yolk[800] : colors.info}
+            />
+            <Text style={[styles.photoCaption, chosen && styles.photoCaptionChosen]}>
+              {photoCaption}
+            </Text>
+          </View>
         </View>
 
         {/* Closed by default on a finished event, because nothing about it is in question;
@@ -482,14 +585,24 @@ export default function AiEventDetailScreen({
             style={({ pressed }) => [styles.trailToggle, pressed && styles.trailTogglePressed]}
             testID="ai-event-trail-open"
           >
-            <Ionicons name="reload-outline" size={16} color={colors.primaryDark} />
+            <View style={[styles.chip, { backgroundColor: ink[500] }]}>
+              <Ionicons name="git-commit" size={15} color={colors.surface} />
+            </View>
             <Text style={styles.trailToggleLabel}>{t('aiEvent.seeTheTrail')}</Text>
+            <Ionicons name="chevron-down" size={16} color={ink[500]} />
           </Pressable>
         ) : (
           <View style={styles.trail} testID="ai-event-trail">
             <View style={styles.trailHead}>
-              <Ionicons name="reload-outline" size={16} color={colors.textMuted} />
+              <View style={[styles.chip, { backgroundColor: ink[500] }]}>
+                <Ionicons name="git-commit" size={15} color={colors.surface} />
+              </View>
               <Text style={styles.trailTitle}>{t('aiEvent.auditTrail')}</Text>
+              {trailRows.length > 0 && (
+                <View style={styles.trailCount}>
+                  <Text style={styles.trailCountLabel}>{trailRows.length}</Text>
+                </View>
+              )}
             </View>
 
             {trail.isLoading ? (
@@ -500,6 +613,7 @@ export default function AiEventDetailScreen({
               trailRows.map((entry, index) => (
                 <TrailStep
                   key={entry.id}
+                  n={index + 1}
                   note={entry.note || entry.to_status}
                   meta={`${clock(entry.created_at)} · ${entry.actor_name || t('aiEvent.handset')}`}
                   last={index === trailRows.length - 1}
@@ -509,7 +623,12 @@ export default function AiEventDetailScreen({
           </View>
         )}
 
-        {showTrail && <Text style={styles.footnote}>{t('aiEvent.trailFootnote')}</Text>}
+        {showTrail && (
+          <View style={styles.footnote}>
+            <Ionicons name="lock-closed" size={13} color={ink[500]} />
+            <Text style={styles.footnoteLabel}>{t('aiEvent.trailFootnote')}</Text>
+          </View>
+        )}
       </ScrollView>
 
       {/* The photo, whole.
@@ -628,16 +747,40 @@ const styles = StyleSheet.create({
   },
   backPressed: { backgroundColor: 'rgba(255,255,255,0.28)' },
   heroTitle: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.surface },
-  heroLine: {
+  heroLine: { ...typography.caption, color: colors.surface, opacity: 0.85 },
+  heroLineShrink: { flexShrink: 1 },
+  heroFacts: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    marginTop: spacing[2],
+  },
+  heroPills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginTop: spacing[2] },
+  heroPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: '100%',
+    paddingHorizontal: spacing[2],
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  heroPillSlate: { backgroundColor: 'rgba(255,255,255,0.16)' },
+  heroPillInfo: { backgroundColor: colors.info },
+  heroPillWarm: { backgroundColor: yolk[500] },
+  heroPillLabel: {
     ...typography.caption,
+    fontFamily: typography.label.fontFamily,
     color: colors.surface,
-    opacity: 0.72,
-    marginTop: spacing[1],
+    flexShrink: 1,
   },
 
   // -- standing --------------------------------------------------------------------------
   standing: {
     marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: spacing[3],
     paddingVertical: 4,
     borderRadius: radius.pill,
@@ -657,6 +800,7 @@ const styles = StyleSheet.create({
   // -- alert -----------------------------------------------------------------------------
   alert: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing[3],
     padding: spacing[4],
     marginBottom: spacing[3],
@@ -675,21 +819,37 @@ const styles = StyleSheet.create({
     // Two to a row on every handset this ships to, with the gap taken out of the width.
     flexBasis: '47%',
     flexGrow: 1,
-    padding: spacing[4],
+    padding: spacing[3],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
   },
-  tile_plain: {},
-  tile_good: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
-  tile_info: { backgroundColor: colors.infoWash, borderColor: colors.info },
-  tile_warn: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
-  tileHead: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
-  tileLabel: { ...typography.caption, color: colors.textMuted },
+  tone_good: { backgroundColor: colors.primaryWash, borderColor: green[300] },
+  tone_warn: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  tone_bad: { backgroundColor: colors.errorWash, borderColor: colors.error },
+  tone_info: { backgroundColor: colors.infoWash, borderColor: colors.info },
+  tone_slate: { backgroundColor: ink[50], borderColor: ink[100] },
+  chip: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipLarge: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileHead: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  tileLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    flexShrink: 1,
+  },
   tileValue: { ...typography.h3, color: colors.ink, marginTop: spacing[2] },
-  tileNote: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  tileNote: { ...typography.caption, marginTop: 2 },
 
   // -- what was used -----------------------------------------------------------------------
   // Blue, the same pair the location tile on this screen already wears.
@@ -708,10 +868,9 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     marginBottom: spacing[3],
     borderRadius: radius.lg,
-    backgroundColor: colors.infoWash,
+    backgroundColor: colors.primaryWash,
     borderWidth: 1,
-    borderColor: colors.info,
-    ...shadows.card,
+    borderColor: green[300],
   },
   usedHead: {
     flexDirection: 'row',
@@ -719,27 +878,67 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     marginBottom: spacing[2],
   },
-  usedTitle: { ...typography.label, color: colors.textMuted, letterSpacing: 1 },
+  usedTitle: { ...typography.label, color: colors.primaryDark, flex: 1 },
+  usedCount: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  usedCountLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
   usedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    marginTop: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: green[300],
+    backgroundColor: colors.surface,
   },
-  usedTitleTone: { color: colors.info },
   usedBody: { flex: 1 },
   usedName: { ...typography.bodyStrong, color: colors.ink },
   usedMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  usedQty: { ...typography.bodyStrong, color: colors.ink },
+  usedQty: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
+  usedQtyLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
 
   // -- photo -----------------------------------------------------------------------------
   photoCard: {
     borderRadius: radius.lg,
     overflow: 'hidden',
     marginBottom: spacing[3],
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+  },
+  photoHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    padding: spacing[3],
+  },
+  photoTitle: { ...typography.label },
+  photoCaptionLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    paddingHorizontal: spacing[3],
   },
   photoFrame: { height: 180, backgroundColor: colors.ink },
   photoFramePressed: { opacity: 0.85 },
@@ -759,10 +958,15 @@ const styles = StyleSheet.create({
   },
   photoEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing[2] },
   photoEmptyLabel: { ...typography.caption, color: colors.surface, opacity: 0.8 },
-  photoCaption: { ...typography.caption, color: colors.textMuted, padding: spacing[3] },
+  photoCaption: {
+    ...typography.caption,
+    color: colors.info,
+    paddingVertical: spacing[3],
+    flexShrink: 1,
+  },
   // Not red — a chosen photo is allowed, not an error. Amber is this product's "read this
   // before you rely on it", which is exactly what the line is for.
-  photoCaptionChosen: { color: yolk[800], backgroundColor: colors.secondaryWash },
+  photoCaptionChosen: { color: yolk[800] },
 
   // -- the photo, whole ------------------------------------------------------------------
   viewer: { flex: 1, backgroundColor: '#000000' },
@@ -791,25 +995,24 @@ const styles = StyleSheet.create({
   trailToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    minHeight: MIN_TOUCH_TARGET,
+    gap: spacing[3],
+    minHeight: MIN_TOUCH_TARGET + 8,
+    paddingHorizontal: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: ink[50],
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
+    borderColor: ink[100],
   },
-  trailTogglePressed: { backgroundColor: colors.primaryWash },
-  trailToggleLabel: { ...typography.bodyStrong, color: colors.primaryDark },
+  trailTogglePressed: { opacity: 0.8 },
+  trailToggleLabel: { ...typography.bodyStrong, color: ink[600], flex: 1 },
 
+  // Slate, the colour of a trail: a record of what happened, neither done nor waiting.
   trail: {
     padding: spacing[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: ink[50],
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
+    borderColor: ink[100],
   },
   trailHead: {
     flexDirection: 'row',
@@ -817,29 +1020,68 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     marginBottom: spacing[3],
   },
-  trailTitle: { ...typography.label, color: colors.textMuted, letterSpacing: 1 },
-  trailEmpty: { ...typography.caption, color: colors.textMuted },
+  trailTitle: { ...typography.label, color: ink[600], flex: 1 },
+  trailCount: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: ink[500],
+  },
+  trailCountLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
+  trailEmpty: { ...typography.caption, color: ink[500] },
 
   step: { flexDirection: 'row', gap: spacing[3] },
-  stepRail: { alignItems: 'center', width: 12 },
+  stepRail: { alignItems: 'center', width: 24 },
   stepDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    marginTop: 5,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: ink[400],
   },
-  stepLine: { flex: 1, width: 2, backgroundColor: colors.primaryWash },
-  stepBody: { flex: 1, paddingBottom: spacing[4] },
+  stepDotLast: { backgroundColor: colors.primary },
+  stepDotLabel: {
+    ...typography.caption,
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
+  stepLine: { flex: 1, width: 2, backgroundColor: ink[200] },
+  stepBody: {
+    flex: 1,
+    padding: spacing[3],
+    marginBottom: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: ink[100],
+    backgroundColor: colors.surface,
+  },
+  stepBodyLast: { backgroundColor: colors.primaryWash, borderColor: green[300] },
   stepNote: { ...typography.bodyStrong, color: colors.ink },
-  stepMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  stepMetaLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  stepMeta: { ...typography.caption, color: ink[500] },
 
   footnote: {
-    ...typography.caption,
-    color: colors.textMuted,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
     marginTop: spacing[3],
-    paddingHorizontal: spacing[1],
+    padding: spacing[3],
+    borderRadius: radius.md,
+    backgroundColor: ink[50],
+    borderWidth: 1,
+    borderColor: ink[100],
   },
+  footnoteLabel: { ...typography.caption, color: ink[600], flex: 1 },
 
   // -- foot ------------------------------------------------------------------------------
   // Opaque: the body scrolls behind it, and a transparent foot would show rows sliding

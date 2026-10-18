@@ -18,7 +18,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import type { AIEvent } from '@api/types';
-import { colors, radius, shadows, spacing, typography } from '@theme/tokens';
+import Glyph, { STRAW_GLYPH } from '@/components/glyph';
+import { colors, green, radius, spacing, typography, yolk } from '@theme/tokens';
 
 import { FlowNotice, FlowScreen } from './components';
 
@@ -80,20 +81,32 @@ export default function CaptureDoneScreen({
       )}
 
       <View style={styles.tiles}>
-        <View style={styles.tile}>
-          <Text style={styles.tileLabel}>{t('done.costToHer')}</Text>
+        {/* What she paid: green once cash is in hand, blue for a member's deduction the dairy
+            will settle. */}
+        <View
+          style={[styles.tile, isMember ? styles.tileInfo : styles.tileGood]}
+          testID="done-cost"
+        >
+          <View style={[styles.chip, { backgroundColor: isMember ? colors.info : colors.primary }]}>
+            <Ionicons name={isMember ? 'receipt' : 'cash'} size={16} color={colors.surface} />
+          </View>
+          <Text style={[styles.tileLabel, isMember ? styles.wordInfo : styles.wordGood]}>
+            {t('done.costToHer')}
+          </Text>
           <Text style={styles.tileValue}>₹ {isMember ? 0 : cost}</Text>
-          <Text style={styles.tileNote}>
+          <Text style={[styles.tileNote, isMember ? styles.wordInfo : styles.wordGood]}>
             {isMember ? t('done.deductedFromMilk') : t('done.collected')}
           </Text>
         </View>
 
-        <View style={[styles.tile, styles.tileGood]}>
-          <Text style={[styles.tileLabel, styles.tileLabelGood]}>{t('done.strawsLeft')}</Text>
-          <Text style={[styles.tileValue, styles.tileValueGood]}>
-            {strawsLeft === null ? '—' : strawsLeft}
-          </Text>
-          <Text style={[styles.tileNote, styles.tileNoteGood]}>{strawBreed}</Text>
+        {/* Straws in their own colour, blue, with the syringe — as on Inventory. */}
+        <View style={[styles.tile, styles.tileInfo]} testID="done-straws">
+          <View style={[styles.chip, { backgroundColor: colors.info }]}>
+            <Glyph name={STRAW_GLYPH} size={16} color={colors.surface} />
+          </View>
+          <Text style={[styles.tileLabel, styles.wordInfo]}>{t('done.strawsLeft')}</Text>
+          <Text style={styles.tileValue}>{strawsLeft === null ? '—' : strawsLeft}</Text>
+          <Text style={[styles.tileNote, styles.wordInfo]}>{strawBreed}</Text>
         </View>
       </View>
 
@@ -102,16 +115,31 @@ export default function CaptureDoneScreen({
       <Pressable
         accessibilityRole="button"
         onPress={onHome}
-        style={({ pressed }) => [styles.today, pressed && styles.todayPressed]}
+        style={({ pressed }) => [
+          styles.today,
+          pending > 0 ? styles.todayWaiting : styles.todaySent,
+          pressed && styles.todayPressed,
+        ]}
         testID="done-today"
       >
+        <View style={[styles.chip, { backgroundColor: pending > 0 ? yolk[500] : colors.primary }]}>
+          <Ionicons
+            name={pending > 0 ? 'cloud-upload' : 'cloud-done'}
+            size={18}
+            color={pending > 0 ? colors.ink : colors.surface}
+          />
+        </View>
         <View style={styles.todayText}>
           <Text style={styles.todayLabel}>{t('done.today')}</Text>
-          <Text style={styles.todayValue}>
+          <Text
+            style={[styles.todayValue, { color: pending > 0 ? yolk[800] : colors.primaryDark }]}
+          >
             {pending > 0 ? t('done.todayWithQueue', { pending }) : t('done.todayAllSynced')}
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        <View style={styles.go}>
+          <Ionicons name="chevron-forward" size={16} color={colors.ink} />
+        </View>
       </Pressable>
     </FlowScreen>
   );
@@ -119,39 +147,49 @@ export default function CaptureDoneScreen({
 
 const styles = StyleSheet.create({
   tiles: { flexDirection: 'row', gap: spacing[3], marginBottom: spacing[3] },
-  // Outlined, like every other card in the app. On a screen that is mostly white space the
-  // wash alone left two figures floating on the page rather than sitting in anything.
+  // In a colour, like every card in the app: the figure's glyph on a solid chip over it.
   tile: {
     flex: 1,
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing[4],
+    padding: spacing[3],
   },
-  // The straw count is green because it is the number a Mait acts on: it decides whether they
-  // can keep working or need to raise an indent tonight.
-  tileGood: { backgroundColor: colors.primaryWash, borderColor: colors.primary },
-  tileLabel: { ...typography.caption, color: colors.textMuted },
-  tileLabelGood: { color: colors.primaryDark },
+  tileGood: { backgroundColor: colors.primaryWash, borderColor: green[300] },
+  tileInfo: { backgroundColor: colors.infoWash, borderColor: colors.info },
+  chip: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[2],
+  },
+  wordGood: { color: colors.primaryDark },
+  wordInfo: { color: colors.info },
+  tileLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
   tileValue: { ...typography.h1, color: colors.ink, marginTop: 2 },
-  tileValueGood: { color: colors.primaryDark },
-  tileNote: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  tileNoteGood: { color: colors.primaryDark },
+  tileNote: { ...typography.caption, marginTop: 2 },
 
   today: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
-    padding: spacing[4],
+    padding: spacing[3],
   },
-  todayPressed: { backgroundColor: colors.background },
+  todaySent: { backgroundColor: colors.primaryWash, borderColor: green[300] },
+  todayWaiting: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
+  todayPressed: { opacity: 0.85 },
   todayText: { flex: 1 },
   todayLabel: { ...typography.bodyStrong, color: colors.ink },
-  todayValue: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  todayValue: { ...typography.caption, marginTop: 2 },
+  go: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
 });

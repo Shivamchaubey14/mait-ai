@@ -107,10 +107,85 @@
     tone($('#status-tile'), statusTone);
     $('#status-icon').html(MaitAI.shell.icon(TONE_ICON[statusTone] || 'info'));
 
+    renderOwner(event);
     renderUsed(event);
     renderChain(event);
     renderProof(event);
     renderMap(event);
+  }
+
+  /**
+   * Who the event was for, and the animal it was on.
+   *
+   * The screen used to name the farmer only in its title, which read as "details missing" for
+   * a non-member — the very farmer with no SAP record to fall back on. So the facts she
+   * registered with are laid out here: her number, her father/husband, her Aadhaar (masked,
+   * the full number stays behind the logged per-record read), and whether a card photo is on
+   * file. The animal's ear tag sits alongside, since a member can own several of one breed and
+   * the tag is the only thing that tells the event's animal from the rest.
+   */
+  function renderOwner(event) {
+    const owner = event.owner_detail || {};
+    const isNonMember = event.owner_type === 'non_member' || owner.type === 'non_member';
+    $('#owner-kind').text(isNonMember ? 'Non-member' : 'Member');
+
+    const animalEarTag = event.ear_tag_no
+      ? ui.escapeHtml(event.ear_tag_no)
+      : '<span class="facts__none">No ear tag recorded</span>';
+
+    // Aadhaar is shown only when there is one: a blank masked value read as "missing" when the
+    // truth was that none was captured, which for a member is normal.
+    const aadhaar = owner.has_aadhar
+      ? ui.escapeHtml(owner.aadhar_masked || '••••') +
+        (isNonMember && owner.has_aadhar_image
+          ? ' <span class="facts__tag">card on file</span>'
+          : '')
+      : '<span class="facts__none">Not recorded</span>';
+
+    const rows = [
+      ['Name', ui.escapeHtml(owner.name || event.owner_name || '—')],
+      isNonMember
+        ? ['Membership', '<span class="facts__none">Non-member — no SAP record</span>']
+        : ['Member code', ui.escapeHtml(owner.code || event.member_code || '—')],
+      ['Mobile', owner.mobile_no ? ui.escapeHtml(owner.mobile_no) : '<span class="facts__none">Not recorded</span>'],
+    ];
+
+    const parentage = owner.father_husband_name
+      ? ui.escapeHtml(owner.father_husband_name) +
+        (owner.relation ? ' <span class="facts__tag">' + ui.escapeHtml(owner.relation) + '</span>' : '')
+      : '';
+    if (parentage) {
+      rows.push(['Father / husband', parentage]);
+    }
+    if (isNonMember && owner.address) {
+      rows.push(['Address', ui.escapeHtml(owner.address)]);
+    }
+    rows.push(['Aadhaar', aadhaar]);
+    rows.push(['Animal', ui.escapeHtml(animalCell(event))]);
+    rows.push(['Ear tag', animalEarTag]);
+
+    $('#owner').html(
+      rows
+        .map(function (pair) {
+          return (
+            '<div class="facts__row">' +
+            '<dt class="facts__key">' +
+            pair[0] +
+            '</dt>' +
+            '<dd class="facts__val">' +
+            pair[1] +
+            '</dd>' +
+            '</div>'
+          );
+        })
+        .join('')
+    );
+  }
+
+  /** "Cow · GIR" — the animal's species and breed, read off the event. */
+  function animalCell(event) {
+    const type = event.animal_type === 'BUFF' ? 'Buffalo' : 'Cow';
+    return type + ' · ' + (event.breed || '—');
   }
 
   /**

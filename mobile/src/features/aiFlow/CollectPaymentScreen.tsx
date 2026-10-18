@@ -19,7 +19,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import type { AIEvent } from '@api/types';
-import { colors, radius, spacing, typography } from '@theme/tokens';
+import { colors, ink, radius, spacing, typography, yolk } from '@theme/tokens';
 
 import { FlowNotice, FlowScreen, OptionCard } from './components';
 
@@ -66,7 +66,10 @@ export default function CollectPaymentScreen({
         testID: 'payment-continue',
       }}
     >
-      <View style={styles.amountCard}>
+      <View style={styles.amountCard} testID="payment-amount">
+        <View style={styles.amountChip}>
+          <Ionicons name="cash" size={22} color={colors.ink} />
+        </View>
         <Text style={styles.amountLabel}>{t('payment.toCollectFrom', { name: farmerName })}</Text>
         <Text style={styles.amount}>
           {event.amount_due ? `₹ ${Math.round(Number(event.amount_due))}` : t('payment.unpriced')}
@@ -76,7 +79,7 @@ export default function CollectPaymentScreen({
       <OptionCard
         title={t('payment.cash')}
         subtitle={t('payment.cashBody')}
-        icon="cash-outline"
+        icon="cash"
         check
         selected={chosen === 'COD'}
         onPress={() => setMode('COD')}
@@ -86,8 +89,8 @@ export default function CollectPaymentScreen({
       <OptionCard
         title={t('payment.upi')}
         subtitle={t('payment.upiBody')}
-        icon="phone-portrait-outline"
-        tone="neutral"
+        icon="phone-portrait"
+        tone="info"
         check
         selected={chosen === 'ONLINE'}
         blockedReason={online ? undefined : t('payment.upiNeedsSignal')}
@@ -99,7 +102,7 @@ export default function CollectPaymentScreen({
           finds out by waiting, and the farmer is standing there while they do. */}
       {!online && (
         <View style={styles.offline} testID="payment-offline">
-          <Ionicons name="cloud-offline-outline" size={18} color={colors.textMuted} />
+          <Ionicons name="cloud-offline" size={18} color={ink[600]} />
           <Text style={styles.offlineText}>{t('payment.offlineTakeCash')}</Text>
         </View>
       )}
@@ -122,25 +125,39 @@ export default function CollectPaymentScreen({
 }
 
 const styles = StyleSheet.create({
+  // Yolk: cash to collect before leaving the yard.
   amountCard: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.secondaryWash,
+    borderWidth: 1,
+    borderColor: yolk[300],
     borderRadius: radius.lg,
     paddingVertical: spacing[5],
     paddingHorizontal: spacing[4],
     marginBottom: spacing[4],
   },
-  amountLabel: { ...typography.label, color: colors.textMuted },
+  amountChip: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: yolk[500],
+    marginBottom: spacing[2],
+  },
+  amountLabel: { ...typography.label, color: yolk[800], textAlign: 'center' },
   amount: { ...typography.display, color: colors.ink, marginTop: spacing[2] },
 
   offline: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    backgroundColor: colors.background,
+    backgroundColor: ink[50],
+    borderWidth: 1,
+    borderColor: ink[100],
     borderRadius: radius.md,
     padding: spacing[3],
     marginTop: spacing[2],
   },
-  offlineText: { ...typography.caption, color: colors.textMuted, flex: 1 },
+  offlineText: { ...typography.caption, color: ink[600], flex: 1 },
 });

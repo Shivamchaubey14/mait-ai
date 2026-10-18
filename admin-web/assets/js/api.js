@@ -16,7 +16,7 @@ window.MaitAI = window.MaitAI || {};
    *
    * Deployed, nginx serves the portal and the API from one origin, so a relative path is
    * correct and avoids baking a hostname into the build. On the no-Docker development path
-   * the portal is static-served on 8080 while Django runs on 8000 — a relative path there
+   * the portal is static-served on 9000 while Django runs on 8001 — a relative path there
    * asks the file server for `/api/v1` and gets a 404 that looks like a broken portal.
    *
    * Dev settings enable CORS for exactly this. Set `window.MAITAI_API_BASE` before this
@@ -27,8 +27,8 @@ window.MaitAI = window.MaitAI || {};
       return window.MAITAI_API_BASE;
     }
     const port = window.location.port;
-    if (port && port !== '80' && port !== '443' && port !== '8000') {
-      return window.location.protocol + '//' + window.location.hostname + ':8000/api/v1';
+    if (port && port !== '80' && port !== '443' && port !== '8001') {
+      return window.location.protocol + '//' + window.location.hostname + ':8001/api/v1';
     }
     return '/api/v1';
   })();
@@ -408,6 +408,30 @@ window.MaitAI = window.MaitAI || {};
       });
     },
 
+    /**
+     * Ask for a password-reset OTP by username (W1a).
+     *
+     * The code is sent to the number already on the account, never one the caller gives. The
+     * server answers the same way whether or not the account exists, so this resolves on a
+     * username that was never real — the page must not read the response as proof it was.
+     */
+    requestPasswordReset: function (username) {
+      return request({
+        path: '/auth/password/reset/request/',
+        method: 'POST',
+        body: { username: username },
+      });
+    },
+
+    /** Verify the reset OTP and set the new password. Rejects on a wrong or expired code. */
+    resetPassword: function (username, otp, newPassword) {
+      return request({
+        path: '/auth/password/reset/verify/',
+        method: 'POST',
+        body: { username: username, otp: otp, new_password: newPassword },
+      });
+    },
+
     logout: function () {
       const stored = tokens.get();
       return request({
@@ -490,6 +514,16 @@ window.MaitAI = window.MaitAI || {};
       return request({ path: '/ai-events/' + id + '/timeline/' });
     },
 
+    /** Delete one event (admin only). Takes the payment and attached records with it. */
+    deleteAiEvent: function (id) {
+      return request({ path: '/ai-events/' + id + '/', method: 'DELETE' });
+    },
+
+    /** Delete several events in one transaction (admin only). */
+    bulkDeleteAiEvents: function (ids) {
+      return request({ path: '/ai-events/bulk-delete/', method: 'POST', body: { ids: ids } });
+    },
+
     /**
      * Maits from SAP who have no mobile number and so cannot sign in.
      *
@@ -557,6 +591,17 @@ window.MaitAI = window.MaitAI || {};
      */
     maitInventory: function (maitId) {
       return request({ path: '/admin/inventory/' + maitId + '/' });
+    },
+
+    /**
+     * Credit stock straight to a Mait from the office — a manual adjustment, not an indent.
+     *
+     * Straws by `breed`, everything else by `product_ref_id` from the catalogue the detail
+     * endpoint returns. Only ever adds. Answers with the Mait's stock as it now stands, in the
+     * same shape `maitInventory` returns, so the holding panel can redraw from the response.
+     */
+    creditMaitStock: function (maitId, body) {
+      return request({ path: '/admin/inventory/' + maitId + '/', method: 'POST', body: body });
     },
 
     /**

@@ -15,7 +15,14 @@
   const ui = MaitAI.ui;
   const LIMIT = 25;
 
-  const state = { offset: 0, page: [], editing: null, chosen: [] };
+  const state = {
+    offset: 0,
+    page: [],
+    editing: null,
+    chosen: [],
+    detailing: null,
+    crediting: null,
+  };
 
   /* --- portal access -------------------------------------------------------------------
    * The sidebar, as a thing that can be handed out. Labels and glyphs come from the shell,
@@ -126,7 +133,7 @@
     if (user.role === 'super_admin') {
       return '<span class="table__sub">Whole network</span>';
     }
-    if (user.role === 'admin') {
+    if (SECTION_SCOPED[user.role]) {
       const names = user.zone_names || [];
       const said = names.length
         ? names
@@ -174,7 +181,16 @@
 
   /* Role decides what an account can reach, so it is a pill rather than one more word in a
      column of words. */
-  const ROLE_PILL = { super_admin: 'pill--super', admin: 'pill--admin' };
+  const ROLE_PILL = {
+    super_admin: 'pill--super',
+    admin: 'pill--admin',
+    normal_user: 'pill--normal',
+  };
+
+  // The office roles whose access is a list of pages to assign — as opposed to a Super Admin,
+  // who reaches everything by role, and a Mait, who has no portal. An Admin and a Normal User
+  // are the same account bar one capability (deleting AI events), so both carry a pages list.
+  const SECTION_SCOPED = { admin: true, normal_user: true };
 
   function rolePill(user) {
     const cls = ROLE_PILL[user.role];
@@ -201,6 +217,10 @@
   const RESTORE = 'M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5';
   const PAGES = 'M3 3h7v7H3zM14 3h7v4h-7zM14 11h7v10h-7zM3 14h7v7H3z';
   const ZONES = 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15';
+  const PERSON = 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0';
+  const MAIL = 'M3 6h18v12H3zM3 7l9 6 9-6';
+  const MOBILE = 'M7 2h10v20H7zM11 18h2';
+  const KEY = 'M6 10V7a6 6 0 1 1 12 0v3M5 10h14v11H5z';
 
   /**
    * How much of the portal this account sees.
@@ -210,7 +230,7 @@
    * that has not loaded.
    */
   function pagesCell(user) {
-    if (user.role !== 'admin' && user.role !== 'super_admin') {
+    if (!SECTION_SCOPED[user.role] && user.role !== 'super_admin') {
       return '<span class="table__sub">No portal</span>';
     }
     const held = user.portal_sections || [];
@@ -222,9 +242,9 @@
         (held.length >= total ? 'All ' + total : held.length + ' of ' + total) +
         '</span>';
 
-    // Only an Admin has pages to assign: a Super Admin reaches everything by role, and
-    // nobody edits their own. Both read as the plain count instead.
-    if (user.role !== 'admin' || user.id === meId()) {
+    // Only a section-scoped account (Admin or Normal User) has pages to assign: a Super Admin
+    // reaches everything by role, and nobody edits their own. Both read as the plain count.
+    if (!SECTION_SCOPED[user.role] || user.id === meId()) {
       return said;
     }
     // The count is the control. It was a second button in the Action column, which pushed
@@ -268,6 +288,74 @@
     );
   }
 
+  /**
+   * The tick that puts an account in a bulk action.
+   *
+   * Not on your own row. Deactivating yourself is the one change on this screen that cannot be
+   * undone from this screen — the account that could put it back is the one just switched off —
+   * and a bulk action is precisely where it would happen without being noticed, as the 41st tick
+   * in a Select all. The row action beside it still offers it for a single deliberate account.
+   */
+  function pickCell(user) {
+    if (user.id === meId()) {
+      return '<td class="col-pick"><span class="table__sub" title="Your own account">—</span></td>';
+    }
+    return (
+      '<td class="col-pick">' +
+      '<input class="pick" type="checkbox" value="' +
+      user.id +
+      '" aria-label="Select ' +
+      ui.escapeHtml(user.full_name || user.username) +
+      '" />' +
+      '</td>'
+    );
+  }
+
+  /**
+   * The name, and the way to correct it.
+   *
+   * Not a button in the Action column, which is where every other table in this portal puts
+   * its row action. This table is eight columns wide and already overruns its wrapper by
+   * ~150px at 1280 — the Action column is off the right edge before anything is added to it,
+   * and a second button there measured 89px more of a thing nobody can see. The name is where
+   * somebody looks when the name is wrong, and `.table__name--link` is the treatment this
+   * portal already uses for a name that opens a record — its underline on hover is the one
+   * signal a row of plain text needs. No glyph beside it: a 13px pencil and its gap measured
+   * 17px onto a column that is already past its wrapper, which is the thing being avoided.
+   */
+  function nameCell(user) {
+    return (
+      '<button class="table__name table__name--link user-name" type="button" data-detail="' +
+      user.id +
+      '" title="Edit this account">' +
+      ui.escapeHtml(user.full_name || user.username) +
+      '</button>' +
+      (user.email ? '<span class="table__sub">' + ui.escapeHtml(user.email) + '</span>' : '')
+    );
+  }
+
+  /**
+   * The sign-in name, and the way to change it (and the password behind it).
+   *
+   * The same bargain the Pages and Scope cells make: the cell is the control, because the
+   * username is where somebody looks when the sign-in is wrong, and clicking the thing you want
+   * to change is shorter than hunting for a button in the Action column — which is already past
+   * the right edge of its wrapper. Only an Admin reaches this screen at all, so the "admin only"
+   * rule is the screen, not the row.
+   */
+  function usernameCell(user) {
+    return (
+      '<button class="pages-link username-link" type="button" data-credentials="' +
+      user.id +
+      '" title="Change username or password">' +
+      '<span class="table__code">' +
+      ui.escapeHtml(user.username) +
+      '</span>' +
+      glyph(KEY) +
+      '</button>'
+    );
+  }
+
   function row(user) {
     return (
       '<tr data-user="' +
@@ -275,12 +363,13 @@
       '"' +
       (user.is_active ? '' : ' class="is-blocked"') +
       '>' +
+      pickCell(user) +
       '<td>' +
-      ui.identity(user.full_name, user.email) +
+      nameCell(user) +
       '</td>' +
-      '<td><span class="table__code">' +
-      ui.escapeHtml(user.username) +
-      '</span></td>' +
+      '<td>' +
+      usernameCell(user) +
+      '</td>' +
       '<td>' +
       rolePill(user) +
       '</td>' +
@@ -297,6 +386,9 @@
       '</td>' +
       '<td>' +
       (user.is_active ? ui.pill('Active', 'good') : ui.pill('Deactivated', 'bad')) +
+      // A sign-in bypass is never hidden: when the fixed code is on for this account, the row
+      // says so, in yolk, so it is read at a glance and turned off once the training is over.
+      (user.fixed_otp_enabled ? ' ' + ui.pill('Code 123456', 'warn') : '') +
       '</td>' +
       '<td class="user-action">' +
       actionCell(user) +
@@ -523,9 +615,13 @@
           ($('#search').val() || '').trim() || $('#filter-role').val()
             ? 'No account matches those filters.'
             : 'No portal accounts yet.',
-          8
+          // Nine columns since the tick column arrived — an empty state that spans eight of
+          // them leaves a stray cell at the end of the row.
+          9
         );
         countActive();
+        // The rows are new, so nothing is ticked any more and the bar has to say so.
+        renderBulk();
         ui.pager(
           $('#pager'),
           { count: page.count, limit: LIMIT, offset: state.offset },
@@ -539,6 +635,581 @@
         MaitAI.shell.alert(problem.detail);
         ui.rows($('#rows'), [], row, 'Could not load accounts.', 8);
         countActive();
+      });
+  }
+
+  /* --- bulk activate and deactivate -----------------------------------------------------------
+   *
+   * There is no bulk endpoint, and `docs/API_CONTRACT.md` is frozen — so this fans out the same
+   * `PATCH /admin/users/{id}/` the single row button uses. That is not a workaround it is
+   * apologising for: each account goes through the same serializer, the same validation and the
+   * same `record_audit` call, so twenty accounts switched off leave twenty audit entries naming
+   * who did it. A bulk endpoint writing one entry for twenty accounts would be the regression.
+   *
+   * Four at a time. A burst of forty parallel requests is a self-inflicted load test against a
+   * server that is also serving the rest of the office, and the throttles would start refusing
+   * partway through — which reads to the operator as "some of them randomly failed".
+   */
+  const BULK_PARALLEL = 4;
+
+  function picked() {
+    return $('#rows .pick:checked')
+      .map(function () {
+        return Number(this.value);
+      })
+      .get();
+  }
+
+  function userById(id) {
+    return state.page.filter(function (candidate) {
+      return candidate.id === id;
+    })[0];
+  }
+
+  /**
+   * Those of the ticked accounts an action would actually change.
+   *
+   * By field and target value, so the one helper serves both the on/off of sign-in
+   * (`is_active`) and of the fixed login code (`fixed_otp_enabled`): an account already in the
+   * target state is left out, so no button offers to do nothing.
+   */
+  function wouldChange(ids, field, value) {
+    return ids.filter(function (id) {
+      const user = userById(id);
+      return user && !!user[field] !== value;
+    });
+  }
+
+  function renderBulk() {
+    const ids = picked();
+    const $bar = $('#bulk');
+
+    if (!ids.length) {
+      $bar.prop('hidden', true);
+      $('#bulk-status').text('');
+      syncPickAll();
+      return;
+    }
+
+    const toActivate = wouldChange(ids, 'is_active', true).length;
+    const toDeactivate = wouldChange(ids, 'is_active', false).length;
+    const toFixedOn = wouldChange(ids, 'fixed_otp_enabled', true).length;
+    const toFixedOff = wouldChange(ids, 'fixed_otp_enabled', false).length;
+
+    $('#bulk-count').text(ids.length + (ids.length === 1 ? ' account' : ' accounts') + ' selected');
+
+    // Counted, and hidden when the count is nought. "Activate 0" is a button that does nothing
+    // dressed as one that does something; a selection of live accounts simply has no Activate.
+    $('#bulk-activate')
+      .prop('hidden', !toActivate)
+      .text('Activate ' + toActivate);
+    $('#bulk-deactivate')
+      .prop('hidden', !toDeactivate)
+      .text('Deactivate ' + toDeactivate);
+    $('#bulk-fixed-on')
+      .prop('hidden', !toFixedOn)
+      .text('Fixed code on · ' + toFixedOn);
+    $('#bulk-fixed-off')
+      .prop('hidden', !toFixedOff)
+      .text('Fixed code off · ' + toFixedOff);
+
+    $bar.prop('hidden', false);
+    syncPickAll();
+  }
+
+  /** The header tick reflects the rows: all, none, or the in-between state. */
+  function syncPickAll() {
+    const $boxes = $('#rows .pick');
+    const $on = $('#rows .pick:checked');
+    const all = $boxes.length > 0 && $on.length === $boxes.length;
+    $('#pick-all')
+      .prop('checked', all)
+      .prop('indeterminate', $on.length > 0 && !all);
+  }
+
+  function setBulkBusy(busy) {
+    $(
+      '#bulk-activate, #bulk-deactivate, #bulk-fixed-on, #bulk-fixed-off, #bulk-clear, #pick-all'
+    ).prop('disabled', busy);
+    $('#rows .pick').prop('disabled', busy);
+  }
+
+  /**
+   * Walk the list, `BULK_PARALLEL` in flight, and report what happened to all of it.
+   *
+   * A refusal does not stop the rest: the accounts that can change should, and the ones that
+   * could not are named at the end. Stopping at the first failure would leave the operator with
+   * a half-done job and no way to tell how far it got.
+   */
+  function runBulk(ids, field, value, verbing, verbed) {
+    const done = [];
+    const failed = [];
+    let next = 0;
+
+    setBulkBusy(true);
+    $('#bulk-status').text(verbing + ' 0 of ' + ids.length + '…');
+
+    function step() {
+      if (next >= ids.length) {
+        return $.Deferred().resolve().promise();
+      }
+      const id = ids[next++];
+      return MaitAI.api
+        .updateUser(id, { [field]: value })
+        .done(function (user) {
+          done.push(id);
+          if (user && user.id) {
+            replaceRow(user);
+          }
+        })
+        .fail(function (problem) {
+          const user = userById(id);
+          failed.push({
+            who: (user && (user.full_name || user.username)) || '#' + id,
+            why: MaitAI.api.problemToLines(problem)[0],
+          });
+        })
+        .always(function () {
+          $('#bulk-status').text(
+            verbing + ' ' + (done.length + failed.length) + ' of ' + ids.length + '…'
+          );
+        })
+        .then(step, step);
+    }
+
+    const lanes = [];
+    for (let lane = 0; lane < Math.min(BULK_PARALLEL, ids.length); lane += 1) {
+      lanes.push(step());
+    }
+
+    $.when.apply($, lanes).always(function () {
+      setBulkBusy(false);
+      countActive();
+      renderBulk();
+
+      if (!failed.length) {
+        $('#bulk-status').text(
+          done.length + (done.length === 1 ? ' account ' : ' accounts ') + verbed + '.'
+        );
+        return;
+      }
+      // Named, not counted. "3 failed" sends somebody back through forty rows looking for them.
+      $('#bulk-status').text(
+        done.length +
+          ' changed · ' +
+          failed.length +
+          ' refused: ' +
+          failed
+            .map(function (entry) {
+              return entry.who;
+            })
+            .join(', ')
+      );
+      MaitAI.shell.alert(
+        failed
+          .map(function (entry) {
+            return entry.who + ' — ' + entry.why;
+          })
+          .join(' · ')
+      );
+    });
+  }
+
+  /* --- the details editor -------------------------------------------------------------------
+   * Who the person is, as opposed to what they can reach.
+   *
+   * `full_name` was settable when the account was created and nowhere afterwards, so a name
+   * typed wrong stayed wrong: the portal offered no field, and the custom `User` model is not
+   * registered in Django's admin either, which left a shell command as the only correction.
+   * The API has always taken it — `AdminUserUpdateSerializer` carries `full_name`, `email` and
+   * `mobile_no` — so this is a panel over an endpoint that was already there.
+   *
+   * A third panel rather than a field on one of the other two, for the reason the zone editor
+   * gives below: these are decided by different people on different days, and sharing a save
+   * makes one an accident of the other. Correcting a spelling must not also be the moment
+   * somebody's zones or pages move.
+   */
+  function detailEditorMarkup() {
+    return [
+      '<section class="panel editor detail-editor" id="detail-panel" hidden ',
+      'aria-label="Account details">',
+
+      '<div class="editor__head">',
+      '<span class="editor__avatar" id="dx-initials" aria-hidden="true">—</span>',
+      '<div class="editor__who">',
+      '<h2 class="editor__name" id="dx-name">—</h2>',
+      '<p class="editor__code" id="dx-username">—</p>',
+      '</div>',
+      '<span id="dx-role"></span>',
+      '</div>',
+
+      '<div class="form-grid">',
+
+      '<div class="field field--iconed">',
+      '<label class="field__label" for="dx-full-name">',
+      '<span class="field__icon" aria-hidden="true">',
+      glyph(PERSON),
+      '</span>Full name</label>',
+      '<input class="input field__control" id="dx-full-name" type="text" maxlength="150" ',
+      'autocomplete="off" />',
+      '<p class="field__hint">What every screen in the portal calls them.</p>',
+      '</div>',
+
+      '<div class="field field--iconed">',
+      '<label class="field__label" for="dx-email">',
+      '<span class="field__icon" aria-hidden="true">',
+      glyph(MAIL),
+      '</span>Email</label>',
+      '<input class="input field__control" id="dx-email" type="email" autocomplete="off" />',
+      '<p class="field__hint">Optional. Shown under their name in the table.</p>',
+      '</div>',
+
+      '<div class="field field--iconed">',
+      '<label class="field__label" for="dx-mobile">',
+      '<span class="field__icon" aria-hidden="true">',
+      glyph(MOBILE),
+      '</span>Mobile number</label>',
+      '<input class="input field__control" id="dx-mobile" type="tel" inputmode="numeric" ',
+      'maxlength="10" autocomplete="off" placeholder="9876543210" />',
+      // The same number the Zones screen edits for a manager. Said out loud, so an operator
+      // who meets it in two places knows it is one field and not two.
+      '<p class="field__hint" id="dx-mobile-hint">—</p>',
+      '</div>',
+
+      '</div>',
+
+      // Role, shown only for the two interchangeable office roles (Admin, Normal User) — see
+      // openDetailEditor. The difference between them is one line: a Normal User cannot delete
+      // AI events. Which pages they open is unchanged by this and stays on the Pages control.
+      // Super Admin and Mait are not switchable here (promotion and the field/office divide are
+      // deliberately not a casual edit), so for them this field is hidden and the pill stands.
+      '<div class="field field--iconed" id="dx-role-field" hidden>',
+      '<label class="field__label" for="dx-role-select">',
+      '<span class="field__icon field__icon--role" aria-hidden="true">',
+      glyph('M12 3l8 4v5c0 5-3.4 8.3-8 9.5C7.4 20.3 4 17 4 12V7z'),
+      '</span>Role</label>',
+      '<select class="select field__control" id="dx-role-select">',
+      '<option value="admin">Admin</option>',
+      '<option value="normal_user">Normal User</option>',
+      '</select>',
+      '<p class="field__hint">A Normal User sees and works the same pages as an Admin but cannot ',
+      'delete AI events.</p>',
+      '</div>',
+
+      // The admin's training / SMS-outage switch. Full width and set apart from the contact
+      // fields above, because it is not a contact detail — it is a sign-in bypass, and it should
+      // read as the deliberate, visible thing it is.
+      '<label class="fixed-login" for="dx-fixed">',
+      '<input class="fixed-login__check" id="dx-fixed" type="checkbox" />',
+      '<span class="fixed-login__body">',
+      '<span class="fixed-login__title">Sign in with the fixed code 123456</span>',
+      '<span class="fixed-login__note">For a Mait being shown the app, or to keep sign-ins ',
+      'working while SMS is down. This account types 123456 instead of a texted OTP. It takes ',
+      'effect on their next code, applies to this account only, and every change is in the ',
+      'audit log — turn it off once the training is over.</span>',
+      '</span>',
+      '</label>',
+
+      '<div class="form-actions">',
+      '<button class="btn btn--primary" type="button" id="dx-save">',
+      glyph('M5 12.5l4.5 4.5L19 7.5'),
+      'Save details</button>',
+      '<button class="btn btn--soft" type="button" id="dx-cancel">',
+      glyph('M6 6l12 12M18 6L6 18'),
+      'Cancel</button>',
+      '<p class="field__hint" id="dx-status">—</p>',
+      '</div>',
+
+      '</section>',
+    ].join('');
+  }
+
+  function openDetailEditor(user) {
+    state.detailing = user;
+
+    $('#dx-initials').text(initials(user.full_name));
+    $('#dx-name').text(user.full_name || user.username);
+    $('#dx-username').text(user.username);
+    $('#dx-role').html(rolePill(user));
+
+    // The role is editable only between the two office roles that are the same account with one
+    // capability different (Admin, Normal User). For a Super Admin or a Mait the select is not
+    // shown — the pill above is the whole answer.
+    const switchable = user.role === 'admin' || user.role === 'normal_user';
+    $('#dx-role-field').prop('hidden', !switchable);
+    if (switchable) {
+      $('#dx-role-select').val(user.role);
+    }
+
+    $('#dx-full-name').val(user.full_name || '');
+    $('#dx-email').val(user.email || '');
+    $('#dx-mobile').val(user.mobile_no || '');
+    $('#dx-fixed').prop('checked', !!user.fixed_otp_enabled);
+    $('#dx-mobile-hint').text(
+      (user.zone_names || []).length
+        ? 'The number they sign into the app with. The Zones screen edits this same one.'
+        : 'Optional for an office account — a number is only a sign-in for a zonal manager.'
+    );
+    $('#dx-status').text('—');
+
+    $('#detail-panel').prop('hidden', false);
+    $('#detail-panel')[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    $('#dx-full-name').trigger('focus');
+  }
+
+  function closeDetailEditor() {
+    state.detailing = null;
+    $('#detail-panel').prop('hidden', true);
+  }
+
+  function saveDetailEditor() {
+    if (!state.detailing) {
+      return;
+    }
+    const user = state.detailing;
+    const fullName = ($('#dx-full-name').val() || '').trim();
+    const email = ($('#dx-email').val() || '').trim();
+    const mobile = ($('#dx-mobile').val() || '').trim();
+
+    // Caught here rather than at the API, which would answer with a field error against a
+    // panel that has already scrolled out of view.
+    if (!fullName) {
+      $('#dx-status').text('A name is what the rest of the portal calls this account.');
+      $('#dx-full-name').trigger('focus');
+      return;
+    }
+    if (mobile && !/^[6-9]\d{9}$/.test(mobile)) {
+      $('#dx-status').text('A mobile number is ten digits, starting 6 to 9.');
+      $('#dx-mobile').trigger('focus');
+      return;
+    }
+
+    // Only what actually moved. Sending all three would write `mobile_no: ""` over a number
+    // nobody touched — and on a zonal manager that number is their sign-in.
+    const body = {};
+    if (fullName !== (user.full_name || '')) {
+      body.full_name = fullName;
+    }
+    if (email !== (user.email || '')) {
+      body.email = email;
+    }
+    if (mobile !== (user.mobile_no || '')) {
+      body.mobile_no = mobile;
+    }
+    const fixed = $('#dx-fixed').is(':checked');
+    if (fixed !== !!user.fixed_otp_enabled) {
+      body.fixed_otp_enabled = fixed;
+    }
+    // Only when the select is actually on screen (an office account) and the role moved. Both
+    // roles are section-scoped, so the account keeps the pages it already had.
+    if ((user.role === 'admin' || user.role === 'normal_user')) {
+      const role = $('#dx-role-select').val();
+      if (role !== user.role) {
+        body.role = role;
+      }
+    }
+    if (!Object.keys(body).length) {
+      closeDetailEditor();
+      return;
+    }
+
+    $('#dx-save').prop('disabled', true);
+    $('#dx-status').text('Saving…');
+
+    MaitAI.api
+      .updateUser(user.id, body)
+      .done(function (saved) {
+        closeDetailEditor();
+        if (saved && saved.id) {
+          replaceRow(saved);
+        } else {
+          load();
+        }
+      })
+      .fail(function (problem) {
+        $('#dx-status').text('');
+        MaitAI.shell.alert(MaitAI.api.problemToLines(problem).join(' · '));
+      })
+      .always(function () {
+        $('#dx-save').prop('disabled', false);
+      });
+  }
+
+  /* --- the credentials editor ---------------------------------------------------------------
+   * How they sign in: the username, and the password behind it. Kept apart from the details
+   * panel (name, email, number) on purpose — a password is the one field on this screen that
+   * is a secret, and resetting it is a deliberate act, not something to do in the same breath
+   * as fixing a spelling. Only an Admin reaches this screen, so the "admin only" rule is the
+   * screen itself; the backend enforces it again on every write.
+   *
+   * A Mait has no password — they sign in to the app with a one-time code — so the password
+   * fields are hidden for one and the panel offers only the username.
+   */
+  function credentialsEditorMarkup() {
+    return [
+      '<section class="panel editor credentials-editor" id="cred-panel" hidden ',
+      'aria-label="Sign-in username and password">',
+
+      '<div class="editor__head">',
+      '<span class="editor__avatar" id="cx-initials" aria-hidden="true">—</span>',
+      '<div class="editor__who">',
+      '<h2 class="editor__name" id="cx-name">—</h2>',
+      '<p class="editor__code" id="cx-username">—</p>',
+      '</div>',
+      '<span id="cx-role"></span>',
+      '</div>',
+
+      '<div class="form-grid">',
+
+      '<div class="field field--iconed">',
+      '<label class="field__label" for="cx-new-username">',
+      '<span class="field__icon" aria-hidden="true">',
+      glyph(PERSON),
+      '</span>Username</label>',
+      '<input class="input field__control" id="cx-new-username" type="text" maxlength="64" ',
+      'autocomplete="off" />',
+      '<p class="field__hint">What they type to sign in.</p>',
+      '</div>',
+
+      // Office accounts only. A reset is optional on every save — blank leaves the current
+      // password untouched, so the panel can be opened to change the username alone.
+      '<div class="field field--iconed" id="cx-password-field">',
+      '<label class="field__label" for="cx-password">',
+      '<span class="field__icon" aria-hidden="true">',
+      glyph(KEY),
+      '</span>New password</label>',
+      '<input class="input field__control" id="cx-password" type="password" ',
+      'autocomplete="new-password" />',
+      '<p class="field__hint">At least 10 characters. Leave blank to keep the current one.</p>',
+      '</div>',
+
+      '<div class="field field--iconed" id="cx-confirm-field">',
+      '<label class="field__label" for="cx-confirm">',
+      '<span class="field__icon" aria-hidden="true">',
+      glyph(KEY),
+      '</span>Confirm new password</label>',
+      '<input class="input field__control" id="cx-confirm" type="password" ',
+      'autocomplete="new-password" />',
+      '<p class="field__hint">Type it again, so a slip is caught here and not at their desk.</p>',
+      '</div>',
+
+      '</div>',
+
+      // Shown in place of the password fields for a Mait, so the panel explains itself rather
+      // than simply missing half its form.
+      '<p class="field__hint" id="cx-mait-note" hidden>',
+      'Maits sign in to the app with a one-time code, so they have no password to set.',
+      '</p>',
+
+      '<div class="form-actions">',
+      '<button class="btn btn--primary" type="button" id="cx-save">',
+      glyph('M5 12.5l4.5 4.5L19 7.5'),
+      'Save sign-in</button>',
+      '<button class="btn btn--soft" type="button" id="cx-cancel">',
+      glyph('M6 6l12 12M18 6L6 18'),
+      'Cancel</button>',
+      '<p class="field__hint" id="cx-status">—</p>',
+      '</div>',
+
+      '</section>',
+    ].join('');
+  }
+
+  function openCredentialsEditor(user) {
+    state.crediting = user;
+    // One panel at a time: two open over the same table, both headed by the same person, are
+    // two saves an operator can mistake for one.
+    closeEditor();
+    closeZoneEditor();
+    closeDetailEditor();
+
+    const isMait = user.role === 'mait';
+    $('#cx-initials').text(initials(user.full_name));
+    $('#cx-name').text(user.full_name || user.username);
+    $('#cx-username').text(user.username);
+    $('#cx-role').html(rolePill(user));
+
+    $('#cx-new-username').val(user.username);
+    $('#cx-password, #cx-confirm').val('');
+    $('#cx-password-field, #cx-confirm-field').prop('hidden', isMait);
+    $('#cx-mait-note').prop('hidden', !isMait);
+    $('#cx-status').text('—');
+
+    $('#cred-panel').prop('hidden', false);
+    $('#cred-panel')[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    $('#cx-new-username').trigger('focus');
+  }
+
+  function closeCredentialsEditor() {
+    state.crediting = null;
+    $('#cred-panel').prop('hidden', true);
+  }
+
+  function saveCredentialsEditor() {
+    if (!state.crediting) {
+      return;
+    }
+    const user = state.crediting;
+    const isMait = user.role === 'mait';
+    const username = ($('#cx-new-username').val() || '').trim();
+    const password = $('#cx-password').val() || '';
+    const confirm = $('#cx-confirm').val() || '';
+
+    // Caught here rather than at the API, which would answer against a panel that has already
+    // scrolled out of view.
+    if (!username) {
+      $('#cx-status').text('A username is what they type to sign in — it cannot be blank.');
+      $('#cx-new-username').trigger('focus');
+      return;
+    }
+
+    const body = {};
+    if (username !== user.username) {
+      body.username = username;
+    }
+    if (!isMait && password) {
+      if (password.length < 10) {
+        $('#cx-status').text('A password needs at least 10 characters.');
+        $('#cx-password').trigger('focus');
+        return;
+      }
+      if (password !== confirm) {
+        $('#cx-status').text('The two passwords do not match.');
+        $('#cx-confirm').trigger('focus');
+        return;
+      }
+      body.password = password;
+    }
+
+    // Nothing to send — the username was left as it was and no password was typed.
+    if (!Object.keys(body).length) {
+      closeCredentialsEditor();
+      return;
+    }
+
+    $('#cx-save').prop('disabled', true);
+    $('#cx-status').text('Saving…');
+
+    MaitAI.api
+      .updateUser(user.id, body)
+      .done(function (saved) {
+        closeCredentialsEditor();
+        if (saved && saved.id) {
+          replaceRow(saved);
+        } else {
+          load();
+        }
+        const changed = body.username
+          ? 'Username updated' + (body.password ? ' and password reset' : '')
+          : 'Password reset';
+        MaitAI.shell.alert(changed + ' for ' + (user.full_name || user.username) + '.', 'good');
+      })
+      .fail(function (problem) {
+        $('#cx-status').text('');
+        MaitAI.shell.alert(MaitAI.api.problemToLines(problem).join(' · '));
+      })
+      .always(function () {
+        $('#cx-save').prop('disabled', false);
       });
   }
 
@@ -775,7 +1446,9 @@
     MaitAI.shell.mount();
     loadCatalogue();
     loadZones();
-    $('#access-editor').html(editorMarkup() + zoneEditorMarkup());
+    $('#access-editor').html(
+      editorMarkup() + zoneEditorMarkup() + detailEditorMarkup() + credentialsEditorMarkup()
+    );
     $('#new-access').html(accessGrid(allKeys()));
     $('#new-access-count').text(countLabel(allKeys()));
     load();
@@ -862,6 +1535,101 @@
 
     $('#ax-cancel').on('click', closeEditor);
     $('#ax-save').on('click', saveEditor);
+
+    /* --- bulk selection --------------------------------------------------------------------- */
+    $('#rows').on('change', '.pick', renderBulk);
+
+    $('#pick-all').on('change', function () {
+      $('#rows .pick').prop('checked', $(this).is(':checked'));
+      renderBulk();
+    });
+
+    $('#bulk-clear').on('click', function () {
+      $('#rows .pick').prop('checked', false);
+      renderBulk();
+    });
+
+    $('#bulk-activate').on('click', function () {
+      const ids = wouldChange(picked(), 'is_active', true);
+      if (ids.length) {
+        runBulk(ids, 'is_active', true, 'Activating', 'activated');
+      }
+    });
+
+    $('#bulk-deactivate').on('click', function () {
+      const ids = wouldChange(picked(), 'is_active', false);
+      if (!ids.length) {
+        return;
+      }
+      // Asked once, and the number is in the question: switching off an account takes somebody
+      // out of the portal, and the row button's single deliberate click is not what this is.
+      if (
+        !window.confirm(
+          'Deactivate ' +
+            ids.length +
+            (ids.length === 1 ? ' account' : ' accounts') +
+            '? They will not be able to sign in until somebody reactivates them.'
+        )
+      ) {
+        return;
+      }
+      runBulk(ids, 'is_active', false, 'Deactivating', 'deactivated');
+    });
+
+    // The training / SMS-outage switch for a group. Confirmed once, with the number in the
+    // question, because it is a sign-in bypass applied to several accounts at a time.
+    $('#bulk-fixed-on').on('click', function () {
+      const ids = wouldChange(picked(), 'fixed_otp_enabled', true);
+      if (!ids.length) {
+        return;
+      }
+      if (
+        !window.confirm(
+          'Turn the fixed login code (123456) on for ' +
+            ids.length +
+            (ids.length === 1 ? ' account' : ' accounts') +
+            '? They will sign in by typing 123456 until you turn it off.'
+        )
+      ) {
+        return;
+      }
+      runBulk(ids, 'fixed_otp_enabled', true, 'Turning on', 'now sign in with 123456');
+    });
+
+    $('#bulk-fixed-off').on('click', function () {
+      const ids = wouldChange(picked(), 'fixed_otp_enabled', false);
+      if (ids.length) {
+        runBulk(ids, 'fixed_otp_enabled', false, 'Turning off', 'back on a texted code');
+      }
+    });
+
+    /* --- the row's details editor ---------------------------------------------------------- */
+    $('#rows').on('click', '[data-detail]', function () {
+      const id = String($(this).data('detail'));
+      const user = state.page.filter(function (candidate) {
+        return String(candidate.id) === id;
+      })[0];
+      if (user) {
+        openDetailEditor(user);
+      }
+    });
+
+    $('#dx-cancel').on('click', closeDetailEditor);
+    $('#dx-save').on('click', saveDetailEditor);
+
+    /* --- the row's credentials editor (username & password) -------------------------------- */
+    $('#rows').on('click', '[data-credentials]', function () {
+      const id = String($(this).data('credentials'));
+      const user = state.page.filter(function (candidate) {
+        return String(candidate.id) === id;
+      })[0];
+      if (user) {
+        openCredentialsEditor(user);
+      }
+    });
+
+    $('#cx-cancel').on('click', closeCredentialsEditor);
+    $('#cx-save').on('click', saveCredentialsEditor);
 
     /* --- the row's zone editor ------------------------------------------------------------ */
     $('#rows').on('click', '[data-zones]', function () {

@@ -18,7 +18,27 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 
+from django.db.models import DateTimeField
+from django.db.models.functions import Coalesce
 from django.utils import timezone
+
+
+def event_day_expr(completed: str = "completed_at", created: str = "created_at") -> Coalesce:
+    """
+    The instant an AI event is dated to: its completion for a finished capture, and the moment
+    it was started while it is still unfinished and has no completion instant yet.
+
+    This is the same day the dashboard counts a completed event on (`apps.dashboard.views`
+    filters `completed_at`), so a list or an export filtered by a date describes the same
+    events the dashboard figure for that date does. Dating by `created_at` alone drifted by
+    one whenever a capture was started before midnight and finished after it — the screen then
+    showed six for a day the dashboard counted seven.
+
+    An expression, not a `__date` lookup: it is compared against the instants
+    `start_of_day`/`end_of_day` return, so it never compiles to the CONVERT_TZ this module
+    exists to avoid, and an index on `completed_at` can still serve the common case.
+    """
+    return Coalesce(completed, created, output_field=DateTimeField())
 
 
 def start_of_day(day: date) -> datetime:

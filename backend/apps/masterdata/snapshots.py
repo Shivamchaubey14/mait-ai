@@ -129,6 +129,13 @@ def latest_upload(upload_type: str) -> DataUploadLog | None:
             ],
         )
         .select_related("uploaded_by")
+        # `error_report` is not needed to identify or rebuild a master, and on the Member
+        # master it is large — a partly-rejected upload of 100k+ rows stores hundreds of KB of
+        # row-level failures. Left in, `SELECT *` drags that JSON through the `ORDER BY`
+        # filesort, and MySQL packs the whole wide row into its sort buffer: past a few such
+        # rows it overflows with "Out of sort memory" (error 1038) and the download modal
+        # 500s with nothing an operator can act on. Deferring it keeps the sorted row small.
+        .defer("error_report")
         .order_by("-created_at")
         .first()
     )

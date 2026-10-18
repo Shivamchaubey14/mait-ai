@@ -90,6 +90,33 @@ class TestRoster:
         results = admin_client.get(f"{URL}?activated=false").json()["results"]
         assert {r["sahayak_vendor_code"] for r in results} == {"SAH-B", "SAH-C"}
 
+    def test_marks_a_deactivated_account(self, admin_client, roster):
+        """`account_active` tells a live login from one switched off on the Users screen."""
+        activated, _, _ = roster
+        activated.user.is_active = False
+        activated.user.save(update_fields=["is_active"])
+
+        rows = {r["sahayak_vendor_code"]: r for r in admin_client.get(URL).json()["results"]}
+        assert rows["SAH-A"]["account_active"] is False
+        # Never activated, so there is no login to be on or off — null, not False, which keeps
+        # "Deactivated" distinct from "Not activated".
+        assert rows["SAH-C"]["account_active"] is None
+
+    def test_filters_to_deactivated_accounts(self, admin_client, roster):
+        activated, _, _ = roster
+        activated.user.is_active = False
+        activated.user.save(update_fields=["is_active"])
+
+        results = admin_client.get(f"{URL}?account_active=false").json()["results"]
+        assert [r["sahayak_vendor_code"] for r in results] == ["SAH-A"]
+
+    def test_summarises_deactivated_accounts(self, admin_client, roster):
+        activated, _, _ = roster
+        activated.user.is_active = False
+        activated.user.save(update_fields=["is_active"])
+
+        assert admin_client.get(URL).json()["summary"]["deactivated"] == 1
+
     def test_searches_by_name_and_code(self, admin_client, roster):
         assert len(admin_client.get(f"{URL}?search=Waiting").json()["results"]) == 1
         assert len(admin_client.get(f"{URL}?search=SAH-C").json()["results"]) == 1

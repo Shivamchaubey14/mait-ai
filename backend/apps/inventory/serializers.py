@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from apps.animals.models import BreedConfig
+
 from .models import Consumable, MaitInventory, MaitInventoryLedger, ProductType, SemenBatch
 
 
@@ -142,6 +144,44 @@ class InventorySummarySerializer(serializers.Serializer):
     # Split apart: what runs out and gets reordered, and what is issued once and kept.
     consumables = serializers.ListField(child=serializers.DictField())
     assets = serializers.ListField(child=serializers.DictField())
+
+
+class MaitStockCreditSerializer(serializers.Serializer):
+    """
+    An office adjustment to a Mait's stock — a manual correction, not an indent collection.
+
+    The item is chosen exactly as a store delivery chooses it (``stores.ReceiveSerializer``):
+    straws by ``breed``, everything else by ``product_ref_id`` from the catalogue. ``qty`` is a
+    whole number of at least one; ``direction`` decides whether that many are credited or taken
+    off, because a count got wrong in one direction is got wrong in the other. A balance is still
+    never *set* by hand, only moved — the ledger behind it has to stay summable either way.
+    """
+
+    product_type = serializers.ChoiceField(choices=ProductType.choices)
+    breed = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    product_ref_id = serializers.IntegerField(required=False, allow_null=True)
+    qty = serializers.IntegerField(min_value=1, max_value=100000)
+    # Add is the default so an older client that knew only how to credit keeps working unchanged.
+    direction = serializers.ChoiceField(
+        choices=[("add", "add"), ("remove", "remove")], default="add"
+    )
+    note = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if attrs["product_type"] == ProductType.STRAW:
+            breed = (attrs.get("breed") or "").strip().upper()
+            if not BreedConfig.objects.filter(code=breed, is_active=True).exists():
+                raise serializers.ValidationError({"breed": ["Pick a breed from the list."]})
+            attrs["breed"] = breed
+            attrs["product_ref_id"] = 0
+        else:
+            ref = attrs.get("product_ref_id")
+            if not ref or not Consumable.objects.filter(pk=ref, is_active=True).exists():
+                raise serializers.ValidationError(
+                    {"product_ref_id": ["Pick a product from the list."]}
+                )
+            attrs["breed"] = ""
+        return attrs
 
 
 class LedgerEntrySerializer(serializers.ModelSerializer):

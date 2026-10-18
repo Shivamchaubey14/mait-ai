@@ -54,6 +54,7 @@
             <option value="">Role: all</option>
             <option value="super_admin">Super admin</option>
             <option value="admin">Admin</option>
+            <option value="normal_user">Normal user</option>
             <option value="mait">Mait</option>
           </select>
         </section>
@@ -200,8 +201,12 @@
               <select class="select field__control" id="new-role">
                 <option value="admin">Admin</option>
                 <option value="super_admin">Super Admin</option>
+                <option value="normal_user">Normal User</option>
               </select>
-              <p class="field__hint">Super Admin can create more accounts</p>
+              <p class="field__hint">
+                Super Admin can create more accounts. A Normal User works the same pages as an
+                Admin but cannot delete AI events.
+              </p>
             </div>
 
             <div class="field field--iconed">
@@ -287,10 +292,43 @@
             </h2>
             <span class="panel__count" id="active-count">—</span>
           </div>
+          <!-- Only on screen once something is ticked. A bar that is always there is a row of
+               disabled buttons an operator learns to read past, and this one carries the two
+               things that matter — how many, and what will happen to them. -->
+          <section class="bulk" id="bulk" hidden aria-label="Selected accounts">
+            <p class="bulk__count" id="bulk-count">—</p>
+            <div class="bulk__actions">
+              <button class="btn btn--good-outline" type="button" id="bulk-activate" hidden>
+                Activate
+              </button>
+              <button class="btn btn--danger-outline" type="button" id="bulk-deactivate" hidden>
+                Deactivate
+              </button>
+              <!-- The training / SMS-outage switch for a whole group at once — the same code
+                   123456, on or off, for every ticked account. -->
+              <button class="btn btn--warn-outline" type="button" id="bulk-fixed-on" hidden>
+                Fixed code on
+              </button>
+              <button class="btn btn--soft" type="button" id="bulk-fixed-off" hidden>
+                Fixed code off
+              </button>
+              <button class="btn btn--soft" type="button" id="bulk-clear">Clear</button>
+            </div>
+            <p class="bulk__status" id="bulk-status" role="status" aria-live="polite"></p>
+          </section>
+
           <div class="table-wrap">
             <table class="table">
               <thead>
                 <tr>
+                  <th class="col-pick" scope="col">
+                    <input
+                      class="pick pick--all"
+                      id="pick-all"
+                      type="checkbox"
+                      aria-label="Select every account on this page"
+                    />
+                  </th>
                   <th scope="col">User</th>
                   <th scope="col">Username</th>
                   <th scope="col">Role</th>
@@ -316,15 +354,6 @@
                   <td></td>
                   <td></td>
                   <td></td>
-                </tr>
-                <tr class="skeleton-row" aria-hidden="true">
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
                   <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
@@ -336,6 +365,18 @@
                   <td></td>
                   <td></td>
                   <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
                   <td></td>
@@ -346,8 +387,10 @@
                   <td></td>
                   <td></td>
                   <td></td>
+                  <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
                   <td></td>
                   <td></td>
                   <td></td>

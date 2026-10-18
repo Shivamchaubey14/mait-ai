@@ -110,7 +110,7 @@ class IndentViewSet(
             .order_by("-requested_at")
         )
         user = self.request.user
-        if getattr(user, "role", None) in (Role.SUPER_ADMIN, Role.ADMIN):
+        if getattr(user, "role", None) in (Role.SUPER_ADMIN, Role.ADMIN, Role.NORMAL_USER):
             # A zonal manager approves their own zone's indents and sees no one else's. Through
             # the Mait's collection points, because an indent carries no plant of its own —
             # and scoped here, on the queryset, so approving one outside the zone is a 404

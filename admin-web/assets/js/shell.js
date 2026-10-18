@@ -405,6 +405,15 @@ window.MaitAI = window.MaitAI || {};
      * Every screen already calls this before it loads anything, which is why the section
      * check lives here rather than in `mount` — a screen that has been refused must not go
      * on to fire the requests it was written to fire.
+     *
+     * The access list it checks is the profile cached at sign-in, and access is assigned while
+     * people are logged in — that is the whole point of assigning it. So a refusal is verified
+     * against the server before it stands: an operator an administrator has just given a section
+     * (a zonal manager handed Stores, say) would otherwise be locked out of it until they signed
+     * out and back in, because this returns before `mount` — the only other thing that refreshes
+     * the profile — ever runs. If the fresh profile grants the page, it is loaded for real; only
+     * a refusal the server confirms is left standing. Nothing is risked by checking, because the
+     * endpoints behind the page refuse anything the account truly may not reach.
      */
     requireSession: function () {
       if (!MaitAI.api.tokens.get().access) {
@@ -412,11 +421,20 @@ window.MaitAI = window.MaitAI || {};
         return false;
       }
       const active = $('.shell').data('page');
-      if (!isAssigned(active)) {
-        refuse(active);
-        return false;
+      if (isAssigned(active)) {
+        return true;
       }
-      return true;
+      refuse(active);
+      MaitAI.api.me().done(function () {
+        if (isAssigned(active)) {
+          // Access confirmed since sign-in — load the page as if it had been allowed all along.
+          window.location.reload();
+        } else {
+          // Still refused, now with a freshly drawn sidebar of what they do hold.
+          refuse(active);
+        }
+      });
+      return false;
     },
 
     /**

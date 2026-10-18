@@ -51,8 +51,8 @@
             class="input filters__search"
             id="search"
             type="search"
-            placeholder="Search member, Mait or straw number"
-            aria-label="Search member, Mait or straw number"
+            placeholder="Search event #, name, member / MPP code, mobile or straw"
+            aria-label="Search event number, name, member or MPP code, mobile or straw number"
           />
           <select class="select" id="filter-mpp" aria-label="MPP">
             <option value="">All MPPs</option>
@@ -66,6 +66,33 @@
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
+          <!-- One click for every capture that stopped partway and still needs the Mait who
+               started it — the events the dashboard counts but a status-by-status hunt misses.
+               The status column says where each one stopped, so an admin can ring the right
+               Mait. Warn-toned, because it lists work waiting on a human, not a clean result. -->
+          <button
+            class="chip chip--warn"
+            id="filter-unfinished"
+            type="button"
+            aria-pressed="false"
+          >
+            <svg
+              class="chip__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v5l3 2" />
+            </svg>
+            Unfinished
+            <!-- How many captures are still waiting on a Mait in the current view. Filled by
+                 ai-events.js from the list's status breakdown, hidden when there are none. -->
+            <span class="chip__count" id="unfinished-count" hidden></span>
+          </button>
           <!-- One filter in two boxes, so they are boxed together. Loose in the bar they read
                as two unrelated dates. -->
           <div class="range">
@@ -105,10 +132,31 @@
             </h2>
             <span class="panel__count" id="events-note">—</span>
           </div>
+
+          <!-- Appears only while events are ticked. Delete is admin-only and irreversible, so
+               the bar says how many and the click confirms before anything goes. The API is the
+               real gate; this bar is simply where the one write this screen allows is driven. -->
+          <section class="bulk" id="bulk" hidden aria-label="Selected events">
+            <p class="bulk__count" id="bulk-count">—</p>
+            <div class="bulk__actions">
+              <button class="btn btn--danger-outline" type="button" id="bulk-delete">Delete</button>
+              <button class="btn btn--soft" type="button" id="bulk-clear">Clear</button>
+            </div>
+            <p class="bulk__status" id="bulk-status" role="status" aria-live="polite"></p>
+          </section>
+
           <div class="table-wrap">
             <table class="table">
               <thead>
                 <tr>
+                  <th class="col-pick" scope="col">
+                    <input
+                      class="pick pick--all"
+                      id="pick-all"
+                      type="checkbox"
+                      aria-label="Select every event on this page"
+                    />
+                  </th>
                   <th scope="col">Event</th>
                   <th scope="col">Farmer</th>
                   <th scope="col">Mait</th>
@@ -127,14 +175,6 @@
                   <td></td>
                   <td></td>
                   <td></td>
-                </tr>
-                <tr class="skeleton-row" aria-hidden="true">
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
                   <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
@@ -145,6 +185,17 @@
                   <td></td>
                   <td></td>
                   <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
                   <td></td>
@@ -154,8 +205,10 @@
                   <td></td>
                   <td></td>
                   <td></td>
+                  <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
                   <td></td>
                   <td></td>
                   <td></td>

@@ -183,6 +183,25 @@ def test_the_facts_do_not_repeat_the_sentence(audit_client):
     assert "Straw" in labels
 
 
+def test_a_mait_code_reads_as_the_mait_code_not_the_sap_column(audit_client):
+    """
+    SAP calls it the Sahayak vendor code; in this product it is the Mait's own code, and the
+    trail should name it the way the rest of the portal does rather than the way the import did.
+    """
+    an_entry(
+        action=AuditLog.Action.UPDATE,
+        entity_type="mait",
+        entity_id=7,
+        meta={"sahayak_vendor_code": "9900000016", "before": {}, "after": {}},
+    )
+    row = rows(audit_client.get(URL))[0]
+    facts = {fact["label"]: fact["value"] for fact in row["facts"]}
+
+    assert "Mait vendor code" in facts
+    assert facts["Mait vendor code"] == "9900000016"
+    assert not any("Sahayak" in label for label in facts)
+
+
 def test_a_before_and_after_becomes_a_real_diff(audit_client):
     """
     Some call sites record one — the payout scheme editor is the clearest — and those are the

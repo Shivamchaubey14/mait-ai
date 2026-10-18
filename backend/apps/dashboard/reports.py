@@ -30,7 +30,7 @@ from apps.core.models import AuditLog
 from apps.core.permissions import IsAdmin, in_section
 from apps.core.scoping import apply_scope
 from apps.core.services import record_audit
-from apps.core.timeframe import end_of_day, local_day, start_of_day
+from apps.core.timeframe import end_of_day, event_day_expr, local_day, start_of_day
 from apps.pregnancy.models import PregnancyCheck
 
 MAX_ROWS = 100_000
@@ -61,6 +61,10 @@ AI_EVENT_COLUMNS = [
     "member_code",
     "animal_type",
     "breed",
+    # The tag in the animal's ear, where it has one. Not personal data — it identifies the
+    # animal, not the farmer — so it belongs in the file a dispute is reconciled against, and
+    # an event's row was unidentifiable without it when a member owned several of one breed.
+    "ear_tag",
     "straw_no",
     "payment_mode",
     "payment_amount",
@@ -85,6 +89,7 @@ def _ai_event_rows(queryset):
             getattr(event.owner, "member_code", "") or "",
             event.animal.animal_type,
             event.animal.breed,
+            event.animal.ear_tag_no or "",
             event.straw_unique_no,
             payment.mode if payment else "",
             payment.amount if payment else "",
@@ -136,10 +141,16 @@ def export_csv(request):
     # Instants, for the same reason the list filter uses them: `created_at__date` is a
     # CONVERT_TZ that returns NULL on a MySQL without timezone tables, and the export would
     # hand back an empty file for a month that had four hundred events in it.
+    #
+    # Dated on the event *day* — completion for a finished capture, else when it was started —
+    # so the file matches the on-screen list it was taken from, and both match the dashboard.
+    # See `event_day_expr`.
+    if date_from or date_to:
+        queryset = queryset.annotate(event_day=event_day_expr())
     if date_from:
-        queryset = queryset.filter(created_at__gte=start_of_day(date_from))
+        queryset = queryset.filter(event_day__gte=start_of_day(date_from))
     if date_to:
-        queryset = queryset.filter(created_at__lt=end_of_day(date_to))
+        queryset = queryset.filter(event_day__lt=end_of_day(date_to))
     if params.get("mpp"):
         queryset = queryset.filter(mpp__mpp_code=params["mpp"])
     if params.get("mait"):

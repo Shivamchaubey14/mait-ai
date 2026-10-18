@@ -68,10 +68,25 @@ if settings.DEBUG:
     # Named patterns rather than a document root: admin-web also holds node_modules and the
     # project's own package files, and none of that should be reachable — least of all when
     # the port is open to the internet.
+    def _serve_portal(request, path, document_root=None):
+        """
+        Serve a portal file, told to revalidate every time.
+
+        ``django.views.static.serve`` sends ``Last-Modified`` but no ``Cache-Control``, so a
+        browser applies heuristic freshness and can reuse an old ``ai-event.js`` for hours
+        without asking — which is how a shipped portal change (the Farmer & animal card) fails
+        to appear until someone clears their cache. ``no-cache`` keeps the file cached but
+        forces a conditional request: an unchanged file still answers 304, a changed one is
+        picked up at once. Dev-only, like this whole block; deployed, nginx/Caddy set caching.
+        """
+        response = serve(request, path, document_root=document_root)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
     _portal = settings.BASE_DIR.parent / "admin-web"
     if _portal.is_dir():
         urlpatterns += [
             path("", RedirectView.as_view(url="/index.html", permanent=False)),
-            re_path(r"^(?P<path>[\w-]+\.html)$", serve, {"document_root": _portal}),
-            re_path(r"^assets/(?P<path>.*)$", serve, {"document_root": _portal / "assets"}),
+            re_path(r"^(?P<path>[\w-]+\.html)$", _serve_portal, {"document_root": _portal}),
+            re_path(r"^assets/(?P<path>.*)$", _serve_portal, {"document_root": _portal / "assets"}),
         ]

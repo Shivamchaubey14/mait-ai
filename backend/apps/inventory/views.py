@@ -12,6 +12,7 @@ from __future__ import annotations
 from django.conf import settings
 from django.db.models import Min, Q, Sum
 from django.shortcuts import get_object_or_404
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import api_view, permission_classes
@@ -38,10 +39,17 @@ from .serializers import (
     InventorySummarySerializer,
     LedgerEntrySerializer,
     MaitInventorySerializer,
+    MaitStockCreditSerializer,
     SemenBatchSerializer,
     StrawValidationSerializer,
 )
-from .services import available_straw_count, get_straw_for_mait, unnumbered_breeds
+from .services import (
+    add_mait_stock,
+    available_straw_count,
+    get_straw_for_mait,
+    remove_mait_stock,
+    unnumbered_breeds,
+)
 
 
 def _mait(request):
@@ -293,7 +301,31 @@ def inventory_summary(request):
     return Response(InventorySummarySerializer(build_summary(_mait(request))).data)
 
 
+def _stock_catalogue() -> dict:
+    """
+    What a Mait's stock can be added to, in the shape the add-stock form draws from.
+
+    The same two lists the store shelf is stocked from (``apps.stores.views``): every active
+    breed, cow and buffalo in the order the admin set, and every active catalogue product with
+    its category so the form can split the consumables that run out from the equipment that is
+    kept. Kept in step with the store's own catalogue on purpose — a breed a Mait can be
+    credited is a breed a store can hold.
+    """
+    breeds = list(
+        BreedConfig.objects.filter(is_active=True)
+        .order_by("animal_type", "display_order", "name")
+        .values("code", "name", "animal_type")
+    )
+    products = list(
+        Consumable.objects.filter(is_active=True)
+        .order_by("category", "display_order", "name")
+        .values("id", "code", "name", "unit", "category")
+    )
+    return {"breeds": breeds, "products": products}
+
+
 @extend_schema(
+    methods=["GET"],
     tags=["inventory"],
     summary="One Mait's stock, for the admin",
     description=(
@@ -301,25 +333,69 @@ def inventory_summary(request):
         "equipment — for whichever Mait is being looked at.\n\n"
         "The oversight list carries straw counts only, because that is what decides whether "
         "someone can work. This is the rest of the answer, for the moment an admin has a Mait "
-        "on the phone."
+        "on the phone. `catalogue` is everything the stock can be added to — the breeds and "
+        "products the add-stock form draws from."
     ),
-    responses={200: InventorySummarySerializer},
+    responses={200: OpenApiTypes.OBJECT},
 )
-@api_view(["GET"])
+@extend_schema(
+    methods=["POST"],
+    tags=["inventory"],
+    summary="Adjust a Mait's stock (add or remove)",
+    description=(
+        "A manual office adjustment, not an indent. The ordinary path is a store handing an "
+        "approved indent over the counter; this is for the stock that never walked it: an "
+        "opening balance, straws carried by hand, or a count to put right in either "
+        "direction.\n\n"
+        "Straws by `breed`, everything else by `product_ref_id` from the catalogue, chosen "
+        "exactly as a store delivery is. `qty` is at least one; `direction` is `add` (the "
+        "default) or `remove`. A removal takes straws off oldest-first and never touches a "
+        "straw held by an unfinished capture, and it refuses a quantity larger than the Mait "
+        "holds. Written to the ledger as an `adjustment` against `manual` and audited. Returns "
+        "the Mait's stock as it now stands, in the same shape as `GET` — `201` on a credit, "
+        "`200` on a removal."
+    ),
+    request=MaitStockCreditSerializer,
+    responses={201: OpenApiTypes.OBJECT},
+)
+@api_view(["GET", "POST"])
 @permission_classes([IsAdmin, in_section(PortalSection.INVENTORY)])
 def mait_inventory_detail(request, mait_id: int):
     # The same reach as the list it is opened from: a zonal manager reads the Maits in their
-    # zone, and a Mait outside it is a 404 rather than a row they could not have clicked.
+    # zone, and a Mait outside it is a 404 rather than a row they could not have clicked — and
+    # the same gate keeps them from crediting a Mait they could not see either.
     maits = Mait.objects.all()
     codes = scope_of(request)
     if codes is not None:
         maits = maits.filter(mpps__plant_code__in=codes).distinct()
     mait = get_object_or_404(maits, pk=mait_id)
-    payload = build_summary(mait)
-    payload["mait_id"] = mait.id
-    payload["mait_name"] = mait.name
-    payload["sahayak_vendor_code"] = mait.sahayak_vendor_code
-    return Response(payload)
+
+    removing = False
+    if request.method == "POST":
+        payload = MaitStockCreditSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        removing = data.get("direction") == "remove"
+        adjust = remove_mait_stock if removing else add_mait_stock
+        adjust(
+            mait=mait,
+            product_type=data["product_type"],
+            breed=data.get("breed", ""),
+            product_ref_id=data.get("product_ref_id") or 0,
+            qty=data["qty"],
+            note=data.get("note", ""),
+            actor=request.user,
+            request=request,
+        )
+
+    body = build_summary(mait)
+    body["mait_id"] = mait.id
+    body["mait_name"] = mait.name
+    body["sahayak_vendor_code"] = mait.sahayak_vendor_code
+    body["catalogue"] = _stock_catalogue()
+    # A credit creates stock (201); a removal only moves a balance that was already there (200).
+    status_code = 201 if request.method == "POST" and not removing else 200
+    return Response(body, status=status_code)
 
 
 @extend_schema(tags=["inventory"])
