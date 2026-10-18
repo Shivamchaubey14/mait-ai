@@ -149,6 +149,36 @@ def issue(mait, *, straws=0, ln2=0, sheath=0, gloves=0, when=None):
             movement(ProductType.CONSUMABLE, Consumable.objects.get(code=code).id, qty)
 
 
+def admin_add(mait, *, straws=0, ln2=0, sheath=0, gloves=0, when=None):
+    """Credit material to a Mait by hand — a manual office adjustment, not an indent."""
+    moment = when or in_month()
+
+    def movement(product_type, ref_id, qty):
+        inventory, _ = MaitInventory.objects.get_or_create(
+            mait=mait,
+            product_type=product_type,
+            product_ref_id=ref_id,
+            defaults={"qty_available": 0},
+        )
+        inventory.qty_available += qty
+        inventory.save(update_fields=["qty_available"])
+        entry = MaitInventoryLedger.objects.create(
+            inventory=inventory,
+            txn_type=MaitInventoryLedger.TxnType.ADJUSTMENT,
+            qty=qty,
+            balance_after=inventory.qty_available,
+            ref_type=MaitInventoryLedger.RefType.MANUAL,
+        )
+        MaitInventoryLedger.objects.filter(pk=entry.pk).update(created_at=moment)
+
+    for _ in range(straws):
+        straw = SemenBatch.objects.create(unique_straw_no=uuid.uuid4().hex[:20], breed="MURRAH")
+        movement(ProductType.STRAW, straw.id, 1)
+    for code, qty in [("LN2", ln2), ("SHEATH", sheath), ("GLOVES", gloves)]:
+        if qty:
+            movement(ProductType.CONSUMABLE, Consumable.objects.get(code=code).id, qty)
+
+
 def row_for(report, name):
     return next(row for row in report["rows"] if row.mait_name == name)
 
@@ -224,6 +254,61 @@ def test_totals_are_the_sum_of_the_rows(sheet):
     assert sheet["totals"]["ai_performed"] == sum(row[1] for row in SHEET_ROWS)
     assert sheet["totals"]["net_payable"] == sum(Decimal(row[10]) for row in SHEET_ROWS)
     assert sheet["totals"]["quantities"]["semen"] == sum(row[2] for row in SHEET_ROWS)
+
+
+# --------------------------------------------------------------------------------------
+# Stock added by the office, not by an indent
+# --------------------------------------------------------------------------------------
+def test_admin_added_stock_is_shown_apart_and_never_deducted(scheme, mait_factory):
+    """
+    What the office credits by hand is reported in its own columns and does not reduce the pay.
+
+    The dairy recovers the cost of what it *issued against an indent*; an opening balance or a
+    hand correction is not that, so it appears labelled "added by admin" and the deduction is
+    built from the issued columns alone.
+    """
+    mait, mpp = mait_factory("MIXED SOURCE")
+    complete_events(mait, mpp, 30)
+    issue(mait, straws=20, gloves=50)  # the indent path — recovered
+    admin_add(mait, straws=8, ln2=4)  # the office path — shown, not recovered
+
+    row = row_for(build_payout(YEAR, MONTH), "MIXED SOURCE")
+
+    # Issued materials are unchanged — admin-added stock is not mixed into them.
+    assert row.quantities == {"semen": 20, "ln2": 0, "sheath": 0, "gloves": 50, "tagging": 0}
+    # And the hand-credited stock has its own figures.
+    assert row.admin_quantities == {"semen": 8, "ln2": 4, "sheath": 0, "gloves": 0, "tagging": 0}
+
+    # The deduction recovers only the 20 straws and 50 gloves, nothing for the admin stock.
+    expected = Decimal("35") * 20 + Decimal("3") * 50
+    assert row.deduction == expected
+
+
+def test_admin_added_totals_sum_the_rows(scheme, mait_factory):
+    mait, mpp = mait_factory("ADDED")
+    admin_add(mait, straws=5, sheath=12)
+
+    totals = build_payout(YEAR, MONTH)["totals"]
+    assert totals["admin_quantities"]["semen"] == 5
+    assert totals["admin_quantities"]["sheath"] == 12
+
+
+def test_admin_added_columns_carry_the_quantities_in_the_workbook(scheme, mait_factory):
+    mait, mpp = mait_factory("SHEET ADMIN")
+    issue(mait, straws=10)
+    admin_add(mait, straws=3, gloves=6)
+
+    workbook, _report = build_payout_workbook(YEAR, MONTH)
+    payment = workbook["MAR-PAYMENT"]
+    data = next(
+        row
+        for row in payment.iter_rows(min_row=2, values_only=False)
+        if row[2].value == "SHEET ADMIN"
+    )
+    # Issued straws in column 8, admin-added straws in column 12, admin-added gloves in 15.
+    assert data[7].value == 10  # SEMEN (issued)
+    assert data[11].value == 3  # SEMEN (ADMIN)
+    assert data[14].value == 6  # GLOVES (ADMIN)
 
 
 # --------------------------------------------------------------------------------------
@@ -375,7 +460,7 @@ def test_workbook_has_both_tabs_and_the_rate_legend(sheet, scheme):
 
     # Row 1 is the column names, with nothing above them. A banner there made Excel guess the
     # wrong header row on every sort and filter.
-    headers = [payment.cell(row=1, column=i).value for i in range(1, 20)]
+    headers = [payment.cell(row=1, column=i).value for i in range(1, 24)]
     assert headers[:7] == [
         "S.No.",
         "MCC NAME",
@@ -387,9 +472,17 @@ def test_workbook_has_both_tabs_and_the_rate_legend(sheet, scheme):
     ]
     assert headers[-4:] == ["Account No", "IFSC", "PANCARD", "VENDOR"]
 
+    # The "added by admin" block sits between the issued materials and the deduction.
+    assert headers[11:15] == [
+        "SEMEN\n(ADMIN)",
+        "LN2\n(ADMIN)",
+        "SHEETH\n(ADMIN)",
+        "GLOVES\n(ADMIN)",
+    ]
+
     # Identifiers are written as text, or Excel eats the leading zeros and rounds the long
     # ones into scientific notation on the way back in.
-    for column in (16, 17, 18, 19):
+    for column in (20, 21, 22, 23):
         assert payment.cell(row=2, column=column).number_format == "@"
 
     # What the banner used to say, where a sort cannot trip over it.

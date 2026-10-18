@@ -88,6 +88,11 @@ class PayoutRow:
     quantities: dict = field(default_factory=dict)
     #: The rupee value of each of those, same keys.
     recoveries: dict = field(default_factory=dict)
+    #: Quantities the office credited by hand in the month — a manual adjustment, not an indent
+    #: (``add_mait_stock``). Keyed as `MATERIAL_KEYS`. Shown on the sheet labelled "added by
+    #: admin" and deliberately **not** recovered: the dairy only charges a Mait for what it
+    #: issued against an indent, so this sits beside the recovered columns rather than in them.
+    admin_quantities: dict = field(default_factory=dict)
 
     bank_account_no: str = ""
     ifsc_code: str = ""
@@ -219,6 +224,52 @@ def _issued_quantities(first: date, last: date) -> dict[int, dict[str, int]]:
     }
 
 
+def _admin_added_quantities(first: date, last: date) -> dict[int, dict[str, int]]:
+    """
+    What each Mait was credited **by hand** in the window — the office's own adjustments, by
+    report column.
+
+    The same shape and keys as :func:`_issued_quantities`, and deliberately a separate query:
+    these are ``adjustment`` movements (``add_mait_stock`` / ``remove_mait_stock``), the stock
+    that never walked the indent path — an opening balance, a count the desk put right, straws
+    carried over by hand. The payout recovers indent issues only, so this is reported beside
+    the recovered columns and never folded into them.
+
+    A removal adjustment is a negative movement, so the net is floored at zero for the same
+    reason the issued figure is: a desk that corrected more off than it had put on this month
+    is unwinding an earlier one, not crediting the Mait a negative quantity.
+    """
+    codes = {code: key for key, code in CONSUMABLE_COLUMNS}
+    consumable_key = {
+        row["id"]: codes[row["code"]]
+        for row in Consumable.objects.filter(code__in=list(codes)).values("id", "code")
+    }
+
+    quantities: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    rows = (
+        MaitInventoryLedger.objects.filter(
+            txn_type=MaitInventoryLedger.TxnType.ADJUSTMENT,
+            created_at__gte=start_of_day(first),
+            created_at__lt=start_of_day(last),
+        )
+        .values("inventory__mait_id", "inventory__product_type", "inventory__product_ref_id")
+        .annotate(qty=Sum("qty"))
+    )
+    for row in rows:
+        if row["inventory__product_type"] == ProductType.STRAW:
+            key = "semen"
+        else:
+            key = consumable_key.get(row["inventory__product_ref_id"])
+            if key is None:
+                continue
+        quantities[row["inventory__mait_id"]][key] += row["qty"] or 0
+
+    return {
+        mait_id: {key: max(0, qty) for key, qty in columns.items()}
+        for mait_id, columns in quantities.items()
+    }
+
+
 def material_rates() -> dict[str, Decimal]:
     """
     The per-piece recovery rate for each material column.
@@ -239,17 +290,17 @@ def material_rates() -> dict[str, Decimal]:
     return rates
 
 
-def _roster(ai_counts: dict, issued: dict) -> dict[int, Mait]:
+def _roster(ai_counts: dict, issued: dict, admin_added: dict | None = None) -> dict[int, Mait]:
     """
     Which Maits the report has a row for.
 
-    Everybody who worked or was issued anything in the month, plus every activated Mait — the
-    ones holding a login, which is what makes somebody a working technician rather than one of
-    the several thousand Sahayaks the SAP master carries. That last group is why the sheet has
-    rows reading zero all the way across: a Mait who did nothing in March is a fact the office
-    needs on the page, not an absence it has to notice.
+    Everybody who worked, was issued anything, or was credited stock by hand in the month, plus
+    every activated Mait — the ones holding a login, which is what makes somebody a working
+    technician rather than one of the several thousand Sahayaks the SAP master carries. That
+    last group is why the sheet has rows reading zero all the way across: a Mait who did nothing
+    in March is a fact the office needs on the page, not an absence it has to notice.
     """
-    active = set(ai_counts) | set(issued)
+    active = set(ai_counts) | set(issued) | set(admin_added or {})
     return {
         mait.id: mait
         for mait in Mait.objects.filter(
@@ -269,13 +320,15 @@ def build_payout(year: int, month: int) -> dict:
 
     ai_counts = _ai_counts(first, last)
     issued = _issued_quantities(first, last)
+    admin_added = _admin_added_quantities(first, last)
     mcc = _mcc_by_mait()
-    roster = _roster(ai_counts, issued)
+    roster = _roster(ai_counts, issued, admin_added)
 
     rows: list[PayoutRow] = []
     for mait in roster.values():
         count = ai_counts.get(mait.id, 0)
         given = issued.get(mait.id, {})
+        added = admin_added.get(mait.id, {})
         quantities = {key: given.get(key, 0) for key in MATERIAL_KEYS}
         # "At least this many", so a Mait sitting exactly on the threshold earns it. A
         # threshold of zero means the dairy is not running a retainer at all, which is not the
@@ -292,6 +345,7 @@ def build_payout(year: int, month: int) -> dict:
                 fixed_amount=scheme.monthly_fixed_amount if earned_fixed else ZERO,
                 quantities=quantities,
                 recoveries={key: rates[key] * quantity for key, quantity in quantities.items()},
+                admin_quantities={key: added.get(key, 0) for key in MATERIAL_KEYS},
                 bank_account_no=mait.bank_account_no or "",
                 ifsc_code=mait.ifsc_code or "",
                 pan_no=mait.pan_no or "",
@@ -325,6 +379,9 @@ def totals_for(rows: list[PayoutRow]) -> dict:
         "gross": sum((row.gross for row in rows), ZERO),
         "quantities": {
             key: sum(row.quantities.get(key, 0) for row in rows) for key in MATERIAL_KEYS
+        },
+        "admin_quantities": {
+            key: sum(row.admin_quantities.get(key, 0) for row in rows) for key in MATERIAL_KEYS
         },
         "recoveries": {
             key: sum((row.recoveries.get(key, ZERO) for row in rows), ZERO) for key in MATERIAL_KEYS

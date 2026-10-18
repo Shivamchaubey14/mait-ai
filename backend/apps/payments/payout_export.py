@@ -52,6 +52,11 @@ TOTAL_FILL = PatternFill("solid", fgColor="EAF7F1")
 TOTAL_FONT = Font(bold=True)
 LEGEND_FILL = PatternFill("solid", fgColor="FFF8E9")
 LEGEND_FONT = Font(bold=True, size=10)
+#: The "added by admin" block — stock the office credited by hand, shown beside the recovered
+#: material columns so the reader can see it is reported, not charged. Tinted the portal's info
+#: wash so the eye reads the four columns as one group that is doing a different job.
+ADMIN_FILL = PatternFill("solid", fgColor="EAF2FB")
+ADMIN_HEADER_FILL = PatternFill("solid", fgColor="3E6E9A")
 #: A payout that came out below zero — more issued than earned. Tinted rather than filtered
 #: out: it is the row somebody has to look at before the file goes to the bank.
 NEGATIVE_FILL = PatternFill("solid", fgColor="FDECEA")
@@ -77,6 +82,13 @@ COLUMNS = [
     ("LN2", 9, "qty"),
     ("SHEETH", 9, "qty"),
     ("GLOVES", 9, "qty"),
+    # Added by the office by hand (a manual adjustment), not issued against an indent — so it
+    # sits here, beside what was issued, and is pointedly not part of the deduction to its
+    # right. One admin column per material, in the same order as the four above it.
+    ("SEMEN\n(ADMIN)", 10, "qty"),
+    ("LN2\n(ADMIN)", 10, "qty"),
+    ("SHEETH\n(ADMIN)", 10, "qty"),
+    ("GLOVES\n(ADMIN)", 10, "qty"),
     ("TOTAL DEDUCTION", 15, "money"),
     ("AFTER DEDUCTION", 15, "money"),
     ("TAGGING", 10, "money"),
@@ -87,8 +99,16 @@ COLUMNS = [
     ("VENDOR", 14, "text"),
 ]
 
-#: Which material column each quantity heading is fed by, in the sheet's own order.
+#: Which material column each quantity heading is fed by, in the sheet's own order. The same
+#: keys feed the "(ADMIN)" block, which mirrors these four.
 QUANTITY_KEYS = ["semen", "ln2", "sheath", "gloves"]
+
+#: The 1-based column numbers of the "added by admin" block, derived from the headings so a
+#: future reorder of `COLUMNS` moves the tint and the header style with them rather than
+#: leaving a magic number behind.
+ADMIN_COLUMN_INDEXES = {
+    index for index, (title, _w, _k) in enumerate(COLUMNS, start=1) if "(ADMIN)" in title
+}
 
 MONTH_NAMES = [
     "JAN",
@@ -140,7 +160,7 @@ def _payout_sheet(sheet, report: dict) -> None:
     # the audit log with the month it covered.
     for index, (title, width, _kind) in enumerate(COLUMNS, start=1):
         cell = sheet.cell(row=1, column=index, value=title)
-        cell.fill = HEADER_FILL
+        cell.fill = ADMIN_HEADER_FILL if index in ADMIN_COLUMN_INDEXES else HEADER_FILL
         cell.font = HEADER_FONT
         cell.border = GRID
         cell.alignment = Alignment(vertical="center", horizontal="center", wrap_text=True)
@@ -158,6 +178,8 @@ def _payout_sheet(sheet, report: dict) -> None:
             float(row.fixed_amount),
             float(row.gross),
             *(row.quantities.get(key, 0) for key in QUANTITY_KEYS),
+            # The "added by admin" block, one per material, right after what was issued.
+            *(row.admin_quantities.get(key, 0) for key in QUANTITY_KEYS),
             float(row.deduction),
             float(row.after_deduction),
             float(row.tagging),
@@ -170,7 +192,10 @@ def _payout_sheet(sheet, report: dict) -> None:
             row.vendor_code,
         ]
         for index, value in enumerate(values, start=1):
-            _write(sheet, line, index, value, kind=COLUMNS[index - 1][2], fill=tint)
+            # An overdrawn row owns its red band whole; otherwise the admin block keeps its own
+            # wash so the four columns read as a group that is reported, not recovered.
+            cell_fill = tint or (ADMIN_FILL if index in ADMIN_COLUMN_INDEXES else None)
+            _write(sheet, line, index, value, kind=COLUMNS[index - 1][2], fill=cell_fill)
         line += 1
 
     totals = report["totals"]
@@ -186,16 +211,20 @@ def _payout_sheet(sheet, report: dict) -> None:
             (8 + offset, totals["quantities"].get(key, 0), "qty")
             for offset, key in enumerate(QUANTITY_KEYS)
         ),
-        (12, float(totals["deduction"]), "money"),
-        (13, float(totals["after_deduction"]), "money"),
-        (14, float(totals["tagging"]), "money"),
-        (15, float(totals["net_payable"]), "money"),
+        *(
+            (12 + offset, totals["admin_quantities"].get(key, 0), "qty")
+            for offset, key in enumerate(QUANTITY_KEYS)
+        ),
+        (16, float(totals["deduction"]), "money"),
+        (17, float(totals["after_deduction"]), "money"),
+        (18, float(totals["tagging"]), "money"),
+        (19, float(totals["net_payable"]), "money"),
     ]
     for index, value, kind in total_values:
         _write(sheet, line, index, value, kind=kind, fill=TOTAL_FILL, font=TOTAL_FONT)
     # The identifier columns have no total, but the band should run the width of the table
     # rather than stop halfway across it.
-    for index in range(16, len(COLUMNS) + 1):
+    for index in range(20, len(COLUMNS) + 1):
         _write(sheet, line, index, None, fill=TOTAL_FILL)
 
     _legend(sheet, line + 3, scheme, rates)
@@ -247,6 +276,21 @@ def _legend(sheet, line: int, scheme, rates: dict) -> None:
     for offset, (label, rate) in enumerate(materials, start=1):
         _write(sheet, line + offset, 6, label, fill=LEGEND_FILL)
         _write(sheet, line + offset, 7, float(rate or 0), kind="money", fill=LEGEND_FILL)
+
+    # What the "(ADMIN)" columns mean, said once at the foot where the rates are. Stock the
+    # office credited by hand is shown so it is accounted for, not recovered — the deduction is
+    # built from indent issues alone.
+    note = sheet.cell(
+        row=line + len(materials) + 2,
+        column=3,
+        value=(
+            'The "(ADMIN)" columns are stock added to a Mait by the office by hand. They are '
+            "shown for the record and are not part of the deduction — only material issued "
+            "against an indent is recovered."
+        ),
+    )
+    note.font = Font(size=9, color="7A8893")
+    note.alignment = Alignment(wrap_text=True, vertical="top")
 
 
 def _deduction_sheet(sheet, report: dict) -> None:

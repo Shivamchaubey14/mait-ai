@@ -78,6 +78,9 @@ def _row(serial: int, row) -> dict:
         "gross": str(row.gross),
         "quantities": {key: row.quantities.get(key, 0) for key in MATERIAL_KEYS},
         "recoveries": {key: str(row.recoveries.get(key, 0)) for key in MATERIAL_KEYS},
+        # Stock the office credited by hand, labelled "added by admin" on the sheet and shown
+        # beside the recovered columns — never folded into the deduction.
+        "admin_quantities": {key: row.admin_quantities.get(key, 0) for key in MATERIAL_KEYS},
         "deduction": str(row.deduction),
         "after_deduction": str(row.after_deduction),
         "tagging": str(row.tagging),
