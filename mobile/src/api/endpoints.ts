@@ -16,6 +16,9 @@ import type {
   AdminAiEventsPage,
   AdminMait,
   AdminNonMember,
+  InventoryOversight,
+  ProductAdmin,
+  StoreAdmin,
   AIEventDraft,
   AIEventTimelineEntry,
   AnimalTypeCode,
@@ -898,6 +901,40 @@ export const maitaiApi = api.injectEndpoints({
       query: id => `/admin/non-members/${id}/`,
       providesTags: ['Member'],
     }),
+
+    /** Straw holding across every Mait (GET /admin/inventory/) — the oversight screen. */
+    adminInventoryOversight: builder.query<InventoryOversight, void>({
+      query: () => '/admin/inventory/',
+      providesTags: ['Inventory'],
+    }),
+
+    /** The product catalogue with recovery rates (GET /admin/products/). */
+    adminListProducts: builder.query<Paginated<ProductAdmin>, void>({
+      query: () => ({ url: '/admin/products/', params: { limit: 200 } }),
+      providesTags: ['Inventory'],
+    }),
+
+    /** Every store/depot for the admin roster (GET /admin/stores/). */
+    adminListStores: builder.query<Paginated<StoreAdmin>, { search?: string } | void>({
+      query: args => ({
+        url: '/admin/stores/',
+        params: { limit: 100, ...(args?.search ? { search: args.search } : {}) },
+      }),
+      providesTags: ['Store'],
+    }),
+
+    /** The indent queue for the admin roster (GET /indents/), filterable by status. */
+    adminListIndents: builder.query<Paginated<Indent>, { status?: string; offset?: number } | void>({
+      query: args => ({
+        url: '/indents/',
+        params: {
+          limit: 25,
+          ...(args?.status ? { status: args.status } : {}),
+          ...(args?.offset ? { offset: args.offset } : {}),
+        },
+      }),
+      providesTags: ['Indent'],
+    }),
   }),
 });
 
@@ -972,4 +1009,8 @@ export const {
   useGetMppQuery,
   useAdminSearchNonMembersQuery,
   useAdminGetNonMemberQuery,
+  useAdminInventoryOversightQuery,
+  useAdminListProductsQuery,
+  useAdminListStoresQuery,
+  useAdminListIndentsQuery,
 } = maitaiApi;

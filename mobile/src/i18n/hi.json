@@ -178,6 +178,62 @@
       "fieldEvents": "AI इवेंट",
       "fieldCattle": "पशुधन",
       "fieldYield": "दैनिक उपज"
+    },
+    "inventory": {
+      "error": "इन्वेंटरी लोड नहीं हो सकी। दोबारा कोशिश करें।",
+      "none": "दिखाने के लिए कोई मैत नहीं।",
+      "atZero": "शून्य पर",
+      "low": "कम",
+      "maits": "मैत",
+      "straws": "कुल स्ट्रॉ"
+    },
+    "products": {
+      "error": "उत्पाद लोड नहीं हो सके। दोबारा कोशिश करें।",
+      "none": "कैटलॉग में कोई उत्पाद नहीं।",
+      "inactive": "निष्क्रिय",
+      "unpriced": "कोई दर नहीं"
+    },
+    "stores": {
+      "searchPlaceholder": "स्टोर का नाम या कोड",
+      "error": "स्टोर लोड नहीं हो सके। दोबारा कोशिश करें।",
+      "none": "कोई स्टोर नहीं मिला।",
+      "noneFound": "“{{query}}” से कोई स्टोर मेल नहीं खाता।",
+      "active": "सक्रिय",
+      "inactive": "निष्क्रिय",
+      "mpps": "{{count}} केंद्र",
+      "noKeepers": "कोई कीपर नहीं सौंपा गया",
+      "fieldCode": "कोड",
+      "fieldZone": "ज़ोन",
+      "fieldPlants": "सेवा (BMC/MCC)",
+      "fieldMpps": "संग्रह केंद्र",
+      "fieldKeepers": "कीपर",
+      "fieldOpen": "खुले इंडेंट",
+      "fieldNote": "टिप्पणी"
+    },
+    "indents": {
+      "error": "इंडेंट लोड नहीं हो सके। दोबारा कोशिश करें।",
+      "none": "यहाँ कोई इंडेंट नहीं।",
+      "record": "इंडेंट",
+      "recordMissing": "यह इंडेंट लोड नहीं हो सका।",
+      "filter_all": "सभी",
+      "filter_requested": "प्रतीक्षित",
+      "filter_approved": "स्वीकृत",
+      "filter_rejected": "अस्वीकृत",
+      "approve": "स्वीकृत करें",
+      "approveTitle": "यह इंडेंट स्वीकृत करें?",
+      "approveBody": "{{name}} के लिए {{qty}} {{item}} स्वीकृत करें। फिर यह सौंपे जाने के लिए डिपो पर प्रतीक्षा करेगा।",
+      "reject": "अस्वीकृत करें",
+      "rejectHint": "मैत को कारण बताएँ — यह उन्हें उनके ऐप में दिखाया जाता है।",
+      "reasonPlaceholder": "अस्वीकृति का कारण",
+      "rejectConfirm": "इंडेंट अस्वीकृत करें",
+      "failedTitle": "सहेजा नहीं जा सका",
+      "failedBody": "निर्णय दर्ज नहीं हुआ। दोबारा कोशिश करें।",
+      "fieldMait": "मैत",
+      "fieldItem": "वस्तु",
+      "fieldQty": "मात्रा",
+      "fieldStore": "डिपो",
+      "fieldApprovedBy": "स्वीकृत किया",
+      "fieldNote": "टिप्पणी"
     }
   },
   "aiFlow": {

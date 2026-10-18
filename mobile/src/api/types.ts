@@ -102,6 +102,57 @@ export interface AdminNonMember {
   created_at: string;
 }
 
+/** One Mait's straw holding on the admin inventory oversight (GET /admin/inventory/). */
+export interface InventoryOversightRow {
+  mait_id: number;
+  name: string;
+  sahayak_vendor_code: string;
+  mpp_codes: string[];
+  by_breed: Record<string, number>;
+  total: number;
+}
+
+export interface InventoryOversight {
+  summary: {
+    total_straws: number;
+    maits: number;
+    low: number;
+    at_zero: number;
+    low_stock_threshold: number;
+    stores: number;
+    store_straws: number;
+  };
+  results: InventoryOversightRow[];
+}
+
+/** A catalogue product with its recovery rate (GET /admin/products/). */
+export interface ProductAdmin {
+  id: number;
+  code: string;
+  name: string;
+  category: 'consumable' | 'asset';
+  unit: string;
+  /** Rupees per unit, as a decimal string. Zero means not priced. */
+  rate: string;
+  display_order: number;
+  is_active: boolean;
+}
+
+/** A store/depot for the admin roster (GET /admin/stores/). */
+export interface StoreAdmin {
+  id: number;
+  code: string;
+  name: string;
+  zone_name: string;
+  description: string;
+  is_active: boolean;
+  plant_names: string[];
+  mpp_count: number;
+  keepers: { full_name: string; mobile_no: string; is_active: boolean }[];
+  open_indents: number;
+  created_at: string;
+}
+
 export interface MPP {
   id: number;
   mpp_code: string;
@@ -654,6 +705,9 @@ export interface Indent {
   qty_issued: number;
   status: IndentStatus;
   status_display: string;
+  /** Who raised it — on the admin roster; a Mait reading their own never needs it. */
+  mait_name?: string;
+  mait_code?: string;
   requested_at: string;
   issued_at: string | null;
   /** Set when the Mait confirms they collected it. This is when the stock becomes theirs. */

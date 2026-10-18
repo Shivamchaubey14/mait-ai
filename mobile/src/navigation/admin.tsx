@@ -23,10 +23,14 @@ import { useTranslation } from 'react-i18next';
 import { useLogoutMutation } from '@api/endpoints';
 import AdminDrawer from '@/features/admin/AdminDrawer';
 import AdminEventsScreen from '@/features/admin/AdminEventsScreen';
+import AdminIndentsScreen from '@/features/admin/AdminIndentsScreen';
+import AdminInventoryScreen from '@/features/admin/AdminInventoryScreen';
 import AdminMaitsScreen from '@/features/admin/AdminMaitsScreen';
 import AdminMembersScreen from '@/features/admin/AdminMembersScreen';
 import AdminMppsScreen from '@/features/admin/AdminMppsScreen';
 import AdminNonMembersScreen from '@/features/admin/AdminNonMembersScreen';
+import AdminProductsScreen from '@/features/admin/AdminProductsScreen';
+import AdminStoresScreen from '@/features/admin/AdminStoresScreen';
 import { ADMIN_HOME, sectionFor } from '@/features/admin/sections';
 import { loggedOut } from '@/features/auth/authSlice';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -102,6 +106,14 @@ export default function AdminNavigator(): React.JSX.Element {
     screen = <AdminMppsScreen />;
   } else if (section === 'non-members') {
     screen = <AdminNonMembersScreen />;
+  } else if (section === 'inventory') {
+    screen = <AdminInventoryScreen />;
+  } else if (section === 'products') {
+    screen = <AdminProductsScreen />;
+  } else if (section === 'indents') {
+    screen = <AdminIndentsScreen />;
+  } else if (section === 'stores') {
+    screen = <AdminStoresScreen />;
   } else {
     screen = (
       <View style={styles.soonBody} testID="admin-section-soon">
