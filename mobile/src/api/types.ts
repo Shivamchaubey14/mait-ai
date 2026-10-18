@@ -48,6 +48,18 @@ export interface Paginated<T> {
   results: T[];
 }
 
+/** The status split of the whole filtered set, carried beside a page of AI events. */
+export interface AiEventsSummary {
+  completed: number;
+  unfinished: number;
+  cancelled: number;
+}
+
+/** A page of AI events for the admin list, with the set-wide status counts. */
+export interface AdminAiEventsPage extends Paginated<AIEvent> {
+  summary: AiEventsSummary;
+}
+
 export interface MPP {
   id: number;
   mpp_code: string;
@@ -436,6 +448,13 @@ export interface AIEvent {
   mpp: number;
   mpp_code: string;
   mpp_name: string;
+  /**
+   * The Mait who recorded it, for the admin roster — the field app never reads these, and a
+   * provisional event built on the handset has no Mait name yet, so they are optional.
+   */
+  mait_name?: string;
+  mait_code?: string;
+  mait_mobile?: string;
   owner_type: 'member' | 'non_member';
   member: number | null;
   /**

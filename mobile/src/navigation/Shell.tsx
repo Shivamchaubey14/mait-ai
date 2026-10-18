@@ -28,6 +28,7 @@ import React from 'react';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SplashScreen from '@/features/auth/SplashScreen';
 import RootNavigator from '@/navigation';
+import AdminNavigator from '@/navigation/admin';
 import StoreNavigator from '@/navigation/store';
 import ZonalNavigator from '@/navigation/zonal';
 import { useAppSelector } from '@/store';
@@ -46,6 +47,11 @@ export default function Shell({ fontsLoaded }: { fontsLoaded: boolean }): React.
   const manager = useAppSelector(
     state => state.auth.user?.role === 'admin' && (state.auth.user?.zones?.length ?? 0) > 0,
   );
+  // An office account that is not a zonal manager gets the admin app — the portal's surface on
+  // a handset. A super admin and a normal user are always this; a plain admin is this unless
+  // they hold zones, which is what makes them a manager instead (checked first, above).
+  const role = useAppSelector(state => state.auth.user?.role);
+  const office = role === 'super_admin' || role === 'normal_user' || role === 'admin';
 
   if (fontsLoaded && restored) {
     if (!signedIn) {
@@ -54,7 +60,10 @@ export default function Shell({ fontsLoaded }: { fontsLoaded: boolean }): React.
     if (keeper) {
       return <StoreNavigator />;
     }
-    return manager ? <ZonalNavigator /> : <RootNavigator />;
+    if (manager) {
+      return <ZonalNavigator />;
+    }
+    return office ? <AdminNavigator /> : <RootNavigator />;
   }
 
   // Two things are being waited on, so the bar can report which of them have landed rather

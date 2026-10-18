@@ -13,6 +13,7 @@ import type {
   PregnancyCheckPage,
   AadhaarImages,
   AIEvent,
+  AdminAiEventsPage,
   AIEventDraft,
   AIEventTimelineEntry,
   AnimalTypeCode,
@@ -806,6 +807,65 @@ export const maitaiApi = api.injectEndpoints({
       query: id => `/ai-events/${id}/timeline/`,
       providesTags: ['AIEvent'],
     }),
+
+    // ---- admin (office account on a handset) --------------------------------------------
+    /**
+     * Username + password, the Admin door — the one role that does not take an OTP (a desk
+     * account, not a field phone). Maits, keepers and managers use `/auth/otp/*`.
+     */
+    passwordLogin: builder.mutation<TokenPair, { username: string; password: string }>({
+      query: body => ({ url: '/auth/login/', method: 'POST', body }),
+    }),
+
+    /**
+     * Every AI event in the network, for the admin roster — the portal's AI events screen on a
+     * handset. Scoped by the server to the account's zones (all of it for a head-office admin),
+     * filterable by one search box, a status and a date range, and carrying the set-wide status
+     * `summary` beside the page.
+     */
+    adminListAiEvents: builder.query<
+      AdminAiEventsPage,
+      {
+        search?: string;
+        status?: string;
+        unfinished?: boolean;
+        dateFrom?: string;
+        dateTo?: string;
+        offset?: number;
+      } | void
+    >({
+      query: args => ({
+        url: '/ai-events/',
+        params: {
+          limit: 25,
+          ...(args?.search ? { search: args.search } : {}),
+          ...(args?.status ? { status: args.status } : {}),
+          ...(args?.unfinished ? { unfinished: true } : {}),
+          ...(args?.dateFrom ? { date_from: args.dateFrom } : {}),
+          ...(args?.dateTo ? { date_to: args.dateTo } : {}),
+          ...(args?.offset ? { offset: args.offset } : {}),
+        },
+      }),
+      providesTags: ['AIEvent'],
+    }),
+
+    /** Delete one AI event (admin/super_admin only — a Normal User is refused by the server). */
+    deleteAiEvent: builder.mutation<void, number>({
+      query: id => ({ url: `/ai-events/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['AIEvent'],
+    }),
+
+    /**
+     * Search members across the network, for the admin roster. One box over name, member code
+     * and mobile; scoped to the account's zones by the server.
+     */
+    adminSearchMembers: builder.query<Paginated<Member>, { search?: string } | void>({
+      query: args => ({
+        url: '/members/',
+        params: { limit: 25, ...(args?.search ? { search: args.search } : {}) },
+      }),
+      providesTags: ['Member'],
+    }),
   }),
 });
 
@@ -872,4 +932,8 @@ export const {
   useLazyListZonalMaitsQuery,
   useZonalLookupQuery,
   useAssignZonalMppMutation,
+  usePasswordLoginMutation,
+  useAdminListAiEventsQuery,
+  useDeleteAiEventMutation,
+  useAdminSearchMembersQuery,
 } = maitaiApi;

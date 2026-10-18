@@ -38,10 +38,11 @@ import Problem, { useOnline } from '@/components/problem';
 import { Toast } from '@/components/toast';
 import { OTP_EXPIRY_SECONDS, OTP_LOCK_MINUTES, OTP_MAX_ATTEMPTS } from '@/config/env';
 import { useAppDispatch } from '@/store';
-import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+import { colors, green, MIN_TOUCH_TARGET, radius, spacing, typography, yolk } from '@theme/tokens';
 
 import { loggedIn } from './authSlice';
 import { toAuthUser } from './liveScope';
+import AdminLoginScreen from './AdminLoginScreen';
 import OtpVerifyScreen, { OtpFailure } from './OtpVerifyScreen';
 
 type Step = 'mobile' | 'otp';
@@ -50,6 +51,40 @@ type Step = 'mobile' | 'otp';
 function formatMobile(digits: string): string {
   return digits.length <= 5 ? digits : `${digits.slice(0, 5)} ${digits.slice(5)}`;
 }
+
+/**
+ * The three steps of signing in, each in its colour: blue the number (a fact), yolk the code
+ * on its way (waiting), green signed in (done).
+ */
+const STEPS = [
+  {
+    key: 'stepNumber',
+    icon: 'call',
+    solid: colors.info,
+    on: colors.surface,
+    word: colors.info,
+    wash: colors.infoWash,
+    edge: colors.info,
+  },
+  {
+    key: 'stepCode',
+    icon: 'chatbubble-ellipses',
+    solid: yolk[500],
+    on: colors.ink,
+    word: yolk[800],
+    wash: colors.secondaryWash,
+    edge: yolk[300],
+  },
+  {
+    key: 'stepIn',
+    icon: 'checkmark-done',
+    solid: colors.primary,
+    on: colors.surface,
+    word: colors.primaryDark,
+    wash: colors.primaryWash,
+    edge: green[300],
+  },
+] as const;
 
 // --------------------------------------------------------------------------------------
 // Hero
@@ -104,8 +139,10 @@ function Notice({
   body: string;
 }): React.JSX.Element {
   return (
-    <View style={styles.notice}>
-      <Ionicons name={icon} size={20} color={colors.secondaryPressed} style={styles.noticeIcon} />
+    <View style={styles.notice} testID="login-no-password">
+      <View style={styles.noticeChip}>
+        <Ionicons name={icon} size={20} color={colors.ink} />
+      </View>
       <View style={styles.noticeBody}>
         <Text style={styles.noticeTitle}>{title}</Text>
         <Text style={styles.noticeText}>{body}</Text>
@@ -123,6 +160,8 @@ export default function LoginScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState<Step>('mobile');
+  /** The password door, for an office admin — reached by the link below the OTP button. */
+  const [adminMode, setAdminMode] = useState(false);
   const [mobileNo, setMobileNo] = useState('');
   const [focused, setFocused] = useState(false);
   const [otp, setOtp] = useState('');
@@ -298,6 +337,13 @@ export default function LoginScreen(): React.JSX.Element {
     }
   }, [mobileNo, requestSuperOtp, t]);
 
+  // The office door is a different credential entirely (a password, not an OTP), so it is its
+  // own screen rather than a third step — reached from the link below, and handing straight
+  // back here on cancel.
+  if (adminMode) {
+    return <AdminLoginScreen onBack={() => setAdminMode(false)} />;
+  }
+
   const onMobile = step === 'mobile';
 
   if (!onMobile) {
@@ -391,11 +437,50 @@ export default function LoginScreen(): React.JSX.Element {
               },
             ]}
           >
-            <Text style={styles.label}>{t('auth.mobileNumber')}</Text>
-            <View style={[styles.phoneField, focused && styles.phoneFieldFocused]}>
+            {/* The whole of signing in, before it starts: three steps, the first one lit. A Mait
+                signing in for the first time knows what is coming and that there is no
+                password step waiting at the end of it. */}
+            <View style={styles.steps} testID="login-steps">
+              {STEPS.map((item, index) => (
+                <View
+                  key={item.key}
+                  style={[styles.stepTile, { backgroundColor: item.wash, borderColor: item.edge }]}
+                >
+                  <View style={[styles.stepChip, { backgroundColor: item.solid }]}>
+                    <Ionicons name={item.icon} size={16} color={item.on} />
+                  </View>
+                  <Text style={[styles.stepNumber, { color: item.word }]}>{index + 1}</Text>
+                  <Text style={[styles.stepLabel, { color: item.word }]} numberOfLines={2}>
+                    {t(`auth.${item.key}`)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.labelRow}>
+              <View style={styles.labelChip}>
+                <Ionicons name="call" size={13} color={colors.surface} />
+              </View>
+              <Text style={styles.label}>{t('auth.mobileNumber')}</Text>
+              {/* How many of the ten are in, so a short number is seen before it is sent. */}
+              <View style={[styles.count, isValidMobile && styles.countDone]}>
+                <Text style={[styles.countLabel, isValidMobile && styles.countLabelDone]}>
+                  {`${mobileNo.length}/10`}
+                </Text>
+              </View>
+            </View>
+            <View
+              style={[
+                styles.phoneField,
+                focused && styles.phoneFieldFocused,
+                isValidMobile && styles.phoneFieldDone,
+              ]}
+              testID="login-phone-field"
+            >
               {/* The country code is a fixed block, not something to be typed past. Filling
                   it separates it from the ten digits that are the user's to change. */}
-              <View style={styles.prefixBlock}>
+              <View style={[styles.prefixBlock, isValidMobile && styles.prefixBlockDone]}>
+                <Ionicons name="call" size={14} color={colors.surface} />
                 <Text style={styles.prefix}>+91</Text>
               </View>
               <TextInput
@@ -413,13 +498,14 @@ export default function LoginScreen(): React.JSX.Element {
                 accessibilityLabel={t('auth.mobileNumber')}
                 testID="login-mobile"
               />
+              {isValidMobile && (
+                <View style={styles.valid} testID="login-mobile-valid">
+                  <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+                </View>
+              )}
             </View>
 
-            <Notice
-              icon="information-circle-outline"
-              title={t('auth.noPasswordTitle')}
-              body={t('auth.noPasswordBody')}
-            />
+            <Notice icon="key" title={t('auth.noPasswordTitle')} body={t('auth.noPasswordBody')} />
 
             {/* The CTA sits at the bottom of the screen rather than under the field it
                 submits. On a one-field form the two are the same gesture, and the thumb
@@ -441,11 +527,25 @@ export default function LoginScreen(): React.JSX.Element {
               <Text style={[styles.ctaLabel, (!canSubmit || busy) && styles.ctaLabelDisabled]}>
                 {t('auth.sendOtp')}
               </Text>
-              <Ionicons
-                name="arrow-forward"
-                size={18}
-                color={!canSubmit || busy ? colors.textDisabled : colors.surface}
-              />
+              <View style={[styles.ctaChip, (!canSubmit || busy) && styles.ctaChipDisabled]}>
+                <Ionicons
+                  name="paper-plane"
+                  size={15}
+                  color={!canSubmit || busy ? colors.textDisabled : colors.primary}
+                />
+              </View>
+            </Pressable>
+
+            {/* The office door. A quiet link rather than a second button: almost everyone on
+                this screen is a Mait, and an admin knows to look for it. */}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setAdminMode(true)}
+              style={styles.adminLink}
+              testID="login-are-you-admin"
+            >
+              <Ionicons name="briefcase-outline" size={15} color={colors.info} />
+              <Text style={styles.adminLinkLabel}>{t('auth.areYouAdmin')}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -489,35 +589,83 @@ const styles = StyleSheet.create({
   },
 
   sheet: { flex: 1, paddingTop: spacing[5] },
-  label: {
-    ...typography.label,
-    color: colors.textMuted,
+
+  steps: { flexDirection: 'row', gap: spacing[2], marginBottom: spacing[5] },
+  stepTile: {
+    flex: 1,
+    padding: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'flex-start',
+  },
+  stepChip: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[1],
+  },
+  stepNumber: { ...typography.caption, fontFamily: typography.h2.fontFamily },
+  stepLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
+
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
     marginBottom: spacing[2],
   },
+  labelChip: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.info,
+  },
+  label: { ...typography.label, color: colors.info, flex: 1 },
+  count: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.infoWash,
+    borderWidth: 1,
+    borderColor: colors.info,
+  },
+  countDone: { backgroundColor: colors.primary, borderColor: colors.primary },
+  countLabel: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.info,
+  },
+  countLabelDone: { color: colors.surface },
 
+  // Blue while it is being filled, green once it holds a number that can be sent.
   phoneField: {
     flexDirection: 'row',
     alignItems: 'stretch',
     minHeight: MIN_TOUCH_TARGET + 8,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: colors.info,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     // The prefix block is filled to the corner, so the container has to clip it back to the
     // radius or it squares off the left-hand side.
     overflow: 'hidden',
   },
-  phoneFieldFocused: { borderColor: colors.primary },
+  phoneFieldFocused: { borderWidth: 2 },
+  phoneFieldDone: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
   prefixBlock: {
-    justifyContent: 'center',
-    paddingHorizontal: spacing[4],
-    backgroundColor: colors.primaryWash,
-    borderRightWidth: 1,
-    borderRightColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing[3],
+    backgroundColor: colors.info,
   },
+  prefixBlockDone: { backgroundColor: colors.primary },
   // The prefix and the digits use the heading face so the number block reads as data
   // rather than prose.
-  prefix: { ...typography.h3, fontFamily: typography.h2.fontFamily, color: colors.ink },
+  prefix: { ...typography.h3, fontFamily: typography.h2.fontFamily, color: colors.surface },
   phoneInput: {
     flex: 1,
     ...typography.h3,
@@ -527,21 +675,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
   },
+  valid: { justifyContent: 'center', paddingRight: spacing[3] },
 
   notice: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing[3],
     backgroundColor: colors.secondaryWash,
     borderWidth: 1,
-    borderColor: colors.secondary,
+    borderColor: yolk[300],
     borderRadius: radius.md,
-    padding: spacing[4],
+    padding: spacing[3],
     marginTop: spacing[4],
   },
-  noticeIcon: { marginTop: 1 },
+  noticeChip: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: yolk[500],
+  },
   noticeBody: { flex: 1 },
   noticeTitle: { ...typography.bodyStrong, color: colors.ink },
-  noticeText: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  noticeText: { ...typography.caption, color: yolk[800], marginTop: 2 },
 
   /** Holds the CTA at the bottom when the content is short, and collapses when it is not. */
   spacer: { flex: 1, minHeight: spacing[6] },
@@ -559,4 +716,23 @@ const styles = StyleSheet.create({
   ctaPressed: { backgroundColor: colors.primaryPressed },
   ctaLabel: { ...typography.bodyStrong, color: colors.surface },
   ctaLabelDisabled: { color: colors.textDisabled },
+  ctaChip: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  ctaChipDisabled: { backgroundColor: 'transparent' },
+
+  adminLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    marginTop: spacing[4],
+    paddingVertical: spacing[2],
+  },
+  adminLinkLabel: { ...typography.label, color: colors.info },
 });
