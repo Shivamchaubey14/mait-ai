@@ -440,8 +440,14 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
       name: 'proof.jpg',
       type: 'image/jpeg',
     } as unknown as Blob);
-    form.append('gps_lat', String(job.payload.gpsLat));
-    form.append('gps_lng', String(job.payload.gpsLng));
+    // Only when there is a fix. A capture with no location left these null, and sending
+    // String(null) === "null" made the server reject the whole finalize as a bad number —
+    // which stranded every no-GPS capture at straw_verified. Omit them and GPS stays optional,
+    // exactly as the live finalizeEvent send does.
+    if (job.payload.gpsLat != null) {
+      form.append('gps_lat', String(job.payload.gpsLat));
+      form.append('gps_lng', String(job.payload.gpsLng));
+    }
     form.append('performed_at', String(job.payload.performedAt));
     form.append('photo_source', String(job.payload.source ?? 'camera'));
     form.append('gps_source', String(job.payload.gpsSource ?? 'device'));
@@ -475,8 +481,12 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
     name: 'proof.jpg',
     type: 'image/jpeg',
   } as unknown as Blob);
-  form.append('gps_lat', String(job.payload.gpsLat));
-  form.append('gps_lng', String(job.payload.gpsLng));
+  // Only when there is a fix — see the finalize handler above. Sending String(null) === "null"
+  // made the server refuse a no-GPS capture's photo as a bad number, stranding it.
+  if (job.payload.gpsLat != null) {
+    form.append('gps_lat', String(job.payload.gpsLat));
+    form.append('gps_lng', String(job.payload.gpsLng));
+  }
   form.append('performed_at', String(job.payload.performedAt));
   // Defaulted for a job queued by an older build of the app, where the only way to get a
   // photo was to take one.
