@@ -8,7 +8,7 @@ from apps.animals.serializers import MAX_PHOTO_BYTES, AnimalSerializer
 
 from .identity import aadhaar_clash
 from .models import MAX_ERRORS_STORED, MPP, DataUploadLog, Mait, Member, NonMember
-from .procurement import decide as decide_eligibility
+from .procurement import decide_from_periods
 
 # openpyxl only reads the OOXML format. Rejecting other types up front gives a clear error
 # instead of an unhandled parser exception inside a Celery worker.
@@ -229,12 +229,13 @@ class ProcurementFieldsMixin:
         return rows[0] if rows else None
 
     def _eligibility(self, obj):
-        latest = self._latest_procurement(obj)
-        return decide_eligibility(
-            amount=latest.amount if latest else None,
+        # The whole prefetched list, so eligibility sums her latest cycle (a month possibly
+        # uploaded in pieces) rather than reading one window — `decide_from_periods`.
+        periods = list(obj.procurements.all())  # prefetched, newest first (model Meta ordering)
+        return decide_from_periods(
+            periods=periods,
             threshold=self.context.get("procurement_threshold", 0),
             gated=self.context.get("procurement_gated", False),
-            latest=latest,
         )
 
     def get_procurement_eligible(self, obj) -> bool:

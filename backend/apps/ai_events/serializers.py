@@ -18,7 +18,7 @@ from rest_framework import serializers
 from apps.animals.models import Animal
 from apps.inventory.models import Consumable
 from apps.masterdata.models import MPP, Member, NonMember
-from apps.masterdata.procurement import decide as decide_eligibility
+from apps.masterdata.procurement import decide_from_periods as decide_eligibility
 from apps.masterdata.procurement import serializer_context as procurement_context
 from apps.payments.models import Payment
 from apps.payments.pricing import price_for
@@ -277,12 +277,9 @@ class AIEventSerializer(serializers.ModelSerializer):
 
         rows = list(member.procurements.all())  # prefetched, newest first (model Meta ordering)
         latest = rows[0] if rows else None
-        decision = decide_eligibility(
-            amount=latest.amount if latest else None,
-            threshold=threshold,
-            gated=gated,
-            latest=latest,
-        )
+        # Sum her latest cycle (a month that may have been uploaded in pieces) rather than the
+        # newest window alone — the one rule the member serializers also take.
+        decision = decide_eligibility(periods=rows, threshold=threshold, gated=gated)
         block = {
             "member_code": member.member_code,
             "member_name": member.member_name,

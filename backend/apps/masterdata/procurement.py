@@ -55,6 +55,41 @@ def latest_for(member) -> MemberProcurement | None:
     return member.procurements.order_by("-to_date", "-from_date").first()
 
 
+def cycle_periods(periods: list) -> list:
+    """
+    The windows that belong to the member's latest reporting cycle, newest first.
+
+    A SAP MemberWiseProcurementReport covers a month, and the office may upload it in pieces — a
+    corrected 3rd–4th sitting beside an already-uploaded 1st–2nd and 5th–10th
+    (``_import_procurement_fast``). Each piece is its own ``(member, from_date, to_date)`` row, so
+    reading only the newest row would judge eligibility on a fragment of the month's pour. The
+    cycle is the whole month of the latest window's ``to_date``; a month split across several
+    uploads sums back together here.
+
+    ``periods`` is expected newest-first (the model's Meta ordering / the serializer prefetch), so
+    ``periods[0]`` is the latest window and names the cycle. Empty in, empty out.
+    """
+    if not periods:
+        return []
+    latest = periods[0]
+    key = (latest.to_date.year, latest.to_date.month)
+    return [p for p in periods if (p.to_date.year, p.to_date.month) == key]
+
+
+def cycle_amount(periods: list) -> Decimal | None:
+    """
+    What the member poured across her latest cycle, or ``None`` if she has no procurement.
+
+    The sum eligibility reads instead of a single window's amount, so two partial uploads of one
+    month count together. ``None`` (not zero) when there is nothing on record, which is the state
+    ``decide`` reads as "not on the latest roll".
+    """
+    rows = cycle_periods(periods)
+    if not rows:
+        return None
+    return sum((p.amount for p in rows), Decimal("0"))
+
+
 @dataclass(frozen=True)
 class Eligibility:
     """Whether a member may be sent an insemination code, and the figures behind it."""
@@ -63,7 +98,8 @@ class Eligibility:
     #: False when the gate is off (no procurement data yet) — then ``eligible`` is True for all.
     gated: bool
     threshold: Decimal
-    amount: Decimal | None  # her latest period's amount, or None if she has no procurement
+    #: Her latest *cycle*'s amount — the sum of that month's windows — or None if she has none.
+    amount: Decimal | None
     latest: MemberProcurement | None = None
 
 
@@ -82,6 +118,23 @@ def decide(
     if amount is None:
         return Eligibility(False, True, threshold, None, latest)
     return Eligibility(amount >= threshold, True, threshold, amount, latest)
+
+
+def decide_from_periods(*, periods: list, threshold: Decimal, gated: bool) -> Eligibility:
+    """
+    Decide from a member's prefetched periods, summing her latest cycle (``cycle_amount``).
+
+    The one path both the member serializers and the AI-event row take, so the pill, the milk
+    panel and the office all read a month split across uploads the same way. ``periods`` is
+    newest-first; ``periods[0]`` is the latest window kept as ``latest`` for the detail, while the
+    amount eligibility compares is the whole cycle's sum.
+    """
+    return decide(
+        amount=cycle_amount(periods),
+        threshold=threshold,
+        gated=gated,
+        latest=periods[0] if periods else None,
+    )
 
 
 def code_block_reason(farmer) -> str | None:
@@ -127,10 +180,9 @@ def serializer_context() -> dict:
 
 def eligibility_for(member) -> Eligibility:
     """Decide for one member, reading what it needs. For single-member paths (code request)."""
-    latest = latest_for(member)
-    return decide(
-        amount=latest.amount if latest else None,
+    periods = list(member.procurements.order_by("-to_date", "-from_date"))
+    return decide_from_periods(
+        periods=periods,
         threshold=standard_ai_rate(),
         gated=gate_active(),
-        latest=latest,
     )

@@ -235,6 +235,58 @@ class TestMemberProcurement:
         assert proc["threshold"] == "100.00"
         assert proc["period"]["qty"] == "90.00"
 
+    def test_sums_partial_windows_in_one_cycle(self, api_client, admin_user, member):
+        """
+        A month uploaded in pieces counts together (SRS §6 procurement cycles).
+
+        ₹40 (1st–2nd) + ₹70 (3rd–10th) = ₹110 clears the ₹100 bar, though the latest window
+        alone (₹70) does not — which is the whole point: eligibility reads the cycle, not a
+        fragment of it.
+        """
+        from datetime import date
+
+        from apps.masterdata.models import MemberProcurement
+
+        self._price_the_bar()
+        MemberProcurement.objects.create(
+            member=member, from_date=date(2026, 10, 1), to_date=date(2026, 10, 2),
+            qty="30.00", amount="40.00",
+        )
+        MemberProcurement.objects.create(
+            member=member, from_date=date(2026, 10, 3), to_date=date(2026, 10, 10),
+            qty="60.00", amount="70.00",
+        )
+
+        body = auth(api_client, admin_user).get(f"{BASE}/members/{member.member_code}/").json()
+        proc = body["procurement"]
+
+        assert proc["eligible"] is True
+        assert proc["amount"] == "110.00"
+        # The latest window alone is below the bar — proof the cycle was summed, not read off one.
+        assert proc["period"]["amount"] == "70.00"
+
+    def test_a_different_month_is_a_different_cycle(self, api_client, admin_user, member):
+        """September's pour does not prop up October: only the latest window's month is summed."""
+        from datetime import date
+
+        from apps.masterdata.models import MemberProcurement
+
+        self._price_the_bar()
+        MemberProcurement.objects.create(
+            member=member, from_date=date(2026, 9, 1), to_date=date(2026, 9, 30),
+            qty="200.00", amount="500.00",
+        )
+        MemberProcurement.objects.create(
+            member=member, from_date=date(2026, 10, 1), to_date=date(2026, 10, 10),
+            qty="20.00", amount="40.00",
+        )
+
+        body = auth(api_client, admin_user).get(f"{BASE}/members/{member.member_code}/").json()
+        proc = body["procurement"]
+
+        assert proc["amount"] == "40.00"
+        assert proc["eligible"] is False
+
     def test_a_gated_member_with_no_milk_still_names_the_bar(self, api_client, admin_user, member):
         """She has no period, so eligibility is false and there is no `period` — but the bar is
         still on the block, which is what lets the picker say "no milk on record · bar ₹100"."""

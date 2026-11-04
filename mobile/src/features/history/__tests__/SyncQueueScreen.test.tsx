@@ -194,15 +194,15 @@ describe('SyncQueueScreen', () => {
     // claim a Mait can watch fail: three rows all sending, and the count never changing.
     renderScreen([KAVITA, RADHA], { done: 1, total: 2 }, 'kavita');
 
-    expect(screen.getByText('Syncing')).toBeTruthy();
-    expect(screen.queryByText('Waiting')).toBeNull();
+    expect(screen.getByText('Sending')).toBeTruthy();
+    expect(screen.queryByText('Waiting for signal')).toBeNull();
   });
 
   it('calls nothing syncing when no drain is running', () => {
     renderScreen([KAVITA]);
 
-    expect(screen.getByText('Waiting')).toBeTruthy();
-    expect(screen.queryByText('Syncing')).toBeNull();
+    expect(screen.getByText('Waiting for signal')).toBeTruthy();
+    expect(screen.queryByText('Sending')).toBeNull();
   });
 
   it('shows how far a send has got, so a slow one does not look stuck', () => {
