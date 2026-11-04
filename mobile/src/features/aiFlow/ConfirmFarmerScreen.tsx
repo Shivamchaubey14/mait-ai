@@ -47,6 +47,7 @@ import { OfficeCallCard, OfficeCodeAsk } from './OfficeCode';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
 import { FlowLabel, FlowNotice, FlowScreen, groupedMobile, IdentityCard } from './components';
+import { procurementLine } from './procurement';
 import { useServiceRate } from './rates';
 
 /**
@@ -164,6 +165,12 @@ export default function ConfirmFarmerScreen({
   const mobile = record?.mobile_no ?? '';
   const animals = record?.animals ?? [];
 
+  // Her milk against the code-eligibility bar — members only (a non-member pays in cash, so no
+  // bar applies), and only once the gate is live. The same figures the picker row and the portal
+  // show, read back here as one more fact the Mait can check before her phone is asked.
+  const procurement = isMember ? member.data?.procurement : undefined;
+  const procLine = procurementLine(t, procurement);
+
   const facts = record
     ? [
         // Her collection point first: it is the one fact on this card that is checked against
@@ -188,6 +195,16 @@ export default function ConfirmFarmerScreen({
             ? t('aiFlow.animalsOnRecord', { count: animals.length })
             : t('aiFlow.noAnimalsYet'),
         },
+        ...(procLine
+          ? [
+              {
+                label: t('aiFlow.milkLabel'),
+                value: `${
+                  procurement?.eligible ? t('aiFlow.eligible') : t('aiFlow.notEligible')
+                } · ${procLine}`,
+              },
+            ]
+          : []),
       ]
     : [];
 

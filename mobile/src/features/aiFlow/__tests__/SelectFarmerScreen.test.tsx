@@ -192,6 +192,62 @@ describe('SelectFarmerScreen', () => {
     expect(screen.queryByText(/Not eligible/i)).toBeNull();
   });
 
+  it('shows the poured-vs-bar figures for a gated member', async () => {
+    mockMembers([
+      {
+        ...withMobile,
+        procurement_eligible: false,
+        procurement: {
+          eligible: false,
+          gated: true,
+          threshold: '100',
+          amount: '50',
+          period: {
+            from_date: '2026-10-01',
+            to_date: '2026-10-15',
+            qty: '12.34',
+            avg_fat: '4.0',
+            avg_snf: '8.0',
+            amount: '50',
+            no_of_pouring_days: 10,
+            no_of_pouring_shift: 18,
+          },
+        },
+      },
+    ]);
+    renderScreen();
+
+    await waitFor(() => screen.getByText('REETA DEVI'));
+    expect(screen.getByText(/₹50 poured · 12\.3 L · bar ₹100/)).toBeTruthy();
+  });
+
+  it('names the bar for a gated member with no milk on record', async () => {
+    mockMembers([
+      {
+        ...withMobile,
+        procurement_eligible: false,
+        procurement: { eligible: false, gated: true, threshold: '100', amount: null },
+      },
+    ]);
+    renderScreen();
+
+    await waitFor(() => screen.getByText('REETA DEVI'));
+    expect(screen.getByText(/no milk on record · bar ₹100/)).toBeTruthy();
+  });
+
+  it('shows no procurement figures while the gate is off', async () => {
+    mockMembers([
+      {
+        ...withMobile,
+        procurement: { eligible: true, gated: false, threshold: '0', amount: null },
+      },
+    ]);
+    renderScreen();
+
+    await waitFor(() => screen.getByText('REETA DEVI'));
+    expect(screen.queryByText(/poured|bar ₹/)).toBeNull();
+  });
+
   it('scopes the request to the selected MPP', async () => {
     mockMembers([withMobile]);
     renderScreen();

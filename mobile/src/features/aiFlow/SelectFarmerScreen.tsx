@@ -28,6 +28,7 @@ import {
   OptionCard,
   SearchField,
 } from './components';
+import { procurementLine } from './procurement';
 
 interface Props {
   mpp: MPP;
@@ -106,6 +107,13 @@ export default function SelectFarmerScreen({
         // bar, or the gate is off) shows nothing, so the pill appears only on members finance
         // cannot yet recover the AI charge from. Informational — she stays selectable.
         const ineligible = member.procurement_eligible === false;
+        // The figures behind the pill — "₹50 poured · 12.3 L · bar ₹100" — the same line the
+        // portal shows, so the Mait sees how much milk she is short rather than a bare verdict.
+        // Null until the gate is live, so a dairy with no procurement sees the row as before.
+        const procLine = procurementLine(t, member.procurement);
+        const base = member.mobile_no
+          ? `${member.member_code} · ${groupedMobile(member.mobile_no)}`
+          : member.member_code;
         return (
           <OptionCard
             key={member.member_code}
@@ -118,11 +126,9 @@ export default function SelectFarmerScreen({
             // have room to be read here rather than skimmed.
             size="roomy"
             title={member.member_name}
-            subtitle={
-              member.mobile_no
-                ? `${member.member_code} · ${groupedMobile(member.mobile_no)}`
-                : member.member_code
-            }
+            // The procurement figures ride under the code on a second line (the roomy row has
+            // the height for it); without them the subtitle is just the code and number.
+            subtitle={procLine ? `${base}\n${procLine}` : base}
             blockedReason={unreachable ? t('aiFlow.memberNoMobile') : undefined}
             // The unreachable "Blocked" tag wins the one pill slot — she cannot be picked at all,
             // so that is the more urgent thing to say. Otherwise a muted "Not eligible" tag.

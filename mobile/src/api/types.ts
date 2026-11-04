@@ -844,6 +844,41 @@ export interface MPP {
   member_count: number;
 }
 
+/**
+ * A member's milk procurement and the insemination-code eligibility it decides.
+ *
+ * An AI charge is recovered from a member's milk payout, so she can only be sent an insemination
+ * code once she has poured enough to cover it. The server decides this one way
+ * (`masterdata.procurement`) and ships the same block to the portal and the app.
+ *
+ * Amounts are decimal strings (never floats). `gated` is the switch: it is `false` until the
+ * dairy has uploaded any procurement, and while it is `false` nothing about eligibility should be
+ * shown — every member is eligible by default. `amount` is `null` for a gated member with no milk
+ * on record, and `period` is then absent.
+ */
+export interface MemberProcurement {
+  /** Does she clear the bar? Always `true` when the gate is off. */
+  eligible: boolean;
+  /** Is the gate live (any procurement uploaded)? Show the figures only when this is `true`. */
+  gated: boolean;
+  /** The bar she must clear — the cheapest active member AI rate, as a decimal string. */
+  threshold: string;
+  /** What she poured in her latest period, as a decimal string, or `null` if none on record. */
+  amount: string | null;
+  /** Her latest procurement period — absent when she has no milk on record. */
+  period?: {
+    from_date: string;
+    to_date: string;
+    /** Litres, as a decimal string. */
+    qty: string;
+    avg_fat: string;
+    avg_snf: string;
+    amount: string;
+    no_of_pouring_days: number;
+    no_of_pouring_shift: number;
+  };
+}
+
 export interface Member {
   id: number;
   member_code: string;
@@ -861,6 +896,13 @@ export interface Member {
    * genuine `false`.
    */
   procurement_eligible?: boolean;
+  /**
+   * Her milk procurement and the eligibility it decides, in the same shape the portal's AI-events
+   * row and Super OTP panel read — so the picker can draw the identical "poured vs bar" line.
+   * Returned for every member when the server is recent enough; `undefined` on an older payload.
+   * Read `gated` to decide whether to show anything (see {@link MemberProcurement}).
+   */
+  procurement?: MemberProcurement;
   /**
    * The Aadhaar masked to its last four — on an Admin's list only; the server leaves it off for
    * anybody else, which is how the screen knows whether to draw it.
