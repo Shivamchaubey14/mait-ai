@@ -186,10 +186,11 @@ function putPhoto(
   clientUuid: string,
   form: FormData,
   onProgress?: (fraction: number | null) => void,
+  method: 'PATCH' | 'POST' = 'PATCH',
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
-    request.open('PATCH', url);
+    request.open(method, url);
     request.setRequestHeader('Authorization', `Bearer ${accessToken}`);
     request.setRequestHeader('Idempotency-Key', clientUuid);
 
@@ -735,5 +736,103 @@ export async function completeEvent(
   }
 
   await enqueue('completeEvent', clientUuid, { eventId, closeWithoutStock: withoutStock }, label);
+  return { sent: false, queued: true, remaining: await pendingCount() };
+}
+
+/**
+ * Finish a member capture in one request — photo + complete — or queue it as one job.
+ *
+ * The robust close for a member (SRS §6.9, and the "only Shyamta Prasad" race). The
+ * step-by-step close is three ordered server writes — photo, deduction, complete — and between
+ * the photo landing and the completion landing the event sits at `photo_captured`, which reads
+ * as *unfinished* until the last write catches up; on a slow link that gap is long, and if the
+ * completion is ever lost the capture is stranded there. `finalize` carries the photo and the
+ * completion in one request, so there is no in-between state and nothing for a second call to
+ * race: the server goes `straw_verified → completed` atomically or not at all.
+ *
+ * Members only — the server refuses it for a non-member, who authorises her own payment with a
+ * code. Queued exactly like the photo it replaces: a capture the server has not made yet (a
+ * provisional, negative id) names nothing and the drain fills the id in from the create; no
+ * token or no signal goes straight to the queue. The same `client_uuid` is the idempotency key,
+ * so a replay after a lost response is a no-op rather than a second straw.
+ */
+export async function finalizeEvent(
+  eventId: number,
+  clientUuid: string,
+  photo: CapturedPhoto,
+  accessToken: string | null,
+  /** As on `attachPhoto`: what the waiting list needs to name this record. */
+  label?: QueuedLabel,
+  /** How far the send has got, for the button the Mait is watching. */
+  onProgress?: (progress: CaptureProgress) => void,
+): Promise<CaptureOutcome> {
+  const payload = {
+    eventId,
+    photoUri: photo.uri,
+    gpsLat: photo.gpsLat,
+    gpsLng: photo.gpsLng,
+    performedAt: photo.performedAt,
+    source: photo.source,
+    gpsSource: photo.gpsSource,
+  };
+
+  // No token, or an event the server has not made yet: queue it, naming the capture rather than
+  // a provisional id the server would reject. The drain resolves the real id from the create.
+  if (!accessToken || isProvisional(eventId)) {
+    onProgress?.({ stage: 'queueing' });
+    await enqueue('finalize', clientUuid, { ...payload, eventId: null }, label);
+    return { sent: false, queued: true, remaining: await pendingCount() };
+  }
+
+  const form = new FormData();
+  form.append('photo', {
+    uri: photo.uri,
+    name: 'proof.jpg',
+    type: 'image/jpeg',
+  } as unknown as Blob);
+  if (photo.gpsLat != null) {
+    form.append('gps_lat', String(photo.gpsLat));
+    form.append('gps_lng', String(photo.gpsLng));
+  }
+  form.append('performed_at', photo.performedAt);
+  form.append('photo_source', photo.source);
+  form.append('gps_source', photo.gpsSource);
+
+  onProgress?.({ stage: 'uploading', fraction: 0 });
+
+  try {
+    const response = await putPhoto(
+      `${apiBaseUrl()}/ai-events/${eventId}/finalize/`,
+      accessToken,
+      clientUuid,
+      form,
+      fraction => onProgress?.({ stage: 'uploading', fraction }),
+      'POST',
+    );
+
+    if (response.status >= 200 && response.status < 300) {
+      // A successful write is the best signal the network is back — drain the rest behind it.
+      const result = await drainQueue(accessToken, sync =>
+        onProgress?.({ stage: 'catchingUp', done: sync.done, total: sync.total }),
+      );
+      return { sent: true, queued: false, remaining: result.remaining };
+    }
+
+    // A 4xx the server means — an unpriced breed, a non-member sent here by mistake — will be
+    // refused again on every retry, so it is surfaced rather than queued.
+    if (isRefusal(response.status)) {
+      return {
+        sent: false,
+        queued: false,
+        remaining: await pendingCount(),
+        ...problemDetail(response.body),
+      };
+    }
+  } catch {
+    // Network. Fall through to the queue.
+  }
+
+  onProgress?.({ stage: 'queueing' });
+  await enqueue('finalize', clientUuid, payload, label);
   return { sent: false, queued: true, remaining: await pendingCount() };
 }

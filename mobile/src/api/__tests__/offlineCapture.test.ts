@@ -911,4 +911,27 @@ describe('a photo from the queue, sent the way the live upload sends it', () => 
     expect(job?.failed).toBe(true);
     expect(job?.lastError).toContain('No GPS.');
   });
+
+  it('drains a one-step finalize to /finalize/ and lets the job go', async () => {
+    // The member capture queued as a single job: photo + complete in one POST, so the drain
+    // cannot send a completion ahead of its own photo.
+    await enqueue('finalize', 'uuid-ai', {
+      eventId: 12,
+      photoUri: PHOTO.uri,
+      gpsLat: PHOTO.gpsLat,
+      gpsLng: PHOTO.gpsLng,
+      performedAt: PHOTO.performedAt,
+      source: PHOTO.source,
+      gpsSource: PHOTO.gpsSource,
+    });
+
+    const result = await drainQueue(TOKEN);
+
+    expect(FakeXhr.sent).toHaveLength(1);
+    expect(FakeXhr.sent[0]?.method).toBe('POST');
+    expect(FakeXhr.sent[0]?.url).toContain('/ai-events/12/finalize/');
+    expect(FakeXhr.sent[0]?.headers['Idempotency-Key']).toBe('uuid-ai');
+    expect(result.sent).toBe(1);
+    expect(await readQueue()).toEqual([]);
+  });
 });

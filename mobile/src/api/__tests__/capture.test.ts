@@ -7,7 +7,7 @@
  * already has; drop a timeout and an insemination that happened is gone.
  */
 
-import { attachPhoto, completeEvent } from '../capture';
+import { attachPhoto, completeEvent, finalizeEvent, provisionalId } from '../capture';
 import type { CaptureProgress } from '../capture';
 import { clearQueue, pendingCount, readQueue } from '../queue';
 import type { QueuedLabel } from '../queue';
@@ -236,6 +236,63 @@ describe('the label on a queued job', () => {
     await attachPhoto(7, 'uuid-1', PHOTO, null, LABEL);
 
     expect((await readQueue())[0]?.label).toEqual(LABEL);
+  });
+});
+
+describe('finishing a member capture in one step', () => {
+  /**
+   * `finalize` carries the photo and the completion in one request, so the member capture
+   * never sits at `photo_captured` waiting on a separate completion a slow link can strand —
+   * the "photo captured but still unfinished" report. It sends over XHR (it carries a photo)
+   * and POSTs to `/finalize/`.
+   */
+  it('sends photo and completion as one POST to /finalize/', async () => {
+    const outcome = await finalizeEvent(7, 'uuid-1', PHOTO, TOKEN, LABEL);
+
+    expect(outcome.sent).toBe(true);
+    expect(await pendingCount()).toBe(0);
+    expect(FakeXhr.sent[0]?.method).toBe('POST');
+    expect(FakeXhr.sent[0]?.url).toContain('/ai-events/7/finalize/');
+    expect(FakeXhr.sent[0]?.headers['Idempotency-Key']).toBe('uuid-1');
+  });
+
+  it('queues one finalize job when the network drops, not three', async () => {
+    FakeXhr.answer = request => request.fail();
+
+    const outcome = await finalizeEvent(7, 'uuid-1', PHOTO, TOKEN, LABEL);
+
+    expect(outcome.queued).toBe(true);
+    const jobs = await readQueue();
+    expect(jobs.map(job => job.kind)).toEqual(['finalize']);
+    expect(jobs[0]?.label?.farmer).toBe('Kavita Devi');
+  });
+
+  it('queues a finalize naming nothing when the event has no server id yet', async () => {
+    // A capture opened offline carries a provisional (negative) id. The finalize is queued with
+    // eventId null; the drain fills the real id in from the create that lands ahead of it.
+    const provisional = provisionalId();
+
+    const outcome = await finalizeEvent(provisional, 'uuid-1', PHOTO, TOKEN, LABEL);
+
+    expect(outcome.queued).toBe(true);
+    const [job] = await readQueue();
+    expect(job?.kind).toBe('finalize');
+    expect(job?.payload.eventId).toBeNull();
+    // Never put a provisional id on the wire.
+    expect(FakeXhr.sent).toHaveLength(0);
+  });
+
+  it('does not queue a finalize the server refused, and passes on its words', async () => {
+    // An unpriced breed, or a non-member sent here by mistake: a 4xx no retry will clear.
+    FakeXhr.answer = request =>
+      request.succeed(400, JSON.stringify({ detail: 'This breed has no rate set.' }));
+
+    const outcome = await finalizeEvent(7, 'uuid-1', PHOTO, TOKEN, LABEL);
+
+    expect(outcome.sent).toBe(false);
+    expect(outcome.queued).toBe(false);
+    expect(outcome.problem).toBe('This breed has no rate set.');
+    expect(await pendingCount()).toBe(0);
   });
 });
 

@@ -87,6 +87,15 @@ export type QueuedKind =
   | 'createEvent'
   | 'attachPhoto'
   | 'completeEvent'
+  /**
+   * A member capture finished in one step — photo + complete in a single request.
+   *
+   * Replaces the `attachPhoto` + `verifyPayment` + `completeEvent` trio for a member: there is
+   * no in-between `photo_captured` state to be left stranded in, and nothing for a lost
+   * completion to race. Carries the same photo payload `attachPhoto` does; the drain POSTs it to
+   * `/ai-events/{id}/finalize/`.
+   */
+  | 'finalize'
   | 'verifyPayment'
   /** A pregnancy check recorded in a yard with no signal — the ordinary case, not the edge. */
   | 'recordPd';

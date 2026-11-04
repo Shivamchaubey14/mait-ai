@@ -421,6 +421,33 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
     });
   }
 
+  /**
+   * A member capture finished in one step — photo + complete in one request.
+   *
+   * Sent the way the live `finalizeEvent` sends it: multipart over `XMLHttpRequest`, to
+   * `/finalize/`. The server attaches the photo, records her verified deduction, deducts one
+   * straw and closes the event atomically, so the completion can never reach it ahead of its
+   * own photo. A replay is a no-op on the server (the event is already completed).
+   */
+  if (job.kind === 'finalize') {
+    const eventId = await resolveEventId(job);
+    if (eventId === null) {
+      throw new AwaitingEventId();
+    }
+    const form = new FormData();
+    form.append('photo', {
+      uri: job.payload.photoUri as string,
+      name: 'proof.jpg',
+      type: 'image/jpeg',
+    } as unknown as Blob);
+    form.append('gps_lat', String(job.payload.gpsLat));
+    form.append('gps_lng', String(job.payload.gpsLng));
+    form.append('performed_at', String(job.payload.performedAt));
+    form.append('photo_source', String(job.payload.source ?? 'camera'));
+    form.append('gps_source', String(job.payload.gpsSource ?? 'device'));
+    return sendForm(`${apiBaseUrl()}/ai-events/${eventId}/finalize/`, 'POST', headers, form);
+  }
+
   if (job.kind === 'completeEvent') {
     const eventId = await resolveEventId(job);
     if (eventId === null) {
@@ -500,6 +527,7 @@ const CAPTURE_KINDS: ReadonlySet<QueuedJob['kind']> = new Set([
   'attachPhoto',
   'verifyPayment',
   'completeEvent',
+  'finalize',
 ]);
 
 /** An event in either of these states has nothing left for the queue to do. */

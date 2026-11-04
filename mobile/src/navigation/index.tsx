@@ -22,7 +22,7 @@ import NetInfo from '@react-native-community/netinfo';
 import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
 
-import { attachPhoto, completeEvent, isProvisional } from '@api/capture';
+import { attachPhoto, completeEvent, finalizeEvent, isProvisional } from '@api/capture';
 import type { CaptureProgress } from '@api/capture';
 import { api, ErrorCode, errorCodeOf, newClientUuid } from '@api/client';
 import {
@@ -1563,32 +1563,23 @@ export default function RootNavigator(): React.JSX.Element {
           // watching a bar while a weak signal carries a photograph. Anything the server
           // refuses is on the waiting list with its reason, as every queued record is.
           if (farmer?.kind === 'member') {
-            // The card first, so the Mait is not kept waiting on any of what follows.
+            // A member owes nothing in the yard, so the photo is the last thing the Mait does.
+            // The photo and the completion go up as ONE request (`finalizeEvent`), or one queued
+            // job when there is no signal — the server attaches the photo, records her verified
+            // deduction, deducts the straw and closes the event atomically. There is no
+            // in-between `photo_captured` state for a slow link to strand the capture in, and
+            // nothing for a lost completion to race. The Mait is told it is recorded at once and
+            // taken Home; anything the server refuses lands on the waiting list with its reason.
             setStep('done');
-            const eventId = isProvisional(event.id) ? null : event.id;
             const label = captureLabel();
             const capture = { id: event.id, uuid: clientUuid };
-            // Behind the card, in order. The photo through the same upload the screen always
-            // used — which queues it itself when there is no signal — and only then the
-            // deduction and the close, so neither can ever reach the server ahead of the
-            // photo they depend on.
             (async () => {
-              const sent = await attachPhoto(capture.id, capture.uuid, photo, accessToken, label);
-              if (!sent.sent && !sent.queued) {
-                // Refused outright. Nothing after it is queued: the capture stays open, in
-                // Unfinished, where Home calls it out in red until it is put right.
-                return;
+              const outcome = await finalizeEvent(capture.id, capture.uuid, photo, accessToken, label);
+              if (outcome.sent) {
+                setLastSyncAt(clockTime());
+                // The capture is closed on the server; the lists it came from are out of date.
+                eventsChanged();
               }
-              // The server records a member's deduction whatever mode is sent; the queue job
-              // carries one because a non-member's needs it.
-              await enqueue('verifyPayment', capture.uuid, { eventId, mode: 'COD' }, label);
-              await enqueue(
-                'completeEvent',
-                capture.uuid,
-                { eventId, closeWithoutStock: false },
-                label,
-              );
-              await sync();
             })().catch(() => undefined);
             return;
           }
