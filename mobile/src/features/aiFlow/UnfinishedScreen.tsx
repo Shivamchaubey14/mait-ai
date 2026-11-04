@@ -18,12 +18,12 @@
  */
 
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
-import { useListAiEventsQuery } from '@api/endpoints';
+import { useCancelAiEventMutation, useListAiEventsQuery } from '@api/endpoints';
 import type { AIEvent } from '@api/types';
 import { AI_FLOW_STEPS } from '@/config/env';
 import { colors, radius, spacing, typography } from '@theme/tokens';
@@ -50,8 +50,30 @@ export default function UnfinishedScreen({ onResume, onBack }: Props): React.JSX
   const { data, isLoading, isError, isFetching, refetch } = useListAiEventsQuery({
     unfinished: true,
   });
+  const [cancelEvent, { isLoading: discarding }] = useCancelAiEventMutation();
 
   const events = data?.results ?? [];
+
+  // Abandon a capture that will never be finished — the farmer left, the wrong animal was
+  // picked, the photo was never going to be taken. Confirmed first, because it is terminal; the
+  // server frees the held straw, so nothing is lost but the half-started record. The list
+  // refetches on its own (the mutation invalidates the AIEvent tag), so the row simply leaves.
+  const confirmDiscard = (event: AIEvent) => {
+    Alert.alert(t('unfinished.discardTitle'), t('unfinished.discardBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('unfinished.discard'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await cancelEvent({ id: event.id }).unwrap();
+          } catch {
+            Alert.alert(t('unfinished.discardFailedTitle'), t('unfinished.discardFailedBody'));
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <FlowScreen
@@ -101,7 +123,9 @@ export default function UnfinishedScreen({ onResume, onBack }: Props): React.JSX
               testID={`unfinished-${event.id}`}
             />
             {/* How far it got, under its own row: a Mait deciding which to pick up first wants
-                to know which is nearly done. */}
+                to know which is nearly done. The discard sits on the same line, pushed to the
+                end, so finishing stays the obvious tap (the whole card) and abandoning is the
+                deliberate, smaller one — never where a thumb reaching for Resume would land. */}
             <View style={styles.progress}>
               <Ionicons name="arrow-forward-circle-outline" size={14} color={colors.textMuted} />
               <AppText style={styles.progressText}>
@@ -110,6 +134,17 @@ export default function UnfinishedScreen({ onResume, onBack }: Props): React.JSX
                   total: AI_FLOW_STEPS.length,
                 })}
               </AppText>
+              <View style={styles.progressSpacer} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: discarding }}
+                onPress={() => confirmDiscard(event)}
+                disabled={discarding}
+                hitSlop={spacing[2]}
+                testID={`unfinished-discard-${event.id}`}
+              >
+                <AppText style={styles.discard}>{t('unfinished.discard')}</AppText>
+              </Pressable>
             </View>
           </View>
         );
@@ -133,4 +168,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   progressText: { ...typography.caption, color: colors.textMuted },
+  progressSpacer: { flex: 1 },
+  // Muted, not red: discarding is a legitimate everyday action (the wrong animal, a farmer who
+  // left), not a danger to be warned off. The red lives in the confirm dialog's destructive
+  // button, where the decision is actually made.
+  discard: { ...typography.caption, color: colors.textMuted, textDecorationLine: 'underline' },
 });

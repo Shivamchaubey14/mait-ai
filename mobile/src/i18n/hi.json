@@ -2357,7 +2357,12 @@
     "missingCloseOff": "पूरा नहीं किया",
     "missingCode": "कोड की पुष्टि नहीं",
     "openList_one": "{{count}} अधूरा रिकॉर्ड",
-    "openList_other": "{{count}} अधूरे रिकॉर्ड"
+    "openList_other": "{{count}} अधूरे रिकॉर्ड",
+    "discard": "हटाएँ",
+    "discardTitle": "यह रिकॉर्ड हटाएँ?",
+    "discardBody": "स्ट्रॉ आपके स्टॉक में वापस आ जाएगा और रिकॉर्ड हट जाएगा। इसे पूर्ववत नहीं किया जा सकता।",
+    "discardFailedTitle": "हटाया नहीं जा सका",
+    "discardFailedBody": "अपना कनेक्शन जाँचें और फिर कोशिश करें।"
   },
   "payment": {
     "mode": "भुगतान का तरीका",

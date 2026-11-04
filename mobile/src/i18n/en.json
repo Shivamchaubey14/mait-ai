@@ -2357,7 +2357,12 @@
     "missingCloseOff": "Not closed off",
     "missingCode": "Code not confirmed",
     "openList_one": "{{count}} unfinished capture",
-    "openList_other": "{{count}} unfinished captures"
+    "openList_other": "{{count}} unfinished captures",
+    "discard": "Discard",
+    "discardTitle": "Discard this capture?",
+    "discardBody": "The straw goes back to your stock and the record is removed. This cannot be undone.",
+    "discardFailedTitle": "Could not discard",
+    "discardFailedBody": "Check your connection and try again."
   },
   "payment": {
     "mode": "Payment mode",

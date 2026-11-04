@@ -43,6 +43,7 @@ from .serializers import (
 )
 from .services import (
     attach_photo,
+    cancel_ai_event,
     complete_ai_event,
     finalize_member_capture,
     mark_payment_pending,
@@ -253,7 +254,7 @@ class AIEventViewSet(
         # Capture happens in the field, by the Mait standing with the animal — including the
         # photo and the completion, which are the two writes that matter most. Reading is
         # wider: an admin resolving a dispute needs the same record.
-        if self.action in ("create", "photo", "complete", "finalize"):
+        if self.action in ("create", "photo", "complete", "finalize", "cancel"):
             return [IsMait()]
         # Deleting a record is the one thing a Mait can never do to their own history, and the
         # one thing on this endpoint that is not reversible. It is a back-office correction —
@@ -624,6 +625,61 @@ class AIEventViewSet(
         mait = getattr(request.user, "mait_profile", None)
         if mait is None or event.mait_id != mait.id:
             raise PermissionDenied("This is not your event.")
+
+    @extend_schema(
+        summary="Discard an unfinished capture (Mait)",
+        description=(
+            "The Mait's own way to abandon a capture they will never finish — the farmer walked "
+            "off, the wrong animal was picked, the photo was never going to be taken. It moves "
+            "the event to `cancelled`, which is terminal and deducts no stock.\n\n"
+            "**It releases the held straw.** A straw is held by an unfinished capture and offered "
+            "to no other until that capture closes; cancelling closes it, so the straw is free "
+            "for the next insemination again at once (no stock was ever deducted — that only "
+            "happens at completion).\n\n"
+            "Only the Mait's **own** event, and only while it is still unfinished: a completed "
+            "capture cannot be discarded (the insemination happened and the straw is spent), and "
+            "an already-cancelled one comes back unchanged — the same no-op a lost-response retry "
+            "from the offline queue needs. Send the capture's `client_uuid` as the idempotency "
+            "key. An optional `reason` is kept on the record and the timeline."
+        ),
+        request=None,
+        responses={200: AIEventSerializer},
+    )
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        event = self.get_object()
+        self._assert_own(event, request)
+
+        # Already cancelled: the honest answer is that it is gone, with nothing to redo — the
+        # same no-op the completion endpoints give a lost-response retry. Returned before the
+        # status guard so a blind resend from the offline queue is never an error.
+        if event.status == AIEvent.Status.CANCELLED:
+            return Response(AIEventSerializer(event).data)
+        if event.is_terminal:
+            # The only other terminal state is completed: the insemination happened and the straw
+            # is spent, so there is nothing to discard. `cancel_ai_event` would refuse it too;
+            # saying so here keeps the message about discarding rather than about transitions.
+            raise DomainError(
+                "This capture is already finished and cannot be discarded. A completed "
+                "insemination stays on the record."
+            )
+
+        reason = (request.data.get("reason") or "").strip()[:255]
+        event = cancel_ai_event(event, reason=reason or "Discarded by the Mait", actor=request.user)
+
+        record_audit(
+            action="state_change",
+            entity_type="ai_event",
+            entity_id=event.id,
+            request=request,
+            meta={
+                "to": event.status,
+                "discarded_by_mait": True,
+                "mait_id": event.mait_id,
+                "mpp_code": event.mpp.mpp_code,
+            },
+        )
+        return Response(AIEventSerializer(event).data)
 
     @extend_schema(
         summary="Complete a stuck event from the office (admin)",

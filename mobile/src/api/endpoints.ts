@@ -999,6 +999,22 @@ export const maitaiApi = api.injectEndpoints({
     }),
 
     /**
+     * Discard a capture the Mait will never finish — the farmer walked off, the wrong animal
+     * was picked, the photo was never taken. The server moves it to `cancelled` (terminal, no
+     * stock deducted) and frees the straw it was holding, so `Inventory` is invalidated too.
+     * Only the Mait's own, still-unfinished event; a completed one is refused and an
+     * already-cancelled one comes back unchanged.
+     */
+    cancelAiEvent: builder.mutation<AIEvent, { id: number; reason?: string }>({
+      query: ({ id, reason }) => ({
+        url: `/ai-events/${id}/cancel/`,
+        method: 'POST',
+        body: reason ? { reason } : {},
+      }),
+      invalidatesTags: ['AIEvent', 'Inventory'],
+    }),
+
+    /**
      * Search members across the network, for the admin roster. One box over name, member code
      * and mobile; scoped to the account's zones by the server.
      */
@@ -1780,6 +1796,7 @@ export const {
   useDeleteAiEventMutation,
   useBulkDeleteAiEventsMutation,
   useOfficeCompleteAiEventMutation,
+  useCancelAiEventMutation,
   useAdminSearchMembersQuery,
   useAdminListMaitsQuery,
   useAdminListMembersQuery,

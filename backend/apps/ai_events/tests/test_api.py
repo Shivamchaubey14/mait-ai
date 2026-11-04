@@ -669,3 +669,94 @@ class TestUnfinished:
         response = mait_client.get(f"{BASE}/", {"unfinished": "true"})
 
         assert response.json()["count"] == 1
+
+
+class TestCancel:
+    """
+    The Mait's own way to discard a capture they will never finish (SRS §11 `cancelled`).
+
+    The field case: a straw was verified, then the farmer walked off or the wrong animal was
+    picked and the photo was never taken, so the capture sits at `straw_verified` forever. The
+    Mait can abandon it — terminal, no stock deducted — and the held straw is freed because a
+    straw is "spoken for" only while its event is unfinished (`inventory.take_straw_of_breed`).
+    """
+
+    def _verified(self, mait_client, payload, stocked_mait):
+        straw = stocked_mait(1)[0]
+        event_id = mait_client.post(
+            f"{BASE}/", payload(straw_unique_no=straw.unique_straw_no), format="json"
+        ).json()["id"]
+        return event_id, straw
+
+    def test_discards_an_unfinished_capture(self, mait_client, payload, stocked_mait):
+        event_id, _ = self._verified(mait_client, payload, stocked_mait)
+
+        response = mait_client.post(f"{BASE}/{event_id}/cancel/", {}, format="json")
+
+        assert response.status_code == 200, response.json()
+        assert response.json()["status"] == AIEvent.Status.CANCELLED
+
+    def test_discarding_deducts_no_stock(self, mait_client, payload, stocked_mait, mait):
+        """A discarded capture never happened, so the straw stays in the Mait's holding."""
+        event_id, _ = self._verified(mait_client, payload, stocked_mait)
+        assert available_straw_count(mait) == 1
+
+        mait_client.post(f"{BASE}/{event_id}/cancel/", {}, format="json")
+
+        assert available_straw_count(mait) == 1
+
+    def test_the_freed_straw_can_be_scanned_again(self, mait_client, payload, stocked_mait):
+        """The straw a discarded capture held is no longer spoken for, so it is usable again."""
+        event_id, straw = self._verified(mait_client, payload, stocked_mait)
+        mait_client.post(f"{BASE}/{event_id}/cancel/", {}, format="json")
+
+        again = mait_client.post(
+            f"{BASE}/", payload(straw_unique_no=straw.unique_straw_no), format="json"
+        )
+        assert again.status_code == 201, again.json()
+        assert again.json()["status"] == AIEvent.Status.STRAW_VERIFIED
+
+    def test_records_the_cancel_on_the_timeline(self, mait_client, payload, stocked_mait):
+        event_id, _ = self._verified(mait_client, payload, stocked_mait)
+        mait_client.post(f"{BASE}/{event_id}/cancel/", {"reason": "wrong animal"}, format="json")
+
+        entries = mait_client.get(f"{BASE}/{event_id}/timeline/").json()
+        assert entries[-1]["to_status"] == AIEvent.Status.CANCELLED
+
+    def test_a_completed_capture_cannot_be_discarded(self, mait_client, payload, stocked_mait):
+        event_id, _ = self._verified(mait_client, payload, stocked_mait)
+        AIEvent.objects.filter(id=event_id).update(
+            status=AIEvent.Status.COMPLETED, completed_at=timezone.now()
+        )
+
+        response = mait_client.post(f"{BASE}/{event_id}/cancel/", {}, format="json")
+
+        assert response.status_code == 400
+        assert AIEvent.objects.get(id=event_id).status == AIEvent.Status.COMPLETED
+
+    def test_discarding_twice_is_a_no_op(self, mait_client, payload, stocked_mait):
+        """A blind resend from the offline queue lands here and is answered, not refused."""
+        event_id, _ = self._verified(mait_client, payload, stocked_mait)
+        mait_client.post(f"{BASE}/{event_id}/cancel/", {}, format="json")
+
+        again = mait_client.post(f"{BASE}/{event_id}/cancel/", {}, format="json")
+
+        assert again.status_code == 200
+        assert again.json()["status"] == AIEvent.Status.CANCELLED
+
+    def test_cannot_discard_another_maits_capture(self, mait_client, other_mait):
+        stranger, other_mpp, other_member, other_animal = other_mait
+        event = AIEvent.objects.create(
+            client_uuid=uuid.uuid4(),
+            mait=stranger,
+            mpp=other_mpp,
+            owner_type=AIEvent.OwnerType.MEMBER,
+            member=other_member,
+            animal=other_animal,
+            status=AIEvent.Status.STRAW_VERIFIED,
+        )
+
+        response = mait_client.post(f"{BASE}/{event.id}/cancel/", {}, format="json")
+
+        assert response.status_code == 404
+        assert AIEvent.objects.get(id=event.id).status == AIEvent.Status.STRAW_VERIFIED
