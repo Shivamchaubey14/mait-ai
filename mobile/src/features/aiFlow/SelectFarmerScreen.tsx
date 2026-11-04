@@ -102,6 +102,10 @@ export default function SelectFarmerScreen({
 
       {members.map(member => {
         const unreachable = !member.mobile_no;
+        // Only a genuine `false` flags her: `undefined` (older payload) or `true` (clears the
+        // bar, or the gate is off) shows nothing, so the pill appears only on members finance
+        // cannot yet recover the AI charge from. Informational — she stays selectable.
+        const ineligible = member.procurement_eligible === false;
         return (
           <OptionCard
             key={member.member_code}
@@ -120,7 +124,12 @@ export default function SelectFarmerScreen({
                 : member.member_code
             }
             blockedReason={unreachable ? t('aiFlow.memberNoMobile') : undefined}
-            pill={unreachable ? t('aiFlow.blocked') : undefined}
+            // The unreachable "Blocked" tag wins the one pill slot — she cannot be picked at all,
+            // so that is the more urgent thing to say. Otherwise a muted "Not eligible" tag.
+            pill={
+              unreachable ? t('aiFlow.blocked') : ineligible ? t('aiFlow.notEligible') : undefined
+            }
+            pillTone={!unreachable && ineligible ? 'muted' : 'primary'}
             check
             selected={selected === member.member_code}
             onPress={() => setSelected(member.member_code)}

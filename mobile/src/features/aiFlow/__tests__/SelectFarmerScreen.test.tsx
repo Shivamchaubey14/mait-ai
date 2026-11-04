@@ -160,6 +160,38 @@ describe('SelectFarmerScreen', () => {
     await waitFor(() => expect(screen.getByText(/No members found/i)).toBeTruthy());
   });
 
+  it('flags a member who has not poured enough milk to be eligible', async () => {
+    mockMembers([{ ...withMobile, procurement_eligible: false }]);
+    renderScreen();
+
+    await waitFor(() => screen.getByText('REETA DEVI'));
+    expect(screen.getByText(/Not eligible/i)).toBeTruthy();
+  });
+
+  it('still lets an ineligible member be chosen — the pill informs, it does not block', async () => {
+    mockMembers([{ ...withMobile, procurement_eligible: false }]);
+    renderScreen();
+
+    await waitFor(() => screen.getByText('REETA DEVI'));
+    fireEvent.press(screen.getByTestId(`member-${withMobile.member_code}`));
+    fireEvent.press(screen.getByTestId('farmer-continue'));
+
+    expect(onSelectMember).toHaveBeenCalledWith(
+      expect.objectContaining({ member_name: 'REETA DEVI' }),
+    );
+  });
+
+  it('shows no eligibility pill for a member who clears the bar (or when the gate is off)', async () => {
+    mockMembers([
+      { ...withMobile, procurement_eligible: true },
+      { ...withMobile, id: 9, member_code: 'x', member_name: 'GATE OFF MEMBER', procurement_eligible: undefined },
+    ]);
+    renderScreen();
+
+    await waitFor(() => screen.getByText('GATE OFF MEMBER'));
+    expect(screen.queryByText(/Not eligible/i)).toBeNull();
+  });
+
   it('scopes the request to the selected MPP', async () => {
     mockMembers([withMobile]);
     renderScreen();

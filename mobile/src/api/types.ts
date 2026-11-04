@@ -853,6 +853,15 @@ export interface Member {
   mpp_code: string;
   activation_status: string;
   /**
+   * Whether she has poured enough milk this period to be sent for an insemination — the AI
+   * charge is recovered from her milk payout, so a member below the bar is flagged in the
+   * picker. The server computes it (`masterdata.procurement`) and ships it on the list and in
+   * the offline pack. True when the gate is off (no procurement uploaded yet) or absent on an
+   * older payload, so a member is never *wrongly* flagged — the pill only ever appears on a
+   * genuine `false`.
+   */
+  procurement_eligible?: boolean;
+  /**
    * The Aadhaar masked to its last four — on an Admin's list only; the server leaves it off for
    * anybody else, which is how the screen knows whether to draw it.
    */
