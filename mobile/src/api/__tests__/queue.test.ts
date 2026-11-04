@@ -19,8 +19,12 @@ import {
   subscribeQueue,
 } from '../queue';
 import { drainQueue } from '../sync';
+import { IDEMPOTENCY_TTL_HOURS } from '@/config/env';
 
 const TOKEN = 'access-token';
+
+/** Comfortably past the idempotency window, however it is tuned — a job this old is expired. */
+const PAST_TTL_MS = (IDEMPOTENCY_TTL_HOURS + 1) * 60 * 60 * 1000;
 
 beforeEach(async () => {
   await clearQueue();
@@ -70,11 +74,11 @@ describe('the queue', () => {
   });
 
   it('flags jobs the server will no longer recognise as replays', async () => {
-    // Past the 24h idempotency window a resend is read as a fresh request, which is how one
+    // Past the idempotency window a resend is read as a fresh request, which is how one
     // insemination becomes two records.
     await enqueue('completeEvent', 'uuid-old', { eventId: 1 });
     const raw = JSON.parse((await AsyncStorage.getItem('maitai.queue.v1')) as string);
-    raw[0].queuedAt = Date.now() - 25 * 60 * 60 * 1000;
+    raw[0].queuedAt = Date.now() - PAST_TTL_MS;
     await AsyncStorage.setItem('maitai.queue.v1', JSON.stringify(raw));
 
     expect(await expiredJobs()).toHaveLength(1);
@@ -260,7 +264,7 @@ describe('draining', () => {
     (global.fetch as jest.Mock).mockImplementation(ok);
     await enqueue('completeEvent', 'uuid-old', { eventId: 1 });
     const raw = JSON.parse((await AsyncStorage.getItem('maitai.queue.v1')) as string);
-    raw[0].queuedAt = Date.now() - 25 * 60 * 60 * 1000;
+    raw[0].queuedAt = Date.now() - PAST_TTL_MS;
     await AsyncStorage.setItem('maitai.queue.v1', JSON.stringify(raw));
 
     const result = await drainQueue(TOKEN);
@@ -338,7 +342,7 @@ describe('reporting progress', () => {
     await enqueue('completeEvent', 'uuid-old', { eventId: 1 });
     await enqueue('completeEvent', 'uuid-new', { eventId: 2 });
     const raw = JSON.parse((await AsyncStorage.getItem('maitai.queue.v1')) as string);
-    raw[0].queuedAt = Date.now() - 25 * 60 * 60 * 1000;
+    raw[0].queuedAt = Date.now() - PAST_TTL_MS;
     await AsyncStorage.setItem('maitai.queue.v1', JSON.stringify(raw));
 
     const seen = await progressOf();

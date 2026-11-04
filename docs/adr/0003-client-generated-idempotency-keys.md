@@ -15,8 +15,12 @@ response was lost".
 
 The client generates a UUIDv4 when it creates a local draft, before any network attempt. That
 UUID is the event's local primary key and the `Idempotency-Key` header on every write for that
-event. The server stores key to response for 24 hours and replays the stored response on a
-repeat.
+event. The server stores key to response for a week (`IDEMPOTENCY_TTL_HOURS`, 168h) and replays
+the stored response on a repeat. The window was originally 24 hours; it was widened to a week so
+a queued offline capture a Mait could not drain within a day — a finalize stuck on a phone that
+stayed in a dead patch — remains safely resendable rather than expiring and stranding the event
+at `straw_verified`. The mobile client's TTL mirrors this value and must never exceed it, so the
+server is always raised and deployed before an APK that carries the larger client window.
 
 ## Consequences
 

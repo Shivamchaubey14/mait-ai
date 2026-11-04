@@ -132,8 +132,16 @@ export function mediaUrl(path: string | null | undefined): string | undefined {
   return `${origin}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 
-/** How long a queued offline event stays replayable. Mirrors the server TTL (ADR 0003). */
-export const IDEMPOTENCY_TTL_HOURS = 24;
+/**
+ * How long a queued offline event stays replayable. Mirrors the server TTL (ADR 0003).
+ *
+ * A week, not a day. Past this the client stops resending a queued write, because the server
+ * would no longer recognise its idempotency key and would record it afresh — a second
+ * insemination. At 24h a Mait who spent a day in a dead patch had their finalize expire on the
+ * queue, stranding the capture at `straw_verified` for good. This MUST stay <= the server's
+ * `IDEMPOTENCY_TTL_HOURS`, so the server is raised and deployed before an APK carrying this is.
+ */
+export const IDEMPOTENCY_TTL_HOURS = 168;
 
 /**
  * How often the app asks the queue again while something is still waiting.

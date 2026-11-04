@@ -296,7 +296,19 @@ SUPER_OTP_EXPIRY_SECONDS = env.int("SUPER_OTP_EXPIRY_SECONDS", default=600)
 SUPER_OTP_MAX_ATTEMPTS = env.int("SUPER_OTP_MAX_ATTEMPTS", default=5)
 # An ask nobody answered within this long leaves the queue.
 SUPER_OTP_REQUEST_TTL_HOURS = env.int("SUPER_OTP_REQUEST_TTL_HOURS", default=24)
+# The number a Mait with no signal rings for a farmer's code (accounts.field_codes). Shown on
+# the phone with a button to dial it; blank, and the phone says "call the office" without one.
+FIELD_OFFICE_PHONE = env("FIELD_OFFICE_PHONE", default="")
 OTP_MAX_ATTEMPTS = env.int("OTP_MAX_ATTEMPTS", default=3)  # SRS §6.5.1
+
+# The mobile app version the server expects. `latest` is what a fresh install carries; a handset
+# on an older build is nudged to update, and one older than `min` is told it must. Bumped when a
+# release adds something the app itself has to carry (e.g. the procurement pill and code gate).
+# The app checks these at startup and shows a bilingual "please install the new version" prompt.
+MOBILE_LATEST_VERSION = env("MOBILE_LATEST_VERSION", default="0.2.0")
+MOBILE_MIN_VERSION = env("MOBILE_MIN_VERSION", default="0.2.0")
+# Where the APK is served from, shown as the install action. Blank hides the button.
+MOBILE_UPDATE_URL = env("MOBILE_UPDATE_URL", default="")
 
 # Numbers that receive a known OTP instead of a random one, so the app can be demonstrated
 # without a live SMS gateway.
@@ -313,7 +325,14 @@ DEV_FIXED_OTP_CODE = env("DEV_FIXED_OTP_CODE", default="123456")
 # production feature, so it is not refused anywhere; it only ever applies to the specific
 # accounts an admin has flipped it on for.
 FIXED_LOGIN_OTP_CODE = env("FIXED_LOGIN_OTP_CODE", default="123456")
-IDEMPOTENCY_TTL_HOURS = env.int("IDEMPOTENCY_TTL_HOURS", default=24)
+# How long the server remembers an idempotency key and replays its stored response. This is
+# also the window a queued offline write stays safely resendable: past it a resend is read as a
+# new request, which is how one insemination becomes two records (ADR 0003). Set to a week to
+# match the refresh-token lifetime the offline queue is built around — a Mait who spends days in
+# a dead patch still drains every capture on reconnect instead of stranding it at `straw_verified`.
+# The mobile client's IDEMPOTENCY_TTL_HOURS (mobile/src/config/env.ts) MUST stay <= this value,
+# so always raise the server first, then ship the APK.
+IDEMPOTENCY_TTL_HOURS = env.int("IDEMPOTENCY_TTL_HOURS", default=168)
 LOW_STOCK_THRESHOLD = env.int("LOW_STOCK_THRESHOLD", default=5)
 
 SMS_GATEWAY = {
