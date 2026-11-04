@@ -50,7 +50,7 @@ import {
 import type { QueuedJob, QueuedLabel } from '@api/queue';
 import { drainQueue } from '@api/sync';
 import { configurePackSync, refreshPack, subscribePack } from '@api/offlinePack';
-import type { SyncProgress } from '@api/sync';
+import type { SyncProgress, SyncResult } from '@api/sync';
 import type {
   AIEvent,
   Animal,
@@ -387,6 +387,9 @@ export default function RootNavigator(): React.JSX.Element {
   const [draining, setDraining] = useState(false);
   /** How far the running drain has got, and which capture is on the wire. */
   const [progress, setProgress] = useState<SyncProgress | null>(null);
+  // What the last manual "Try all again" did, shown as one line on the sync-queue screen once
+  // the drain stops. Only a manual sync sets it, so a background drain never flashes a summary.
+  const [syncSummary, setSyncSummary] = useState<SyncResult | null>(null);
 
   const [clientUuid, setClientUuid] = useState(newClientUuid);
   /** Answered at step 1, and it decides where step 3 goes. */
@@ -589,6 +592,9 @@ export default function RootNavigator(): React.JSX.Element {
       // lands.
       eventsChanged();
     }
+    // Handed back so the one caller that wants to report what happened — the sync-queue screen's
+    // "Try all again" — can, while every other caller (the silent background pulls) ignores it.
+    return result;
   }, [accessToken, eventsChanged, refreshScope, reauth, packOwner]);
 
   /**
@@ -1805,7 +1811,13 @@ export default function RootNavigator(): React.JSX.Element {
         // long send read "Sending 0 of 3…" from start to finish — which is what being stuck
         // looks like.
         progress={draining && progress && progress.total > 0 ? progress : null}
-        onRetryAll={sync}
+        summary={syncSummary}
+        // The manual sync, wrapped to leave its summary behind. Cleared first so the old line
+        // does not linger under the new drain's progress, then set from what the drain returns.
+        onRetryAll={async () => {
+          setSyncSummary(null);
+          setSyncSummary(await sync());
+        }}
         /**
          * One refused capture, put back in the queue.
          *
@@ -1826,6 +1838,8 @@ export default function RootNavigator(): React.JSX.Element {
         // Home, the same place the back gesture goes. The list is reached from Home's tile, and
         // the two ways out of a screen should not land in two different places.
         onBack={() => {
+          // The summary is about the sync just watched; it should not be waiting here next time.
+          setSyncSummary(null);
           setQueueOpen(false);
           setTab('home');
         }}

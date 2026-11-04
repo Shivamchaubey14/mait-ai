@@ -40,9 +40,42 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import type { QueuedJob } from '@api/queue';
+import type { SyncResult } from '@api/sync';
 import { colors, radius, shadows, spacing, typography } from '@theme/tokens';
 
 import { FlowNotice, FlowScreen, OptionCard } from '../aiFlow/components';
+
+/**
+ * The one line a manual "Try all again" leaves behind: what the drain actually did.
+ *
+ * The rows already say where each record stands, but a Mait who taps the button and watches the
+ * count fall wants a plain answer when it stops — how many went, how many the server refused,
+ * how many are still waiting on a network. Built from the drain's own `SyncResult` so it can
+ * never disagree with the rows. Returns `null` when there is nothing to report (an empty queue),
+ * so the caller shows it only when it means something.
+ */
+export function syncSummaryLine(result: SyncResult, t: TFunction): string | null {
+  const parts: string[] = [];
+  if (result.sent > 0) {
+    parts.push(t('queue.summarySent', { n: result.sent }));
+  }
+  if (result.failed > 0) {
+    parts.push(t('queue.summaryRefused', { n: result.failed }));
+  }
+  // `remaining` counts every job left, refused ones included; the genuinely-still-waiting are
+  // what is left once the refusals are set aside.
+  const waiting = Math.max(0, result.remaining - result.failed - result.expired);
+  if (waiting > 0) {
+    parts.push(t('queue.summaryWaiting', { n: waiting }));
+  }
+  if (result.expired > 0) {
+    parts.push(t('queue.summaryExpired', { n: result.expired }));
+  }
+  if (parts.length === 0) {
+    return result.sent > 0 ? t('queue.summaryAllSent') : null;
+  }
+  return parts.join(' · ');
+}
 
 /** One capture, however many jobs it is waiting on. */
 export interface QueuedCapture {
@@ -79,6 +112,11 @@ interface Props {
   captures: QueuedCapture[];
   /** How far a drain in progress has got — `2 of 3`. Null when nothing is being sent. */
   progress: { done: number; total: number } | null;
+  /**
+   * What the last manual "Try all again" did, shown once it has finished. Null before any manual
+   * sync and while one is still running (the progress line speaks for that).
+   */
+  summary?: SyncResult | null;
   /** Records already gone up, kept on screen so the list is the whole day, not the remainder. */
   synced: QueuedCapture[];
   onRetryAll: () => void;
@@ -187,6 +225,7 @@ function subtitle(capture: QueuedCapture, t: TFunction): string {
 export default function SyncQueueScreen({
   captures,
   progress,
+  summary,
   synced,
   onRetryAll,
   onRetryCapture,
@@ -194,6 +233,11 @@ export default function SyncQueueScreen({
   onBack,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
+
+  // The finished-sync line, built only when a manual sync has run and nothing is in flight.
+  const summaryLine = !progress && summary ? syncSummaryLine(summary, t) : null;
+  // Green when everything that tried, landed; amber when some were refused or too old to resend.
+  const summaryClean = !!summary && summary.failed === 0 && summary.expired === 0;
 
   const needing = captures.filter(
     capture => capture.needsCode || capture.rejected !== undefined,
@@ -233,6 +277,16 @@ export default function SyncQueueScreen({
             body={t('queue.sendingProgress', { done: progress.done, total: progress.total })}
             icon="sync-outline"
             testID="queue-progress"
+          />
+        ) : summaryLine ? (
+          // The plain answer a Mait wants when the send stops: what went, what was refused, what
+          // is still waiting. Green when all clear, amber when something needs a person.
+          <FlowNotice
+            tone={summaryClean ? 'good' : 'accent'}
+            title={t('queue.summaryHeading')}
+            body={summaryLine}
+            icon={summaryClean ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+            testID="queue-summary"
           />
         ) : undefined
       }
