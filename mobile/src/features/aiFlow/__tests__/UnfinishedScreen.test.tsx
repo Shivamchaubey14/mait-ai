@@ -12,6 +12,7 @@ import { Alert } from 'react-native';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import UnfinishedScreen from '../UnfinishedScreen';
+import { clearQueue, enqueue } from '@api/queue';
 import { jsonResponse, renderWithStore } from '@/test-utils';
 
 /** One abandoned capture at `straw_verified`, shaped the way the API sends it. */
@@ -51,12 +52,16 @@ describe('UnfinishedScreen discard', () => {
   const onBack = jest.fn();
   let cancelCalls: string[];
 
-  beforeEach(() => {
+  beforeEach(async () => {
     cancelCalls = [];
+    await clearQueue(); // an empty phone queue, so the stranded row is genuinely "photo not taken"
     mockApi(cancelCalls);
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    await clearQueue();
+  });
 
   function renderScreen() {
     return renderWithStore(<UnfinishedScreen onResume={onResume} onBack={onBack} />);
@@ -93,5 +98,19 @@ describe('UnfinishedScreen discard', () => {
 
     await waitFor(() => screen.getByText('ANJU'));
     expect(cancelCalls).toHaveLength(0);
+  });
+
+  it('hides a capture whose photo is already queued — it is waiting, not "photo not taken"', async () => {
+    // The reported bug: the photo WAS taken and the finalize is queued on the phone, yet the row
+    // read "photo not taken". With the capture queued, it must not appear here at all.
+    await enqueue('finalize', STRANDED.client_uuid, {
+      eventId: STRANDED.id,
+      photoUri: 'file://proof.jpg',
+    });
+
+    renderScreen();
+
+    await waitFor(() => screen.getByTestId('unfinished-empty'));
+    expect(screen.queryByText('ANJU')).toBeNull();
   });
 });

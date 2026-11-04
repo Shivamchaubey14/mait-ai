@@ -190,6 +190,23 @@ describe('useNeedsAttention', () => {
     expect(result.current.unmatched.map(row => row.id)).toEqual([44]);
   });
 
+  it('does not call a queued photo "photo not taken" — it is waiting, not unfinished', async () => {
+    const store = makeStore();
+    // A capture whose photo + finalize is queued, matching the server's straw_verified event 9
+    // (both carry client_uuid 'e-1'). The photo WAS taken; it is waiting on a network.
+    const queue = [capture({ clientUuid: 'e-1' })];
+    const { result } = renderHook(() => useNeedsAttention(queue), {
+      wrapper: ({ children }) => <Provider store={store}>{children}</Provider>,
+    });
+
+    await waitFor(() => expect(result.current.unmatched.map(row => row.id)).toEqual([44]));
+    // Event 9 is dropped from "photo not taken" — it is the queued capture, on the waiting line.
+    expect(result.current.unfinished.map(row => row.id)).toEqual([]);
+    expect(result.current.waiting).toBe(1);
+    // It needs nobody, so it is not in the "needs a person" total (only the office-code row is).
+    expect(result.current.total).toBe(1);
+  });
+
   it('asks the server nothing for an account that is not a Mait', () => {
     const store = makeStore();
     renderHook(() => useNeedsAttention([], true), {

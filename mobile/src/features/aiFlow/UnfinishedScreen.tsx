@@ -17,13 +17,15 @@
  * are owed something by the person reading the screen.
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import { useCancelAiEventMutation, useListAiEventsQuery } from '@api/endpoints';
+import { readQueue, subscribeQueue } from '@api/queue';
+import type { QueuedJob } from '@api/queue';
 import type { AIEvent } from '@api/types';
 import { AI_FLOW_STEPS } from '@/config/env';
 import { colors, radius, spacing, typography } from '@theme/tokens';
@@ -52,7 +54,30 @@ export default function UnfinishedScreen({ onResume, onBack }: Props): React.JSX
   });
   const [cancelEvent, { isLoading: discarding }] = useCancelAiEventMutation();
 
-  const events = data?.results ?? [];
+  // The client_uuids of every capture already queued on this phone. A straw_verified event whose
+  // photo + finalize is sitting in the queue was NOT abandoned "photo not taken" — the photo was
+  // taken and is waiting on a network. Showing it here would mislabel it and send the Mait back
+  // to the camera to retake a photo they already have, so it is dropped from the list; its queued
+  // job (the waiting-to-sync screen) already speaks for it.
+  const [queuedUuids, setQueuedUuids] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let alive = true;
+    const apply = (jobs: QueuedJob[]) => setQueuedUuids(new Set(jobs.map(job => job.clientUuid)));
+    readQueue().then(jobs => {
+      if (alive) {
+        apply(jobs);
+      }
+    });
+    const unsubscribe = subscribeQueue(apply);
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const events = (data?.results ?? []).filter(
+    event => !queuedUuids.has(event.client_uuid ?? ''),
+  );
 
   // Abandon a capture that will never be finished — the farmer left, the wrong animal was
   // picked, the photo was never going to be taken. Confirmed first, because it is terminal; the

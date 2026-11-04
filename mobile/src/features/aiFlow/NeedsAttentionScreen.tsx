@@ -74,7 +74,17 @@ export function useNeedsAttention(captures: QueuedCapture[], skip = false): Atte
   const needsCode = captures.filter(capture => capture.needsCode && capture.rejected === undefined);
   const waiting = captures.length - refused.length - needsCode.length;
   const unmatched = unmatchedQuery.data?.results ?? [];
-  const unfinished = unfinishedQuery.data?.results ?? [];
+  // An event whose photo + finalize is already queued on the phone is NOT "photo not taken" —
+  // the photo WAS taken and is waiting on a network. The server still reads `straw_verified`
+  // (the finalize has not landed), but the capture is represented by its queued job, counted on
+  // the "waiting for signal" line below. So it is dropped from the server's unfinished list
+  // rather than shown there too, where it wrongly says "photo not taken" and, worse, sends a
+  // Mait back to the camera to retake a photo they already have. Matched by the capture's
+  // `client_uuid`, which both the queued job and the server event carry.
+  const queuedUuids = new Set(captures.map(capture => capture.clientUuid));
+  const unfinished = (unfinishedQuery.data?.results ?? []).filter(
+    event => !queuedUuids.has(event.client_uuid ?? ''),
+  );
 
   return {
     refused,
