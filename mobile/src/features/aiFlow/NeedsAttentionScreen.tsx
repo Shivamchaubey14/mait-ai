@@ -22,11 +22,11 @@
  */
 
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import AppText from '@/components/AppText';
 import { useTranslation } from 'react-i18next';
 
-import { useListAiEventsQuery } from '@api/endpoints';
+import { useCancelAiEventMutation, useListAiEventsQuery } from '@api/endpoints';
 import { localDay } from '@api/fieldCode';
 import type { AIEvent } from '@api/types';
 import { colors, spacing, typography } from '@theme/tokens';
@@ -119,6 +119,27 @@ export default function NeedsAttentionScreen({
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const { refused, needsCode, unmatched, unfinished, waiting, total } = attention;
+  const [cancelEvent, { isLoading: discarding }] = useCancelAiEventMutation();
+
+  // Abandon a capture that will never be finished — the photo was never going to be taken, the
+  // wrong animal was picked. Confirmed first; the server frees the held straw, and the list
+  // refetches on its own (the mutation invalidates the AIEvent tag), so the row leaves.
+  const confirmDiscard = (event: AIEvent) => {
+    Alert.alert(t('unfinished.discardTitle'), t('unfinished.discardBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('unfinished.discard'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await cancelEvent({ id: event.id }).unwrap();
+          } catch {
+            Alert.alert(t('unfinished.discardFailedTitle'), t('unfinished.discardFailedBody'));
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <FlowScreen
@@ -209,17 +230,32 @@ export default function NeedsAttentionScreen({
         <View testID="attention-unfinished">
           <FlowLabel style={styles.heading}>{t('attention.unfinishedHeading')}</FlowLabel>
           {unfinished.map(event => (
-            <OptionCard
-              key={event.id}
-              swatchLabel={initials(event.owner_name)}
-              round
-              title={event.owner_name}
-              subtitle={shortDate(event.created_at)}
-              pill={t(resumePoint(event).missingKey)}
-              pillTone="accent"
-              onPress={() => onResume(event)}
-              testID={`attention-unfinished-${event.id}`}
-            />
+            <View key={event.id}>
+              <OptionCard
+                swatchLabel={initials(event.owner_name)}
+                round
+                title={event.owner_name}
+                subtitle={shortDate(event.created_at)}
+                pill={t(resumePoint(event).missingKey)}
+                pillTone="accent"
+                onPress={() => onResume(event)}
+                testID={`attention-unfinished-${event.id}`}
+              />
+              {/* Finishing is the whole card (the obvious tap); discarding is the smaller,
+                  deliberate one, pushed to the end so a thumb reaching for Resume never lands it. */}
+              <View style={styles.discardRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: discarding }}
+                  onPress={() => confirmDiscard(event)}
+                  disabled={discarding}
+                  hitSlop={spacing[2]}
+                  testID={`attention-discard-${event.id}`}
+                >
+                  <AppText style={styles.discard}>{t('unfinished.discard')}</AppText>
+                </Pressable>
+              </View>
+            </View>
           ))}
         </View>
       )}
@@ -248,4 +284,14 @@ export default function NeedsAttentionScreen({
 const styles = StyleSheet.create({
   heading: { marginTop: spacing[4], marginBottom: spacing[2] },
   explain: { ...typography.caption, color: colors.textMuted, marginBottom: spacing[3] },
+  // The discard tucked under its row, pushed to the end — a footnote on that capture, not a
+  // control competing with Resume.
+  discardRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing[3],
+    marginTop: -spacing[2],
+    marginBottom: spacing[3],
+  },
+  discard: { ...typography.caption, color: colors.textMuted, textDecorationLine: 'underline' },
 });

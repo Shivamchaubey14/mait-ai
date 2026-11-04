@@ -9,8 +9,8 @@ import React from 'react';
 import { fireEvent, screen } from '@testing-library/react-native';
 
 import SyncQueueScreen, { toCaptures } from '../SyncQueueScreen';
+import type { SyncSummary } from '../SyncQueueScreen';
 import type { QueuedJob } from '@api/queue';
-import type { SyncResult } from '@api/sync';
 import { renderWithStore } from '@/test-utils';
 
 function job(over: Partial<QueuedJob> & { clientUuid: string }): QueuedJob {
@@ -227,7 +227,7 @@ describe('SyncQueueScreen', () => {
   });
 
   /** The screen with a finished-sync summary, as the navigator passes it after "Try all again". */
-  function renderWithSummary(summary: SyncResult, progress = null as null | { done: number; total: number }) {
+  function renderWithSummary(summary: SyncSummary, progress = null as null | { done: number; total: number }) {
     return renderWithStore(
       <SyncQueueScreen
         captures={[]}
@@ -242,23 +242,24 @@ describe('SyncQueueScreen', () => {
     );
   }
 
-  it('reports what the finished sync did', () => {
-    renderWithSummary({ sent: 21, remaining: 3, expired: 0, failed: 3 });
+  it('reports the finished sync in records, agreeing with the list', () => {
+    renderWithSummary({ sent: 21, remaining: 3 });
 
     expect(screen.getByTestId('queue-summary')).toBeTruthy();
     expect(screen.getByText('Sync finished')).toBeTruthy();
-    // 21 went, 3 refused; remaining(3) - refused(3) leaves nothing merely waiting.
-    expect(screen.getByText('21 sent · 3 refused')).toBeTruthy();
+    expect(screen.getByText('21 sent · 3 still waiting')).toBeTruthy();
   });
 
-  it('separates what is still waiting on a network from what was refused', () => {
-    renderWithSummary({ sent: 1, remaining: 2, expired: 0, failed: 1 });
+  it('counts records, not the jobs a record is made of — one record reads as one', () => {
+    // The reported bug: a capture of two jobs read "2 still waiting" over a list of one record.
+    renderWithSummary({ sent: 0, remaining: 1 });
 
-    expect(screen.getByText('1 sent · 1 refused · 1 still waiting')).toBeTruthy();
+    expect(screen.getByText('1 still waiting')).toBeTruthy();
+    expect(screen.queryByText('2 still waiting')).toBeNull();
   });
 
   it('holds the summary back while a drain is still running — the progress line speaks then', () => {
-    renderWithSummary({ sent: 5, remaining: 0, expired: 0, failed: 0 }, { done: 1, total: 2 });
+    renderWithSummary({ sent: 5, remaining: 0 }, { done: 1, total: 2 });
 
     expect(screen.queryByTestId('queue-summary')).toBeNull();
     expect(screen.getByText('Sending 1 of 2…')).toBeTruthy();

@@ -8,6 +8,7 @@
  */
 
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, renderHook, screen, waitFor } from '@testing-library/react-native';
 import { Provider } from 'react-redux';
 
@@ -120,6 +121,30 @@ describe('NeedsAttentionScreen', () => {
 
     fireEvent.press(screen.getByTestId('attention-unfinished-9'));
     expect(on.onResume).toHaveBeenCalledWith(stopped);
+  });
+
+  it('discards an unfinished capture here, where the Mait actually reaches it', async () => {
+    const on = handlers();
+    const stopped = event({ id: 9, status: 'straw_verified' });
+    const calls: string[] = [];
+    global.fetch = jest.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('/cancel/')) {
+        calls.push(url);
+        return jsonResponse({ ...stopped, status: 'cancelled' });
+      }
+      return jsonResponse({ count: 0, next: null, previous: null, results: [] });
+    }) as jest.Mock;
+    // Auto-accept the confirm (the destructive button is the second one).
+    jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => buttons?.[1]?.onPress?.());
+
+    renderWithStore(
+      <NeedsAttentionScreen attention={attention({ unfinished: [stopped] })} {...on} />,
+    );
+    fireEvent.press(screen.getByTestId('attention-discard-9'));
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toContain('/ai-events/9/cancel/');
   });
 
   it('keeps what only needs signal to one quiet line', () => {

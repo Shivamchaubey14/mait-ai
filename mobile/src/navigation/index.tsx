@@ -89,6 +89,7 @@ import { radioSaysOffline, REACH_RETRY_MS, serverReachable } from '@api/reachabi
 import SyncQueueScreen, {
   toCaptures,
   type QueuedCapture,
+  type SyncSummary,
 } from '@/features/history/SyncQueueScreen';
 import HomeScreen from '@/features/home/HomeScreen';
 import SettingsScreen from '@/features/settings/SettingsScreen';
@@ -387,9 +388,10 @@ export default function RootNavigator(): React.JSX.Element {
   const [draining, setDraining] = useState(false);
   /** How far the running drain has got, and which capture is on the wire. */
   const [progress, setProgress] = useState<SyncProgress | null>(null);
-  // What the last manual "Try all again" did, shown as one line on the sync-queue screen once
-  // the drain stops. Only a manual sync sets it, so a background drain never flashes a summary.
-  const [syncSummary, setSyncSummary] = useState<SyncResult | null>(null);
+  // What the last manual "Try all again" did, in records, shown as one line on the sync-queue
+  // screen once the drain stops. Only a manual sync sets it, so a background drain never flashes
+  // a summary. Counted in records (captures) so it agrees with the header and the rows.
+  const [syncSummary, setSyncSummary] = useState<SyncSummary | null>(null);
 
   const [clientUuid, setClientUuid] = useState(newClientUuid);
   /** Answered at step 1, and it decides where step 3 goes. */
@@ -1812,11 +1814,17 @@ export default function RootNavigator(): React.JSX.Element {
         // looks like.
         progress={draining && progress && progress.total > 0 ? progress : null}
         summary={syncSummary}
-        // The manual sync, wrapped to leave its summary behind. Cleared first so the old line
-        // does not linger under the new drain's progress, then set from what the drain returns.
+        // The manual sync, wrapped to leave a record-counted summary behind. The queue is read
+        // before and after so "sent" and "remaining" are in records (captures) — the same unit
+        // the header and rows use — rather than the jobs a `SyncResult` counts, which read "2
+        // waiting" over a list of one. Cleared first so the old line never lingers under the new
+        // drain's progress.
         onRetryAll={async () => {
           setSyncSummary(null);
-          setSyncSummary(await sync());
+          const before = toCaptures(await readQueue()).length;
+          await sync();
+          const after = toCaptures(await readQueue()).length;
+          setSyncSummary({ sent: Math.max(0, before - after), remaining: after });
         }}
         /**
          * One refused capture, put back in the queue.
