@@ -1,0 +1,56 @@
+# =======================================================================================
+# Cloudflare Tunnel — puts the API on https://mait-ai.shwetdharamilk.com (port 443)
+#
+# WHY THIS EXISTS
+# ---------------
+# The product used to be reachable only on https://mait-ai.shwetdharamilk.com:8001, because
+# the office FortiGate already owns 80 and 443 (see infra/caddy/Caddyfile). Port 8001 is a
+# non-standard port, and a large share of mobile carriers and WiFi networks block outbound
+# traffic to it — so a subset of Maits could never open a connection and saw
+# "Mait AI is not answering" (handset has signal, server did not respond) on the login screen.
+#
+# A Cloudflare Tunnel fixes that without touching the FortiGate:
+#   * The handset talks to Cloudflare's edge on 443 — a port nothing blocks.
+#   * cloudflared on this server makes an OUTBOUND connection to Cloudflare, so no inbound
+#     firewall port has to be opened at all. 8001 is no longer on the path for phones.
+#   * Cloudflare terminates TLS at the edge, so the bought wildcard cert is not needed here
+#     for the mobile path.
+#
+#       phone ──https:443──▶  Cloudflare edge  ──tunnel (outbound)──▶  cloudflared (this PC)
+#                                                                         │
+#                                                                         ▼
+#                                                              127.0.0.1:8010  Django
+#
+# PREREQUISITES (done once, in the Cloudflare dashboard + CLI — see README.md here)
+# ---------------------------------------------------------------------------------
+#   1. The zone shwetdharamilk.com is on Cloudflare (free plan is enough).
+#   2. cloudflared is installed on this server.
+#   3. `cloudflared tunnel login`         (authorises this machine to the zone)
+#   4. `cloudflared tunnel create mait-ai`  -> prints a Tunnel UUID and writes a
+#                                              credentials JSON into ~/.cloudflared\
+#   5. `cloudflared tunnel route dns mait-ai mait-ai.shwetdharamilk.com`
+#                                           (creates the proxied CNAME in DNS)
+#   Then fill in the two values below and run the tunnel (start-cloudflare.ps1 does this).
+#
+# The two values to fill in: the tunnel UUID from step 4, and the path to the credentials
+# file it wrote (on Windows it lands in C:\Users\<you>\.cloudflared\<UUID>.json).
+# =======================================================================================
+
+tunnel: PUT-TUNNEL-UUID-HERE
+credentials-file: C:\Users\Server\.cloudflared\PUT-TUNNEL-UUID-HERE.json
+
+# Keep the original Host header so Django builds https://mait-ai.shwetdharamilk.com/... URLs
+# (for photos/media) rather than a loopback address. Cloudflare sets X-Forwarded-Proto: https,
+# which backend/config/settings/dev.py already trusts (SECURE_PROXY_SSL_HEADER), so media URLs
+# come out as https on 443.
+ingress:
+  - hostname: mait-ai.shwetdharamilk.com
+    # Django on this server runs on 127.0.0.1:8010 (port 8000 is taken by the Easy Indent app;
+    # this matches $DjangoPort in start-https.ps1). Change to 8000 on a clean server.
+    service: http://127.0.0.1:8010
+  # Anything that is not the hostname above gets a flat 404 rather than reaching Django.
+  - service: http_status:404
+
+# Health of the tunnel itself (not the app). cloudflared serves these locally so the launcher
+# and a monitor can see whether the tunnel is up.
+metrics: 127.0.0.1:20241

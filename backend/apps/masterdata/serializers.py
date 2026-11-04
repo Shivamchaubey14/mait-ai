@@ -8,6 +8,7 @@ from apps.animals.serializers import MAX_PHOTO_BYTES, AnimalSerializer
 
 from .identity import aadhaar_clash
 from .models import MAX_ERRORS_STORED, MPP, DataUploadLog, Mait, Member, NonMember
+from .procurement import decide as decide_eligibility
 
 # openpyxl only reads the OOXML format. Rejecting other types up front gives a clear error
 # instead of an unhandled parser exception inside a Celery worker.
@@ -211,7 +212,72 @@ class MPPDetailSerializer(MPPListSerializer):
         read_only_fields = fields
 
 
-class MemberListSerializer(serializers.ModelSerializer):
+class ProcurementFieldsMixin:
+    """
+    A member's milk procurement and the insemination-code eligibility it decides.
+
+    Shared by the picker row (the pill) and the member detail (the milk panel), so both read
+    eligibility the one way the backend defines it (``masterdata.procurement``). The threshold
+    and whether the gate is live are computed once per request and handed in through the
+    serializer context (``procurement_threshold`` / ``procurement_gated``), so a page of members
+    costs no extra query for them. The latest period is read from the prefetched
+    ``procurements`` (ordered newest-first), so there is no per-row query either.
+    """
+
+    def _latest_procurement(self, obj):
+        rows = obj.procurements.all()  # prefetched, newest first (model Meta ordering)
+        return rows[0] if rows else None
+
+    def _eligibility(self, obj):
+        latest = self._latest_procurement(obj)
+        return decide_eligibility(
+            amount=latest.amount if latest else None,
+            threshold=self.context.get("procurement_threshold", 0),
+            gated=self.context.get("procurement_gated", False),
+            latest=latest,
+        )
+
+    def get_procurement_eligible(self, obj) -> bool:
+        return self._eligibility(obj).eligible
+
+    def get_procurement(self, obj):
+        """
+        Her milk procurement and the insemination-code eligibility it decides.
+
+        The **same shape the AI-events row and the Super OTP panel read**
+        (``ai_events.serializers`` / ``accounts.super_otp_views``): whether the gate is live,
+        whether she clears it, the bar, how much she has poured, and — when she has one — her
+        latest period nested under ``period``. Kept identical so the mobile picker can draw the
+        exact pill-plus-figures line the portal does, and the three screens never disagree.
+
+        Returned for every member, even one with no milk on record (``amount`` null, no
+        ``period``): the front end reads ``gated`` to decide whether to show anything, so a dairy
+        that has uploaded no procurement still sees nothing new, and a gated member with no
+        pouring can still be told the bar she has not yet reached.
+        """
+        decision = self._eligibility(obj)
+        latest = decision.latest
+        block = {
+            "eligible": decision.eligible,
+            "gated": decision.gated,
+            "threshold": str(decision.threshold),
+            "amount": str(decision.amount) if decision.amount is not None else None,
+        }
+        if latest is not None:
+            block["period"] = {
+                "from_date": latest.from_date,
+                "to_date": latest.to_date,
+                "qty": str(latest.qty),
+                "avg_fat": str(latest.avg_fat),
+                "avg_snf": str(latest.avg_snf),
+                "amount": str(latest.amount),
+                "no_of_pouring_days": latest.no_of_pouring_days,
+                "no_of_pouring_shift": latest.no_of_pouring_shift,
+            }
+        return block
+
+
+class MemberListSerializer(ProcurementFieldsMixin, serializers.ModelSerializer):
     """
     Trimmed for the mobile app's member picker (SRS §6.3 step 2).
 
@@ -225,12 +291,16 @@ class MemberListSerializer(serializers.ModelSerializer):
     # (SRS §16). Sent to an Admin only: the Mait's picker has no use for it, and a field the
     # app does not need is personal data on a handset for no reason.
     aadhar_masked = serializers.CharField(source="masked_aadhar", read_only=True)
+    # The picker-row pill: can she be sent an insemination code, and her latest milk detail.
+    procurement_eligible = serializers.SerializerMethodField()
+    procurement = serializers.SerializerMethodField()
 
     class Meta:
         model = Member
         fields = [
             "id",
             "member_code",
+            "sap_vendor_code",
             "member_name",
             "father_husband_name",
             "aadhar_masked",
@@ -241,6 +311,8 @@ class MemberListSerializer(serializers.ModelSerializer):
             "mobile_updated_by_name",
             "mpp_code",
             "activation_status",
+            "procurement_eligible",
+            "procurement",
         ]
         read_only_fields = fields
 
@@ -257,11 +329,14 @@ class MemberListSerializer(serializers.ModelSerializer):
         return (user.full_name or user.username) if user else ""
 
 
-class MemberDetailSerializer(serializers.ModelSerializer):
+class MemberDetailSerializer(ProcurementFieldsMixin, serializers.ModelSerializer):
     aadhar_no = serializers.CharField(source="masked_aadhar", read_only=True)
     mpp_code = serializers.CharField(source="mpp.mpp_code", read_only=True)
     mpp_name = serializers.CharField(source="mpp.mpp_name", read_only=True)
     can_receive_otp = serializers.SerializerMethodField()
+    # Her milk for the latest period, and whether it clears the code-eligibility bar.
+    procurement_eligible = serializers.SerializerMethodField()
+    procurement = serializers.SerializerMethodField()
     # Step 3 of the capture flow picks from these (SRS §6.3). Nested rather than a second
     # request because the Mait is standing in a yard with one bar of signal — two round trips
     # to show one screen is one too many.
@@ -272,6 +347,7 @@ class MemberDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "member_code",
+            "sap_vendor_code",
             "member_name",
             "father_husband_name",
             "gender",
@@ -289,6 +365,8 @@ class MemberDetailSerializer(serializers.ModelSerializer):
             "mpp_code",
             "mpp_name",
             "can_receive_otp",
+            "procurement_eligible",
+            "procurement",
             "animals",
         ]
         read_only_fields = fields

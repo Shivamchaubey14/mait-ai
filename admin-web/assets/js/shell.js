@@ -61,6 +61,10 @@ window.MaitAI = window.MaitAI || {};
        sidebar that is about getting into an account rather than about what is in one. */
     'super-otp':
       'M15 3a6 6 0 1 1-5.6 8.2L3 17.6V21h3.4l.8-.8V18h2.2l.8-.8v-2.2h2.2l1-1A6 6 0 0 1 15 3zM16.5 7.5h.01',
+    /* A message passing down a line of stations to a phone. Not the key above it: this is not
+       a way in, it is the road a code travels and where on it the code was lost. */
+    'otp-pipeline':
+      'M3 12h4M10 12h4M17 12h4M5 12a2 2 0 1 0 0 .01M12 12a2 2 0 1 0 0 .01M19 12a2 2 0 1 0 0 .01M8 6h8l-2-2M16 18H8l2 2',
     /* A map divided into areas. Not the MPP pin and not the Assignment pin — both of those
        say "a place", and a zone is the line drawn around several of them. */
     zones: 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15',
@@ -121,6 +125,9 @@ window.MaitAI = window.MaitAI || {};
     // Directly under Users & roles: a code that signs somebody in without their SMS is
     // account administration, and it sits with the desk that already does that.
     { key: 'super-otp', label: 'Super OTP', href: 'super-otp.html' },
+    // Directly under Super OTP, because it is the evidence that desk decides on: whether the
+    // code ever reached the phone, and so whether the office was right to be asked for one.
+    { key: 'otp-pipeline', label: 'OTP pipeline', href: 'otp-pipeline.html' },
     // Directly under Users & roles, because it is the other half of the same job. That screen
     // says which pages an account opens; this one says how much of the network it sees
     // through them — and an account that can edit zones can widen its own view.

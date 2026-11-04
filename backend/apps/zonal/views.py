@@ -217,7 +217,8 @@ def zonal_dashboard(request):
     tags=["zonal"],
     summary="The indents awaiting this manager's decision",
     description=(
-        "Oldest first — the Mait who has waited longest is the one to answer. Each row "
+        "Newest first — the request that has just come in is the one a manager opens the "
+        "screen to answer; how long the oldest has waited is on the zonal home. Each row "
         "carries what the decision turns on: what that Mait already holds of the item, what "
         "the depot serving them can still promise (`in_store`, or `-1` where no depot serves "
         "them yet), and how long it has sat.\n\n"
@@ -244,8 +245,9 @@ def zonal_approvals(request):
             match |= Q(pk=int(number))
         queryset = queryset.filter(match)
 
-    # Oldest first: this is a queue of people waiting, not a list of records.
-    rows = list(queryset.order_by("requested_at"))
+    # Newest first: a manager opens this because a request has just come in, and the oldest
+    # wait is already said on the zonal home ("oldest 6d").
+    rows = list(queryset.order_by("-requested_at"))
 
     # Both context maps are built once for the page. A shelf read per row would be one query
     # per indent on a screen that opens on a village connection.

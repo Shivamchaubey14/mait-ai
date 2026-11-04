@@ -31,6 +31,10 @@
     editing: null,
     // Whether the server sent the masked Aadhaar at all — an Admin's list only.
     aadhaar: false,
+    // The MPP the search box has settled on: its code is what the list filters by, the name is
+    // what the closed box reads back. Empty code means every MPP.
+    mppCode: '',
+    mppName: '',
   };
 
   const SHIELD =
@@ -183,11 +187,24 @@
       ui.escapeHtml(member.member_code) +
       '">' +
       '<td>' +
-      ui.identity(member.member_name, member.father_husband_name) +
+      '<a class="table__name table__name--link" href="member.html?code=' +
+      ui.escapeHtml(encodeURIComponent(member.member_code)) +
+      '">' +
+      ui.escapeHtml(member.member_name || '—') +
+      '</a>' +
+      (member.father_husband_name
+        ? '<span class="table__sub">' + ui.escapeHtml(member.father_husband_name) + '</span>'
+        : '') +
       '</td>' +
       '<td><span class="table__code">' +
       ui.escapeHtml(member.member_code) +
-      '</span></td>' +
+      '</span>' +
+      // Under the code, because it is what stays the same when she moves MPP and the code does
+      // not — and what the search box also matches.
+      (member.sap_vendor_code
+        ? '<span class="table__sub">SAP ' + ui.escapeHtml(member.sap_vendor_code) + '</span>'
+        : '') +
+      '</td>' +
       '<td>' +
       ui.escapeHtml(member.mpp_code || '—') +
       '</td>' +
@@ -215,18 +232,17 @@
   function query() {
     const params = { limit: LIMIT, offset: state.offset };
     const search = ($('#search').val() || '').trim();
-    const mpp = $('#filter-mpp').val();
 
     if (search) {
       params.search = search;
     }
-    if (mpp) {
-      params.mpp__mpp_code = mpp;
+    if (state.mppCode) {
+      params.mpp__mpp_code = state.mppCode;
     }
     if (state.noMobile) {
-      // The server filters on the stored value; an empty string is what an unusable record
-      // carries after the SAP import normalises it.
-      params.mobile_no = '';
+      // Asked for by name. `mobile_no=''` was what this sent, and the filter backend drops an
+      // empty value as "no filter" — so the chip showed every member.
+      params.no_mobile = 'true';
     }
     if (state.office) {
       params.mobile_source = 'office';
@@ -275,22 +291,125 @@
       });
   }
 
-  function loadMppOptions() {
-    MaitAI.api.mpps({ limit: 200 }).done(function (page) {
-      $('#filter-mpp').append(
-        (page.results || [])
-          .map(function (mpp) {
-            return (
-              '<option value="' +
-              ui.escapeHtml(mpp.mpp_code) +
-              '">' +
-              ui.escapeHtml(mpp.mpp_name) +
-              '</option>'
-            );
-          })
-          .join('')
-      );
-    });
+  /* --- the MPP search box -----------------------------------------------------------------
+   *
+   * A type-to-search dropdown over the MPP directory. The old plain menu could only ever hold
+   * the first 200 collection points, and there are thousands — so most MPPs could not be
+   * filtered to at all. This asks the server as the operator types, matching on name or code
+   * (`mpp_name`, `mpp_code`), and the chosen code becomes `state.mppCode`, which the list
+   * filters on exactly as the menu's value used to.
+   */
+  const combo = {
+    options: [], // the rows currently drawn, in order, for the arrow keys
+    active: -1, // which one the keyboard is on, or -1
+    debounce: null,
+    // A search is a round trip, and a later keystroke can be answered before an earlier one.
+    // Each request carries the token it was issued with; a response whose token is stale is
+    // dropped, so the list always shows the answer to the last thing typed.
+    token: 0,
+    open: false,
+  };
+
+  /** One row. Code `''` is the "All MPPs" clear row, which every list carries at the top. */
+  function comboOption(code, name, sub) {
+    return (
+      '<button class="mpp-combo__option" type="button" role="option" aria-selected="' +
+      (code === state.mppCode ? 'true' : 'false') +
+      '" data-code="' +
+      ui.escapeHtml(code) +
+      '" data-name="' +
+      ui.escapeHtml(name) +
+      '">' +
+      '<span class="mpp-combo__opt-name">' +
+      ui.escapeHtml(name) +
+      '</span>' +
+      (sub ? '<span class="mpp-combo__opt-code">' + ui.escapeHtml(sub) + '</span>' : '') +
+      '</button>'
+    );
+  }
+
+  /** A line that is not an option — "Searching…", or nothing matched — so it cannot be chosen. */
+  function comboNote(text) {
+    combo.options = [{ code: '', name: 'All MPPs', sub: '' }];
+    combo.active = -1;
+    $('#mpp-combo-menu').html(
+      comboOption('', 'All MPPs', '') + '<p class="mpp-combo__note">' + ui.escapeHtml(text) + '</p>'
+    );
+  }
+
+  function renderComboOptions(mpps) {
+    const rows = [{ code: '', name: 'All MPPs', sub: '' }].concat(
+      mpps.map(function (mpp) {
+        return { code: mpp.mpp_code, name: mpp.mpp_name || mpp.mpp_code, sub: mpp.mpp_code };
+      })
+    );
+    combo.options = rows;
+    combo.active = -1;
+    $('#mpp-combo-menu').html(
+      rows
+        .map(function (r) {
+          return comboOption(r.code, r.name, r.sub);
+        })
+        .join('')
+    );
+  }
+
+  function searchMpps(term) {
+    const token = ++combo.token;
+    const t = (term || '').trim();
+    $('#mpp-combo-menu').html(
+      comboOption('', 'All MPPs', '') + '<p class="mpp-combo__note">Searching…</p>'
+    );
+    const q = { limit: 50 };
+    if (t) {
+      q.search = t;
+    }
+    MaitAI.api
+      .mpps(q)
+      .done(function (page) {
+        if (token !== combo.token) {
+          return; // a later keystroke already won
+        }
+        const results = page.results || [];
+        if (!results.length) {
+          comboNote(t ? 'No MPP matches “' + t + '”.' : 'No MPPs found.');
+          return;
+        }
+        renderComboOptions(results);
+      })
+      .fail(function () {
+        if (token === combo.token) {
+          comboNote('Could not load MPPs. Try again.');
+        }
+      });
+  }
+
+  function openCombo() {
+    combo.open = true;
+    $('#mpp-combo-panel').prop('hidden', false);
+    $('#mpp-combo-button').attr('aria-expanded', 'true');
+    // Filled on each open, honouring whatever is already typed in the box.
+    searchMpps($('#mpp-combo-input').val());
+    $('#mpp-combo-input').trigger('focus');
+  }
+
+  function closeCombo(refocus) {
+    combo.open = false;
+    $('#mpp-combo-panel').prop('hidden', true);
+    $('#mpp-combo-button').attr('aria-expanded', 'false');
+    if (refocus) {
+      $('#mpp-combo-button').trigger('focus');
+    }
+  }
+
+  function chooseMpp(code, name) {
+    state.mppCode = code || '';
+    state.mppName = code ? name || code : '';
+    $('#mpp-combo-value').text(code ? state.mppName : 'All MPPs');
+    $('#mpp-combo').toggleClass('mpp-combo--empty', !code);
+    closeCombo(true);
+    state.offset = 0;
+    load();
   }
 
   /* --- the dialog ------------------------------------------------------------------------ */
@@ -464,7 +583,7 @@
       return;
     }
     MaitAI.shell.mount();
-    loadMppOptions();
+    $('#mpp-combo').addClass('mpp-combo--empty');
     load();
 
     let debounce = null;
@@ -476,9 +595,61 @@
       }, 350);
     });
 
-    $('#filter-mpp').on('change', function () {
-      state.offset = 0;
-      load();
+    // The MPP search box. A div rather than a <select>, so its parts are wired here by hand.
+    $('#mpp-combo-button').on('click', function (event) {
+      event.preventDefault();
+      if (combo.open) {
+        closeCombo();
+      } else {
+        openCombo();
+      }
+    });
+
+    $('#mpp-combo-input').on('input', function () {
+      const term = $(this).val();
+      window.clearTimeout(combo.debounce);
+      combo.debounce = window.setTimeout(function () {
+        searchMpps(term);
+      }, 250);
+    });
+
+    $('#mpp-combo-input').on('keydown', function (event) {
+      const key = event.key;
+      const $opts = $('#mpp-combo-menu .mpp-combo__option');
+      if (key === 'ArrowDown' || key === 'ArrowUp') {
+        event.preventDefault();
+        if (!$opts.length) {
+          return;
+        }
+        combo.active = Math.min(
+          $opts.length - 1,
+          Math.max(0, combo.active + (key === 'ArrowDown' ? 1 : -1))
+        );
+        $opts.removeClass('is-active').eq(combo.active).addClass('is-active');
+        $opts[combo.active].scrollIntoView({ block: 'nearest' });
+      } else if (key === 'Enter') {
+        event.preventDefault();
+        const $opt = $opts.eq(combo.active >= 0 ? combo.active : 0);
+        if ($opt.length) {
+          // `attr`, not `data`: a code like "000123" would come back from jQuery's data cache
+          // coerced to the number 123, and the leading zeros are part of the code.
+          chooseMpp(String($opt.attr('data-code') || ''), String($opt.attr('data-name') || ''));
+        }
+      } else if (key === 'Escape') {
+        event.preventDefault();
+        closeCombo(true);
+      }
+    });
+
+    $('#mpp-combo-menu').on('click', '.mpp-combo__option', function () {
+      chooseMpp(String($(this).attr('data-code') || ''), String($(this).attr('data-name') || ''));
+    });
+
+    // Anywhere outside the box closes it, the way a menu is expected to behave.
+    $(document).on('mousedown', function (event) {
+      if (combo.open && !$(event.target).closest('#mpp-combo').length) {
+        closeCombo();
+      }
     });
 
     $('#filter-no-mobile').on('click', function () {

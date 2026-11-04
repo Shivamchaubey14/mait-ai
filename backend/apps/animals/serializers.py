@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.masterdata.models import Member, NonMember
@@ -89,6 +90,11 @@ class AnimalSerializer(serializers.ModelSerializer):
     # which by definition has no history yet.
     ai_event_count = serializers.IntegerField(read_only=True, default=0)
     last_ai_at = serializers.DateTimeField(read_only=True, default=None)
+    # Whether she may be served today (`ai_events.rules`): one semen, then 21 days, and never
+    # while pregnant. Sent with every animal so the phone can say so before a straw is drawn —
+    # offline too, from the copy in its pack.
+    next_ai_block = serializers.SerializerMethodField()
+    next_ai_on = serializers.SerializerMethodField()
 
     class Meta:
         model = Animal
@@ -105,9 +111,29 @@ class AnimalSerializer(serializers.ModelSerializer):
             "photo_url",
             "ai_event_count",
             "last_ai_at",
+            "next_ai_block",
+            "next_ai_on",
             "created_at",
         ]
         read_only_fields = fields
+
+    def _next(self, obj):
+        from apps.ai_events.rules import next_service
+
+        return next_service(
+            last_served_at=getattr(obj, "last_served_at", None),
+            open_count=getattr(obj, "open_ai_count", 0) or 0,
+            pregnant_until=getattr(obj, "pregnant_until", None),
+        )
+
+    def get_next_ai_block(self, obj) -> str:
+        """'' when she may be served today; else `open`, `too_soon` or `pregnant`."""
+        return self._next(obj).block
+
+    @extend_schema_field(serializers.DateField(allow_null=True))
+    def get_next_ai_on(self, obj):
+        """The first day she may be served, where something holds her back until then."""
+        return self._next(obj).from_day
 
     def get_owner_name(self, obj) -> str:
         owner = obj.owner

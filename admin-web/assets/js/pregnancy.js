@@ -327,7 +327,7 @@
       '<p class="check__coords">' +
       (hasPin(check)
         ? coords(Number(check.gps_lat), Number(check.gps_lng)) +
-          (check.gps_source === 'exif' ? ' · from the photo' : '')
+          (check.gps_source === 'photo' ? ' · from the photo' : '')
         : 'No pin was recorded') +
       '</p>' +
       '</div>' +
@@ -680,7 +680,7 @@
     $('#export-label').text('Preparing…');
 
     MaitAI.api
-      .download('/reports/pregnancy/' + query, 'pregnancy-checks.csv')
+      .download('/reports/pregnancy/' + query, 'pregnancy-checks.xlsx')
       .catch(function () {
         MaitAI.shell.alert('The report could not be produced. Try again in a moment.');
       })

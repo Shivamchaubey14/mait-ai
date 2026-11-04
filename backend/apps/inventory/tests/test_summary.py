@@ -127,3 +127,37 @@ class TestAdminDetail:
 
     def test_an_unknown_mait_is_a_404(self, admin_client):
         assert admin_client.get("/api/v1/admin/inventory/999999/").status_code == 404
+
+
+def test_a_breed_says_how_many_of_its_straws_have_been_used(mait_client, mait):
+    """
+    Issued, used and in hand, per breed — with the used straws counted.
+
+    A straw is a stock line of its own: +1 when issued, -1 when used, and from then on a line
+    of 0. The history was built only from lines with a straw still in them, so every breed read
+    "used 0" however many had gone into animals, and "issued" read as what was left.
+    """
+    from django.db import transaction
+
+    from apps.inventory.services import consume_straw, credit_stock
+    from conftest import SemenBatchFactory
+
+    straws = [SemenBatchFactory(breed="MURRAH") for _ in range(3)]
+    for straw in straws:
+        credit_stock(
+            mait=mait,
+            product_type=ProductType.STRAW,
+            product_ref_id=straw.id,
+            qty=1,
+            ref_type="test",
+        )
+    with transaction.atomic():
+        consume_straw(mait=mait, straw=straws[0], ai_event_id=1)
+        consume_straw(mait=mait, straw=straws[1], ai_event_id=2)
+
+    body = mait_client.get("/api/v1/mait/inventory/").json()
+
+    murrah = next(row for row in body["straws"] if row["breed"] == "MURRAH")
+    assert murrah == {**murrah, "qty": 1, "issued": 3, "used": 2}
+    # The gate the capture flow reads is untouched: only what is in hand.
+    assert body["by_breed"]["MURRAH"] == 1

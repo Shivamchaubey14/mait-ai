@@ -224,6 +224,7 @@ def photo_already_attached(event: AIEvent) -> bool:
     return bool(event.ai_photo_url) and not event.can_transition_to(AIEvent.Status.PHOTO_CAPTURED)
 
 
+@transaction.atomic
 def attach_photo(
     event: AIEvent,
     *,
@@ -249,12 +250,38 @@ def attach_photo(
     and time, and a chosen photograph is a photograph. The platform still accepts it — a Mait
     whose camera will not open has to be able to finish the round — but nobody reading the
     record later should have to guess which of the two they are holding.
+
+    **Locked and re-read before it decides anything.** The view uploads the photo first —
+    outside any transaction, over a connection that can take many seconds — working from the
+    event as it was when the request began. By the time control reaches here the capture may
+    have moved on: a duplicated or replayed upload, or simply one slower than the payment and
+    completion that raced it. The decision has to be made against the row as it is *now*, under
+    a lock, not against the stale instance the view loaded. Without this an old upload writes
+    ``photo_captured`` over whatever the event has since become — and over ``completed`` that
+    silently reopens a finished insemination, which is exactly how the stuck records that
+    needed the office repair were made.
     """
-    if photo_already_attached(event):
-        # A retry whose first response was lost. The photograph is on file, the event has
-        # moved on, and nothing further should be written — see `photo_already_attached`.
+    event = AIEvent.objects.select_for_update().get(pk=event.pk)
+
+    # The authoritative replay check, against the freshly locked status. A photo already on
+    # file, or an event that has reached or passed `photo_captured` (and so on to
+    # payment_pending, completed, cancelled), is a no-op: there is nothing to write and, above
+    # all, nothing to overwrite. This absorbs a lost-response retry and a duplicate or delayed
+    # upload that began a step or more behind where the event now is — including one that lands
+    # after completion, which is what used to reopen a finished insemination.
+    moved_on = (
+        AIEvent.Status.PHOTO_CAPTURED,
+        AIEvent.Status.PAYMENT_PENDING,
+        AIEvent.Status.COMPLETED,
+        AIEvent.Status.CANCELLED,
+    )
+    if event.ai_photo_url or event.status in moved_on:
         return event
 
+    # Anything still earlier than `straw_verified` — a draft with no checked straw — is a
+    # genuine error rather than a replay, and `_transition` refuses it with the 409 the capture
+    # flow expects: a photo without a verified straw is a photograph of an animal, not evidence
+    # of an insemination.
     chosen = photo_source == AIEvent.PhotoSource.GALLERY
     _transition(
         event,
@@ -285,7 +312,19 @@ def attach_photo(
 
 @transaction.atomic
 def mark_payment_pending(event: AIEvent, *, actor=None) -> AIEvent:
-    """Advance to ``payment_pending`` when payment is initiated (SRS §6.5)."""
+    """
+    Advance to ``payment_pending`` when payment is initiated (SRS §6.5).
+
+    Locked and re-read like ``attach_photo``, and for the same reason: a payment-initiate that
+    was duplicated or arrived late must decide against the row as it is now. If the event has
+    already moved past this step — most of all if it has ``completed`` — this is a no-op rather
+    than a write, because transitioning it here would reopen a finished insemination. Already at
+    ``payment_pending`` is the ordinary replay, and also a no-op.
+    """
+    event = AIEvent.objects.select_for_update().get(pk=event.pk)
+    if not event.can_transition_to(AIEvent.Status.PAYMENT_PENDING):
+        # Already here or further along — nothing to do, and nothing to overwrite.
+        return event
     _transition(
         event,
         AIEvent.Status.PAYMENT_PENDING,
@@ -393,6 +432,12 @@ def complete_ai_event(event: AIEvent, *, actor=None, without_stock: bool = False
     Deliberately kept small and free of I/O. No S3 upload, no SMS, no outbound HTTP —
     anything slow inside this block would hold the row lock while it waited.
     """
+    # Re-read the event under its own lock, not just the inventory row. The status is decided
+    # against the row as it is now, so a completion racing a duplicate capture step reads the
+    # committed truth rather than the instance its caller happened to load — the same stale-read
+    # guard `attach_photo` and `mark_payment_pending` now carry.
+    event = AIEvent.objects.select_for_update().get(pk=event.pk)
+
     if event.status == AIEvent.Status.COMPLETED:
         # Not an error. A retry whose original response was lost lands here, and the
         # honest answer is that the event is already complete.
@@ -454,12 +499,62 @@ def complete_ai_event(event: AIEvent, *, actor=None, without_stock: bool = False
 
 
 @transaction.atomic
+def finalize_member_capture(event: AIEvent, *, amount, actor=None) -> AIEvent:
+    """
+    Record a member's verified deduction and complete the event, in one transaction.
+
+    The back half of the one-step finish (``finalize``). Its front half — attaching the proof
+    photo — has already run by the time this is called, so here the event is at
+    ``photo_captured`` with its photo on file, and all that is left is the payment row and the
+    completion the step-by-step close would have made as two more round trips.
+
+    A member pays nothing in the yard: the ₹``amount`` (the administrator's breed rate) is a
+    deduction against her milk payout, settled by finance in their own software. So the row is
+    written ``VERIFIED`` on creation, exactly as ``payments.PaymentInitiateView`` does for the
+    member case — there is no authorisation to wait on, and a pending status would hold the
+    capture open forever. ``get_or_create`` keyed on the event makes a replay reuse the row
+    rather than add a second.
+
+    Then the ordinary completion runs: it re-reads the event under a lock, deducts exactly one
+    straw, closes the event and books the pregnancy check — so the one-straw-per-completion and
+    replay-is-a-no-op guarantees the completion suite defends hold here unchanged.
+    """
+    from apps.payments.models import Payment
+
+    payment, created = Payment.objects.get_or_create(
+        ai_event=event,
+        defaults={
+            "mode": Payment.Mode.DEDUCTION,
+            "amount": amount,
+            "status": Payment.Status.VERIFIED,
+        },
+    )
+    if not created and not payment.is_verified:
+        payment.mode = Payment.Mode.DEDUCTION
+        payment.amount = amount
+        payment.status = Payment.Status.VERIFIED
+        payment.save(update_fields=["mode", "amount", "status", "updated_at"])
+
+    # photo_captured → payment_pending, the step `complete_ai_event` requires. A no-op if the
+    # event is already there (a replay, or a photo that raced ahead).
+    if event.can_transition_to(AIEvent.Status.PAYMENT_PENDING):
+        mark_payment_pending(event, actor=actor)
+
+    return complete_ai_event(event, actor=actor)
+
+
+@transaction.atomic
 def cancel_ai_event(event: AIEvent, *, reason: str = "", actor=None) -> AIEvent:
     """
     Abort a draft (SRS §11 `cancelled`).
 
     Terminal, and no straw is deducted — a cancelled event must never touch stock.
+
+    Locked and re-read like the other transitions, so a cancel that loaded the event early can
+    never overwrite a status that has since advanced — least of all cancel a capture that has
+    already completed.
     """
+    event = AIEvent.objects.select_for_update().get(pk=event.pk)
     if event.status == AIEvent.Status.COMPLETED:
         raise InvalidStateTransition("A completed AI event cannot be cancelled.")
     if event.status == AIEvent.Status.CANCELLED:

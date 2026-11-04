@@ -18,6 +18,8 @@ from rest_framework import serializers
 from apps.animals.models import Animal
 from apps.inventory.models import Consumable
 from apps.masterdata.models import MPP, Member, NonMember
+from apps.masterdata.procurement import decide as decide_eligibility
+from apps.masterdata.procurement import serializer_context as procurement_context
 from apps.payments.models import Payment
 from apps.payments.pricing import price_for
 
@@ -62,6 +64,37 @@ class AIEventConsumableSerializer(serializers.Serializer):
     qty = serializers.IntegerField(read_only=True)
 
 
+def other_codes_by_vendor(events) -> dict[str, list[dict]]:
+    """Every member code under the SAP vendors of these events' members, in one query."""
+    from apps.masterdata.models import Member
+
+    vendors = {
+        (event.member.sap_vendor_code or "").strip()
+        for event in events
+        if event.member_id and (event.member.sap_vendor_code or "").strip()
+    }
+    if not vendors:
+        return {}
+    by_vendor: dict[str, list[dict]] = {}
+    rows = (
+        Member.objects.filter(sap_vendor_code__in=vendors)
+        .select_related("mpp")
+        .order_by("activation_date", "member_code")
+    )
+    for row in rows:
+        by_vendor.setdefault(row.sap_vendor_code, []).append(
+            {
+                "member_code": row.member_code,
+                "mpp_code": row.mpp.mpp_code,
+                "mpp_name": row.mpp.mpp_name,
+                "activation_status": row.activation_status,
+                # The master's own active flag ('Yes'), as the member screens read it.
+                "current": row.activation_status == "Yes",
+            }
+        )
+    return by_vendor
+
+
 class AIEventSerializer(serializers.ModelSerializer):
     """
     Read shape for an AI event.
@@ -76,6 +109,11 @@ class AIEventSerializer(serializers.ModelSerializer):
     # else, and without it a capture picked back up out of the Unfinished list cannot re-fetch
     # the farmer it belongs to — it would have a number the rest of the flow does not speak.
     member_code = serializers.CharField(source="member.member_code", read_only=True, default="")
+    # Hers for life, where the member code changes when she moves MPP. See `search_events`.
+    sap_vendor_code = serializers.CharField(
+        source="member.sap_vendor_code", read_only=True, default=""
+    )
+    other_member_codes = serializers.SerializerMethodField()
     mpp_name = serializers.CharField(source="mpp.mpp_name", read_only=True)
     # The admin list is a table of who did what: an event row without the Mait on it cannot
     # be read without opening every one of 31,000 rows.
@@ -93,6 +131,11 @@ class AIEventSerializer(serializers.ModelSerializer):
     semen_breed = serializers.CharField(source="semen_batch.breed", read_only=True, default="")
     consumables = AIEventConsumableSerializer(many=True, read_only=True)
     amount_due = serializers.SerializerMethodField()
+    # Her milk procurement and whether it clears the insemination-code bar — the same figure the
+    # Super OTP panel shows, so the office can read a member's eligibility from the event row
+    # without crossing to another screen. Members only; `null` for a non-member (who pays cash
+    # and is never gated) and whenever the gate is not yet live.
+    procurement = serializers.SerializerMethodField()
 
     class Meta:
         model = AIEvent
@@ -112,6 +155,8 @@ class AIEventSerializer(serializers.ModelSerializer):
             "owner_type",
             "member",
             "member_code",
+            "sap_vendor_code",
+            "other_member_codes",
             "non_member",
             "owner_name",
             "animal",
@@ -122,6 +167,7 @@ class AIEventSerializer(serializers.ModelSerializer):
             "doses",
             "consumables",
             "amount_due",
+            "procurement",
             "straw_unique_no",
             "stock_deducted",
             "ai_photo_url",
@@ -132,6 +178,7 @@ class AIEventSerializer(serializers.ModelSerializer):
             "performed_at",
             "completed_at",
             "cancelled_reason",
+            "farmer_check",
             "created_at",
         ]
         read_only_fields = fields
@@ -155,6 +202,31 @@ class AIEventSerializer(serializers.ModelSerializer):
         )
         return None if amount is None else f"{amount:.2f}"
 
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
+    def get_other_member_codes(self, obj) -> list:
+        """
+        The member's other codes — the same SAP vendor under another member code.
+
+        A member who moves MPP is given a new code there and keeps her vendor, so an event
+        recorded under her old code names a code nobody uses any more, and one under her new
+        code hides that she has a history. Each comes with `current`: whether that code is the
+        active one. A list page reads these from one query for the whole page (the viewset puts
+        them in the context); a single event asks for its own.
+        """
+        member = obj.member
+        vendor = (getattr(member, "sap_vendor_code", "") or "").strip()
+        if member is None or not vendor:
+            return []
+        by_vendor = self.context.get("other_codes")
+        if by_vendor is None:
+            # Inside a list with no map supplied, saying nothing beats a query per row.
+            if self.parent is not None:
+                return []
+            by_vendor = other_codes_by_vendor([obj])
+        return [
+            row for row in by_vendor.get(vendor, []) if row["member_code"] != member.member_code
+        ]
+
     def get_owner_name(self, obj) -> str:
         owner = obj.owner
         return getattr(owner, "member_name", None) or getattr(owner, "name", "")
@@ -171,6 +243,66 @@ class AIEventSerializer(serializers.ModelSerializer):
         if payment is None:
             return None
         return PaymentSummarySerializer(payment).data
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_procurement(self, obj):
+        """
+        Her milk procurement and the insemination-code eligibility it decides.
+
+        The same shape the Super OTP panel reads (``accounts.super_otp_views``): whether the
+        gate is live, whether she clears it, the bar, how much she has poured, and her latest
+        period. Decided the one way the backend defines eligibility (``masterdata.procurement``)
+        so the two screens never disagree.
+
+        ``null`` for a non-member — she pays the Mait in cash on the spot, so eligibility does
+        not apply — and the front end hides the note entirely when the gate is not yet live, so
+        a dairy that has uploaded no procurement sees nothing new.
+
+        The threshold and whether the gate is live are computed once per request and handed in
+        through the serializer context, and the member's periods are prefetched (newest first),
+        so a page of 25 events costs no extra query per row.
+        """
+        if obj.owner_type != AIEvent.OwnerType.MEMBER or obj.member is None:
+            return None
+        member = obj.member
+
+        gated = self.context.get("procurement_gated")
+        threshold = self.context.get("procurement_threshold")
+        if gated is None or threshold is None:
+            # A single event served without the list's shared context: pay the two small
+            # queries here rather than leave eligibility undecided.
+            ctx = procurement_context()
+            gated = ctx["procurement_gated"]
+            threshold = ctx["procurement_threshold"]
+
+        rows = list(member.procurements.all())  # prefetched, newest first (model Meta ordering)
+        latest = rows[0] if rows else None
+        decision = decide_eligibility(
+            amount=latest.amount if latest else None,
+            threshold=threshold,
+            gated=gated,
+            latest=latest,
+        )
+        block = {
+            "member_code": member.member_code,
+            "member_name": member.member_name,
+            "eligible": decision.eligible,
+            "gated": decision.gated,
+            "threshold": str(decision.threshold),
+            "amount": str(decision.amount) if decision.amount is not None else None,
+        }
+        if latest is not None:
+            block["period"] = {
+                "from_date": latest.from_date,
+                "to_date": latest.to_date,
+                "qty": str(latest.qty),
+                "avg_fat": str(latest.avg_fat),
+                "avg_snf": str(latest.avg_snf),
+                "amount": str(latest.amount),
+                "no_of_pouring_days": latest.no_of_pouring_days,
+                "no_of_pouring_shift": latest.no_of_pouring_shift,
+            }
+        return block
 
 
 class AIEventDetailSerializer(AIEventSerializer):
@@ -194,9 +326,38 @@ class AIEventDetailSerializer(AIEventSerializer):
     # has no room for it. The Aadhaar is **masked** here (SRS §16): the full number lives
     # behind the per-record endpoint that logs the read, which this screen does not need.
     owner_detail = serializers.SerializerMethodField()
+    # The animal as it was registered, before the first insemination could be recorded against
+    # it (SRS §6.3 step 3) — with the portrait the Mait took of her in the yard. The event
+    # already carries her type, breed and tag for the list; this is the registration record
+    # itself, and the photo is the part of it the summary row can never show. Detail only,
+    # because a list of 25 has no room for a picture.
+    animal_detail = serializers.SerializerMethodField()
 
     class Meta(AIEventSerializer.Meta):
-        fields = [*AIEventSerializer.Meta.fields, "pregnancy_checks", "owner_detail"]
+        fields = [
+            *AIEventSerializer.Meta.fields,
+            "pregnancy_checks",
+            "owner_detail",
+            "animal_detail",
+        ]
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_animal_detail(self, event):
+        animal = event.animal
+        if animal is None:
+            return None
+        return {
+            "id": animal.id,
+            "animal_type": animal.animal_type,
+            "animal_type_display": animal.get_animal_type_display(),
+            "breed": animal.breed,
+            "ear_tag_no": animal.ear_tag_no,
+            # Root-relative, like every other media URL the API returns; the portal passes it
+            # through `mediaUrl()` so it resolves on the dev path too. Blank when the upload
+            # that follows registration never completed on a village connection.
+            "photo_url": animal.photo_url,
+            "registered_at": animal.created_at,
+        }
 
     @extend_schema_field(serializers.DictField(allow_null=True))
     def get_owner_detail(self, event):
@@ -266,13 +427,27 @@ class AIEventPhotoSerializer(serializers.Serializer):
     happened — a server timestamp would quietly move every offline event to whenever the
     Mait next found signal.
 
-    GPS is required. The photo alone proves an animal was photographed; the pin is what ties
-    it to the village it was billed to.
+    GPS is recorded when the handset has a fix, but it is **optional**: a phone with location
+    denied, an old device, or an insemination done inside a shed still has to be recordable —
+    refusing the proof because there is no pin would strand the very capture the app exists to
+    save (offline-first, SRS §6.9). The photo alone carries the proof; the pin, where present,
+    ties it to the village it was billed to. A capture with no fix stores a null coordinate,
+    which the portal already renders as "No location recorded".
+
+    Null is accepted three ways, because a multipart client cannot send a JSON null: the field
+    omitted, an explicit ``null``, and the literal strings an older field build puts on the wire
+    for "no value" (``"null"``/``""``) — all map to ``None`` (see ``_drop_nullish_gps`` in the
+    view, which strips them before validation). That last case is what let no-GPS captures
+    strand: the offline queue sent ``gps_lat="null"`` and the required DecimalField refused it.
     """
 
     photo = serializers.ImageField()
-    gps_lat = serializers.DecimalField(max_digits=10, decimal_places=7)
-    gps_lng = serializers.DecimalField(max_digits=10, decimal_places=7)
+    gps_lat = serializers.DecimalField(
+        max_digits=10, decimal_places=7, required=False, allow_null=True
+    )
+    gps_lng = serializers.DecimalField(
+        max_digits=10, decimal_places=7, required=False, allow_null=True
+    )
     performed_at = serializers.DateTimeField(required=False)
     # Both default to the honest answer for a client that says nothing, which is the app as it
     # shipped before the gallery existed: a live capture, pinned by the handset.
@@ -343,11 +518,16 @@ class AIEventCreateSerializer(serializers.Serializer):
         required=False,
         default=1,
         min_value=1,
-        max_value=5,
+        max_value=1,
+        error_messages={
+            "max_value": (
+                "Only one semen per animal. The next can be given 21 days after the last AI, "
+                "if she has not conceived."
+            )
+        },
         help_text=(
-            "How many straws of the breed this insemination used. Two in one visit is "
-            "ordinary practice on a difficult animal; every one of them comes off the Mait's "
-            "flask, and the capture is refused if the flask cannot cover them."
+            "Always 1. The dairy's rule is one semen per animal per AI; the next may be given "
+            "21 days later if she has not conceived (`ai_events.rules`)."
         ),
     )
     consumables = ConsumableLine(
@@ -369,8 +549,26 @@ class AIEventCreateSerializer(serializers.Serializer):
         ),
     )
 
+    office_code = serializers.RegexField(
+        r"^\d{4,8}$",
+        required=False,
+        help_text=(
+            "The office's code the farmer read out, where the phone checked her with no signal. "
+            "Proved here against what the office issued; the event is recorded either way."
+        ),
+    )
+    office_code_day = serializers.DateField(
+        required=False,
+        help_text="The day the phone checked it — the day of the key it used.",
+    )
+
     def validate(self, attrs):
         mait = self.context["mait"]
+
+        if bool(attrs.get("office_code")) != bool(attrs.get("office_code_day")):
+            raise serializers.ValidationError(
+                "Send office_code and office_code_day together, or neither."
+            )
 
         # -- MPP: must be one of this Mait's own (SRS §16) --------------------------------
         mpp = MPP.objects.filter(mpp_code=attrs["mpp_code"].strip()).first()
@@ -416,6 +614,15 @@ class AIEventCreateSerializer(serializers.Serializer):
                 {"animal_id": "This animal is not registered to that farmer."}
             )
         attrs["animal"] = animal
+
+        # -- One semen, then 21 days, never while pregnant (`ai_events.rules`) -------------
+        # A repeat of a create that already landed never reaches here: the view answers it as
+        # a replay first, so this cannot refuse the AI it is being asked about.
+        from .rules import next_service_for, refusal
+
+        service = next_service_for(animal)
+        if service.block:
+            raise serializers.ValidationError({"animal_id": refusal(service)})
 
         # -- Consumables: real catalogue codes, and one line each ---------------------------
         lines = attrs.get("consumables") or []

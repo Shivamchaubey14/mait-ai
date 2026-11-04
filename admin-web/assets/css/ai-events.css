@@ -163,6 +163,15 @@
   display: none;
 }
 
+/* The Complete column is admin-only in the same way the tick column is: a Normal User (or any
+   non-admin) could never use it, so the whole column — header and body — is collapsed for them
+   rather than left as a dead last column of empty cells. Set by ai-events.js from the role; the
+   API gates the action itself (CanDeleteAIEvent), this only keeps the control off a screen that
+   could never drive it. */
+.table--no-actions .table__action {
+  display: none;
+}
+
 /* Only while something is ticked, so it is allowed to be loud: Ink above pale rows, saying how
    many and what will happen to them. */
 .bulk {
@@ -202,4 +211,22 @@
   margin-left: auto;
   font-size: var(--text-caption);
   color: var(--ink-200);
+}
+
+/* A member's other code under her name: same SAP vendor, another MPP. Amber, because it
+   is the fact that changes how the row is read: this farmer has records under two codes. */
+.table__moved {
+  display: block;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--yolk-100);
+  color: var(--yolk-800);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.table__moved:hover {
+  text-decoration: underline;
 }

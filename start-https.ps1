@@ -44,6 +44,7 @@ $WindowName   = 'Shwetdhara'                    # shared Windows Terminal window
 $BindSite = "$Domain`:$HttpsPort"
 
 $py       = Join-Path $root 'backend\.venv\Scripts\python.exe'
+$waitress = Join-Path $root 'backend\.venv\Scripts\waitress-serve.exe'
 $backend  = Join-Path $root 'backend'
 $mobile   = Join-Path $root 'mobile'
 $caddyDir = Join-Path $root 'infra\caddy'
@@ -51,6 +52,11 @@ $caddyDir = Join-Path $root 'infra\caddy'
 # --- Preconditions --------------------------------------------------------------------
 if (-not (Test-Path $py)) {
     Write-Error "venv not found at $py. Create it: python -m venv backend\.venv; backend\.venv\Scripts\python -m pip install -r backend\requirements\dev.txt"
+    exit 1
+}
+
+if (-not (Test-Path $waitress)) {
+    Write-Error "waitress not installed. Run: $py -m pip install -r backend\requirements\dev.txt  (it serves Django here instead of the dev runserver)."
     exit 1
 }
 
@@ -111,8 +117,17 @@ if ($otpFixed -eq '*') {
 }
 
 # --- Tabs -----------------------------------------------------------------------------
-# Tab 1: Django (loopback only, no autoreload for a stable single process).
-$apiTab = "new-tab --title `"Mait Django  [127.0.0.1:$DjangoPort]`" cmd /k `"cd /d $backend && $py manage.py runserver 127.0.0.1:$DjangoPort --noreload`""
+# Tab 1: Django, served by waitress (loopback only). waitress rather than `runserver`: it has a
+# real connection queue and a thread pool, so a burst of simultaneous sign-ins is handled instead
+# of dropping connections — which is one cause of "Mait AI is not answering" on the login screen.
+# Pinned to dev settings on purpose: wsgi.py defaults to production, under which Django stops
+# serving the portal and /media (both gated on DEBUG). --threads carries the concurrent requests;
+# a thread per connection, each taking at most one pooled DB connection (CONN_MAX_AGE=60).
+# NOTE: no space before `&&` on purpose — `set X=val && ...` captures the space into the value,
+# so Django would try to import the settings module "config.settings.dev " (trailing space) and
+# fail to start, leaving Caddy with no upstream. `set X=val&& ...` keeps the value clean.
+$django = "set DJANGO_SETTINGS_MODULE=config.settings.dev&& $waitress --listen=127.0.0.1:$DjangoPort --threads=12 config.wsgi:application"
+$apiTab = "new-tab --title `"Mait Django  [127.0.0.1:$DjangoPort waitress]`" cmd /k `"cd /d $backend && $django`""
 
 # Tab 2: Caddy — run FROM infra\caddy so the relative cert/log paths in the Caddyfile
 # resolve. MAIT_SITE picks the bind host (see $BindSite above); MAIT_UPSTREAM points it at

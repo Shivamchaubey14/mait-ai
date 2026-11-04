@@ -111,6 +111,7 @@
     renderUsed(event);
     renderChain(event);
     renderProof(event);
+    renderAnimal(event);
     renderMap(event);
   }
 
@@ -147,13 +148,38 @@
       isNonMember
         ? ['Membership', '<span class="facts__none">Non-member — no SAP record</span>']
         : ['Member code', ui.escapeHtml(owner.code || event.member_code || '—')],
-      ['Mobile', owner.mobile_no ? ui.escapeHtml(owner.mobile_no) : '<span class="facts__none">Not recorded</span>'],
+      [
+        'Mobile',
+        owner.mobile_no
+          ? ui.escapeHtml(owner.mobile_no)
+          : '<span class="facts__none">Not recorded</span>',
+      ],
     ];
 
     const parentage = owner.father_husband_name
       ? ui.escapeHtml(owner.father_husband_name) +
-        (owner.relation ? ' <span class="facts__tag">' + ui.escapeHtml(owner.relation) + '</span>' : '')
+        (owner.relation
+          ? ' <span class="facts__tag">' + ui.escapeHtml(owner.relation) + '</span>'
+          : '')
       : '';
+    // Her other member codes — the same SAP vendor at another MPP. Recorded under her old
+    // code, this event names a code nobody uses any more; under the new one, it hides that she
+    // has a history. Either way the other code is named, linked to her record under it.
+    if (!isNonMember && event.sap_vendor_code) {
+      rows.push(['SAP vendor', ui.escapeHtml(event.sap_vendor_code)]);
+    }
+    (event.other_member_codes || []).forEach(function (other) {
+      rows.push([
+        other.current ? 'Current code' : 'Earlier code',
+        '<a href="member.html?code=' +
+          encodeURIComponent(other.member_code) +
+          '">' +
+          ui.escapeHtml(other.member_code) +
+          '</a> <span class="facts__tag">' +
+          ui.escapeHtml(other.mpp_name || other.mpp_code || '') +
+          '</span>',
+      ]);
+    });
     if (parentage) {
       rows.push(['Father / husband', parentage]);
     }
@@ -163,6 +189,13 @@
     rows.push(['Aadhaar', aadhaar]);
     rows.push(['Animal', ui.escapeHtml(animalCell(event))]);
     rows.push(['Ear tag', animalEarTag]);
+    // When she was first put on record — the registration this insemination was recorded
+    // against. A fact that lives nowhere else on the screen, and the portrait below the proof
+    // photo is the rest of that same record.
+    const animal = event.animal_detail || {};
+    if (animal.registered_at) {
+      rows.push(['Registered', ui.escapeHtml(ui.date(animal.registered_at))]);
+    }
 
     $('#owner').html(
       rows
@@ -348,7 +381,60 @@
       })
       .attr('src', src);
 
-    bindLightbox(src, alt, $('#proof-caption').text());
+    bindLightbox($('#proof-frame'), src, alt, $('#proof-caption').text());
+  }
+
+  /**
+   * The animal's registration portrait, beside the proof photo.
+   *
+   * A different photograph from the proof above it: the proof is evidence that this animal was
+   * served here and now, while this is the picture the Mait took to recognise her by on the
+   * next visit (SRS §6.3 step 3). It carries the registration's own facts in its caption —
+   * species, breed, ear tag and the day she was put on record — because that is the record the
+   * photo belongs to, and the one the summary row can never show.
+   *
+   * `animal_detail` is a detail-only field; an event page reached before the API carried it
+   * simply shows the empty state rather than breaking.
+   */
+  function renderAnimal(event) {
+    const animal = event.animal_detail || {};
+
+    const type = animal.animal_type_display || (event.animal_type === 'BUFF' ? 'Buffalo' : 'Cow');
+    const facts = [type];
+    if (animal.breed || event.breed) {
+      facts.push(animal.breed || event.breed);
+    }
+    if (animal.ear_tag_no) {
+      facts.push('tag ' + animal.ear_tag_no);
+    }
+    if (animal.registered_at) {
+      facts.push('registered ' + ui.date(animal.registered_at));
+    }
+    const caption = facts.join(' · ');
+
+    const src = MaitAI.api.mediaUrl(animal.photo_url);
+    if (!src) {
+      $('#animal-empty-text').text('No photo was taken when she was registered');
+      $('#animal-caption').text(caption || 'Animal registered for this insemination');
+      return;
+    }
+
+    $('#animal-caption').text(caption);
+    const alt = 'Registration photo of the animal for event ' + event.id;
+
+    $('<img>')
+      .addClass('proof__image')
+      .attr('alt', alt)
+      .attr({ role: 'button', tabindex: 0, title: 'Open the full photo' })
+      .on('load', function () {
+        $('#animal-frame').empty().append(this);
+      })
+      .on('error', function () {
+        $('#animal-empty-text').text('The registration photo could not be loaded');
+      })
+      .attr('src', src);
+
+    bindLightbox($('#animal-frame'), src, alt, caption);
   }
 
   /**
@@ -367,12 +453,12 @@
    * Delegated from the frame rather than bound to the image, because the image is replaced
    * whenever the event reloads and a handler bound to the old element would go with it.
    */
-  function bindLightbox(src, alt, caption) {
+  function bindLightbox($frame, src, alt, caption) {
     const open = function () {
       MaitAI.lightbox.open([{ src: src, alt: alt, caption: caption }], 0);
     };
 
-    $('#proof-frame')
+    $frame
       .off('click.lightbox keydown.lightbox')
       .on('click.lightbox', '.proof__image', open)
       .on('keydown.lightbox', '.proof__image', function (e) {

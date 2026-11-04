@@ -25,6 +25,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.accounts.models import Role, User
 from apps.ai_events.models import AIEvent
 from apps.masterdata.models import NonMember
+from conftest import sheet_text
 
 pytestmark = pytest.mark.django_db
 
@@ -155,9 +156,7 @@ class TestStatusSummary:
 
 
 class TestOwnerDetail:
-    def test_a_non_member_carries_her_details(
-        self, admin_client, mait, mpp, animal, stocked_mait
-    ):
+    def test_a_non_member_carries_her_details(self, admin_client, mait, mpp, animal, stocked_mait):
         farmer = NonMember.objects.create(
             mpp=mpp,
             name="Not A Member",
@@ -228,9 +227,9 @@ class TestExportEarTag:
         )
 
         response = admin_client.get("/api/v1/reports/export/")
-        text = b"".join(response.streaming_content).decode()
+        text = sheet_text(response)
         header = text.splitlines()[0].split(",")
         row = next(line for line in text.splitlines()[1:] if "EXP-1" in line).split(",")
 
-        assert "ear_tag" in header
-        assert row[header.index("ear_tag")] == "TAG-99"
+        assert "Ear tag" in header
+        assert row[header.index("Ear tag")] == "TAG-99"

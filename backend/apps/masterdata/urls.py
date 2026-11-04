@@ -12,6 +12,7 @@ request — CI fails on schema drift.
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from .offline_pack import OfflinePackMppView, OfflinePackView
 from .views import (
     AdminNonMemberViewSet,
     FarmerOTPOfficeView,
@@ -42,5 +43,12 @@ urlpatterns = [
     path("farmers/otp/send/", FarmerOTPSendView.as_view(), name="farmer-otp-send"),
     path("farmers/otp/verify/", FarmerOTPVerifyView.as_view(), name="farmer-otp-verify"),
     path("farmers/otp/office/", FarmerOTPOfficeView.as_view(), name="farmer-otp-office"),
+    # A Mait's working set, kept on the handset so the capture flow runs with no signal.
+    path("mait/offline-pack/", OfflinePackView.as_view(), name="offline-pack"),
+    path(
+        "mait/offline-pack/<str:mpp_code>/",
+        OfflinePackMppView.as_view(),
+        name="offline-pack-mpp",
+    ),
     path("", include(router.urls)),
 ]

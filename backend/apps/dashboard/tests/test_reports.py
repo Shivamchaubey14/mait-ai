@@ -17,6 +17,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
 from apps.ai_events.models import AIEvent
+from conftest import sheet_text
 
 pytestmark = pytest.mark.django_db
 
@@ -56,7 +57,7 @@ def two_events(db, mait, mpp, member, animal, stocked_mait):
 
 
 def body_of(response) -> str:
-    return b"".join(response.streaming_content).decode()
+    return sheet_text(response)
 
 
 def test_the_export_honours_the_search(admin_client, two_events):
@@ -93,11 +94,11 @@ def test_the_export_carries_the_member_code(admin_client, two_events, member):
     text = body_of(admin_client.get("/api/v1/reports/export/"))
 
     header = text.splitlines()[0].split(",")
-    assert "member_code" in header
+    assert "Member code" in header
     # Beside the name, so a reader scanning the sheet finds them together.
-    assert header.index("member_code") == header.index("farmer_name") + 1
+    assert header.index("Member code") == header.index("Farmer name") + 1
 
-    column = header.index("member_code")
+    column = header.index("Member code")
     assert all(
         line.split(",")[column] == member.member_code for line in text.splitlines()[1:] if line
     )
@@ -131,5 +132,5 @@ def test_a_non_member_has_no_code_to_give(admin_client, mait, mpp, animal, stock
     header = text.splitlines()[0].split(",")
     row = next(line for line in text.splitlines()[1:] if "NONMEMBER-001" in line).split(",")
 
-    assert row[header.index("member_code")] == ""
-    assert row[header.index("farmer_type")] == "non_member"
+    assert row[header.index("Member code")] == ""
+    assert row[header.index("Farmer type")] == "Non-member"

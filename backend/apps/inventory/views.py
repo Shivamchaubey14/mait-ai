@@ -252,11 +252,20 @@ def build_summary(mait) -> dict:
         config.code: config.animal_type
         for config in BreedConfig.objects.only("code", "animal_type")
     }
+    # Every straw line the Mait has ever held, not only the ones with a straw left in them.
+    # A straw is a line of its own: issued as +1, used as -1, and from then on a line of 0 —
+    # which the in-hand query above leaves out. Built from those alone, a breed's history only
+    # ever saw the straws not yet used, so "used" read 0 on every breed however many had gone
+    # into animals, and "issued" read as the number still in the flask.
+    straw_lines = list(
+        MaitInventory.objects.filter(mait=mait, product_type=ProductType.STRAW).only(
+            "product_type", "product_ref_id", "qty_available"
+        )
+    )
+    straw_batches = SemenBatch.objects.in_bulk([line.product_ref_id for line in straw_lines])
     breed_history: dict[str, dict] = {}
-    for line in lines:
-        if line.product_type != ProductType.STRAW:
-            continue
-        batch = batches.get(line.product_ref_id)
+    for line in straw_lines:
+        batch = straw_batches.get(line.product_ref_id)
         if batch is None:
             continue
         moved = movement_for(line)

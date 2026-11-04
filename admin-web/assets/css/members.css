@@ -119,6 +119,166 @@
   background: var(--color-secondary-wash);
 }
 
+/* --- the MPP search box --------------------------------------------------------------------
+   Built to read as one of the portal's own dropdowns (controls.css `.pick`): the same `.input`
+   box, the same panel lifted off the page by a shadow, the same chevron. What it adds is a
+   search field at the top of the panel, because the directory runs to thousands of collection
+   points and a menu cannot hold them — so this one is filled from the server as the operator
+   types, by name or by MPP code. */
+.mpp-combo {
+  position: relative;
+  display: inline-flex;
+  width: auto;
+  min-width: 13rem;
+}
+
+.mpp-combo__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mpp-combo__button:hover {
+  border-color: var(--ink-100);
+}
+
+.mpp-combo__button[aria-expanded='true'] {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -1px;
+}
+
+.mpp-combo__lead {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.mpp-combo__value {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Nothing chosen: the same grey a placeholder would be, so "All MPPs" reads as the unfiltered
+   default rather than as a collection point someone picked. */
+.mpp-combo--empty .mpp-combo__value {
+  color: var(--color-text-muted);
+}
+
+.mpp-combo__chevron {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--color-text-muted);
+  transition: transform 120ms ease;
+}
+
+.mpp-combo__button[aria-expanded='true'] .mpp-combo__chevron {
+  transform: rotate(180deg);
+  color: var(--color-primary-dark);
+}
+
+.mpp-combo__panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 30;
+  min-width: 100%;
+  width: max-content;
+  max-width: min(22rem, 90vw);
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 28px rgb(37 61 78 / 14%);
+}
+
+/* The search field, with a magnifier tucked inside it the way the filter bar's own search is. */
+.mpp-combo__search {
+  position: relative;
+  margin-bottom: var(--space-1);
+}
+
+.mpp-combo__search-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--space-3);
+  width: 15px;
+  height: 15px;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.mpp-combo__input {
+  width: 100%;
+  padding-left: calc(var(--space-3) * 2 + 15px);
+}
+
+.mpp-combo__menu {
+  max-height: 17rem;
+  overflow-y: auto;
+}
+
+.mpp-combo__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  min-height: 36px;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  color: var(--color-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.mpp-combo__option:hover,
+.mpp-combo__option.is-active {
+  background: var(--ink-50);
+}
+
+.mpp-combo__option[aria-selected='true'] {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-wash);
+}
+
+.mpp-combo__opt-name {
+  font-weight: 600;
+}
+
+.mpp-combo__option[aria-selected='true'] .mpp-combo__opt-name {
+  color: var(--color-primary-dark);
+}
+
+/* The code under the name, in the heading face so it reads as data — the thing an operator
+   searched for. Muted, because it is the confirmation, not the label. */
+.mpp-combo__opt-code {
+  font-family: var(--font-heading);
+  font-size: var(--text-caption);
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+/* "No MPP matches…" / "Searching…": a line, not an option, so it cannot be clicked or arrowed
+   onto. */
+.mpp-combo__note {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
 /* --- the dialog ---------------------------------------------------------------------------- */
 .phone {
   width: min(560px, 94vw);

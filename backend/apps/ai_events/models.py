@@ -17,6 +17,10 @@ from apps.core.models import TimeStampedModel
 class AIEvent(TimeStampedModel):
     """One artificial insemination, from draft to completion."""
 
+    class FarmerCheck(models.TextChoices):
+        OFFICE_CALL = "office_call", "Office code, checked with no signal"
+        OFFICE_CALL_UNMATCHED = "office_call_unmatched", "Code the office never issued"
+
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
         STRAW_VERIFIED = "straw_verified", "Straw verified"
@@ -156,6 +160,25 @@ class AIEvent(TimeStampedModel):
 
     synced_from_offline = models.BooleanField(
         default=False, help_text="True when the event reached the server via the offline queue."
+    )
+
+    farmer_check = models.CharField(
+        max_length=24,
+        choices=FarmerCheck.choices,
+        blank=True,
+        help_text=(
+            "How the farmer was checked, where the phone did it with no signal: against a code "
+            "the office phoned her, proved on arrival against what the office issued. Blank "
+            "for a check the server did itself, by SMS or the office's code."
+        ),
+    )
+    farmer_check_otp = models.ForeignKey(
+        "accounts.SuperOTP",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="The office's code the check was matched to.",
     )
 
     class Meta:

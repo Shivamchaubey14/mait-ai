@@ -83,6 +83,9 @@ REQUIRED_MPP = ("mpp code",)
 REQUIRED_VENDOR = (("customer id", "vendor"),)
 # Only the MPP is required. A blank Sahayak column is meaningful — it unassigns.
 REQUIRED_ASSIGNMENT = ("mpp code",)
+# The procurement report keys each row to a member by the long transaction code (our
+# Member.member_code), and the window it covers; the amount is what makes the row worth keeping.
+REQUIRED_PROCUREMENT = ("member_tr_code", "from_date", "to_date")
 
 
 # --------------------------------------------------------------------------------------
@@ -176,6 +179,33 @@ VENDOR = {
 
 
 # ----------------------------------------------------------------------------------------
+# MemberWiseProcurementReport — a periodic milk-pouring report, keyed to a member.
+# ----------------------------------------------------------------------------------------
+# Its headers already arrive machine-friendly (snake_case), so the aliases are mostly the names
+# themselves; a couple of friendlier spellings are accepted in case a hand-made file differs.
+# `member_tr_code` is the long transaction code that equals our `Member.member_code`.
+PROCUREMENT = {
+    "mcc_tr_code": ("mcc_tr_code",),
+    "bmc_tr_code": ("bmc_tr_code",),
+    "bmc_name": ("bmc_name",),
+    "from_date": ("from_date", "from date"),
+    "to_date": ("to_date", "to date"),
+    "mpp_tr_code": ("mpp_tr_code", "mpp code", "mpp_code"),
+    "mpp_name": ("mpp_name", "mpp name"),
+    "member_tr_code": ("member_tr_code", "member code", "member_code"),
+    "member_ex_code": ("member_ex_code",),
+    "member_name": ("member_name", "member name"),
+    "form_no": ("form_no", "form no"),
+    "qty": ("qty", "quantity"),
+    "avg_fat": ("avg_fat", "fat"),
+    "avg_snf": ("avg_snf", "snf"),
+    "amount": ("amount",),
+    "no_of_pouring_days": ("no_of_pouring_days", "pouring days"),
+    "no_of_pouring_shift": ("no_of_pouring_shift", "pouring shift", "pouring shifts"),
+}
+
+
+# ----------------------------------------------------------------------------------------
 # Assignment workbook — the round-trip file, not a SAP export.
 # ----------------------------------------------------------------------------------------
 # Downloaded from the portal already filled with the current mapping, edited, and uploaded
@@ -233,6 +263,12 @@ IDENTITY = {
         ("MPP code", ASSIGNMENT["mpp_code"]),
         ("Mait vendor", ASSIGNMENT["sahayak_vendor_code"]),
         ("Mait name", ASSIGNMENT["name"]),
+    ),
+    "procurement": (
+        ("Member code", PROCUREMENT["member_tr_code"]),
+        ("Member name", PROCUREMENT["member_name"]),
+        ("MPP", PROCUREMENT["mpp_tr_code"]),
+        ("Period", PROCUREMENT["to_date"]),
     ),
 }
 

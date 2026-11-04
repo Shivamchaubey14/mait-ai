@@ -14,6 +14,7 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
+    AppVersionView,
     CurrentUserView,
     LogoutView,
     OTPSendView,
@@ -46,4 +47,5 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", CurrentUserView.as_view(), name="me"),
     path("time/", ServerTimeView.as_view(), name="server-time"),
+    path("app-version/", AppVersionView.as_view(), name="app-version"),
 ]

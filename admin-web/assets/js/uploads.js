@@ -46,7 +46,12 @@
     { endpoint: 'mpp', type: 'mpp' },
   ];
 
-  const STORED_TYPE = MASTERS.reduce(function (map, master) {
+  /* Everything this screen can upload. The procurement report rides the same pipeline, card
+     and history as the masters, but it is not a downloadable master (there is no formatted
+     copy to hand back), so it is kept out of MASTERS, which drives the download dialog. */
+  const UPLOADABLE = MASTERS.concat([{ endpoint: 'procurement', type: 'procurement' }]);
+
+  const STORED_TYPE = UPLOADABLE.reduce(function (map, master) {
     map[master.endpoint] = master.type;
     return map;
   }, {});
@@ -59,6 +64,7 @@
     mait: 'Mait',
     mpp: 'MPP',
     assignment: 'Mait ↔ MPP assignment',
+    procurement: 'Member procurement',
   };
 
   const STATUS_TONE = {
@@ -409,7 +415,7 @@
    * another type pushed it onto page two.
    */
   function loadCards() {
-    MASTERS.forEach(function (master) {
+    UPLOADABLE.forEach(function (master) {
       const $meta = $('[data-last="' + master.type + '"]');
       MaitAI.api
         .uploadHistory({ upload_type: master.type, limit: 1 })

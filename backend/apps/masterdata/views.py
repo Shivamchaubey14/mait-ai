@@ -60,6 +60,8 @@ from .serializers import (
 )
 from .snapshots import has_snapshot, latest_upload, snapshot_bytes
 from .storage import store_aadhaar_image
+from .procurement import code_block_reason
+from .procurement import serializer_context as procurement_serializer_context
 from .tasks import process_master_upload
 from .templates_xlsx import assignment_template_response
 from .verification import (
@@ -202,6 +204,28 @@ class MasterUploadViewSet(
     @action(detail=False, methods=["post"], url_path="assignments")
     def assignments(self, request):
         return self._accept(request, DataUploadLog.UploadType.ASSIGNMENT)
+
+    @extend_schema(
+        summary="Upload the Member-wise Procurement report",
+        description=(
+            "Accepts the SAP MemberWiseProcurementReport — each row is a member's milk for a "
+            "date window (from_date–to_date): quantity, average fat and SNF, and the amount the "
+            "dairy owes her for it.\n\n"
+            "Unlike the identity masters, this **updates** rather than only inserts: re-uploading "
+            "a window that is already on file refreshes it, because a corrected report is meant "
+            "to replace the period, not add a second copy of it. Rows are keyed to a member by "
+            "`member_tr_code`; a line for a member not on record is reported as a bad row — "
+            "upload the member master first.\n\n"
+            "The latest window decides whether a member can be sent an insemination code: the AI "
+            "charge is recovered from her milk payout, so she qualifies only once she has poured "
+            "at least the standard AI rate."
+        ),
+        request=MasterUploadSerializer,
+        responses={202: DataUploadLogSerializer},
+    )
+    @action(detail=False, methods=["post"], url_path="procurement")
+    def procurement(self, request):
+        return self._accept(request, DataUploadLog.UploadType.PROCUREMENT)
 
     @extend_schema(
         summary="Download the assignment sheet, already filled in",
@@ -432,14 +456,27 @@ class MPPViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
         user = self.request.user
         # SRS §6.2.3 — a Mait only ever sees their own MPPs. Enforced in the queryset rather
         # than by a filter the client supplies, so it cannot be bypassed by omitting one.
+        #
+        # ...and only the *active* ones: a collection point the SAP master has retired should not
+        # appear in the field app's capture picker, where choosing it would open a flow against a
+        # point the dairy no longer collects at. An admin still sees every MPP in the portal
+        # directory (this branch is the Mait's alone), so a retired point stays manageable there.
         mait = getattr(user, "mait_profile", None)
         if mait is not None and not user.is_admin:
-            queryset = queryset.filter(mait=mait)
+            queryset = queryset.filter(mait=mait, is_active=True)
         # And an office account to its zones. `plant_code` on the MPP itself, so this is the
         # one model where the scope needs no join at all.
         queryset = apply_scope(queryset, self.request, "plant_code")
         if self.action in ("retrieve", "list"):
-            queryset = queryset.annotate(member_count=Count("members"))
+            # A Mait sees the count of *active* members, matching the active-only member list
+            # the field app opens for an MPP; an admin sees the full count for management.
+            if mait is not None and not user.is_admin:
+                member_filter = Count(
+                    "members", filter=Q(members__activation_status=Member.ACTIVE_STATUS)
+                )
+            else:
+                member_filter = Count("members")
+            queryset = queryset.annotate(member_count=member_filter)
         return queryset
 
     def get_serializer_class(self):
@@ -531,10 +568,16 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
     lookup_field = "member_code"
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["mpp__mpp_code", "activation_status", "mobile_no", "mobile_source"]
-    search_fields = ["member_name", "member_code", "mobile_no"]
+    # The SAP vendor too: it is what the dairy's own systems know a member by, and unlike the
+    # member code it does not change when she moves to another MPP.
+    search_fields = ["member_name", "member_code", "sap_vendor_code", "mobile_no"]
 
     def get_queryset(self):
         queryset = Member.objects.select_related("mpp", "mobile_updated_by")
+        # The member's procurement periods, newest first — the picker pill and the milk panel
+        # both read the latest from the prefetch, so a page of members costs one extra query,
+        # not one per row. A member has at most a handful of periods.
+        queryset = queryset.prefetch_related("procurements")
         if self.action == "retrieve":
             # Only on detail: the list serializer has no animals, and prefetching for a
             # 105k-row search would cost a second query per page for nothing.
@@ -542,13 +585,29 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
         user = self.request.user
         mait = getattr(user, "mait_profile", None)
         if mait is not None and not user.is_admin:
-            queryset = queryset.filter(mpp__mait=mait)
+            # A Mait only ever works with their own MPPs' *active* members. An inactive ("No")
+            # member has left the rolls; the office still needs her, so the portal (admins)
+            # keeps seeing everyone, but the field app's search never surfaces her.
+            queryset = queryset.filter(
+                mpp__mait=mait, activation_status=Member.ACTIVE_STATUS
+            )
+        # The members who cannot authorise a payment, asked for by name. `?mobile_no=` cannot
+        # say it: the filter backend treats an empty value as no filter at all, so the screen
+        # asking for "no number" was handed every member.
+        if self.request.query_params.get("no_mobile") in ("true", "1"):
+            queryset = queryset.filter(mobile_no="")
         return apply_scope(queryset, self.request, "mpp__plant_code")
 
     def get_serializer_class(self):
         if self.action == "mobile":
             return MemberMobileChangeSerializer
         return MemberDetailSerializer if self.action == "retrieve" else MemberListSerializer
+
+    def get_serializer_context(self):
+        # The eligibility threshold and whether the gate is live, computed once for the page.
+        context = super().get_serializer_context()
+        context.update(procurement_serializer_context())
+        return context
 
     @extend_schema(
         summary="Change a member's mobile number (Admin only)",
@@ -644,11 +703,93 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
         return Response({"results": history_of_mobile(member)})
 
     @extend_schema(
+        summary="Every member code she has had, and the inseminations under each",
+        description=(
+            "A member who moves to another MPP is given a new member code there; her SAP "
+            "vendor code stays the same. So the member master holds her twice — the old code "
+            "and the new — and her inseminations are split between them. This puts them back "
+            "together by the vendor code: `codes` is every member code that vendor has had "
+            "(`current` marks the one asked about), and `events` is every AI event under any of "
+            "them, newest first, each saying which code it was recorded against. A member with "
+            "no vendor code on file has only her own code. Capped at the latest 500 events."
+        ),
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="history",
+        permission_classes=[IsAdmin, in_section(PortalSection.MEMBERS)],
+    )
+    def history(self, request, member_code=None):
+        from apps.ai_events.models import AIEvent
+
+        # Through the scoped queryset: a member outside this admin's zones is a 404. Her other
+        # codes are then shown wherever they are — it is her history, and a member who moved
+        # in from another zone did not leave half of it behind.
+        member = self.get_object()
+        vendor = (member.sap_vendor_code or "").strip()
+        codes = (
+            Member.objects.filter(sap_vendor_code=vendor).select_related("mpp")
+            if vendor
+            else Member.objects.filter(pk=member.pk).select_related("mpp")
+        )
+        codes = list(codes.order_by("activation_date", "member_code"))
+        # Counted apart from the list: the list is capped, a count under each code is not.
+        counts = dict(
+            AIEvent.objects.filter(member__in=codes)
+            .values_list("member_id")
+            .annotate(n=Count("id"))
+            .values_list("member_id", "n")
+        )
+        events = list(
+            AIEvent.objects.filter(member__in=codes)
+            .select_related("member", "mpp", "mait", "animal", "semen_batch")
+            .order_by("-created_at")[:500]
+        )
+        return Response(
+            {
+                "sap_vendor_code": vendor,
+                "codes": [
+                    {
+                        "member_code": row.member_code,
+                        "member_name": row.member_name,
+                        "mpp_code": row.mpp.mpp_code,
+                        "mpp_name": row.mpp.mpp_name,
+                        "activation_status": row.activation_status,
+                        "activation_date": row.activation_date,
+                        "deactivation_date": row.deactivation_date,
+                        "current": row.pk == member.pk,
+                        "ai_count": counts.get(row.pk, 0),
+                    }
+                    for row in codes
+                ],
+                "events": [
+                    {
+                        "id": event.id,
+                        "status": event.status,
+                        "status_display": event.get_status_display(),
+                        "at": event.performed_at or event.completed_at or event.created_at,
+                        "member_code": event.member.member_code,
+                        "mpp_code": event.mpp.mpp_code,
+                        "mpp_name": event.mpp.mpp_name,
+                        "mait_name": event.mait.name,
+                        "animal_type": event.animal.animal_type,
+                        "breed": event.animal.breed,
+                        "ear_tag_no": event.animal.ear_tag_no or "",
+                        "semen_breed": getattr(event.semen_batch, "breed", "") or "",
+                    }
+                    for event in events
+                ],
+            }
+        )
+
+    @extend_schema(
         summary="Search members",
         parameters=[
             OpenApiParameter(
                 "search",
-                description="Matches member name, member code or mobile number.",
+                description="Matches member name, member code, SAP vendor code or mobile number.",
                 required=False,
                 type=str,
             ),
@@ -657,6 +798,12 @@ class MemberViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.G
                 description="Restrict to one MPP. The mobile app always sends this.",
                 required=False,
                 type=str,
+            ),
+            OpenApiParameter(
+                "no_mobile",
+                description="`true` for only the members with no usable number on file.",
+                required=False,
+                type=bool,
             ),
         ],
     )
@@ -1140,6 +1287,13 @@ class FarmerOTPSendView(APIView):
                 {"detail": "No mobile number on record — she must add it at the collection point."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # The eligibility gate: a member is sent a code only once she has poured enough milk to
+        # cover the AI charge the dairy will deduct. A non-member pays cash and is never gated.
+        blocked = code_block_reason(farmer)
+        if blocked:
+            return Response(
+                {"detail": blocked, "code": "not-eligible"}, status=status.HTTP_409_CONFLICT
+            )
 
         issue_otp(mobile_no=mobile_no, purpose=OTPLog.Purpose.FARMER_VERIFY)
         return Response(
@@ -1188,6 +1342,13 @@ class FarmerOTPOfficeView(APIView):
         if farmer is None or not mobile_no:
             return Response(
                 {"detail": "No such farmer at your MPPs."}, status=status.HTTP_404_NOT_FOUND
+            )
+        # Same gate as the SMS send: the office is not asked to phone a code to a member who is
+        # not yet eligible for one.
+        blocked = code_block_reason(farmer)
+        if blocked:
+            return Response(
+                {"detail": blocked, "code": "not-eligible"}, status=status.HTTP_409_CONFLICT
             )
         name = getattr(farmer, "member_name", "") or getattr(farmer, "name", "")
         request_farmer_code(

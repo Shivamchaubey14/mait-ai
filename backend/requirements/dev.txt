@@ -26,3 +26,10 @@ django-extensions==3.2.3
 django-debug-toolbar==4.4.6
 ipython==8.27.0
 flower==2.0.1
+
+# Serving — the Windows office server (SRS field deployment).
+# gunicorn (base.txt) is the WSGI server everywhere Linux; it does not run on Windows, so the
+# office PC that hosts the field build serves Django through waitress instead of the dev
+# `runserver`. Pure-Python, a proper connection queue and a thread pool, which runserver is
+# not built to be under concurrent sign-ins. Driven by start-https.ps1 / start-cloudflare.ps1.
+waitress==3.0.2

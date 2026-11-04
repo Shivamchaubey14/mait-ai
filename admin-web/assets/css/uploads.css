@@ -37,6 +37,13 @@
   border-color: var(--yolk-200);
 }
 
+/* Procurement — the dairy's own milk data, so the brand green, a shade deeper than the
+   member card's pale wash so the two greens read as distinct cards. */
+.drop--procurement {
+  background: var(--green-100);
+  border-color: var(--green-300);
+}
+
 /* The glyph sits on a white chip and the card carries the wash — the same way round as a
    notice, a stat tile and an assignment step, so all four read as one family. */
 .drop__icon {
@@ -65,6 +72,10 @@
 
 .drop__icon--mpp {
   color: var(--color-secondary-pressed);
+}
+
+.drop__icon--procurement {
+  color: var(--color-primary);
 }
 
 .drop__title {

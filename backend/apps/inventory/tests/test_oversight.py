@@ -14,6 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
 from apps.masterdata.models import Mait
+from conftest import sheet_text
 
 pytestmark = pytest.mark.django_db
 
@@ -81,16 +82,18 @@ class TestInventoryOversight:
 
 
 class TestCsvExport:
-    def test_exports_events_as_csv(self, admin_client, ai_event_ready_to_complete):
+    def test_exports_events_as_a_workbook(self, admin_client, ai_event_ready_to_complete):
         ai_event_ready_to_complete()
 
         response = admin_client.get(f"{BASE}/reports/export/")
-        body = b"".join(response.streaming_content).decode()
+        body = sheet_text(response)
 
         assert response.status_code == 200
-        assert response["Content-Type"] == "text/csv"
+        assert response["Content-Type"] == (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         assert "attachment" in response["Content-Disposition"]
-        assert body.splitlines()[0].startswith("event_id,status,captured_at")
+        assert body.splitlines()[0].startswith("Event ID,Status,Captured at")
         assert len(body.splitlines()) == 2
 
     def test_carries_no_personal_data(self, admin_client, member, ai_event_ready_to_complete):
@@ -104,23 +107,22 @@ class TestCsvExport:
         member.save(update_fields=["aadhar_no", "mobile_no", "folio_no"])
         ai_event_ready_to_complete()
 
-        body = b"".join(admin_client.get(f"{BASE}/reports/export/").streaming_content).decode()
+        body = sheet_text(admin_client.get(f"{BASE}/reports/export/"))
 
         assert "514389489509" not in body
         assert "7081820448" not in body
         assert "FOLIO-99881" not in body
-        header = body.splitlines()[0]
+        header = body.splitlines()[0].lower()
         assert "aadhar" not in header
-        assert "mobile" not in header
+        # Her mobile only masked to the last four, as in the pregnancy export.
+        assert "0448" in body
 
     def test_filters_by_date(self, admin_client, ai_event_ready_to_complete):
         ai_event_ready_to_complete()
 
-        body = b"".join(
-            admin_client.get(
-                f"{BASE}/reports/export/?date_from=2000-01-01&date_to=2000-01-02"
-            ).streaming_content
-        ).decode()
+        body = sheet_text(
+            admin_client.get(f"{BASE}/reports/export/?date_from=2000-01-01&date_to=2000-01-02")
+        )
 
         # Header only: nothing was captured in 2000.
         assert len(body.splitlines()) == 1

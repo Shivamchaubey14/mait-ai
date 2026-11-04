@@ -83,6 +83,62 @@
           </p>
         </section>
 
+        <!-- A Mait with no data at all cannot ask from the app, and could not check what the
+             farmer reads out if they did. The phone checks this code itself; the capture is
+             matched against it when it syncs. -->
+        <section class="panel phone-in" aria-labelledby="field-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="field-title">
+              A Mait with no signal phoned — farmer check
+            </h2>
+          </div>
+          <div class="phone-in__row">
+            <input
+              class="input phone-in__input"
+              id="field-mait"
+              type="text"
+              inputmode="numeric"
+              maxlength="15"
+              placeholder="Mait's sign-in number or vendor code"
+              aria-label="The Mait's sign-in number or vendor code"
+            />
+            <input
+              class="input phone-in__input"
+              id="field-member"
+              type="text"
+              maxlength="20"
+              placeholder="Member code"
+              aria-label="The member's code"
+            />
+          </div>
+          <div class="phone-in__row">
+            <input
+              class="input phone-in__input"
+              id="field-mobile"
+              type="tel"
+              inputmode="numeric"
+              maxlength="10"
+              placeholder="Or, for a non-member: her 10-digit number"
+              aria-label="A non-member's number"
+            />
+            <input
+              class="input phone-in__input"
+              id="field-name"
+              type="text"
+              maxlength="150"
+              placeholder="Her name (non-member)"
+              aria-label="A non-member's name"
+            />
+            <button class="btn btn--primary" id="field-issue" type="button">Generate a code</button>
+          </div>
+          <p class="field__hint">
+            Good until midnight, for this Mait and this farmer only. Call <strong>her</strong> on
+            the number shown and read it to her — never to the Mait. Her capture is matched against
+            this code when the Mait's phone next has signal; one with a code nobody here gave is
+            flagged on the record.
+          </p>
+        </section>
+
         <section class="filters" aria-label="Filters">
           <input
             class="input filters__search"
@@ -139,10 +195,10 @@
     </div>
 
     <script src="assets/vendor/jquery-3.7.1.min.js"></script>
-    <script src="assets/js/api.js"></script>
+    <script src="assets/js/api.js?v=20261028"></script>
     <script src="assets/js/ui.js"></script>
     <script src="assets/js/controls.js"></script>
     <script src="assets/js/shell.js"></script>
-    <script src="assets/js/super-otp.js"></script>
+    <script src="assets/js/super-otp.js?v=20261028"></script>
   </body>
 </html>

@@ -160,6 +160,18 @@ class TestFindingThem:
         page = auth(office).get("/api/v1/members/", {"mobile_source": "office"}).json()
         assert [row["member_code"] for row in page["results"]] == ["MEM0001"]
 
+    def test_the_list_filters_to_the_members_with_no_number(self, anita, mpp):
+        Member.objects.create(mpp=mpp, member_code="MEM0009", member_name="ASHA", mobile_no="")
+        office = auth(admin())
+
+        page = office.get("/api/v1/members/", {"no_mobile": "true"}).json()
+        assert [row["member_code"] for row in page["results"]] == ["MEM0009"]
+
+        # `mobile_no=` with nothing after it is dropped by the filter backend as "no filter" —
+        # which is why the screen asks by name rather than by an empty value.
+        everyone = office.get("/api/v1/members/", {"mobile_no": ""}).json()
+        assert everyone["count"] == 2
+
 
 class TestTheAadhaarColumn:
     def test_an_admin_sees_it_masked_to_the_last_four(self, anita):

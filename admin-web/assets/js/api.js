@@ -27,7 +27,15 @@ window.MaitAI = window.MaitAI || {};
       return window.MAITAI_API_BASE;
     }
     const port = window.location.port;
-    if (port && port !== '80' && port !== '443' && port !== '8001') {
+    // Only the two static file servers have the API somewhere else. start_dev.ps1 serves the
+    // portal on 8080 beside Django on 8000; start-lan.ps1 on 9000 beside Django on 8001.
+    // Everywhere else — Django serving the portal itself on 8000 or 8010, Caddy on 8001, nginx
+    // on 80/443 — the page and the API share an origin. This used to send every port it did
+    // not know to 8001, so the portal opened from Django on 8000 could not sign anybody in.
+    if (port === '8080') {
+      return window.location.protocol + '//' + window.location.hostname + ':8000/api/v1';
+    }
+    if (port === '9000') {
       return window.location.protocol + '//' + window.location.hostname + ':8001/api/v1';
     }
     return '/api/v1';
@@ -525,6 +533,17 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
+     * Complete a stuck member capture from the office (admin only).
+     *
+     * The office's one door into completion — the Mait's own is barred to an admin. Only a
+     * member event at photo_captured / payment_pending whose deduction is already verified;
+     * the server refuses anything else.
+     */
+    officeCompleteAiEvent: function (id) {
+      return request({ path: '/ai-events/' + id + '/office-complete/', method: 'POST' });
+    },
+
+    /**
      * Maits from SAP who have no mobile number and so cannot sign in.
      *
      * 93% of the roster arrives in this state, which is why activation is a screen of its
@@ -641,6 +660,16 @@ window.MaitAI = window.MaitAI || {};
      */
     otpFailures: function (query) {
       return request({ path: '/admin/otp-failures/', query: query });
+    },
+
+    /**
+     * The OTP pipeline: every code read back through made → gateway accepted → typed in →
+     * used, the Super OTP asks beside them with a verdict on each (for information only),
+     * and the funnel and gateway figures. `days` is 1, 7 or 30; `purpose`, `stage`,
+     * `verdict` and `search` narrow it.
+     */
+    otpPipeline: function (query) {
+      return request({ path: '/admin/otp-pipeline/', query: query });
     },
 
     /**
@@ -837,6 +866,16 @@ window.MaitAI = window.MaitAI || {};
       return request({ path: '/members/', query: query });
     },
 
+    /** One member, with her full card and the animals already registered to her. */
+    member: function (memberCode) {
+      return request({ path: '/members/' + encodeURIComponent(memberCode) + '/' });
+    },
+
+    /** Every member code she has had (joined on the SAP vendor), and the AI under each. */
+    memberHistory: function (memberCode) {
+      return request({ path: '/members/' + encodeURIComponent(memberCode) + '/history/' });
+    },
+
     /**
      * Change a member's mobile number — an Admin's job alone. `expected_mobile` is the number
      * the dialog was opened on; a `409` means somebody changed it since.
@@ -1027,6 +1066,11 @@ window.MaitAI = window.MaitAI || {};
         method: 'POST',
         body: { mobile_no: mobileNo },
       });
+    },
+
+    /** A farmer code for a Mait with no signal, checked on their phone (accounts.field_codes). */
+    issueFieldCode: function (body) {
+      return request({ path: '/admin/super-otp/field-code/', method: 'POST', body: body });
     },
 
     declineSuperOtp: function (id, reason) {

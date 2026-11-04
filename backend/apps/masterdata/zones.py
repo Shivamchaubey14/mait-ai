@@ -208,13 +208,18 @@ def _scoped_managers(request):
     """
     Every account narrowed to a zone, within what the caller may see.
 
-    Zone-scoped accounts only: a head-office Admin has no zone and is not the manager of one,
+    Zone-scoped accounts only: a head-office account has no zone and is not the manager of one,
     and listing them here would turn a screen about who runs Bahraich into a second copy of
     Users & roles. A caller who is themselves scoped sees the managers of the zones they
     overlap and no others — the panel is a directory, not a way round the scope.
+
+    Both office roles count — Admin and Normal User — because the dairy creates its managers
+    under either (see ``User.is_zonal_manager``). Listing only Admins hid every real manager
+    from the one screen that shows whether they can reach the app and lets the office set the
+    number they sign in with.
     """
     managers = (
-        User.objects.filter(role=Role.ADMIN, zones__isnull=False)
+        User.objects.filter(role__in=(Role.ADMIN, Role.NORMAL_USER), zones__isnull=False)
         .prefetch_related("zones")
         .distinct()
         .order_by("full_name")

@@ -37,7 +37,7 @@
               >
                 <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />
               </svg>
-              <span id="export-label">Export CSV</span>
+              <span id="export-label">Export Excel</span>
             </button>
             <button class="btn btn--logout" id="account" type="button">Log out</button>
           </div>
@@ -51,8 +51,8 @@
             class="input filters__search"
             id="search"
             type="search"
-            placeholder="Search event #, name, member / MPP code, mobile or straw"
-            aria-label="Search event number, name, member or MPP code, mobile or straw number"
+            placeholder="Search event #, name, member / MPP code, SAP vendor, mobile or straw"
+            aria-label="Search event number, name, member or MPP code, SAP vendor, mobile or straw number"
           />
           <select class="select" id="filter-mpp" aria-label="MPP">
             <option value="">All MPPs</option>
@@ -70,12 +70,7 @@
                started it — the events the dashboard counts but a status-by-status hunt misses.
                The status column says where each one stopped, so an admin can ring the right
                Mait. Warn-toned, because it lists work waiting on a human, not a clean result. -->
-          <button
-            class="chip chip--warn"
-            id="filter-unfinished"
-            type="button"
-            aria-pressed="false"
-          >
+          <button class="chip chip--warn" id="filter-unfinished" type="button" aria-pressed="false">
             <svg
               class="chip__icon"
               viewBox="0 0 24 24"
@@ -164,6 +159,10 @@
                   <th scope="col">Payment</th>
                   <th scope="col">Captured</th>
                   <th scope="col">Status</th>
+                  <!-- Admin-only: a Complete button on a member capture the Mait left stuck with
+                       its payment already verified. Collapsed for anyone who cannot use it, the
+                       same way the tick column is (table--no-actions, set by ai-events.js). -->
+                  <th scope="col" class="table__action">Complete</th>
                 </tr>
               </thead>
               <tbody id="rows" aria-busy="true">
@@ -176,15 +175,6 @@
                   <td></td>
                   <td></td>
                   <td></td>
-                </tr>
-                <tr class="skeleton-row" aria-hidden="true">
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
                   <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
@@ -196,6 +186,18 @@
                   <td></td>
                   <td></td>
                   <td></td>
+                  <td></td>
+                </tr>
+                <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
                   <td></td>
@@ -206,8 +208,10 @@
                   <td></td>
                   <td></td>
                   <td></td>
+                  <td></td>
                 </tr>
                 <tr class="skeleton-row" aria-hidden="true">
+                  <td></td>
                   <td></td>
                   <td></td>
                   <td></td>
@@ -230,10 +234,10 @@
       and a third-party script on the page can read everything the page can — see README.md.
     -->
     <script src="assets/vendor/jquery-3.7.1.min.js"></script>
-    <script src="assets/js/api.js"></script>
+    <script src="assets/js/api.js?v=20261028"></script>
     <script src="assets/js/ui.js"></script>
     <script src="assets/js/controls.js"></script>
     <script src="assets/js/shell.js"></script>
-    <script src="assets/js/ai-events.js"></script>
+    <script src="assets/js/ai-events.js?v=20261028"></script>
   </body>
 </html>

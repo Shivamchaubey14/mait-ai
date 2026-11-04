@@ -92,9 +92,34 @@ Sign-in:
 | POST | `/admin/super-otp/{id}/issue/` | Generate the code for an ask. `201` with `code` — **the only response that carries it**, `Cache-Control: no-store`. Revokes any earlier code for the person; `409` if they can no longer sign in | Admin · `super-otp` |
 | POST | `/admin/super-otp/issue-for-number/` | `{"mobile_no"}` — the same, for somebody who phoned. `409` for a number nobody signs in with, `404` outside the admin's zone (checked before anything is revoked) | Admin · `super-otp` |
 | POST | `/admin/super-otp/{id}/decline/` | `{"reason"?}` | Admin · `super-otp` |
+| GET | `/admin/otp-pipeline/?days=1\|7\|30&purpose=&stage=&verdict=&search=` | Every code read back through made → gateway accepted → typed in → used, with `arrived` (`yes` only when somebody typed into it — the gateway reports acceptance, never delivery), the funnel, the gateway's last twenty sends, and each Super OTP ask with a `verdict` (`justified` / `early` / `arrived` / `not_tried` / `not_needed`) judged on the SMS before it — **for information only**. Zone-scoped | Admin · `otp-pipeline` |
 
 A code works once, for `SUPER_OTP_EXPIRY_SECONDS` (600), with `SUPER_OTP_MAX_ATTEMPTS` (5)
 wrong tries; an ask nobody answers leaves the queue after `SUPER_OTP_REQUEST_TTL_HOURS` (24).
+
+### No signal at all — the farmer check by phone (`accounts.field_codes`)
+
+For a Mait with no data where they stand, who can neither ask from the app nor have a typed code
+checked. They phone the office by voice; the office generates the farmer's code on the portal and
+calls **her** on the number on her record, exactly as above; the phone checks what she reads out
+against a per-Mait, per-day key it carries in the offline pack (`field_keys`, seven days of
+them); and the capture carries the code to the server, which matches it against the row the
+office wrote.
+
+| Method | Endpoint | Description | Auth |
+| --- | --- | --- | --- |
+| POST | `/admin/super-otp/field-code/` | `{"mait", "member_code"?, "farmer_mobile"?, "farmer_name"?}` — `mait` is the Mait's sign-in number or vendor code; exactly one of `member_code` (at that Mait's MPPs) or `farmer_mobile` (a non-member, possibly registered on the phone and not yet synced). `201` with `code` and `number_on_file` (hers), `Cache-Control: no-store`. Good until midnight; asking again for the same farmer that day returns the same code. `404` for no such Mait or one outside the zone, `409` for one who can no longer sign in | Admin · `super-otp` |
+
+The code is `HMAC-SHA256(day key, "farmer_verify|<her 10 digits>")`, first four bytes
+big-endian, modulo 10⁶; the day key is `HMAC-SHA256(SECRET_KEY, "maitai.field-code.v1|<mait
+id>|<YYYY-MM-DD>")`. Both sides pin one value in their tests. These codes are left out of the
+SMS check (`consume`), so a farmer's own SMS code keeps working the same day.
+
+On `POST /ai-events/`, `office_code` + `office_code_day` (together or not at all) are matched
+against the office's rows for that Mait, her number and that day. The event is created either
+way — the insemination happened — and carries `farmer_check`: `office_call` when the office gave
+that code (its row is marked used), `office_call_unmatched` when nobody did. Blank for a check
+the server did itself.
 
 ## 9.2 Master data upload (admin)
 
@@ -215,11 +240,12 @@ the rows that actually carry figures rather than the whole roster.
 | --- | --- | --- | --- |
 | GET | `/mpp/` | List/search MPPs (filter: district, tehsil, mait, active) | JWT |
 | GET | `/mpp/{mpp_code}/` | MPP detail incl. assigned Mait | JWT |
-| GET | `/members/` | Search members (by mpp, mobile, member_code, name; `mobile_source=office` for numbers the office set). Each row carries `mobile_source`, `mobile_updated_at`, `mobile_updated_by_name` | JWT |
+| GET | `/members/` | Search members (by mpp, mobile, member_code, SAP vendor code, name; `mobile_source=office` for numbers the office set). Each row carries `mobile_source`, `mobile_updated_at`, `mobile_updated_by_name` | JWT |
 | GET | `/members/{member_code}/` | Member detail incl. animals | JWT |
 | POST | `/members/{member_code}/mobile/` | Change a member's mobile number. `{mobile_no, reason, expected_mobile}`: 10-digit Indian mobile (`+91` accepted), a reason of 4+ characters, and the number the caller was looking at — `409 mobile-changed` if it has changed since. Sets `mobile_source: office`, which **no member-master upload replaces**; audited with both numbers masked. Returns the member and `shared_with` (other members on the number — a warning, not a refusal) | Admin · `members` |
 | GET | `/members/{member_code}/aadhaar/` | One member's **full** Aadhaar, for an Admin checking a caller. Logged as a personal-data read against the account, `Cache-Control: no-store`, throttled (`aadhaar_reveal`, 300/hour). The list itself carries only `aadhar_masked` (last four), and only to an Admin | Admin · `members` |
 | GET | `/members/{member_code}/mobile-history/` | Every change the office made to the number, newest first: `when`, `by`, masked `before` / `after`, `reason` | Admin · `members` |
+| GET | `/members/{member_code}/history/` | Her history across MPPs. A member who moves MPP gets a new member code and keeps her SAP vendor code, so the master holds her twice; this joins them on the vendor. `codes`: every member code that vendor has had (`current` marks this one, with `mpp_*`, `activation_*`, `ai_count`); `events`: every AI event under any of them, newest first (500 max), each with the `member_code` it was recorded against | Admin · `members` |
 | GET | `/non-members/` | The non-members already registered at the Mait's MPPs | Mait |
 | POST | `/non-members/` | Register a new non-member on the fly | Mait |
 | POST | `/non-members/check/` | Is this Aadhaar or mobile already somebody's? | Mait |
@@ -231,6 +257,17 @@ the rows that actually carry figures rather than the whole roster.
 | GET | `/admin/non-members/export/` | The same list as an .xlsx workbook, with full Aadhaar | Admin |
 | POST | `/farmers/otp/send/` | Send a verification code to a farmer, before the capture proceeds | Mait |
 | POST | `/farmers/otp/verify/` | Check the code she read out | Mait |
+| GET | `/mait/offline-pack/` | The offline pack's index: the Mait's active MPPs (the `/mpp/` row shape) and the active breeds, with `server_time`; `field_keys` (`[{day, key}]`, seven days) and `office_phone` (`FIELD_OFFICE_PHONE`) for the farmer check with no signal | Mait |
+| GET | `/mait/offline-pack/{mpp_code}/` | One MPP's members and non-members with their animals, for the handset to keep. `?since=<server_time>` returns only farmers changed since (record, animal, or an insemination on one); `member_codes` / `non_member_ids` always list everyone still there. `404` for an MPP the Mait does not cover | Mait |
+
+**The offline pack is the capture flow's data, kept on the phone.** A Mait works in villages
+with one bar or none, so the app downloads everything steps 1–6 read — the MPPs, every farmer at
+them with her animals, the breeds — and answers its pickers from the handset. The index first,
+then one MPP at a time, so a dropped connection costs one village. Every refresh after the first
+sends `since` (the last `server_time`) and gets back only the farmers touched since; the server
+widens the window by five minutes so a row committed while the last answer was built is not
+missed. The member rows are trimmed to what the flow reads — **no bank, folio, Aadhaar, age or
+education** — because this is every farmer at every MPP, on a phone carried around all day.
 
 **A Mait's non-members are scoped by MPP, not by who typed the row in.** `GET /non-members/`
 lists the farmers registered at the collection points that Mait covers — the roster the capture
@@ -372,10 +409,21 @@ created here; they arrive by being issued against an indent.
 
 | Method | Endpoint | Description | Auth |
 | --- | --- | --- | --- |
-| POST | `/ai-events/` | Create draft AI event (mpp, member/non-member, animal, straw no.) | Mait |
+| POST | `/ai-events/` | Create draft AI event (mpp, member/non-member, animal, straw no.). `office_code` + `office_code_day` for a farmer checked on the phone with no signal (§9.1, *No signal at all*) | Mait |
+
+**One semen per animal, then 21 days, never while pregnant** (`ai_events/rules.py`). `doses` is
+always 1 — a second is refused with the rule. And the create is refused (`400`, on `animal_id`,
+saying from which day) while an AI on that animal is still open, inside 21 days of her last AI
+that was not cancelled, or while a pregnancy check has found her pregnant and her calving date
+has not passed. A replay of the same `client_uuid` is answered as a replay first, so the queue
+resending a capture is never refused by it. Every animal returned — on a farmer's detail and in
+the offline pack — carries `next_ai_block` (`''` / `open` / `too_soon` / `pregnant`) and
+`next_ai_on` (the first day she may be served), so the app holds her back before a straw is drawn.
+
 | PATCH | `/ai-events/{id}/photo/` | Upload AI proof photo (multipart) with GPS/time stamp | Mait |
 | POST | `/ai-events/{id}/complete/` | Finalise — atomic straw deduction + status=completed | Mait |
-| GET | `/ai-events/` | List AI events (filters: mait, mpp, date range, status, `unfinished`) | JWT |
+| POST | `/ai-events/{id}/office-complete/` | Office completion of a stuck **member** capture (photo_captured/payment_pending, deduction already verified) — same straw deduction + status=completed | Admin |
+| GET | `/ai-events/` | List AI events (filters: mait, mpp, date range, status, `unfinished`, `farmer_check` — the Mait's *Needs attention* list asks for `office_call_unmatched`) | JWT |
 | GET | `/ai-events/{id}/` | AI event full detail | JWT |
 
 **`unfinished=true` is the app's Unfinished list.** It returns the captures that still need
@@ -527,8 +575,8 @@ say which bundle it came out of. Validate then answers `reason: "breed_required"
 | GET | `/dashboard/mpp-coverage/` | Members served vs. total per MPP for a window (`?days=`, default 30, max 365) | Admin |
 | GET | `/admin/otp-failures/` | Who is stuck at an OTP and why — the detail behind the Exceptions card (§9.9) | Admin |
 | GET | `/admin/exceptions/{queue}/` | The detail behind any other Exceptions card, in one shared row shape (§9.9) | Admin |
-| GET | `/reports/export/` | CSV/Excel export of AI events / payments (query-filtered) | Admin |
-| GET | `/reports/pregnancy/` | CSV of every pregnancy check: who agreed, who refused, who has not been visited (§9.11) | Admin |
+| GET | `/reports/export/` | Excel workbook (`.xlsx`) of AI events, query-filtered as the list is (`search` matches the SAP vendor too). Codes are text cells, so member, MPP and straw codes keep their leading zeros; carries `SAP vendor` beside `Member code` | Admin |
+| GET | `/reports/pregnancy/` | Excel workbook (`.xlsx`) of every pregnancy check: who agreed, who refused, who has not been visited (§9.11) | Admin |
 | GET | `/reports/mait-payment/` | A month's Mait payout, one row per Mait, for the preview on W18 (`?month=YYYY-MM`, default this month) | Admin |
 | GET | `/reports/mait-payment/export/` | The same month as the two-tab workbook the office reads | Admin |
 | GET / PATCH | `/reports/mait-payment/scheme/` | The commission, retainer and straw rate the payout is computed from | Admin |
@@ -1092,7 +1140,7 @@ with the filters used.
 | Method | Endpoint | Description | Auth |
 | --- | --- | --- | --- |
 | GET / PATCH | `/admin/pregnancy/rate/` | The two prices, read and set from the Rates screen | Admin |
-| GET | `/reports/pregnancy/` | CSV of every check: who agreed, who refused, who has not been visited | Admin |
+| GET | `/reports/pregnancy/` | Excel workbook of every check: who agreed, who refused, who has not been visited | Admin |
 
 **Flat, not per breed** — the one place this differs from the insemination rate. A straw's
 price follows the bull it came from and so belongs on `BreedConfig`; putting a hand on an
@@ -1204,5 +1252,15 @@ POST   /ai-events/{id}/complete/        Idempotency-Key: <uuid>
        └─ 200 { status: "completed" }   ← straw deducted in the same transaction
 ```
 
-`complete` is the only endpoint that mutates inventory. It fails closed: if payment is not
-`verified`, it returns `409` and the straw is untouched.
+`complete` is the Mait's own completion and the ordinary path that mutates inventory. It fails
+closed: if payment is not `verified`, it returns `409` and the straw is untouched.
+
+`office-complete` is the back-office counterpart, for a capture the Mait left stuck — the Mait's
+`complete` is barred to an admin on purpose (nobody closes an insemination they were not at), so
+this is the one narrow door the office gets. Admin only (same gate as delete: `CanDeleteAIEvent`
++ the AI-events section). It accepts only a **member** event at `photo_captured` or
+`payment_pending` whose deduction is already recorded and `verified`; a non-member (whose payment
+needs her own code) and any event without a verified payment are refused with `409`. Where it
+applies it advances `photo_captured → payment_pending` if needed, then deducts the straw and
+closes the event in one transaction — the same inventory move `complete` makes — and is written
+to the event's timeline and the audit log as an office completion.

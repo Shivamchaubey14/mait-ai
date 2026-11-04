@@ -217,7 +217,7 @@
    * screen's alone: a narrower date range is the fix for an AI event export and not
    * necessarily for anything else.
    */
-  function exportCsv() {
+  function exportWorkbook() {
     MaitAI.shell.clearAlert();
     const query = $.param(filters());
 
@@ -225,13 +225,13 @@
     $('#export-label').text('Preparing…');
 
     MaitAI.api
-      .download('/reports/export/' + (query ? '?' + query : ''), 'ai-events.csv')
+      .download('/reports/export/' + (query ? '?' + query : ''), 'ai-events.xlsx')
       .catch(function () {
         MaitAI.shell.alert('The export could not be produced. Try a narrower date range.');
       })
       .finally(function () {
         $('#export').prop('disabled', false);
-        $('#export-label').text('Export CSV');
+        $('#export-label').text('Export Excel');
       });
   }
 
@@ -266,6 +266,6 @@
       runQuery();
     });
 
-    $('#export').on('click', exportCsv);
+    $('#export').on('click', exportWorkbook);
   });
 })(window.MaitAI, jQuery);

@@ -49,8 +49,9 @@ window.MaitAI = window.MaitAI || {};
     'failed-otps': [
       [1, 'Today'],
       [7, 'Last 7 days'],
+      // Thirty is as far back as the server goes (`MAX_WINDOW_DAYS`). A ninety here came back
+      // as thirty under a select still reading ninety.
       [30, 'Last 30 days'],
-      [90, 'Last 90 days'],
     ],
     'declined-checks': [
       [30, 'Last 30 days'],

@@ -195,6 +195,13 @@ class Member(TimeStampedModel):
     bank_branch = models.CharField(max_length=100, blank=True)
     ifsc_code = models.CharField(max_length=15, blank=True)
 
+    #: SAP's `activation_status` for a member who is currently on the rolls. It is a plain
+    #: "Yes"/"No" in the member master, and the Mait app only ever works with active members
+    #: — an inactive ("No") member is kept for history and the office, but never shown in the
+    #: field app's MPP member lists or search (SRS §6.3). The `member_mpp_status_idx` composite
+    #: index below keeps that per-MPP filter cheap over the 105k-row table.
+    ACTIVE_STATUS = "Yes"
+
     activation_status = models.CharField(max_length=20, blank=True, db_index=True)
     activation_date = models.DateField(null=True, blank=True)
     deactivation_date = models.DateField(null=True, blank=True)
@@ -379,6 +386,9 @@ class DataUploadLog(TimeStampedModel):
         # Not a SAP export: the round-trip workbook the portal hands out already filled with
         # the current mapping, so an admin edits what is there rather than composing a file.
         ASSIGNMENT = "assignment", "Mait ↔ MPP assignment"
+        # A periodic report, not an identity master: a member's milk procurement for a window.
+        # It updates on re-upload (a corrected period replaces it) rather than inserting-only.
+        PROCUREMENT = "procurement", "Member Procurement"
 
     class Status(models.TextChoices):
         QUEUED = "queued", "Queued"
@@ -387,7 +397,7 @@ class DataUploadLog(TimeStampedModel):
         COMPLETED_WITH_ERRORS = "completed_with_errors", "Completed with errors"
         FAILED = "failed", "Failed"
 
-    upload_type = models.CharField(max_length=10, choices=UploadType.choices, db_index=True)
+    upload_type = models.CharField(max_length=20, choices=UploadType.choices, db_index=True)
     file_name = models.CharField(max_length=255)
     file = models.FileField(upload_to="uploads/master-data/%Y/%m/")
     uploaded_by = models.ForeignKey(
@@ -456,6 +466,68 @@ class DataUploadLog(TimeStampedModel):
         if not self.total_rows:
             return 0
         return min(100, round(self.processed_rows / self.total_rows * 100))
+
+
+class MemberProcurement(TimeStampedModel):
+    """
+    A member's milk procurement for one reporting period (the SAP *MemberWiseProcurementReport*).
+
+    Unlike the identity masters, this is **periodic, changing** data: each report covers a date
+    window (``from_date``–``to_date``) and carries how much milk a member poured, its average fat
+    and SNF, and — the number the field app cares about — the ``amount`` the dairy owes her for
+    it. The app uses the latest period to decide whether she can be sent an insemination code:
+    the AI charge is settled against her milk payout (see ``animals.BreedConfig.rate``), so she
+    is eligible only once she has poured enough to cover it (``procurement.ELIGIBILITY``).
+
+    Keyed to the member by ``member_tr_code`` in the report, which is our ``Member.member_code``.
+    A re-upload of the same window **updates** the row rather than adding a second one — a
+    correction to a period replaces it — so the natural key is (member, from_date, to_date).
+    """
+
+    member = models.ForeignKey(
+        Member, on_delete=models.CASCADE, related_name="procurements", db_index=True
+    )
+    # Denormalised from the report, for tracing a row back to its source without a join.
+    mpp_code = models.CharField(max_length=20, blank=True, db_index=True)
+    bmc_name = models.CharField(max_length=120, blank=True)
+    form_no = models.CharField(max_length=20, blank=True)
+
+    from_date = models.DateField()
+    to_date = models.DateField(db_index=True)
+
+    #: Litres poured in the window. SAP reports two decimals.
+    qty = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    avg_fat = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    avg_snf = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    #: Rupees owed for the milk in the window — the figure eligibility is measured against.
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    no_of_pouring_days = models.PositiveSmallIntegerField(default=0)
+    no_of_pouring_shift = models.PositiveSmallIntegerField(default=0)
+
+    #: The upload this row came from, so a period can be traced to its file and audited.
+    source_upload = models.ForeignKey(
+        DataUploadLog,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="procurement_rows",
+    )
+
+    class Meta:
+        db_table = "member_procurement"
+        ordering = ["-to_date", "-from_date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["member", "from_date", "to_date"], name="uniq_member_period"
+            ),
+        ]
+        indexes = [
+            # The app's hot path: this member's latest period, first row.
+            models.Index(fields=["member", "-to_date"], name="procurement_latest_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.member_id} {self.from_date}–{self.to_date} ₹{self.amount}"
 
 
 class Zone(TimeStampedModel):

@@ -32,6 +32,7 @@ from apps.ai_events.models import AIEvent
 from apps.masterdata.models import Mait
 from apps.pregnancy.models import ALERT_WINDOW_DAYS, PregnancyCheck
 from apps.pregnancy.services import record_check
+from conftest import sheet_rows, sheet_text
 
 pytestmark = pytest.mark.django_db
 
@@ -269,10 +270,8 @@ def test_event_detail_carries_the_chain(admin_client, insemination):
 
 
 def _rows(response):
-    body = b"".join(response.streaming_content).decode()
-    lines = [line for line in body.splitlines() if line]
-    header = lines[0].split(",")
-    return header, [dict(zip(header, line.split(","), strict=False)) for line in lines[1:]]
+    header, *rows = sheet_rows(response)
+    return header, [dict(zip(header, row, strict=False)) for row in rows]
 
 
 def test_the_report_says_who_agreed_and_who_refused(admin_client, insemination):
@@ -286,9 +285,9 @@ def test_the_report_says_who_agreed_and_who_refused(admin_client, insemination):
 
     assert response.status_code == 200
     header, rows = _rows(response)
-    assert "owner_consent" in header
+    assert "Owner consent" in header
 
-    consent = {int(row["check_id"]): row["owner_consent"] for row in rows}
+    consent = {int(row["Check ID"]): row["Owner consent"] for row in rows}
     assert consent[accepted.id] == "Accepted"
     assert consent[refused.id] == "Declined"
     assert consent[owed.id] == "Not visited yet"
@@ -303,7 +302,7 @@ def test_the_report_can_be_narrowed_to_the_refusals(admin_client, insemination):
     response = admin_client.get("/api/v1/reports/pregnancy/?consent=declined")
 
     _, rows = _rows(response)
-    assert [int(row["check_id"]) for row in rows] == [refused.id]
+    assert [int(row["Check ID"]) for row in rows] == [refused.id]
 
 
 def test_the_report_carries_no_full_mobile_number(admin_client, insemination, member):
@@ -314,7 +313,7 @@ def test_the_report_carries_no_full_mobile_number(admin_client, insemination, me
     _, check = insemination(due_in_days=-1)
     record_check(check, outcome=PregnancyCheck.Outcome.PREGNANT)
 
-    body = b"".join(admin_client.get("/api/v1/reports/pregnancy/").streaming_content).decode()
+    body = sheet_text(admin_client.get("/api/v1/reports/pregnancy/"))
 
     assert "9876543210" not in body
     assert "3210" in body

@@ -450,7 +450,7 @@ def _overdue_rows(queryset):
 # --------------------------------------------------------------------------------------
 # Refused checks
 # --------------------------------------------------------------------------------------
-def _declined_rows(queryset):
+def _declined_rows(queryset, days: int = DECLINE_WINDOW_DAYS):
     """
     Grouped by village, not by Mait and not by animal.
 
@@ -495,7 +495,9 @@ def _declined_rows(queryset):
                 ),
                 facts=[
                     fact("Refused", count),
-                    fact("Window", f"Last {DECLINE_WINDOW_DAYS} days"),
+                    # The window the rows were counted over, not the default: a year of refusals
+                    # labelled "Last 30 days" misstates every count above it.
+                    fact("Window", f"Last {days} days"),
                     fact("MPP code", entry["ai_event__mpp__mpp_code"]),
                     fact("Re-booked", "No — a refusal closes the check"),
                 ],
@@ -559,7 +561,7 @@ def _queue_overdue_checks(_filter, _days):
 
 def _queue_declined_checks(_filter, days):
     queryset = declined_checks(days or DECLINE_WINDOW_DAYS)
-    rows = _declined_rows(queryset)
+    rows = _declined_rows(queryset, days or DECLINE_WINDOW_DAYS)
     return {
         "title": "Owners who declined",
         "subtitle": "Refused checks, by village",

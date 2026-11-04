@@ -80,6 +80,9 @@ class PortalSection(models.TextChoices):
     # Beside Users & roles: handing somebody a code that signs them in without their SMS is
     # account administration, and it belongs to the desk that already does that.
     SUPER_OTP = "super-otp", "Super OTP"
+    # Directly under Super OTP, because it is the evidence that screen decides on: whether a
+    # code ever reached the phone, and so whether the office was right to be asked for one.
+    OTP_PIPELINE = "otp-pipeline", "OTP pipeline"
     # Beside Users & roles, and for the same reason: both hand out reach. That one says which
     # screens an account opens, this one says how much of the network it sees through them —
     # and an account that can edit zones can widen its own view, so it belongs behind the same
@@ -198,19 +201,25 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     @property
     def is_zonal_manager(self) -> bool:
         """
-        An office Admin narrowed to at least one live zone — the dairy's zonal manager.
+        An office account narrowed to at least one live zone — the dairy's zonal manager.
 
         Not a role, and deliberately not one: the business's zonal manager is an ordinary
-        Admin with a zone and a few sections, and every "who" queryset in the product already
-        narrows by ``zone_scope``. Minting a fourth role would fork all of them.
+        office account with a zone and a few sections, and every "who" queryset in the product
+        already narrows by ``zone_scope``. Minting a fourth role would fork all of them.
 
-        What it does decide is the **app**. A head-office Admin has a desk, a browser and a
+        Both office roles count — Admin and Normal User. A Normal User *is* an office account
+        treated as an Admin for everything the portal does (see ``is_admin``), and the dairy
+        creates its zone managers under that role; gating this on ``Role.ADMIN`` alone locked
+        every one of them out of the app while leaving them a full portal login. A Super Admin
+        is never scoped, so they are never this.
+
+        What it does decide is the **app**. A head-office account has a desk, a browser and a
         password; a zonal manager is out at a depot with a handset, and it is this property —
         together with a mobile number on the account — that lets them sign in there
-        (``apps.zonal``). A Super Admin is never scoped, so they are never this.
+        (``apps.zonal``).
         """
         return (
-            self.role == Role.ADMIN
+            self.role in (Role.ADMIN, Role.NORMAL_USER)
             and self.is_active
             and self.zones.filter(is_active=True).exists()
         )
@@ -356,6 +365,9 @@ class SuperOTP(TimeStampedModel):
     expires_at = models.DateTimeField(null=True, blank=True)
     attempt_count = models.PositiveSmallIntegerField(default=0)
     used_at = models.DateTimeField(null=True, blank=True)
+    #: Set on a code for a farmer check done with no signal (``field_codes``): the day it is
+    #: good for, and the mark that it is checked on the Mait's phone, not by ``consume``.
+    offline_day = models.DateField(null=True, blank=True, db_index=True)
 
     decided_by = models.ForeignKey(
         User,

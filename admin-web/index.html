@@ -28,12 +28,14 @@
             </p>
           </div>
           <div class="topbar__actions">
-            <!-- Seven days first, and so the one the screen opens on: the JS reads whatever
-                 is selected when the page loads, and the shortest window is the one an
-                 operator checking on the day's work actually wants. Thirty is a month's
+            <!-- This week first, and so the one the screen opens on: the JS reads whatever is
+                 selected when the page loads, and the week an operator checking on the day's
+                 work actually wants is the one that runs back to the same weekday — last
+                 Thursday through today, not six days ago through today. Eight columns, so both
+                 Thursdays are on the chart and a week reads as a week. Thirty is a month's
                  review, which is a thing somebody chooses rather than lands on. -->
             <select class="select" id="range" aria-label="Date range">
-              <option value="7">Last 7 days</option>
+              <option value="8">This week</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
             </select>

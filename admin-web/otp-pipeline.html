@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OTP pipeline · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <!-- otp-pipeline.css pulls in forms.css, which imports portal.css. -->
+    <link rel="stylesheet" href="assets/css/otp-pipeline.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="otp-pipeline">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">OTP pipeline</h1>
+            <p class="topbar__meta">
+              Did the code reach the phone — and was the office right to be asked for one?
+            </p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn" id="refresh" type="button">
+              <svg
+                class="btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5" />
+              </svg>
+              Refresh
+            </button>
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- Blue: a rule about what the screen can know, not a backlog. It is the sentence that
+             stops "accepted" being read as "delivered". -->
+        <div class="notice">
+          <span class="notice__icon" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">The gateway says accepted — never delivered.</p>
+            <p class="notice__body">
+              The SMS gateway confirms it took a message, not that a phone received it. So a code
+              counts as <strong>arrived</strong> only when somebody typed into it, right or wrong.
+              One the gateway accepted that expired with nothing typed, and was not replaced by a
+              resend, is <strong>likely lost</strong> — the case Super OTP exists for.
+            </p>
+          </div>
+        </div>
+
+        <section class="tiles" aria-label="Summary">
+          <article class="tile tile--info">
+            <p class="tile__label">Codes sent</p>
+            <p class="tile__value" data-kpi="made">—</p>
+            <p class="tile__foot" data-kpi="made-foot"></p>
+          </article>
+          <article class="tile tile--good">
+            <p class="tile__label">Reached a phone</p>
+            <p class="tile__value" data-kpi="rate">—</p>
+            <p class="tile__foot" data-kpi="rate-foot"></p>
+          </article>
+          <article class="tile tile--warn">
+            <p class="tile__label">Likely lost</p>
+            <p class="tile__value" data-kpi="lost">—</p>
+            <p class="tile__foot" data-kpi="lost-foot"></p>
+          </article>
+          <article class="tile tile--bad">
+            <p class="tile__label">Never left</p>
+            <p class="tile__value" data-kpi="never">—</p>
+            <p class="tile__foot">The gateway did not accept them</p>
+          </article>
+        </section>
+
+        <!-- The gateway's recent record, as one line: the first thing to read when a run of
+             asks arrives at once. -->
+        <section class="panel gateway" id="gateway" aria-live="polite">
+          <span class="gateway__mark" id="gateway-mark" aria-hidden="true"></span>
+          <div>
+            <p class="gateway__title" id="gateway-title">—</p>
+            <p class="gateway__body" id="gateway-body">—</p>
+          </div>
+        </section>
+
+        <section class="filters" aria-label="Filters">
+          <input
+            class="input filters__search"
+            id="search"
+            type="search"
+            placeholder="Search a number or a name"
+            aria-label="Search a number or a name"
+            autocomplete="off"
+          />
+          <select class="select" id="purpose" aria-label="Step">
+            <option value="">Every step</option>
+          </select>
+          <select class="select" id="days" aria-label="Window">
+            <option value="1">Last 24 hours</option>
+            <option value="7" selected>Last 7 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+        </section>
+
+        <!-- The four stations, as counts. Where the numbers drop is where codes are lost. -->
+        <section class="panel" aria-labelledby="funnel-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="funnel-title">The pipeline</h2>
+            <span class="panel__count" id="window-label">—</span>
+          </div>
+          <div class="funnel" id="funnel"></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" class="table__num">Made</th>
+                  <th scope="col" class="table__num">Gateway accepted</th>
+                  <th scope="col" class="table__num">Typed in</th>
+                  <th scope="col" class="table__num">Verified</th>
+                  <th scope="col">Reached a phone</th>
+                </tr>
+              </thead>
+              <tbody id="steps-rows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- The asks, each judged on the SMS before it. For information: nothing here stops
+             the office giving a code. -->
+        <section class="panel panel--flush" aria-labelledby="asks-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="asks-title">Super OTP asks — were they needed?</h2>
+            <a class="btn btn--soft" href="super-otp.html">Open Super OTP</a>
+          </div>
+          <p class="asks__note">
+            Each ask is read against the SMS the same number was sent for the same step in the hour
+            before. The verdict is for information — they can still be given a code.
+          </p>
+          <section
+            class="filters asks__chips"
+            id="verdicts"
+            aria-label="Filter by verdict"
+          ></section>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col">Who</th>
+                  <th scope="col">Number</th>
+                  <th scope="col">Asked</th>
+                  <th scope="col">The SMS before it</th>
+                  <th scope="col">Verdict</th>
+                  <th scope="col">Ask</th>
+                </tr>
+              </thead>
+              <tbody id="asks-rows" aria-busy="true"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel panel--flush" aria-labelledby="codes-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="codes-title">Every code</h2>
+            <span class="panel__count" id="codes-count">—</span>
+          </div>
+          <section class="filters asks__chips" id="stages" aria-label="Filter by stage"></section>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Sent</th>
+                  <th scope="col">Step</th>
+                  <th scope="col">Whose</th>
+                  <th scope="col">Number</th>
+                  <th scope="col">Pipeline</th>
+                  <th scope="col">Where it stands</th>
+                </tr>
+              </thead>
+              <tbody id="codes-rows" aria-busy="true"></tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/controls.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/otp-pipeline.js"></script>
+  </body>
+</html>

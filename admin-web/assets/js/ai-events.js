@@ -30,6 +30,37 @@
     return role === 'super_admin' || role === 'admin';
   }
 
+  // The office-side completion is the same back-office correction delete is, so the same admins
+  // get it — super_admin / admin, never a Normal User — and the API gates it to exactly that set
+  // (CanDeleteAIEvent). `canComplete` mirrors `canDelete`; it is named apart so the two reasons a
+  // row sprouts a control stay legible even though the role test is the one test.
+  let canComplete = false;
+
+  // A row the office may close: a member's capture the Mait left at photo_captured or
+  // payment_pending whose ₹100 deduction is already recorded and verified. A non-member is left
+  // out — she authorises her own payment with a code the office cannot enter — as is any event
+  // whose payment has not landed, which is finance's to record, not this button's to assume. The
+  // server enforces every one of these; this only decides whether to draw the button.
+  function completable(event) {
+    return (
+      canComplete &&
+      event.owner_type === 'member' &&
+      (event.status === 'photo_captured' || event.status === 'payment_pending') &&
+      !!event.payment &&
+      event.payment.is_verified === true
+    );
+  }
+
+  function completeButton(event) {
+    return (
+      '<button class="btn btn--warn js-complete" type="button" data-complete="' +
+      event.id +
+      '" aria-label="Complete event ' +
+      event.id +
+      '">Complete</button>'
+    );
+  }
+
   /**
    * Status colours match the app exactly.
    *
@@ -76,6 +107,72 @@
     return type + ' · ' + ui.escapeHtml(event.breed || '—');
   }
 
+  /**
+   * Her other member codes, under her name — the same SAP vendor at another MPP.
+   *
+   * A member who moves MPP is given a new code and keeps her vendor, so an event recorded under
+   * her old code names a code nobody uses any more, and one under her new code hides that she
+   * has a history. The other code is named, with which way round it is: "Now …" where the
+   * other code is the active one, "Earlier code …" where it is not.
+   */
+  function otherCodes(event) {
+    const others = event.other_member_codes || [];
+    if (!others.length) {
+      return '';
+    }
+    return others
+      .map(function (other) {
+        return (
+          '<a class="table__sub table__moved" href="member.html?code=' +
+          encodeURIComponent(other.member_code) +
+          '" title="' +
+          ui.escapeHtml((other.mpp_name || '') + ' (' + (other.mpp_code || '') + ')') +
+          '">' +
+          (other.current ? 'Now ' : 'Earlier code ') +
+          ui.escapeHtml(other.member_code) +
+          '</a>'
+        );
+      })
+      .join('');
+  }
+
+  /**
+   * Her milk procurement and whether it clears the insemination-code bar.
+   *
+   * The same note the Super OTP screen shows, brought under the farmer here so an admin reading
+   * the event can see at a glance whether the member is eligible — a code is recovered from her
+   * milk payout, so "eligible" means she has poured enough to cover the AI charge.
+   *
+   * Shown only once the gate is live (`p.gated`): a dairy that has uploaded no procurement has
+   * no bar to read against, so the row stays as it was. Empty for a non-member, whose event
+   * carries no procurement at all (she pays the Mait in cash).
+   */
+  function procurementNote(p) {
+    if (!p || !p.gated) {
+      return '';
+    }
+    const eligible = p.eligible;
+    const bar = '₹' + Math.round(parseFloat(p.threshold || 0));
+    let poured;
+    if (p.amount === null || p.amount === undefined) {
+      poured = 'no milk on record';
+    } else {
+      poured = '₹' + Math.round(parseFloat(p.amount)) + ' poured';
+      if (p.period && p.period.qty) {
+        poured += ' · ' + parseFloat(p.period.qty).toFixed(1) + ' L';
+      }
+    }
+    return (
+      '<div class="table__sub">' +
+      ui.pill(eligible ? 'Eligible' : 'Not eligible', eligible ? 'good' : 'bad') +
+      ' · ' +
+      ui.escapeHtml(poured) +
+      ' · bar ' +
+      ui.escapeHtml(bar) +
+      '</div>'
+    );
+  }
+
   function row(event) {
     // Anything waiting on a human is tinted, so a screenful can be triaged without reading
     // every status cell. Every unfinished capture is tinted, not only the payment-pending one
@@ -106,7 +203,14 @@
       event.id +
       '</a></td>' +
       '<td>' +
-      ui.identity(event.owner_name, event.owner_type === 'member' ? event.mpp_code : 'Non-member') +
+      ui.identity(
+        event.owner_name,
+        event.owner_type === 'member'
+          ? (event.member_code ? event.member_code + ' · ' : '') + event.mpp_code
+          : 'Non-member'
+      ) +
+      otherCodes(event) +
+      procurementNote(event.procurement) +
       '</td>' +
       '<td>' +
       ui.identity(event.mait_name, event.mait_code, {
@@ -129,6 +233,12 @@
       '</td>' +
       '<td>' +
       ui.pill(event.status_display, STATUS_TONE[event.status]) +
+      '</td>' +
+      // The one write this column drives: Complete, on a stuck member capture only. Empty on
+      // every other row rather than absent, so the column lines up — and collapsed entirely for
+      // anyone who is not an admin (table--no-actions), exactly as the tick column is.
+      '<td class="table__action">' +
+      (completable(event) ? completeButton(event) : '') +
       '</td>' +
       '</tr>'
     );
@@ -244,6 +354,9 @@
       '<td>' +
       ui.pill(r[8], r[9]) +
       '</td>' +
+      // The sample is never acted on, so its action cell is empty — present only to line the
+      // row up with the real ones under the same column count.
+      '<td class="table__action"></td>' +
       '</tr>'
     );
   }
@@ -322,7 +435,7 @@
    * The fetch-as-blob dance lives in `api.download`: these endpoints stream and need the
    * bearer token, and a plain link arrives unauthenticated.
    */
-  function exportCsv() {
+  function exportWorkbook() {
     MaitAI.shell.clearAlert();
 
     const params = query();
@@ -334,13 +447,13 @@
     $('#export-label').text('Preparing…');
 
     MaitAI.api
-      .download('/reports/export/' + (search ? '?' + search : ''), 'ai-events.csv')
+      .download('/reports/export/' + (search ? '?' + search : ''), 'ai-events.xlsx')
       .catch(function () {
         MaitAI.shell.alert('The export could not be produced. Try a narrower date range.');
       })
       .finally(function () {
         $('#export').prop('disabled', false);
-        $('#export-label').text('Export CSV');
+        $('#export-label').text('Export Excel');
       });
   }
 
@@ -428,6 +541,39 @@
       });
   }
 
+  /* --- completing a stuck capture from the office --------------------------------------
+   * The office's one door into completion — the Mait's own is barred to an admin on purpose.
+   * It is the same thing the handset would do: deduct the straw and close the event, and book
+   * the pregnancy check that follows. One deliberate confirm, because it moves inventory, and
+   * the server refuses anything that is not a member capture with its payment already verified.
+   */
+  function runComplete(id, $btn) {
+    if (
+      !window.confirm(
+        'Complete event ' +
+          id +
+          "? This deducts the straw from the Mait's stock, records the insemination as done " +
+          'and books its pregnancy check.'
+      )
+    ) {
+      return;
+    }
+
+    $btn.prop('disabled', true).text('Completing…');
+
+    MaitAI.api
+      .officeCompleteAiEvent(id)
+      .done(function () {
+        // Land on the reloaded list: the row now reads Completed and has lost its button, which
+        // is the confirmation. The flash says which one, since the page may have moved.
+        load('Event ' + id + ' completed.');
+      })
+      .fail(function (problem) {
+        $btn.prop('disabled', false).text('Complete');
+        MaitAI.shell.alert(problem.detail);
+      });
+  }
+
   /**
    * @param {string} [flash] a success line to show once the reloaded list has rendered. Set by
    *   a delete; left off by the pager and the filters, which have nothing to announce.
@@ -483,7 +629,7 @@
         }
         parts.push('showing ' + (page.results || []).length);
         $('#events-note').text(parts.join(' · '));
-        ui.rows($('#rows'), page.results, row, 'No events match these filters.', 8);
+        ui.rows($('#rows'), page.results, row, 'No events match these filters.', 9);
         // The table was just rebuilt, so nothing is ticked any more and the bar must say so.
         renderBulk();
         ui.pager(
@@ -497,7 +643,7 @@
       })
       .fail(function (problem) {
         MaitAI.shell.alert(problem.detail);
-        ui.rows($('#rows'), [], row, 'Could not load events.', 8);
+        ui.rows($('#rows'), [], row, 'Could not load events.', 9);
         renderBulk();
       });
   }
@@ -527,8 +673,14 @@
     // Decide before the first render, so the tick column is never drawn for someone who cannot
     // use it. `table--no-pick` collapses that column (header and body alike) for non-admins.
     canDelete = readCanDelete();
+    // Same admins, same gate (the API's is CanDeleteAIEvent for both). Draw neither column for
+    // anyone else: the tick column collapses, and so does the Complete column.
+    canComplete = canDelete;
     if (!canDelete) {
       $('.table').addClass('table--no-pick');
+    }
+    if (!canComplete) {
+      $('.table').addClass('table--no-actions');
     }
 
     // Arrived from a queue card on Exceptions or the dashboard. Set the control rather than
@@ -582,7 +734,7 @@
       }, 350);
     });
 
-    $('#export').on('click', exportCsv);
+    $('#export').on('click', exportWorkbook);
 
     /* --- bulk selection and delete -------------------------------------------------------- */
     // Wired only for an admin: for everyone else the controls are not on the page, so there is
@@ -602,6 +754,16 @@
       });
 
       $('#bulk-delete').on('click', runDelete);
+    }
+
+    // The per-row Complete button, for the same admins. Delegated, because the table is rebuilt
+    // on every load and pager click. Only rendered on an eligible row, so the handler is only
+    // ever reached for one — and the server is the real gate behind it.
+    if (canComplete) {
+      $('#rows').on('click', '.js-complete', function () {
+        const $btn = $(this);
+        runComplete(Number($btn.data('complete')), $btn);
+      });
     }
   });
 })(window.MaitAI, jQuery);

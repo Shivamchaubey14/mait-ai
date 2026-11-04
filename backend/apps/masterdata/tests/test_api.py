@@ -91,6 +91,25 @@ class TestMaitScoping:
         assert codes == [mpp.mpp_code]
         assert "MPP999999" not in codes
 
+    def test_mait_does_not_see_a_retired_mpp(self, api_client, mait_user, mait, mpp):
+        """
+        A collection point the SAP master has retired (``is_active=False``) drops out of the
+        field app's picker — choosing it would open a capture against a point the dairy no longer
+        collects at. An admin still sees it in the portal directory (covered elsewhere).
+        """
+        from apps.masterdata.models import MPP
+
+        MPP.objects.create(
+            mpp_code="MPP777777", mpp_name="Retired", mait=mait, is_active=False
+        )
+
+        response = auth(api_client, mait_user).get(f"{BASE}/mpp/")
+        codes = [row["mpp_code"] for row in response.json()["results"]]
+
+        assert response.status_code == 200
+        assert codes == [mpp.mpp_code]
+        assert "MPP777777" not in codes
+
     def test_mait_cannot_see_another_maits_members(self, api_client, mait_user, member):
         from apps.masterdata.models import MPP, Mait
 
@@ -175,6 +194,74 @@ class TestOTPReachability:
     def test_flags_a_member_with_a_mobile(self, api_client, admin_user, member):
         body = auth(api_client, admin_user).get(f"{BASE}/members/{member.member_code}/").json()
         assert body["can_receive_otp"] is True
+
+
+class TestMemberProcurement:
+    """
+    The member list and detail carry the same procurement block the AI-events row and Super OTP
+    panel read, so the mobile picker can draw the identical poured-vs-bar line (`procurement.py`).
+    """
+
+    def _poured(self, member, amount, qty="90.00"):
+        from datetime import date
+
+        from apps.masterdata.models import MemberProcurement
+
+        return MemberProcurement.objects.create(
+            member=member,
+            from_date=date(2026, 10, 1),
+            to_date=date(2026, 10, 15),
+            qty=qty,
+            amount=amount,
+        )
+
+    def _price_the_bar(self):
+        from apps.animals.models import AnimalType, BreedConfig
+
+        BreedConfig.objects.create(animal_type=AnimalType.COW, code="GIR", name="Gir", rate=100)
+
+    def test_a_member_below_the_bar_carries_the_figures(self, api_client, admin_user, member):
+        self._price_the_bar()
+        self._poured(member, amount="40.00")
+
+        body = auth(api_client, admin_user).get(f"{BASE}/members/").json()
+        proc = next(r for r in body["results"] if r["member_code"] == member.member_code)[
+            "procurement"
+        ]
+
+        assert proc["gated"] is True
+        assert proc["eligible"] is False
+        assert proc["amount"] == "40.00"
+        assert proc["threshold"] == "100.00"
+        assert proc["period"]["qty"] == "90.00"
+
+    def test_a_gated_member_with_no_milk_still_names_the_bar(self, api_client, admin_user, member):
+        """She has no period, so eligibility is false and there is no `period` — but the bar is
+        still on the block, which is what lets the picker say "no milk on record · bar ₹100"."""
+        self._price_the_bar()
+        self._poured(Member.objects.create(member_code="MEM000042", mpp=member.mpp), "250.00")
+
+        body = auth(api_client, admin_user).get(f"{BASE}/members/{member.member_code}/").json()
+        proc = body["procurement"]
+
+        assert proc["gated"] is True
+        assert proc["eligible"] is False
+        assert proc["amount"] is None
+        assert proc["threshold"] == "100.00"
+        assert "period" not in proc
+
+    def test_the_gate_stays_shut_until_procurement_is_uploaded(
+        self, api_client, admin_user, member
+    ):
+        """No procurement anywhere: the gate is off, so everyone is eligible and the picker shows
+        nothing new."""
+        self._price_the_bar()
+
+        body = auth(api_client, admin_user).get(f"{BASE}/members/{member.member_code}/").json()
+        proc = body["procurement"]
+
+        assert proc["gated"] is False
+        assert proc["eligible"] is True
 
 
 class TestSearchAndFilter:

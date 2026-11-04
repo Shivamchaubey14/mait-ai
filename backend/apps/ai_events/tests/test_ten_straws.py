@@ -74,15 +74,30 @@ def _reach_payment_pending(client, event_id):
     return mark_payment_pending(event)
 
 
+def _another_cow(member, like):
+    """
+    A different animal of the same farmer, for each insemination.
+
+    One semen per animal, then 21 days (`ai_events.rules`): ten straws are ten animals served,
+    not one animal served ten times, which the server now refuses.
+    """
+    return Animal.objects.create(
+        owner_type=Animal.OwnerType.MEMBER,
+        member=member,
+        animal_type=like.animal_type,
+        breed=like.breed,
+    )
+
+
 def _capture(client, mpp, member, animal, straw_no):
-    """Open an event with a straw scanned — steps 1 to 4."""
+    """Open an event with a straw scanned — steps 1 to 4, on a cow not yet served."""
     return client.post(
         f"{BASE}/",
         {
             "client_uuid": str(uuid.uuid4()),
             "mpp_code": mpp.mpp_code,
             "member_code": member.member_code,
-            "animal_id": animal.id,
+            "animal_id": _another_cow(member, animal).id,
             "straw_unique_no": straw_no,
         },
         format="json",
@@ -148,7 +163,7 @@ class TestTenStrawsTenEvents:
                 "client_uuid": str(uuid.uuid4()),
                 "mpp_code": mpp.mpp_code,
                 "member_code": member.member_code,
-                "animal_id": animal.id,
+                "animal_id": _another_cow(member, animal).id,
                 "straw_unique_no": straw.unique_straw_no,
             }
             for straw in straws
@@ -205,7 +220,7 @@ def _capture_by_breed(client, mpp, member, animal, breed="GIR"):
             "client_uuid": str(uuid.uuid4()),
             "mpp_code": mpp.mpp_code,
             "member_code": member.member_code,
-            "animal_id": animal.id,
+            "animal_id": _another_cow(member, animal).id,
             "semen_breed": breed,
         },
         format="json",

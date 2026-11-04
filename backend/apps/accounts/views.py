@@ -142,15 +142,15 @@ class OTPSendView(APIView):
         A keeper whose store has been closed is not found at all. There is nothing for them to
         sign in to, and a session that opened onto an empty screen would be a fault report.
 
-        **A zonal manager is the third, and the narrowest.** They are an office Admin, and an
-        office Admin has a password — so admitting the role wholesale would put every
-        back-office account, including the ones that run the SAP imports and edit the rate
-        card, behind a six-digit code sent to whatever number happened to be on the row. Two
-        things are required instead, and both are decisions somebody made on purpose: a live
-        zone on the account (``User.is_zonal_manager``), which is what the app's every screen
-        is scoped by, and a mobile number typed into the Zones or Users screen. An admin with
-        no zone has no app and is not found here; neither is a Super Admin, who is never
-        scoped at all.
+        **A zonal manager is the third, and the narrowest.** They are an office account
+        (Admin or Normal User), and an office account has a password — so admitting the role
+        wholesale would put every back-office account, including the ones that run the SAP
+        imports and edit the rate card, behind a six-digit code sent to whatever number
+        happened to be on the row. Two things are required instead, and both are decisions
+        somebody made on purpose: a live zone on the account (``User.is_zonal_manager``), which
+        is what the app's every screen is scoped by, and a mobile number typed into the Zones
+        or Users screen. An office account with no zone has no app and is not found here;
+        neither is a Super Admin, who is never scoped at all.
         """
         mobile_no = (mobile_no or "").strip()
         if not mobile_no:
@@ -166,6 +166,7 @@ class OTPSendView(APIView):
         )
         if mait and mait.user and mait.user.is_active:
             return mait.user
+        office_roles = (Role.ADMIN, Role.NORMAL_USER)
         candidate = (
             User.objects.filter(mobile_no=mobile_no, is_active=True)
             .filter(
@@ -173,13 +174,14 @@ class OTPSendView(APIView):
                 | Q(role=Role.STORE, store__isnull=False, store__is_active=True)
                 # Narrowed again below by `is_zonal_manager`, which is the authority. The
                 # filter here only keeps the query from dragging back every office account
-                # that shares a number with nobody.
-                | Q(role=Role.ADMIN, zones__is_active=True)
+                # that shares a number with nobody. Both office roles are candidates: the
+                # dairy creates its zone managers as Normal Users, not Admins.
+                | Q(role__in=office_roles, zones__is_active=True)
             )
             .distinct()
             .first()
         )
-        if candidate is not None and candidate.role == Role.ADMIN:
+        if candidate is not None and candidate.role in office_roles:
             return candidate if candidate.is_zonal_manager else None
         return candidate
 
@@ -461,3 +463,33 @@ class ServerTimeView(APIView):
     @extend_schema(summary="Server time", responses={200: dict})
     def get(self, request):
         return Response({"server_time": timezone.now().isoformat()})
+
+
+@extend_schema(tags=["auth"])
+class AppVersionView(APIView):
+    """
+    The mobile app version the server expects, and a bilingual nudge to update.
+
+    Checked at startup. The app compares its own version to ``min`` and ``latest`` and, when it
+    is behind, shows the ``message`` — in English and Hindi both — with a button to install the
+    new build from ``update_url``. Public and unauthenticated, because an app too old to sign in
+    still has to be able to learn that it is too old.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+
+    @extend_schema(summary="Required mobile app version", responses={200: dict})
+    def get(self, request):
+        return Response(
+            {
+                "latest": settings.MOBILE_LATEST_VERSION,
+                "min": settings.MOBILE_MIN_VERSION,
+                "update_url": settings.MOBILE_UPDATE_URL,
+                # Both languages always, so the app shows the pair without a round trip for each.
+                "message": {
+                    "en": "A new version is available. Please install the new version.",
+                    "hi": "नया संस्करण उपलब्ध है। कृपया नया संस्करण इंस्टॉल करें।",
+                },
+            }
+        )

@@ -15,6 +15,7 @@ from apps.payments.reports import mait_payment, mait_payment_export, payout_sche
 
 from .exception_details import exception_detail
 from .otp_failures import otp_failures
+from .otp_pipeline import otp_pipeline
 from .reports import export_csv, export_pregnancy_csv
 from .views import activation_readiness, mait_performance, mpp_coverage, summary, trends
 
@@ -33,6 +34,7 @@ urlpatterns = [
     # The detail behind the Exceptions card's Failed OTPs queue — who is stuck, and
     # which of the three quite different failures it was.
     path("admin/otp-failures/", otp_failures, name="otp-failures"),
+    path("admin/otp-pipeline/", otp_pipeline, name="otp-pipeline"),
     # The detail behind the other five cards, one shape for all of them.
     path(
         "admin/exceptions/<slug:queue>/",

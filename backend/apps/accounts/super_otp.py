@@ -65,11 +65,18 @@ def _hash(code: str, mobile_no: str) -> str:
 
 
 def _open_code(mobile_no: str, purpose: str) -> SuperOTP | None:
-    """A code given for this number and this step, still usable."""
+    """
+    A code given for this number and this step, still usable.
+
+    Not a no-signal code (``field_codes``): that one is checked on the Mait's phone, and taking
+    it here would turn the farmer's own SMS code into "not the code the office read out" for
+    the rest of the day.
+    """
     return (
         SuperOTP.objects.filter(
             mobile_no=mobile_no,
             purpose=purpose,
+            offline_day__isnull=True,
             status=SuperOTP.Status.ISSUED,
             expires_at__gt=timezone.now(),
             attempt_count__lt=settings.SUPER_OTP_MAX_ATTEMPTS,
@@ -253,7 +260,10 @@ def issue_code(*, row: SuperOTP | None = None, mobile_no: str = "", actor, reque
             )
 
         SuperOTP.objects.filter(
-            mobile_no=mobile_no, purpose=purpose, status=SuperOTP.Status.ISSUED
+            mobile_no=mobile_no,
+            purpose=purpose,
+            status=SuperOTP.Status.ISSUED,
+            offline_day__isnull=True,
         ).update(status=SuperOTP.Status.REVOKED, updated_at=timezone.now())
 
         code = "".join(secrets.choice("0123456789") for _ in range(settings.OTP_LENGTH))

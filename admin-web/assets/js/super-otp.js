@@ -139,14 +139,51 @@
     return '<span class="table__sub">—</span>';
   }
 
+  /**
+   * Her milk procurement and whether it clears the insemination-code bar.
+   *
+   * The office reads this before deciding to phone a code: a code is recovered from her milk
+   * payout, so "eligible" means she has poured enough to cover the AI charge. The gate blocks
+   * an ineligible farmer upstream, so this is mostly a reassurance — but it is also the one
+   * place the office can see *why* an ask it expected never arrived.
+   */
+  function procurementNote(p) {
+    if (!p || !p.gated) {
+      return '';
+    }
+    const eligible = p.eligible;
+    const bar = '₹' + Math.round(parseFloat(p.threshold || 0));
+    let poured;
+    if (p.amount === null || p.amount === undefined) {
+      poured = 'no milk on record';
+    } else {
+      poured = '₹' + Math.round(parseFloat(p.amount)) + ' poured';
+      if (p.period && p.period.qty) {
+        poured += ' · ' + parseFloat(p.period.qty).toFixed(1) + ' L';
+      }
+    }
+    return (
+      '<div class="table__sub">' +
+      ui.pill(eligible ? 'Eligible' : 'Not eligible', eligible ? 'good' : 'bad') +
+      ' · ' +
+      ui.escapeHtml(poured) +
+      ' · bar ' +
+      ui.escapeHtml(bar) +
+      '</div>'
+    );
+  }
+
   /** Whom the code is read to — the farmer for her steps, the account holder for sign-in. */
   function person(item) {
-    return item.for_farmer
-      ? ui.identity(
+    if (item.for_farmer) {
+      return (
+        ui.identity(
           item.farmer_name || 'The farmer',
           (item.context ? item.context + ' · ' : '') + 'asked by ' + item.full_name
-        )
-      : ui.identity(item.full_name, item.who);
+        ) + procurementNote(item.procurement)
+      );
+    }
+    return ui.identity(item.full_name, item.who);
   }
 
   function row(item) {
@@ -257,9 +294,13 @@
     const tick = function () {
       const left = Math.max(0, Math.round((until - Date.now()) / 1000));
       $('#reveal-expiry').text(
-        left
-          ? 'Works for ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0')
-          : 'Expired — generate a new one'
+        // A no-signal farmer code is good for the day, not ten minutes: a countdown in the
+        // hundreds of minutes reads as a mistake.
+        left > 3600
+          ? 'Works until midnight'
+          : left
+            ? 'Works for ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0')
+            : 'Expired — generate a new one'
       );
       if (!left) {
         window.clearInterval(state.revealTimer);
@@ -380,6 +421,36 @@
         .issueSuperOtpForNumber(mobile)
         .done(function (response) {
           $('#phone-mobile').val('');
+          issued(response);
+        })
+        .fail(failed);
+    });
+
+    $('#field-issue').on('click', function () {
+      const mait = ($('#field-mait').val() || '').trim();
+      const memberCode = ($('#field-member').val() || '').trim();
+      const mobile = ($('#field-mobile').val() || '').replace(/\D/g, '');
+      if (!mait) {
+        MaitAI.shell.alert("The Mait's sign-in number or vendor code.", 'warn');
+        $('#field-mait').trigger('focus');
+        return;
+      }
+      if (!!memberCode === (mobile.length === 10)) {
+        MaitAI.shell.alert(
+          "A member's code, or a non-member's 10-digit number — one of the two.",
+          'warn'
+        );
+        return;
+      }
+      api
+        .issueFieldCode({
+          mait: mait,
+          member_code: memberCode,
+          farmer_mobile: memberCode ? '' : mobile,
+          farmer_name: ($('#field-name').val() || '').trim(),
+        })
+        .done(function (response) {
+          $('#field-member, #field-mobile, #field-name').val('');
           issued(response);
         })
         .fail(failed);

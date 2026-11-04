@@ -25,7 +25,14 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.accounts.models import PortalSection, Role, User
 from apps.ai_events.models import AIEvent
 from apps.masterdata.models import Zone, ZonePlant
-from conftest import AnimalFactory, MaitFactory, MemberFactory, MPPFactory, SemenBatchFactory
+from conftest import (
+    AnimalFactory,
+    MaitFactory,
+    MemberFactory,
+    MPPFactory,
+    SemenBatchFactory,
+    sheet_text,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -271,7 +278,7 @@ def test_the_export_carries_only_the_zone(zone_admin):
     """An export is the easiest way around a screen's scope, so it is narrowed at the source."""
     response = _as(zone_admin).get(f"{BASE}/reports/export/")
     assert response.status_code == 200
-    body = b"".join(response.streaming_content).decode()
+    body = sheet_text(response)
     # Header plus exactly one event.
     assert len([line for line in body.splitlines() if line.strip()]) == 2
 

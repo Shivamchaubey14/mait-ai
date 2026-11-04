@@ -58,6 +58,10 @@ class MemberFactory(factory.django.DjangoModelFactory):
     member_name = factory.Faker("name")
     mobile_no = factory.Sequence(lambda n: f"98770{n:05d}")
     mpp = factory.SubFactory(MPPFactory)
+    # On the rolls by default: the field app and the mait-scoped member list both show active
+    # members only (SRS §6.2.3), so a member who is to be seen there must carry the active flag.
+    # A test wanting a retired member sets this to something else explicitly.
+    activation_status = Member.ACTIVE_STATUS
 
 
 class AnimalFactory(factory.django.DjangoModelFactory):
@@ -158,3 +162,27 @@ def ai_event_ready_to_complete(db, mait, mpp, member, animal, stocked_mait):
         return event, straw
 
     return _make
+
+
+# --------------------------------------------------------------------------------------
+# Helpers
+# --------------------------------------------------------------------------------------
+def sheet_rows(response) -> list[list[str]]:
+    """An exported workbook's first sheet, every cell as the text it shows ('' for empty)."""
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    sheet = load_workbook(BytesIO(response.content), read_only=True).worksheets[0]
+    rows = [
+        ["" if value is None else str(value) for value in row]
+        for row in sheet.iter_rows(values_only=True)
+    ]
+    # A row ending in empty cells comes back short; padded so it lines up with the header.
+    width = max((len(row) for row in rows), default=0)
+    return [row + [""] * (width - len(row)) for row in rows]
+
+
+def sheet_text(response) -> str:
+    """The same, one line a row and commas between cells — for `in` checks on what it holds."""
+    return "\n".join(",".join(row) for row in sheet_rows(response))

@@ -403,3 +403,22 @@ def test_refusals_outside_the_window_are_not_counted(admin_client, mait, mpp, me
 
     assert admin_client.get(url("declined-checks")).data["count"] == 0
     assert admin_client.get(url("declined-checks"), {"days": 365}).data["count"] == 1
+
+
+def test_a_refused_row_names_the_window_it_was_counted_over(
+    admin_client, mait, mpp, member, animal
+):
+    """A year of refusals labelled "Last 30 days" misstates the count beside it."""
+    a_check(
+        mait,
+        mpp,
+        member,
+        animal,
+        due_days_ago=200,
+        outcome=PregnancyCheck.Outcome.DECLINED,
+        checked=timezone.now() - timedelta(days=120),
+    )
+
+    rows = rows_of(admin_client.get(url("declined-checks"), {"days": 365}))
+    window = next(f for f in rows[0]["facts"] if f["label"] == "Window")
+    assert window["value"] == "Last 365 days"

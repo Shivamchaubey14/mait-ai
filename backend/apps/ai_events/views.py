@@ -21,13 +21,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import PortalSection, Role
+from apps.core.exceptions import DomainError, InvalidStateTransition, PaymentNotVerified
 from apps.core.idempotency import idempotent
 from apps.core.models import AuditLog
-from apps.core.permissions import CanDeleteAIEvent, IsAdmin, IsMait, in_section
-from apps.payments.models import Payment
+from apps.core.permissions import CanDeleteAIEvent, IsMait, in_section
 from apps.core.scoping import apply_scope
 from apps.core.services import record_audit
 from apps.core.timeframe import end_of_day, event_day_expr, start_of_day
+from apps.payments.models import Payment
+from apps.payments.pricing import price_for
 
 from .models import AIEvent
 from .serializers import (
@@ -37,14 +39,41 @@ from .serializers import (
     AIEventPhotoSerializer,
     AIEventSerializer,
     AIEventTimelineSerializer,
+    other_codes_by_vendor,
 )
 from .services import (
     attach_photo,
     complete_ai_event,
+    finalize_member_capture,
+    mark_payment_pending,
     photo_already_attached,
     start_ai_event,
 )
 from .storage import store_photo
+
+
+# The strings a multipart client sends for "no coordinate". A JSON null cannot ride in a
+# multipart field, so the handset's offline queue historically put the literal "null" on the
+# wire; older callers may also send an empty value. All mean "no GPS fix".
+_NULLISH_GPS = {"", "null", "undefined", "nan", "none"}
+
+
+def _drop_nullish_gps(data):
+    """
+    Strip absent/placeholder GPS so the serializer reads it as "no fix" rather than a bad number.
+
+    GPS is optional on a proof photo (see ``AIEventPhotoSerializer``), but a required-looking
+    ``gps_lat="null"`` from the offline queue was being parsed as a decimal and refused — which
+    stranded every no-GPS member capture at ``straw_verified`` for good. Dropping the key here
+    lets the optional field default to None, so a capture taken with no location still closes.
+    Returns a mutable copy; the original (an immutable multipart QueryDict) is untouched.
+    """
+    cleaned = data.copy()
+    for key in ("gps_lat", "gps_lng"):
+        value = cleaned.get(key)
+        if value is None or (isinstance(value, str) and value.strip().lower() in _NULLISH_GPS):
+            cleaned.pop(key, None)
+    return cleaned
 
 
 def search_events(queryset, term: str):
@@ -54,7 +83,8 @@ def search_events(queryset, term: str):
     A straw number comes off a complaint, a farmer's name or phone off a call, a code off a
     roster or a collection slip, an event number off another screen or an export. The operator
     should not have to know which kind of thing they are holding, so the box matches any of
-    them: the event's own number, the farmer (member or non-member) by name, code or mobile,
+    them: the event's own number, the farmer (member or non-member) by name, code, SAP vendor or
+    mobile,
     their MPP's code, and the Mait by name or code.
 
     An all-digits term is treated as an event number as well — matched against the id exactly,
@@ -72,6 +102,10 @@ def search_events(queryset, term: str):
         Q(straw_unique_no__icontains=term)
         | Q(member__member_name__icontains=term)
         | Q(member__member_code__icontains=term)
+        # Her SAP vendor code, which outlives the member code: a member who moves to another MPP
+        # is given a new code there and keeps the vendor. Searching it brings back her events
+        # under the old code and the new one together — her whole history in one list.
+        | Q(member__sap_vendor_code__icontains=term)
         | Q(member__mobile_no__icontains=term)
         | Q(non_member__name__icontains=term)
         | Q(non_member__mobile_no__icontains=term)
@@ -125,6 +159,9 @@ class AIEventFilter(django_filters.FilterSet):
     date_to = django_filters.DateFilter(method="filter_date_to")
     search = django_filters.CharFilter(method="filter_search")
     unfinished = django_filters.BooleanFilter(method="filter_unfinished")
+    # The Mait's "Needs attention" list asks for `office_call_unmatched`: captures whose
+    # no-signal farmer check carried a code the office has no record of giving.
+    farmer_check = django_filters.ChoiceFilter(choices=AIEvent.FarmerCheck.choices)
 
     class Meta:
         model = AIEvent
@@ -137,6 +174,7 @@ class AIEventFilter(django_filters.FilterSet):
             "date_to",
             "search",
             "unfinished",
+            "farmer_check",
         ]
 
     def filter_search(self, queryset, name, value):
@@ -150,7 +188,9 @@ class AIEventFilter(django_filters.FilterSet):
         return queryset.annotate(event_day=event_day_expr())
 
     def filter_date_from(self, queryset, name, value):
-        return self._dated(queryset).filter(event_day__gte=start_of_day(value)) if value else queryset
+        return (
+            self._dated(queryset).filter(event_day__gte=start_of_day(value)) if value else queryset
+        )
 
     def filter_date_to(self, queryset, name, value):
         # Half-open: everything up to the instant the next local day begins, which includes
@@ -213,7 +253,7 @@ class AIEventViewSet(
         # Capture happens in the field, by the Mait standing with the animal — including the
         # photo and the completion, which are the two writes that matter most. Reading is
         # wider: an admin resolving a dispute needs the same record.
-        if self.action in ("create", "photo", "complete"):
+        if self.action in ("create", "photo", "complete", "finalize"):
             return [IsMait()]
         # Deleting a record is the one thing a Mait can never do to their own history, and the
         # one thing on this endpoint that is not reversible. It is a back-office correction —
@@ -221,7 +261,10 @@ class AIEventViewSet(
         # to a real admin holding the AI events section, never to the field. `CanDeleteAIEvent`
         # rather than `IsAdmin` on purpose: a Normal User reaches every other part of this
         # endpoint as an admin does, but deletion is the single thing that role withholds.
-        if self.action in ("destroy", "bulk_delete"):
+        # Completing from the office is a back-office correction, like deleting: it closes a
+        # capture the Mait left stuck, so it is gated to a real admin holding the section — not
+        # to a Normal User, and never to the field — exactly as the delete routes are.
+        if self.action in ("destroy", "bulk_delete", "office_complete"):
             return [CanDeleteAIEvent(), in_section(PortalSection.AI_EVENTS)()]
         # Reading is where the portal comes in, and two of its screens read this: the AI
         # events roster and the Reports query builder, which runs the same filters.
@@ -249,6 +292,11 @@ class AIEventViewSet(
             # a dispute is settled from.
             base = base.prefetch_related("pregnancy_checks__ai_event__semen_batch")
 
+        if self.action in ("list", "retrieve"):
+            # The `procurement` field reads each member's latest milk period. Prefetched (newest
+            # first, by the model's Meta ordering) so a page of 25 rows is one query, not 25.
+            base = base.prefetch_related("member__procurements")
+
         user = self.request.user
         if getattr(user, "role", None) in (Role.SUPER_ADMIN, Role.ADMIN, Role.NORMAL_USER):
             # An office account sees the whole network unless it has been given zones, in
@@ -274,7 +322,23 @@ class AIEventViewSet(
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context["mait"] = getattr(self.request.user, "mait_profile", None)
+        # Eligibility's two inputs — whether the gate is live and the standard AI rate — computed
+        # once per read and shared across every row, so the `procurement` field decides a page
+        # without re-querying the breed list and procurement table per member.
+        if self.action in ("list", "retrieve"):
+            from apps.masterdata.procurement import serializer_context as procurement_context
+
+            context.update(procurement_context())
         return context
+
+    def get_serializer(self, *args, **kwargs):
+        # A page of events reads every member's other codes in one query, not one per row.
+        if kwargs.get("many") and args and self.action == "list":
+            kwargs["context"] = {
+                **self.get_serializer_context(),
+                "other_codes": other_codes_by_vendor(list(args[0])),
+            }
+        return super().get_serializer(*args, **kwargs)
 
     # -- create --------------------------------------------------------------------------
     def _replay(self, client_uuid, mait):
@@ -340,6 +404,17 @@ class AIEventViewSet(
             actor=request.user,
         )
 
+        # A farmer checked on the phone with no signal: prove the code against the office's.
+        if data.get("office_code"):
+            from apps.accounts.field_codes import record_office_check
+
+            record_office_check(
+                event=event,
+                code=data["office_code"],
+                day=data["office_code_day"],
+                actor=request.user,
+            )
+
         record_audit(
             action=AuditLog.Action.CREATE,
             entity_type="ai_event",
@@ -385,7 +460,7 @@ class AIEventViewSet(
         if photo_already_attached(event):
             return Response(AIEventSerializer(event).data)
 
-        serializer = AIEventPhotoSerializer(data=request.data)
+        serializer = AIEventPhotoSerializer(data=_drop_nullish_gps(request.data))
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
@@ -396,8 +471,8 @@ class AIEventViewSet(
         event = attach_photo(
             event,
             photo_url=photo_url,
-            gps_lat=data["gps_lat"],
-            gps_lng=data["gps_lng"],
+            gps_lat=data.get("gps_lat"),
+            gps_lng=data.get("gps_lng"),
             performed_at=data.get("performed_at"),
             photo_source=data["photo_source"],
             gps_source=data["gps_source"],
@@ -442,6 +517,103 @@ class AIEventViewSet(
         )
         return Response(AIEventSerializer(event).data)
 
+    @extend_schema(
+        summary="Finish a member capture in one step (photo + complete)",
+        description=(
+            "The Mait's own one-request close of a **member** capture: attach the proof photo, "
+            "record her verified ₹ deduction, deduct one straw, complete the event and book its "
+            "pregnancy check — all in a single call.\n\n"
+            "It exists for the weak-network case the step-by-step close cannot survive. Those "
+            "steps are three ordered round trips (photo, payment, complete), and on a village "
+            "connection they do not always arrive in order: the completion reaches the server "
+            "ahead of its own photo and is refused against a `straw_verified` event. Carrying "
+            "both in one request makes that impossible.\n\n"
+            "Multipart: `photo`, `gps_lat`, `gps_lng`, and optionally `performed_at`. The photo "
+            "may be omitted **only** when it is already on file (the other half of the race — "
+            "the photo landed, the completion was lost); otherwise it is required.\n\n"
+            "Member only — a non-member authorises her own payment with a code, which this path "
+            "cannot stand in for. An unpriced breed is refused (`400`), and nothing is touched. "
+            "A replay of an already-completed event is a no-op that returns it as it stands. "
+            "Send `Idempotency-Key` from the offline queue."
+        ),
+        request=AIEventPhotoSerializer,
+        responses={200: AIEventSerializer},
+    )
+    @idempotent(endpoint="ai-events.finalize")
+    @action(detail=True, methods=["post"], parser_classes=[MultiPartParser, FormParser])
+    def finalize(self, request, pk=None):
+        event = self.get_object()
+        self._assert_own(event, request)
+
+        # Already done: a lost-response retry lands here, and the honest answer is that it is
+        # finished. Returned before anything is read, so a replay carrying a second photo never
+        # stores it and never spends a second straw.
+        if event.status == AIEvent.Status.COMPLETED:
+            return Response(AIEventSerializer(event).data)
+
+        if event.owner_type != AIEvent.OwnerType.MEMBER:
+            raise DomainError(
+                "One-step finish is only for a member's capture. A non-member authorises her "
+                "own payment with a code, which this path cannot stand in for."
+            )
+
+        # Price the deduction first. An unpriced breed is a refusal no retry can clear — an admin
+        # must set the rate — so it is surfaced before anything is attached or deducted, exactly
+        # as the payment endpoint does, and the event is left untouched.
+        breed = getattr(event.semen_batch, "breed", "") if event.semen_batch_id else ""
+        amount = price_for(
+            breed=breed,
+            animal_type=event.animal.animal_type,
+            owner_type=event.owner_type,
+        )
+        if amount is None:
+            raise DomainError(
+                "This breed has no rate set for this kind of farmer. Ask the administrator to "
+                "price it before the capture can be closed."
+            )
+
+        # Attach the photo, unless it is already on file — the race where the photo landed and
+        # the completion was lost. `photo_already_attached` is the same replay check the photo
+        # endpoint uses, and it is asked before the upload is stored so a replay leaves no orphan.
+        if not photo_already_attached(event):
+            if "photo" not in request.FILES:
+                raise serializers.ValidationError(
+                    {"photo": "This capture still needs its proof photo."}
+                )
+            photo_in = AIEventPhotoSerializer(data=_drop_nullish_gps(request.data))
+            photo_in.is_valid(raise_exception=True)
+            data = photo_in.validated_data
+            photo_url = store_photo(event, data["photo"])
+            event = attach_photo(
+                event,
+                photo_url=photo_url,
+                gps_lat=data.get("gps_lat"),
+                gps_lng=data.get("gps_lng"),
+                performed_at=data.get("performed_at"),
+                photo_source=data["photo_source"],
+                gps_source=data["gps_source"],
+                actor=request.user,
+            )
+
+        event = finalize_member_capture(event, amount=amount, actor=request.user)
+
+        # Audited as a one-step finish, after the completion's own `state_change` entry, so the
+        # trail says plainly this closed in one request rather than through the usual three.
+        record_audit(
+            action="state_change",
+            entity_type="ai_event",
+            entity_id=event.id,
+            request=request,
+            meta={
+                "to": event.status,
+                "one_step_finish": True,
+                "mait_id": event.mait_id,
+                "mpp_code": event.mpp.mpp_code,
+                "stock_deducted": event.stock_deducted,
+            },
+        )
+        return Response(AIEventSerializer(event).data)
+
     def _assert_own(self, event, request):
         """
         A write only ever touches the caller's own event.
@@ -452,6 +624,69 @@ class AIEventViewSet(
         mait = getattr(request.user, "mait_profile", None)
         if mait is None or event.mait_id != mait.id:
             raise PermissionDenied("This is not your event.")
+
+    @extend_schema(
+        summary="Complete a stuck event from the office (admin)",
+        description=(
+            "The office's counterpart to the Mait's own completion, for a capture the Mait "
+            "left stuck. The Mait's `complete` is barred to an admin on purpose — nobody "
+            "should close an insemination they were not at — so this is the one narrow door "
+            "the office gets, and it is deliberately kept narrow.\n\n"
+            "Only a **member** capture at `photo_captured` or `payment_pending` whose ₹100 "
+            "deduction is already **recorded and verified**. A non-member pays on the spot "
+            "against her own authorisation code, which the office cannot stand in for, so a "
+            "non-member is refused here. An event with no verified payment is refused too — "
+            "the money is finance's to record, not this endpoint's to invent.\n\n"
+            "Where it applies it does exactly what the handset would: advances "
+            "`photo_captured → payment_pending` if needed, then deducts the straw and closes "
+            "the event in one transaction. Already-completed is a no-op. Audited as an office "
+            "completion with the acting admin on the event's own timeline."
+        ),
+        request=None,
+        responses={200: AIEventSerializer},
+    )
+    @action(detail=True, methods=["post"], url_path="office-complete")
+    def office_complete(self, request, pk=None):
+        event = self.get_object()  # through get_queryset, so an admin's zone scope still binds
+
+        if event.status == AIEvent.Status.COMPLETED:
+            # A second click, or two admins on the same stuck row. The honest answer is that
+            # it is done — same no-op the Mait's completion gives a lost-response retry.
+            return Response(AIEventSerializer(event).data)
+
+        if event.owner_type != AIEvent.OwnerType.MEMBER:
+            raise DomainError(
+                "Office completion is only for a member's capture. A non-member authorises her "
+                "own payment with a code, which the office cannot enter for her."
+            )
+        if event.status not in (AIEvent.Status.PHOTO_CAPTURED, AIEvent.Status.PAYMENT_PENDING):
+            raise InvalidStateTransition(
+                "This capture is not far enough along to complete — it needs its photo and a "
+                "recorded payment first."
+            )
+        payment = getattr(event, "payment", None)
+        if payment is None or not payment.is_verified:
+            raise PaymentNotVerified()
+
+        with transaction.atomic():
+            if event.status == AIEvent.Status.PHOTO_CAPTURED:
+                mark_payment_pending(event, actor=request.user)
+            event = complete_ai_event(event, actor=request.user)
+
+        record_audit(
+            action="state_change",
+            entity_type="ai_event",
+            entity_id=event.id,
+            request=request,
+            meta={
+                "to": event.status,
+                "office_complete": True,
+                "mait_id": event.mait_id,
+                "mpp_code": event.mpp.mpp_code,
+                "stock_deducted": event.stock_deducted,
+            },
+        )
+        return Response(AIEventSerializer(event).data)
 
     # -- read ----------------------------------------------------------------------------
     @extend_schema(

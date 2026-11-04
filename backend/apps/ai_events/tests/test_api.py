@@ -11,7 +11,7 @@ take two straws out of stock for one service.
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from django.utils import timezone
@@ -20,9 +20,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
 from apps.ai_events.models import AIEvent
-from apps.animals.models import Animal, AnimalType
+from apps.animals.models import Animal, AnimalType, BreedConfig
 from apps.inventory.services import available_straw_count
-from apps.masterdata.models import MPP, Mait, Member
+from apps.masterdata.models import MPP, Mait, Member, MemberProcurement, NonMember
+from conftest import AnimalFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -327,10 +328,18 @@ class TestReading:
 
         assert mait_client.get(f"{BASE}/{hidden.id}/").status_code == 404
 
-    def test_filters_by_status(self, mait_client, payload, stocked_mait):
+    def test_filters_by_status(self, mait_client, payload, stocked_mait, member):
         straw = stocked_mait(1)[0]
         mait_client.post(f"{BASE}/", payload(), format="json")
-        mait_client.post(f"{BASE}/", payload(straw_unique_no=straw.unique_straw_no), format="json")
+        # Another cow: one AI per animal (`ai_events.rules`).
+        mait_client.post(
+            f"{BASE}/",
+            payload(
+                straw_unique_no=straw.unique_straw_no,
+                animal_id=AnimalFactory(member=member).id,
+            ),
+            format="json",
+        )
 
         verified = mait_client.get(f"{BASE}/?status=straw_verified").json()["results"]
         assert [row["status"] for row in verified] == [AIEvent.Status.STRAW_VERIFIED]
@@ -345,9 +354,9 @@ class TestReading:
     def test_filters_by_mait_code(self, admin_client, mait_client, payload, mait):
         mait_client.post(f"{BASE}/", payload(), format="json")
 
-        results = admin_client.get(
-            f"{BASE}/?mait_code={mait.sahayak_vendor_code}"
-        ).json()["results"]
+        results = admin_client.get(f"{BASE}/?mait_code={mait.sahayak_vendor_code}").json()[
+            "results"
+        ]
         assert len(results) == 1
         assert admin_client.get(f"{BASE}/?mait_code=SAH-NOBODY").json()["count"] == 0
 
@@ -359,9 +368,8 @@ class TestReading:
         # The number is matched exactly, so a different id is not dragged in by a substring.
         assert admin_client.get(f"{BASE}/?search={event_id + 7000}").json()["count"] == 0
 
-    def test_the_event_number_match_comes_first(self, admin_client, mait_client, payload):
+    def test_the_event_number_match_comes_first(self, admin_client, mait_client, payload, member):
         """Typing a number surfaces that event above rows whose straw/phone merely contains it."""
-        import uuid
 
         from apps.ai_events.models import AIEvent
 
@@ -369,8 +377,9 @@ class TestReading:
         # A newer event whose straw number contains the target id. By recency it would sort above
         # the target; the exact-id ordering must still put the target first.
         AIEvent.objects.filter(pk=target).update(straw_unique_no="")
+        # Another cow: one AI per animal (`ai_events.rules`).
         noise = mait_client.post(
-            f"{BASE}/", payload(), format="json"
+            f"{BASE}/", payload(animal_id=AnimalFactory(member=member).id), format="json"
         ).json()["id"]
         AIEvent.objects.filter(pk=noise).update(straw_unique_no=f"STRAW-{target}-X")
 
@@ -404,6 +413,89 @@ class TestReading:
         body = mait_client.get(f"{BASE}/{event_id}/").json()
         assert body["owner_name"] == member.member_name
         assert body["breed"] == "GIR"
+
+
+class TestProcurementEligibility:
+    """
+    A member's milk-payout eligibility, carried on the event the way the Super OTP panel shows
+    it — so the office can read whether she clears the insemination-code bar without crossing to
+    another screen (`masterdata.procurement`).
+    """
+
+    def _poured(self, member, amount, qty="90.00"):
+        return MemberProcurement.objects.create(
+            member=member,
+            from_date=date(2026, 10, 1),
+            to_date=date(2026, 10, 15),
+            qty=qty,
+            amount=amount,
+        )
+
+    def test_a_member_below_the_bar_reads_not_eligible(self, admin_client, mait_client, payload, member):
+        # The gate goes live once any procurement exists; ₹100 is the cheapest priced rate.
+        BreedConfig.objects.create(animal_type=AnimalType.COW, code="GIR", name="Gir", rate=100)
+        self._poured(member, amount="40.00")
+        event_id = mait_client.post(f"{BASE}/", payload(), format="json").json()["id"]
+
+        proc = admin_client.get(f"{BASE}/{event_id}/").json()["procurement"]
+        assert proc["gated"] is True
+        assert proc["eligible"] is False
+        assert proc["amount"] == "40.00"
+        assert proc["threshold"] == "100.00"
+        assert proc["period"]["qty"] == "90.00"
+
+    def test_a_member_over_the_bar_reads_eligible(self, admin_client, mait_client, payload, member):
+        BreedConfig.objects.create(animal_type=AnimalType.COW, code="GIR", name="Gir", rate=100)
+        self._poured(member, amount="250.00")
+        event_id = mait_client.post(f"{BASE}/", payload(), format="json").json()["id"]
+
+        proc = admin_client.get(f"{BASE}/{event_id}/").json()["procurement"]
+        assert proc["eligible"] is True
+
+    def test_the_latest_period_wins(self, admin_client, mait_client, payload, member):
+        """A member's most recent window is the one eligibility reads."""
+        BreedConfig.objects.create(animal_type=AnimalType.COW, code="GIR", name="Gir", rate=100)
+        MemberProcurement.objects.create(
+            member=member, from_date=date(2026, 9, 1), to_date=date(2026, 9, 15),
+            qty="10.00", amount="20.00",
+        )
+        self._poured(member, amount="250.00")  # October — the later window
+        event_id = mait_client.post(f"{BASE}/", payload(), format="json").json()["id"]
+
+        proc = admin_client.get(f"{BASE}/{event_id}/").json()["procurement"]
+        assert proc["eligible"] is True
+        assert proc["amount"] == "250.00"
+
+    def test_a_non_member_carries_no_procurement(self, admin_client, mait, mpp):
+        """A non-member pays cash on the spot and is never gated — the field is null for her."""
+        BreedConfig.objects.create(animal_type=AnimalType.COW, code="GIR", name="Gir", rate=100)
+        non_member = NonMember.objects.create(mpp=mpp, name="Walk-in", created_by_mait=mait)
+        animal = Animal.objects.create(
+            owner_type=Animal.OwnerType.NON_MEMBER,
+            non_member=non_member,
+            animal_type=AnimalType.COW,
+            breed="GIR",
+        )
+        event = AIEvent.objects.create(
+            client_uuid=uuid.uuid4(),
+            mait=mait,
+            mpp=mpp,
+            owner_type=AIEvent.OwnerType.NON_MEMBER,
+            non_member=non_member,
+            animal=animal,
+        )
+
+        assert admin_client.get(f"{BASE}/{event.id}/").json()["procurement"] is None
+
+    def test_the_gate_stays_shut_until_procurement_is_uploaded(
+        self, admin_client, mait_client, payload
+    ):
+        """With no procurement anywhere the gate is off: everyone is eligible and ungated."""
+        event_id = mait_client.post(f"{BASE}/", payload(), format="json").json()["id"]
+
+        proc = admin_client.get(f"{BASE}/{event_id}/").json()["procurement"]
+        assert proc["gated"] is False
+        assert proc["eligible"] is True
 
 
 class TestDateWindow:
