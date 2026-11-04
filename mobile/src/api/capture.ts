@@ -52,9 +52,18 @@ import type {
  * The photo gets a longer cap than the small JSON writes: it is image bytes rather than a line
  * of it, and a cap short enough to feel instant for a create would background every photo on a
  * link that could have carried it in a second or two.
+ *
+ * **The cap is the whole round-trip, not the handset's signal.** It counts the server's own
+ * time to answer too — and in this deployment the server is an office PC running `runserver`
+ * behind a Cloudflare tunnel, which can take several seconds to reply even when the Mait is on
+ * strong signal. A cap set for the radio alone (4s / 6s) therefore queued captures that had a
+ * perfectly good connection, purely because the server was slow to come back. These are set
+ * generous enough that a healthy but slow server answers inline — so a capture goes *directly*
+ * and reads as "sent" — while a genuinely dead link still falls back to the queue rather than
+ * holding the Mait forever.
  */
-const WRITE_CAP_MS = 4_000;
-const PHOTO_UPLOAD_CAP_MS = 6_000;
+const WRITE_CAP_MS = 12_000;
+const PHOTO_UPLOAD_CAP_MS = 25_000;
 
 /**
  * `fetch`, but it gives up after `ms` and lets the caller queue instead.
