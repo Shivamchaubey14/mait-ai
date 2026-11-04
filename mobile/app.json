@@ -8,7 +8,9 @@
     "userInterfaceStyle": "light",
     "primaryColor": "#3BB77E",
     "icon": "./assets/icon.png",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "in.Shwetdhara.maitai"
@@ -19,7 +21,10 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION"]
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -30,7 +35,10 @@
         {
           "android": {
             "minSdkVersion": 24,
-            "buildArchs": ["arm64-v8a", "armeabi-v7a"],
+            "buildArchs": [
+              "arm64-v8a",
+              "armeabi-v7a"
+            ],
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
             "enablePngCrunchInReleaseBuilds": false
@@ -72,9 +80,9 @@
       "apiUrl": "http://127.0.0.1:8000/api/v1",
       "itSupportPhone": "",
       "eas": {
-        "projectId": "77b3f3ab-5b47-4489-a134-2b1d732277a6"
+        "projectId": "308c714f-0fdf-4a17-a664-271d038dc092"
       }
     },
-    "owner": "shivam1214"
+    "owner": "shivam1412"
   }
 }
