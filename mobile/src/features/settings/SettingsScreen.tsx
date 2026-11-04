@@ -26,10 +26,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import AppText from '@/components/AppText';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -149,11 +149,11 @@ function Row({
         <Glyph name={icon} size={20} color={onSolid(tone)} />
       </View>
       <View style={styles.rowBody}>
-        <Text style={styles.rowTitle}>{title}</Text>
+        <AppText style={styles.rowTitle}>{title}</AppText>
         {!!body && (
-          <Text style={[styles.rowText, { color: WORD[tone] }]} numberOfLines={2}>
+          <AppText style={[styles.rowText, { color: WORD[tone] }]} numberOfLines={2}>
             {body}
-          </Text>
+          </AppText>
         )}
       </View>
       {right}
@@ -357,7 +357,7 @@ export default function SettingsScreen({
     } catch {
       // The token is unreachable either way; a session left in storage is the worse outcome.
     }
-    dispatch(loggedOut());
+    dispatch(loggedOut({ deliberate: true }));
   };
 
   /**
@@ -385,7 +385,7 @@ export default function SettingsScreen({
           above a name saying Sunil Kumar is the mark competing with its own answer. */}
       <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarLabel}>{initialsOf(user?.fullName ?? '')}</Text>
+          <AppText style={styles.avatarLabel}>{initialsOf(user?.fullName ?? '')}</AppText>
         </View>
         <View style={styles.heroBody}>
           {/* One line, set to whatever size makes it fit.
@@ -396,7 +396,7 @@ export default function SettingsScreen({
               broken across lines, and the card stops changing height depending on whose phone
               it is. The same rule Home's hero uses, through the same function, with the avatar
               and its gap taken off the width first. */}
-          <Text
+          <AppText
             style={[
               styles.heroTitle,
               { fontSize: nameSize, lineHeight: Math.round(nameSize * 1.25) },
@@ -406,14 +406,14 @@ export default function SettingsScreen({
             minimumFontScale={0.75}
           >
             {user?.fullName ?? ''}
-          </Text>
+          </AppText>
           {!!meta && (
             <View style={styles.heroPills}>
               <View style={styles.heroPill} testID="profile-code">
                 <Ionicons name="id-card" size={12} color={colors.surface} />
-                <Text style={styles.heroMeta} numberOfLines={1}>
+                <AppText style={styles.heroMeta} numberOfLines={1}>
                   {meta}
-                </Text>
+                </AppText>
               </View>
             </View>
           )}
@@ -489,27 +489,27 @@ export default function SettingsScreen({
                 {assigned.map((mpp, index) => (
                   <View key={mpp.mpp_code} style={styles.mppRow}>
                     <View style={styles.mppChip}>
-                      <Text style={styles.mppChipLabel}>{index + 1}</Text>
+                      <AppText style={styles.mppChipLabel}>{index + 1}</AppText>
                     </View>
                     <View style={styles.mppBody}>
-                      <Text style={styles.mppName} numberOfLines={1}>
+                      <AppText style={styles.mppName} numberOfLines={1}>
                         {mpp.mpp_name}
-                      </Text>
+                      </AppText>
                       <View style={styles.mppPlace}>
                         {!!mpp.plant_name && (
                           <>
                             <Ionicons name="business" size={11} color={colors.info} />
-                            <Text style={styles.mppPlaceLabel} numberOfLines={1}>
+                            <AppText style={styles.mppPlaceLabel} numberOfLines={1}>
                               {mpp.plant_name}
-                            </Text>
+                            </AppText>
                           </>
                         )}
                         <Ionicons name="people" size={11} color={colors.info} />
-                        <Text style={styles.mppPlaceLabel}>{mpp.member_count}</Text>
+                        <AppText style={styles.mppPlaceLabel}>{mpp.member_count}</AppText>
                       </View>
                     </View>
                     <View style={styles.mppCode}>
-                      <Text style={styles.mppCodeLabel}>{mpp.mpp_code}</Text>
+                      <AppText style={styles.mppCodeLabel}>{mpp.mpp_code}</AppText>
                     </View>
                   </View>
                 ))}
@@ -574,9 +574,9 @@ export default function SettingsScreen({
                     size={12}
                     color={colors.surface}
                   />
-                  <Text style={styles.pillLabel}>
+                  <AppText style={styles.pillLabel}>
                     {online ? t('settings.online') : t('settings.offline')}
-                  </Text>
+                  </AppText>
                 </View>
               }
               testID="profile-sync"
@@ -599,10 +599,10 @@ export default function SettingsScreen({
                   <Ionicons name="warning" size={20} color={colors.ink} />
                 </View>
                 <View style={styles.rowBody}>
-                  <Text style={styles.warningTitle}>
+                  <AppText style={styles.warningTitle}>
                     {t('settings.signOutWarnTitle', { count: pending })}
-                  </Text>
-                  <Text style={styles.warningText}>{t('settings.signOutWarnBody')}</Text>
+                  </AppText>
+                  <AppText style={styles.warningText}>{t('settings.signOutWarnBody')}</AppText>
                 </View>
               </View>
             )}
@@ -620,7 +620,7 @@ export default function SettingsScreen({
                 style={styles.cancel}
                 testID="signout-cancel"
               >
-                <Text style={styles.cancelLabel}>{t('common.cancel')}</Text>
+                <AppText style={styles.cancelLabel}>{t('common.cancel')}</AppText>
               </Pressable>
             )}
           </ScrollView>

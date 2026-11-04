@@ -14,7 +14,8 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Constants from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,7 +39,7 @@ export default function SplashScreen({ progress = 0.35 }: Props): React.JSX.Elem
       {/* The app-wide bar is green, for the hero headers every other screen opens with.
           This screen is Ink to the top edge, and a green strip above it reads as a
           rendering fault. */}
-      <StatusBar style="light" backgroundColor={colors.ink} />
+      <StatusBar style="light" />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.centre}>
           {/* Above the name, not beside it. This screen is one column of three things a
@@ -47,7 +48,7 @@ export default function SplashScreen({ progress = 0.35 }: Props): React.JSX.Elem
             <BrandLogo size={132} />
           </View>
           <BrandWordmark />
-          <Text style={styles.tagline}>{t('splash.tagline')}</Text>
+          <AppText style={styles.tagline}>{t('splash.tagline')}</AppText>
 
           <View
             style={styles.track}
@@ -60,7 +61,7 @@ export default function SplashScreen({ progress = 0.35 }: Props): React.JSX.Elem
             <View style={[styles.fill, { width: `${clamped * 100}%` }]} />
           </View>
 
-          <Text style={styles.version}>{t('splash.version', { version })}</Text>
+          <AppText style={styles.version}>{t('splash.version', { version })}</AppText>
         </View>
       </SafeAreaView>
     </View>

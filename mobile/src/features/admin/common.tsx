@@ -5,7 +5,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
@@ -59,11 +60,13 @@ export function Field({
   label: string;
   value?: string | null;
 }): React.JSX.Element | null {
-  if (value === null || value === undefined || value === '') {return null;}
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
   return (
     <View style={adminStyles.field}>
-      <Text style={adminStyles.fieldLabel}>{label}</Text>
-      <Text style={adminStyles.fieldValue}>{value}</Text>
+      <AppText style={adminStyles.fieldLabel}>{label}</AppText>
+      <AppText style={adminStyles.fieldValue}>{value}</AppText>
     </View>
   );
 }
@@ -82,9 +85,9 @@ export function RecordHead({
       <Pressable onPress={onBack} hitSlop={8} style={adminStyles.recordBack} testID={testID}>
         <Ionicons name="arrow-back" size={20} color={colors.ink} />
       </Pressable>
-      <Text style={adminStyles.recordTitle} numberOfLines={1}>
+      <AppText style={adminStyles.recordTitle} numberOfLines={1}>
         {title}
-      </Text>
+      </AppText>
     </View>
   );
 }

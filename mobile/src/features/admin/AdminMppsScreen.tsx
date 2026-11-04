@@ -8,12 +8,14 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
 import { useGetMppQuery, useListMppsQuery } from '@api/endpoints';
-import { EmptyState, Loading } from '@/components';
+import { EmptyState } from '@/components';
+import { SkeletonRecord, SkeletonRows } from '@/components/skeleton';
 import { colors, green, ink, radius, spacing, typography } from '@theme/tokens';
 
 import { Field, RecordHead, SearchBar, adminStyles, useDebounced } from './common';
@@ -24,10 +26,14 @@ function Record({ mppId, onBack }: { mppId: number; onBack: () => void }): React
   const mpp = detail.data;
   return (
     <View style={adminStyles.root}>
-      <RecordHead title={mpp?.mpp_name ?? t('admin.mpps.record')} onBack={onBack} testID="admin-mpp-back" />
+      <RecordHead
+        title={mpp?.mpp_name ?? t('admin.mpps.record')}
+        onBack={onBack}
+        testID="admin-mpp-back"
+      />
       <ScrollView contentContainerStyle={adminStyles.body}>
         {detail.isLoading ? (
-          <Loading />
+          <SkeletonRecord />
         ) : !mpp ? (
           <EmptyState message={t('admin.mpps.recordMissing')} />
         ) : (
@@ -38,13 +44,24 @@ function Record({ mppId, onBack }: { mppId: number; onBack: () => void }): React
                 size={16}
                 color={mpp.is_active ? colors.primaryDark : ink[500]}
               />
-              <Text style={[styles.bannerLabel, { color: mpp.is_active ? colors.primaryDark : ink[500] }]}>
+              <AppText
+                style={[
+                  styles.bannerLabel,
+                  { color: mpp.is_active ? colors.primaryDark : ink[500] },
+                ]}
+              >
                 {t(mpp.is_active ? 'admin.mpps.active' : 'admin.mpps.inactive')}
-              </Text>
+              </AppText>
             </View>
             <Field label={t('admin.mpps.fieldCode')} value={mpp.mpp_code} />
-            <Field label={t('admin.mpps.fieldPlant')} value={[mpp.plant_name, mpp.plant_code].filter(Boolean).join(' · ')} />
-            <Field label={t('admin.mpps.fieldMait')} value={mpp.mait_name || t('admin.mpps.noMait')} />
+            <Field
+              label={t('admin.mpps.fieldPlant')}
+              value={[mpp.plant_name, mpp.plant_code].filter(Boolean).join(' · ')}
+            />
+            <Field
+              label={t('admin.mpps.fieldMait')}
+              value={mpp.mait_name || t('admin.mpps.noMait')}
+            />
             <Field label={t('admin.mpps.fieldMembers')} value={String(mpp.member_count)} />
             <Field label={t('admin.mpps.fieldMobile')} value={mpp.mobile_no} />
           </>
@@ -64,7 +81,9 @@ export default function AdminMppsScreen(): React.JSX.Element {
   const rows = list.data?.results ?? [];
 
   useEffect(() => {
-    if (open === null) {return;}
+    if (open === null) {
+      return;
+    }
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       setOpen(null);
       return true;
@@ -86,11 +105,13 @@ export default function AdminMppsScreen(): React.JSX.Element {
       />
       <ScrollView contentContainerStyle={adminStyles.body} keyboardShouldPersistTaps="handled">
         {list.isLoading ? (
-          <Loading />
+          <SkeletonRows />
         ) : list.isError ? (
           <EmptyState message={t('admin.mpps.error')} />
         ) : rows.length === 0 ? (
-          <EmptyState message={search ? t('admin.mpps.noneFound', { query: search }) : t('admin.mpps.none')} />
+          <EmptyState
+            message={search ? t('admin.mpps.noneFound', { query: search }) : t('admin.mpps.none')}
+          />
         ) : (
           rows.map(mpp => (
             <Pressable
@@ -104,12 +125,14 @@ export default function AdminMppsScreen(): React.JSX.Element {
                 <Ionicons name="location" size={18} color={colors.info} />
               </View>
               <View style={adminStyles.rowBody}>
-                <Text style={adminStyles.rowName} numberOfLines={1}>
+                <AppText style={adminStyles.rowName} numberOfLines={1}>
                   {mpp.mpp_name}
-                </Text>
-                <Text style={adminStyles.rowMeta} numberOfLines={1}>
-                  {[mpp.mpp_code, mpp.mait_name || t('admin.mpps.noMait')].filter(Boolean).join(' · ')}
-                </Text>
+                </AppText>
+                <AppText style={adminStyles.rowMeta} numberOfLines={1}>
+                  {[mpp.mpp_code, mpp.mait_name || t('admin.mpps.noMait')]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </AppText>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>

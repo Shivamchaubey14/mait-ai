@@ -19,7 +19,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -52,29 +53,33 @@ function MaitCard({ mait }: { mait: ZonalMait }): React.JSX.Element {
           <Ionicons name="person" size={16} color={colors.surface} />
         </View>
         <View style={styles.cardBody}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
+          <AppText style={styles.cardTitle} numberOfLines={1}>
             {mait.name}
-          </Text>
-          <Text style={styles.cardMeta} numberOfLines={1}>
+          </AppText>
+          <AppText style={styles.cardMeta} numberOfLines={1}>
             {[mait.sahayak_vendor_code, mait.mobile_no].filter(Boolean).join(' · ')}
-          </Text>
+          </AppText>
         </View>
       </View>
 
       {mait.mpps.length ? (
         <View style={styles.points}>
           {mait.mpps.map(point => (
-            <View key={point.mpp_code} style={styles.point} testID={`search-mait-point-${point.mpp_code}`}>
+            <View
+              key={point.mpp_code}
+              style={styles.point}
+              testID={`search-mait-point-${point.mpp_code}`}
+            >
               <Ionicons name="location" size={13} color={colors.primary} />
-              <Text style={styles.pointName} numberOfLines={1}>
+              <AppText style={styles.pointName} numberOfLines={1}>
                 {point.mpp_name}
-              </Text>
-              <Text style={styles.pointCode}>{point.mpp_code}</Text>
+              </AppText>
+              <AppText style={styles.pointCode}>{point.mpp_code}</AppText>
             </View>
           ))}
         </View>
       ) : (
-        <Text style={styles.quiet}>{t('zonal.searchMaitNoPoints')}</Text>
+        <AppText style={styles.quiet}>{t('zonal.searchMaitNoPoints')}</AppText>
       )}
     </View>
   );
@@ -90,29 +95,32 @@ function PointCard({ point }: { point: ZonalMppHit }): React.JSX.Element {
           <Ionicons name="location" size={16} color={colors.surface} />
         </View>
         <View style={styles.cardBody}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
+          <AppText style={styles.cardTitle} numberOfLines={1}>
             {point.mpp_name}
-          </Text>
-          <Text style={styles.cardMeta} numberOfLines={1}>
+          </AppText>
+          <AppText style={styles.cardMeta} numberOfLines={1}>
             {[t('zonal.trCode', { code: point.mpp_code }), point.plant_name]
               .filter(Boolean)
               .join(' · ')}
-          </Text>
+          </AppText>
         </View>
       </View>
 
       {point.mait ? (
         <View style={styles.holder} testID={`search-point-holder-${point.mpp_code}`}>
           <Ionicons name="person" size={13} color={colors.info} />
-          <Text style={styles.holderName} numberOfLines={1}>
+          <AppText style={styles.holderName} numberOfLines={1}>
             {point.mait.name}
-          </Text>
-          <Text style={styles.holderCode}>{point.mait.sahayak_vendor_code}</Text>
+          </AppText>
+          <AppText style={styles.holderCode}>{point.mait.sahayak_vendor_code}</AppText>
         </View>
       ) : (
-        <View style={[styles.holder, styles.holderNone]} testID={`search-point-unassigned-${point.mpp_code}`}>
+        <View
+          style={[styles.holder, styles.holderNone]}
+          testID={`search-point-unassigned-${point.mpp_code}`}
+        >
           <Ionicons name="alert-circle" size={13} color={colors.textMuted} />
-          <Text style={styles.quiet}>{t('zonal.searchUnassigned')}</Text>
+          <AppText style={styles.quiet}>{t('zonal.searchUnassigned')}</AppText>
         </View>
       )}
     </View>
@@ -155,7 +163,7 @@ export default function SearchScreen(): React.JSX.Element {
           <>
             {maits.length > 0 && (
               <View style={styles.section}>
-                <Text style={rowStyles.section}>{t('zonal.searchMaitsSection')}</Text>
+                <AppText style={rowStyles.section}>{t('zonal.searchMaitsSection')}</AppText>
                 {maits.map(mait => (
                   <MaitCard key={mait.id} mait={mait} />
                 ))}
@@ -163,7 +171,7 @@ export default function SearchScreen(): React.JSX.Element {
             )}
             {points.length > 0 && (
               <View style={styles.section}>
-                <Text style={rowStyles.section}>{t('zonal.searchPointsSection')}</Text>
+                <AppText style={rowStyles.section}>{t('zonal.searchPointsSection')}</AppText>
                 {points.map(point => (
                   <PointCard key={point.mpp_code} point={point} />
                 ))}
@@ -214,7 +222,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryWash,
   },
   pointName: { ...typography.body, color: colors.ink, flex: 1 },
-  pointCode: { ...typography.caption, fontFamily: typography.label.fontFamily, color: colors.primaryDark },
+  pointCode: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.primaryDark,
+  },
 
   holder: {
     flexDirection: 'row',
@@ -227,7 +239,11 @@ const styles = StyleSheet.create({
   },
   holderNone: { backgroundColor: colors.background },
   holderName: { ...typography.body, color: colors.ink, flex: 1 },
-  holderCode: { ...typography.caption, fontFamily: typography.label.fontFamily, color: colors.info },
+  holderCode: {
+    ...typography.caption,
+    fontFamily: typography.label.fontFamily,
+    color: colors.info,
+  },
 
   quiet: { ...typography.caption, color: colors.textMuted },
 });

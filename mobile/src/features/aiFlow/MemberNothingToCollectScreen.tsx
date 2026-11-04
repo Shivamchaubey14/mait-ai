@@ -30,7 +30,8 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -77,10 +78,10 @@ function SettleStep({
         {!last && <View style={[styles.line, done && styles.lineDone]} />}
       </View>
       <View style={[styles.stepBody, done ? styles.stepBodyDone : styles.stepBodyLater]}>
-        <Text style={styles.stepTitle}>{title}</Text>
-        <Text style={[styles.stepText, { color: done ? colors.primaryDark : ink[600] }]}>
+        <AppText style={styles.stepTitle}>{title}</AppText>
+        <AppText style={[styles.stepText, { color: done ? colors.primaryDark : ink[600] }]}>
           {body}
-        </Text>
+        </AppText>
       </View>
     </View>
   );
@@ -109,16 +110,18 @@ function FactRow({
         <Ionicons name={icon} size={18} color={warm ? colors.ink : colors.surface} />
       </View>
       <View style={styles.factBody}>
-        <Text style={[styles.factLabel, { color: warm ? yolk[800] : colors.info }]}>{label}</Text>
-        <Text style={styles.factValue} numberOfLines={1}>
+        <AppText style={[styles.factLabel, { color: warm ? yolk[800] : colors.info }]}>
+          {label}
+        </AppText>
+        <AppText style={styles.factValue} numberOfLines={1}>
           {value}
-        </Text>
+        </AppText>
       </View>
       {!!pill && (
         <View style={[styles.factPill, { backgroundColor: warm ? yolk[500] : colors.info }]}>
-          <Text style={[styles.factPillLabel, { color: warm ? colors.ink : colors.surface }]}>
+          <AppText style={[styles.factPillLabel, { color: warm ? colors.ink : colors.surface }]}>
             {pill}
-          </Text>
+          </AppText>
         </View>
       )}
     </View>
@@ -160,8 +163,8 @@ export default function MemberNothingToCollectScreen({
           <View style={styles.noCashSlash} />
         </View>
         <View style={styles.noCashBody}>
-          <Text style={styles.noCashTitle}>{t('payment.noCashTitle')}</Text>
-          <Text style={styles.noCashText}>{t('payment.noCashBody')}</Text>
+          <AppText style={styles.noCashTitle}>{t('payment.noCashTitle')}</AppText>
+          <AppText style={styles.noCashText}>{t('payment.noCashBody')}</AppText>
         </View>
       </View>
 
@@ -173,14 +176,14 @@ export default function MemberNothingToCollectScreen({
           <View style={[styles.chip, { backgroundColor: colors.info }]}>
             <Ionicons name="receipt" size={18} color={colors.surface} />
           </View>
-          <Text style={styles.amountLabel}>{t('payment.deductedFromMilk')}</Text>
+          <AppText style={styles.amountLabel}>{t('payment.deductedFromMilk')}</AppText>
         </View>
-        <Text style={[styles.amount, !priced && styles.amountUnpriced]}>
+        <AppText style={[styles.amount, !priced && styles.amountUnpriced]}>
           {priced ? `₹ ${Math.round(Number(event.amount_due))}` : t('payment.unpriced')}
-        </Text>
+        </AppText>
         <View style={styles.amountPill}>
           <Ionicons name="calendar" size={13} color={colors.surface} />
-          <Text style={styles.amountPillLabel}>{t('payment.atNextPayout')}</Text>
+          <AppText style={styles.amountPillLabel}>{t('payment.atNextPayout')}</AppText>
         </View>
       </View>
 
@@ -202,7 +205,7 @@ export default function MemberNothingToCollectScreen({
         <View style={[styles.sectionChip, { backgroundColor: ink[500] }]}>
           <Ionicons name="git-commit" size={13} color={colors.surface} />
         </View>
-        <Text style={styles.section}>{t('payment.howSettled')}</Text>
+        <AppText style={styles.section}>{t('payment.howSettled')}</AppText>
       </View>
       <View style={styles.settle} testID="payment-settle">
         <SettleStep
@@ -233,7 +236,7 @@ export default function MemberNothingToCollectScreen({
         <View style={[styles.sectionChip, { backgroundColor: colors.info }]}>
           <Ionicons name="clipboard" size={13} color={colors.surface} />
         </View>
-        <Text style={styles.section}>{t('payment.thisVisit')}</Text>
+        <AppText style={styles.section}>{t('payment.thisVisit')}</AppText>
       </View>
       <FactRow
         icon="people"

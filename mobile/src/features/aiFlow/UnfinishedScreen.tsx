@@ -18,7 +18,8 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -103,12 +104,12 @@ export default function UnfinishedScreen({ onResume, onBack }: Props): React.JSX
                 to know which is nearly done. */}
             <View style={styles.progress}>
               <Ionicons name="arrow-forward-circle-outline" size={14} color={colors.textMuted} />
-              <Text style={styles.progressText}>
+              <AppText style={styles.progressText}>
                 {t('unfinished.stoppedAt', {
                   done: point.done,
                   total: AI_FLOW_STEPS.length,
                 })}
-              </Text>
+              </AppText>
             </View>
           </View>
         );

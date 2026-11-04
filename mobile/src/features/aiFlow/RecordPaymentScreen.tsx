@@ -13,7 +13,8 @@
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -134,11 +135,11 @@ export default function RecordPaymentScreen({
       {/* What the Mait is confirming, in their own words, before anything about codes. */}
       <View style={styles.taken}>
         <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-        <Text style={styles.takenText}>
+        <AppText style={styles.takenText}>
           {mode === 'COD'
             ? t('payment.cashTakenFrom', { amount, name: farmerName })
             : t('payment.paidOnlineBy', { amount, name: farmerName })}
-        </Text>
+        </AppText>
       </View>
 
       {!sentTo && (
@@ -202,7 +203,7 @@ export default function RecordPaymentScreen({
             onPress={() => setCamera(true)}
             testID="payment-proof-tile"
           />
-          <Text style={styles.proofHint}>{t('payment.proofBothNeeded')}</Text>
+          <AppText style={styles.proofHint}>{t('payment.proofBothNeeded')}</AppText>
         </View>
       )}
 

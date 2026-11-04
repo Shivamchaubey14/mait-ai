@@ -26,6 +26,7 @@ import { apiBaseUrl } from '@/config/env';
 
 import { idempotencyHeaders, newClientUuid } from './client';
 import { clockTime, enqueue, pendingCount, rememberEventId, rememberServerId } from './queue';
+import { rememberLocalAnimal, rememberLocalNonMember } from './offlinePack';
 import type { QueuedLabel } from './queue';
 import { drainQueue } from './sync';
 import type {
@@ -288,14 +289,17 @@ export async function registerNonMember(
   const queueIt = async (): Promise<RegisteredFarmer> => {
     await enqueue('createNonMember', clientUuid, { ...body }, label);
     await queueCard(null);
+    const nonMember = {
+      ...provisional,
+      id: provisionalId(),
+      client_uuid: clientUuid,
+    } as NonMember;
+    // On the phone's roster now, so the next capture at this MPP can pick her.
+    await rememberLocalNonMember(nonMember);
     return {
       sent: false,
       queued: true,
-      nonMember: {
-        ...provisional,
-        id: provisionalId(),
-        client_uuid: clientUuid,
-      } as NonMember,
+      nonMember,
       remaining: await pendingCount(),
     };
   };
@@ -322,6 +326,7 @@ export async function registerNonMember(
     if (response.ok) {
       const nonMember = (await response.json()) as NonMember;
       await rememberServerId('nonMember', clientUuid, nonMember.id);
+      await rememberLocalNonMember(nonMember);
       await queueCard(nonMember.id);
       // The card is allowed to fail and must not hold the step: she is registered and the
       // flow needs her, not her photographs. Drained now so on a working connection it goes
@@ -384,6 +389,7 @@ export async function registerAnimal(
 ): Promise<RegisteredAnimal> {
   const clientUuid = newClientUuid();
   const body: AnimalDraft = { ...draft, client_uuid: clientUuid };
+  const ownerKey = { member_code: draft.member_code, non_member_id: draft.non_member_id };
 
   const queueIt = async (): Promise<RegisteredAnimal> => {
     await enqueue(
@@ -400,10 +406,13 @@ export async function registerAnimal(
     if (photoUri) {
       await enqueue('attachAnimalPhoto', clientUuid, { animalId: null, photoUri });
     }
+    const animal = { ...provisional, id: provisionalId(), client_uuid: clientUuid } as Animal;
+    // On her owner's record on the phone now, so she is there on the next visit too.
+    await rememberLocalAnimal(animal, ownerKey);
     return {
       sent: false,
       queued: true,
-      animal: { ...provisional, id: provisionalId(), client_uuid: clientUuid } as Animal,
+      animal,
       remaining: await pendingCount(),
     };
   };
@@ -430,6 +439,7 @@ export async function registerAnimal(
     if (response.ok) {
       const animal = (await response.json()) as Animal;
       await rememberServerId('animal', clientUuid, animal.id);
+      await rememberLocalAnimal(animal, ownerKey);
       if (photoUri) {
         // Queued rather than sent inline, and never blocking the step: it is the same bargain
         // the online path already struck — she is registered and the Mait can go on; her

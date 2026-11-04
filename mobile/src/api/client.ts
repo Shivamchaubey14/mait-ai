@@ -15,6 +15,7 @@ import { discoverServerAddress } from '@/config/serverAddress';
 import type { RootState } from '@/store';
 
 import { cacheKeyFor, readCached, writeCached } from './offlineCache';
+import { answerFromPack } from './offlinePack';
 
 /** RFC 7807 problem details, the shape every API error takes (SRS §9.11). */
 export interface ProblemDetails {
@@ -238,6 +239,18 @@ export const baseQueryWithOfflineReads: BaseQueryFn<
   // storing.
   const owner = (api.getState() as RootState).auth?.user?.id ?? null;
 
+  // A Mait's capture-flow reads come off the phone first (`offlinePack.ts`): every MPP, farmer,
+  // animal and breed they work with is kept there, so a picker opens at once on one bar or none
+  // and a search is a filter over the handset. Anything the pack cannot answer — an MPP not yet
+  // downloaded, any other screen — falls through to the network exactly as before.
+  const role = (api.getState() as RootState).auth?.user?.role;
+  if (owner !== null && role === 'mait') {
+    const local = await answerFromPack(owner, args);
+    if (local !== undefined) {
+      return { data: local, meta: { fromPack: true } };
+    }
+  }
+
   // Not a read we keep, or nobody to key it to: the plain query, with none of the below.
   if (!key || owner === null) {
     return baseQueryWithReauth(args, api, extraOptions);
@@ -302,6 +315,8 @@ export const api = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithOfflineReads,
   tagTypes: [
+    'Upload',
+    'Mait',
     'Inventory',
     'AIEvent',
     'Indent',
@@ -312,6 +327,7 @@ export const api = createApi({
     'Pregnancy',
     'Store',
     'Zonal',
+    'Zone',
   ],
   // Endpoints are injected per feature slice so this module never becomes a dumping ground.
   endpoints: () => ({}),

@@ -23,7 +23,8 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -189,22 +190,22 @@ export default function IssueScreen({
             testID={`issue-waiting-${waiting.id}`}
           >
             <View style={styles.itemText}>
-              <Text style={styles.earlierTitle}>
+              <AppText style={styles.earlierTitle}>
                 {t('store.earlierTitle', {
                   qty: waiting.qty,
                   item,
                   time: clock(waiting.issued_at),
                 })}
-              </Text>
-              <Text style={storeStyles.cardMeta}>
+              </AppText>
+              <AppText style={storeStyles.cardMeta}>
                 {waiting.locked
                   ? t('store.earlierLocked')
                   : t('store.earlierBody', { mait: indent.mait_name })}
-              </Text>
+              </AppText>
             </View>
             {!waiting.locked && (
               <View style={styles.earlierCode}>
-                <Text style={styles.earlierCodeLabel}>{waiting.collection_code}</Text>
+                <AppText style={styles.earlierCodeLabel}>{waiting.collection_code}</AppText>
               </View>
             )}
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -224,8 +225,8 @@ export default function IssueScreen({
           <View style={[styles.itemCard, short && styles.itemCardShort]} testID="issue-item">
             <View style={styles.itemTop}>
               <View style={styles.itemText}>
-                <Text style={storeStyles.cardTitle}>{item}</Text>
-                <Text style={storeStyles.cardMeta}>
+                <AppText style={storeStyles.cardTitle}>{item}</AppText>
+                <AppText style={storeStyles.cardMeta}>
                   {partBefore
                     ? t('store.itemMetaPart', {
                         open: indent.qty_open,
@@ -236,17 +237,17 @@ export default function IssueScreen({
                         approved: indent.qty_requested,
                         inStore: indent.in_store,
                       })}
-                </Text>
+                </AppText>
               </View>
               <Stepper value={qty} min={1} max={most} onChange={setQty} testID="issue-qty" />
             </View>
 
             {rest > 0 && (
-              <Text style={styles.itemNote} testID="issue-rest">
+              <AppText style={styles.itemNote} testID="issue-rest">
                 {short && qty === most
                   ? t('store.restOpen', { inStore: indent.in_store, rest, id: indent.id })
                   : t('store.restOpenChosen', { rest, id: indent.id })}
-              </Text>
+              </AppText>
             )}
           </View>
         )}
@@ -254,8 +255,8 @@ export default function IssueScreen({
         {isStraw && !nothing && (
           <View style={[storeStyles.card, styles.flask]} testID="issue-flask">
             <View style={styles.itemText}>
-              <Text style={styles.flaskTitle}>{t('store.flaskTitle')}</Text>
-              <Text style={storeStyles.cardMeta}>{t('store.flaskBody')}</Text>
+              <AppText style={styles.flaskTitle}>{t('store.flaskTitle')}</AppText>
+              <AppText style={storeStyles.cardMeta}>{t('store.flaskBody')}</AppText>
             </View>
             <Toggle
               value={flask}
@@ -268,19 +269,19 @@ export default function IssueScreen({
 
         {!nothing && (
           <View style={styles.after} testID="issue-after">
-            <Text style={styles.afterTitle}>{t('store.afterTitle')}</Text>
+            <AppText style={styles.afterTitle}>{t('store.afterTitle')}</AppText>
             <View style={styles.afterRow}>
               <View style={styles.afterCell}>
-                <Text style={styles.afterLabel}>{t('store.storeHolding')}</Text>
-                <Text style={styles.afterValue} testID="issue-after-holding">
+                <AppText style={styles.afterLabel}>{t('store.storeHolding')}</AppText>
+                <AppText style={styles.afterValue} testID="issue-after-holding">
                   {`${indent.in_store} → ${indent.in_store - qty}`}
-                </Text>
+                </AppText>
               </View>
               <View style={styles.afterCell}>
-                <Text style={styles.afterLabel}>{t('store.openOn', { id: indent.id })}</Text>
-                <Text style={styles.afterValue} testID="issue-after-open">
+                <AppText style={styles.afterLabel}>{t('store.openOn', { id: indent.id })}</AppText>
+                <AppText style={styles.afterValue} testID="issue-after-open">
                   {rest}
-                </Text>
+                </AppText>
               </View>
             </View>
           </View>

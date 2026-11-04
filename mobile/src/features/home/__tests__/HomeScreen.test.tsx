@@ -125,9 +125,30 @@ describe('HomeScreen', () => {
     // portal and in SAP. It used to print `maitId` — a row id meaning nothing outside this
     // database — under the same "MAIT" label, so a Mait reading it out to the office would
     // be read back a blank look.
-    expect(screen.getByText(/MAIT 5500000054/)).toBeTruthy();
-    expect(screen.queryByText(/MAIT 341/)).toBeNull();
+    expect(screen.getByTestId('home-identity')).toHaveTextContent(/MAIT\s*5500000054/);
+    expect(screen.getByTestId('home-mait-code')).toHaveTextContent('5500000054');
+    expect(screen.getByTestId('home-identity')).not.toHaveTextContent(/341/);
     expect(screen.getByText(/3 MPPs/)).toBeTruthy();
+  });
+
+  it('reads in Hindi throughout when Hindi is chosen', async () => {
+    await i18n.changeLanguage('hi');
+    try {
+      mockApi(SUMMARY, []);
+      // One record waiting, so the waiting tile is on screen to be read.
+      render({ pending: 1 });
+
+      expect(screen.getByText('आज के आपके गर्भाधान')).toBeTruthy();
+      expect(screen.getByText('बाकी')).toBeTruthy();
+      expect(await screen.findByText('आपके पास सीमेन')).toBeTruthy();
+      expect(screen.getByText('नया गर्भाधान शुरू करें')).toBeTruthy();
+      expect(screen.getByText('3 गांव मिले')).toBeTruthy();
+      // Label and number as two pieces, so the number cannot be pushed off the chip.
+      expect(screen.getByText('मैत कोड:')).toBeTruthy();
+      expect(screen.getByTestId('home-mait-code')).toHaveTextContent('5500000054');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 
   it('says nothing rather than a row id when the code is missing', () => {
@@ -136,19 +157,28 @@ describe('HomeScreen', () => {
     mockApi(SUMMARY, []);
     render({}, { sahayakVendorCode: null });
 
-    // `MAIT` followed by digits is a code; the bare word is the brand mark in the hero.
-    expect(screen.queryByText(/MAIT \d/)).toBeNull();
+    expect(screen.queryByTestId('home-mait-code')).toBeNull();
     expect(screen.getByText(/3 MPPs/)).toBeTruthy();
   });
 
-  it('carries the brand mark, the same one the portal pins to its sidebar', () => {
+  it('carries the logo, the same badge as the splash and the sign-in screen', () => {
     // A Mait hands this phone to a farmer to read a code off it, so the app has to say whose
-    // app it is. It was a bare wordmark that read as a heading rather than a mark.
+    // app it is — and with the one logo the product has, not a text pill of its own.
     mockApi(SUMMARY, []);
     render();
 
+    expect(screen.getByTestId('brand-logo')).toBeTruthy();
     expect(screen.getByText('MAIT AI')).toBeTruthy();
-    expect(screen.getByText('FIELD CAPTURE')).toBeTruthy();
+    expect(screen.queryByText('FIELD CAPTURE')).toBeNull();
+  });
+
+  it('greets the Mait and says what they are known by, as chips', () => {
+    mockApi(SUMMARY, []);
+    render();
+
+    expect(screen.getByText(/^Good (morning|afternoon|evening)$/)).toBeTruthy();
+    const identity = screen.getByTestId('home-identity');
+    expect(identity).toHaveTextContent(/MPP/);
   });
 
   it('flags the breeds that are nearly out, not just the flask total', async () => {
@@ -175,6 +205,45 @@ describe('HomeScreen', () => {
 
     fireEvent.press(screen.getByTestId('resume-unfinished'));
     expect(onOpenUnfinished).toHaveBeenCalled();
+  });
+
+  it('counts everything that needs the Mait, and opens that list', async () => {
+    const onOpenAttention = jest.fn();
+    const onOpenUnfinished = jest.fn();
+    mockApi(SUMMARY, []);
+    render({ attentionCount: 3, onOpenAttention, onOpenUnfinished });
+
+    await waitFor(() => expect(screen.getByTestId('resume-unfinished')).toBeTruthy());
+    expect(screen.getByText('Needs attention — tap to see')).toBeTruthy();
+    expect(screen.getByText('3 things need you')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('resume-unfinished'));
+    expect(onOpenAttention).toHaveBeenCalled();
+    expect(onOpenUnfinished).not.toHaveBeenCalled();
+  });
+
+  it('shows no red card when nothing needs the Mait', async () => {
+    mockApi(SUMMARY, [event({ id: 9, status: 'straw_verified', client_uuid: 'uuid-9' })]);
+    render({ attentionCount: 0, onOpenAttention: jest.fn() });
+
+    await waitFor(() => expect(screen.getByTestId('tile-today')).toBeTruthy());
+    expect(screen.queryByTestId('resume-unfinished')).toBeNull();
+  });
+
+  it('says an unfinished capture is a fault to put right, in red, in Hindi too', async () => {
+    mockApi(SUMMARY, [event({ id: 9, status: 'straw_verified', client_uuid: 'uuid-9' })]);
+    await i18n.changeLanguage('hi');
+    try {
+      render();
+
+      await waitFor(() => expect(screen.getByTestId('resume-unfinished')).toBeTruthy());
+      expect(screen.getByTestId('resume-unfinished')).toHaveStyle({
+        backgroundColor: colors.error,
+      });
+      expect(screen.getByText('AI अभी अधूरा है, कृपया इसे तत्काल पूर्ण करें')).toBeTruthy();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 
   it('counts them once there is more than one', async () => {
@@ -241,6 +310,55 @@ describe('HomeScreen', () => {
     mockApi(SUMMARY, []);
     render({ online: false });
     expect(screen.getByTestId('sync-offline')).toBeTruthy();
+  });
+
+  it('says today’s count on one slim line, the number in a pill', async () => {
+    mockApi(SUMMARY, [
+      event({ id: 1, status: 'completed' }),
+      event({ id: 2, status: 'completed' }),
+    ]);
+    render();
+
+    expect(screen.getByTestId('tile-today')).toHaveTextContent(/Inseminations today/);
+    await waitFor(() => expect(screen.getByTestId('tile-today-count')).toHaveTextContent('2'));
+  });
+
+  it('shows the all-time total off the server count, and narrows it by date', async () => {
+    const urls: string[] = [];
+    (global.fetch as jest.Mock).mockImplementation((input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      urls.push(url);
+      if (url.includes('/mait/inventory/')) {
+        return Promise.resolve(jsonResponse(SUMMARY));
+      }
+      // The total is read off `count`, whatever the page holds.
+      const count = url.includes('date_from') ? 12 : url.includes('status=completed') ? 1480 : 0;
+      return Promise.resolve(jsonResponse({ count, next: null, previous: null, results: [] }));
+    });
+    render();
+
+    expect(screen.getByTestId('tile-total')).toHaveTextContent(/Total inseminations/);
+    expect(screen.getByTestId('tile-total-range')).toHaveTextContent('Completed · all time');
+    await waitFor(() => expect(screen.getByTestId('tile-total-count')).toHaveTextContent('1,480'));
+
+    fireEvent.press(screen.getByTestId('tile-total-dates'));
+    fireEvent.press(await screen.findByTestId('date-range-preset-today'));
+    fireEvent.press(screen.getByTestId('date-range-apply'));
+
+    await waitFor(() => expect(screen.getByTestId('tile-total-count')).toHaveTextContent('12'));
+    expect(screen.getByTestId('tile-total-range')).not.toHaveTextContent(/all time/);
+    expect(
+      urls.some(u => /status=completed/.test(u) && /date_from=/.test(u) && /date_to=/.test(u)),
+    ).toBe(true);
+  });
+
+  it('shows the waiting tile only while something is waiting to go', () => {
+    mockApi(SUMMARY, []);
+    const { rerender } = render({ pending: 0 });
+    expect(screen.queryByTestId('tile-waiting')).toBeNull();
+
+    rerender(<HomeScreen {...props} pending={2} />);
+    expect(screen.getByTestId('tile-waiting')).toHaveTextContent(/2/);
   });
 
   it('opens the waiting list from the tile, and only from the tile', async () => {

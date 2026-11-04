@@ -23,8 +23,9 @@
  * is for; none of them is a mode of another.
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
+import { RouteTransitionHost, useRouteTransition } from '@/components/routeTransition';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SplashScreen from '@/features/auth/SplashScreen';
 import RootNavigator from '@/navigation';
@@ -52,18 +53,60 @@ export default function Shell({ fontsLoaded }: { fontsLoaded: boolean }): React.
   // they hold zones, which is what makes them a manager instead (checked first, above).
   const role = useAppSelector(state => state.auth.user?.role);
   const office = role === 'super_admin' || role === 'normal_user' || role === 'admin';
+  const ready = fontsLoaded && restored;
 
-  if (fontsLoaded && restored) {
-    if (!signedIn) {
-      return <LoginScreen />;
+  /**
+   * Arriving from the code screen is announced with the same card as every other arrival:
+   * the code screen stays up for the card's hold, then the app mounts under it and the card
+   * leaves over the first screen. Only a sign-in made here does this — a cold start with a
+   * stored session never showed the login screen, so it opens straight on the app, and
+   * signing out is a reversal and goes back at once.
+   */
+  const transition = useRouteTransition();
+  const [showApp, setShowApp] = useState(signedIn);
+  /** Whether the login screen has been on screen since the app was last shown. */
+  const sawLogin = useRef(false);
+
+  if (!signedIn && showApp) {
+    setShowApp(false);
+  }
+  if (signedIn && !showApp && !sawLogin.current) {
+    setShowApp(true);
+  }
+
+  useEffect(() => {
+    if (ready && !signedIn) {
+      sawLogin.current = true;
     }
-    if (keeper) {
-      return <StoreNavigator />;
+  }, [ready, signedIn]);
+
+  // The first screen of whichever app the account is for, named on the card.
+  const landing = keeper ? 'toIssue' : manager ? 'zonalHome' : office ? 'adminHome' : 'home';
+  const arriving = signedIn && !showApp;
+  useEffect(() => {
+    if (!arriving) {
+      return;
     }
-    if (manager) {
-      return <ZonalNavigator />;
+    transition.go(landing, () => {
+      sawLogin.current = false;
+      setShowApp(true);
+    });
+    // Once per sign-in: `transition` and `landing` are read when it starts, not watched.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arriving]);
+
+  if (ready) {
+    let page: React.JSX.Element;
+    if (!showApp) {
+      page = <LoginScreen />;
+    } else if (keeper) {
+      page = <StoreNavigator />;
+    } else if (manager) {
+      page = <ZonalNavigator />;
+    } else {
+      page = office ? <AdminNavigator /> : <RootNavigator />;
     }
-    return office ? <AdminNavigator /> : <RootNavigator />;
+    return <RouteTransitionHost transition={transition}>{page}</RouteTransitionHost>;
   }
 
   // Two things are being waited on, so the bar can report which of them have landed rather

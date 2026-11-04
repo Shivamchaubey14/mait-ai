@@ -24,7 +24,8 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Glyph, { STRAW_GLYPH } from '@/components/glyph';
 import type { GlyphName } from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
@@ -66,11 +67,11 @@ function Breeds({ by }: { by: Record<string, number> }): React.JSX.Element | nul
       {rows.map(([breed, qty]) => (
         <View key={breed} style={styles.breed}>
           <Glyph name={STRAW_GLYPH} size={12} color={colors.info} />
-          <Text style={styles.breedName} numberOfLines={1}>
+          <AppText style={styles.breedName} numberOfLines={1}>
             {breed}
-          </Text>
+          </AppText>
           <View style={styles.breedQty}>
-            <Text style={styles.breedQtyLabel}>{qty}</Text>
+            <AppText style={styles.breedQtyLabel}>{qty}</AppText>
           </View>
         </View>
       ))}
@@ -113,8 +114,8 @@ function Count({
 }): React.JSX.Element {
   return (
     <View style={styles.count}>
-      <Text style={[styles.countValue, styles[`countValue_${tone}`]]}>{value}</Text>
-      <Text style={styles.countLabel}>{label}</Text>
+      <AppText style={[styles.countValue, styles[`countValue_${tone}`]]}>{value}</AppText>
+      <AppText style={styles.countLabel}>{label}</AppText>
     </View>
   );
 }
@@ -132,7 +133,7 @@ function Section({
   return (
     <View style={styles.section}>
       <Chip icon={icon} tone={tone} size={26} />
-      <Text style={styles.sectionLabel}>{label}</Text>
+      <AppText style={styles.sectionLabel}>{label}</AppText>
     </View>
   );
 }
@@ -166,21 +167,21 @@ function OnItsWay({ row }: { row: ZoneStockProduct }): React.JSX.Element {
     return (
       <View style={styles.way}>
         <Glyph name="checkmark-done" size={14} color={colors.textMuted} />
-        <Text style={styles.wayQuiet}>{t('zonal.nothingOnItsWay')}</Text>
+        <AppText style={styles.wayQuiet}>{t('zonal.nothingOnItsWay')}</AppText>
       </View>
     );
   }
   return (
     <View style={styles.way} testID={`zonal-product-${row.key}-way`}>
-      <Text style={styles.wayLabel}>{t('zonal.onItsWay')}</Text>
+      <AppText style={styles.wayLabel}>{t('zonal.onItsWay')}</AppText>
       {steps
         .filter(step => step.value > 0)
         .map(step => (
           <View key={step.key} style={[styles.step, styles[`step_${step.tone}`]]}>
             <Glyph name={step.icon} size={11} color={colors.surface} />
-            <Text style={styles.stepLabel}>
+            <AppText style={styles.stepLabel}>
               {t(`zonal.way_${step.key}`, { count: step.value })}
-            </Text>
+            </AppText>
           </View>
         ))}
     </View>
@@ -208,14 +209,14 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
         <View style={styles.head}>
           <Chip icon="business" tone={tone} />
           <View style={styles.headBody}>
-            <Text style={styles.title} numberOfLines={1}>
+            <AppText style={styles.title} numberOfLines={1}>
               {place.name}
-            </Text>
+            </AppText>
             {!!place.plant_code && (
-              <Text style={styles.meta}>
-                <Text style={styles.metaLabel}>{`${t('zonal.plantCodeLabel')}: `}</Text>
+              <AppText style={styles.meta}>
+                <AppText style={styles.metaLabel}>{`${t('zonal.plantCodeLabel')}: `}</AppText>
                 {place.plant_code}
-              </Text>
+              </AppText>
             )}
           </View>
           <Count value={place.straws} label={t('zonal.strawsUnit')} tone={tone} />
@@ -224,7 +225,9 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
         <View style={styles.stats}>
           <View style={styles.stat}>
             <Glyph name="people" size={13} color={colors.ink} />
-            <Text style={styles.statLabel}>{t('zonal.maitsHere', { count: place.maits })}</Text>
+            <AppText style={styles.statLabel}>
+              {t('zonal.maitsHere', { count: place.maits })}
+            </AppText>
           </View>
           {place.at_zero > 0 && (
             <Pill label={t('zonal.atZeroN', { count: place.at_zero })} tone="bad" />
@@ -243,9 +246,9 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
           place.stores.map(store => (
             <View key={store.id} style={styles.depot}>
               <Chip icon="storefront" tone="info" size={28} />
-              <Text style={styles.depotName} numberOfLines={1}>
+              <AppText style={styles.depotName} numberOfLines={1}>
                 {store.name}
-              </Text>
+              </AppText>
               <Pill
                 label={t('zonal.depotHas', { count: store.straws_available })}
                 tone={store.straws_available > 0 ? 'good' : 'bad'}
@@ -255,7 +258,7 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
         ) : (
           <View style={[styles.depot, styles.noDepot]}>
             <Glyph name="information-circle" size={18} color={colors.info} />
-            <Text style={styles.noDepotLabel}>{t('zonal.noDepotHere')}</Text>
+            <AppText style={styles.noDepotLabel}>{t('zonal.noDepotHere')}</AppText>
           </View>
         )}
       </View>
@@ -274,23 +277,23 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
       >
         <View style={styles.head}>
           <View style={[styles.avatar, styles[`chip_${tone}`]]}>
-            <Text style={styles.avatarLabel}>{initials(row.name)}</Text>
+            <AppText style={styles.avatarLabel}>{initials(row.name)}</AppText>
           </View>
           <View style={styles.headBody}>
             <View style={styles.nameLine}>
-              <Text style={[styles.title, styles.flexShrink]} numberOfLines={1}>
+              <AppText style={[styles.title, styles.flexShrink]} numberOfLines={1}>
                 {row.name}
-              </Text>
+              </AppText>
               {row.state === 'at_zero' ? (
                 <Pill label={t('zonal.atZero')} tone="bad" />
               ) : row.state === 'low' ? (
                 <Pill label={t('zonal.low')} tone="waiting" />
               ) : null}
             </View>
-            <Text style={styles.meta} numberOfLines={1}>
-              <Text style={styles.metaLabel}>{`${t('zonal.vendorCodeLabel')}: `}</Text>
+            <AppText style={styles.meta} numberOfLines={1}>
+              <AppText style={styles.metaLabel}>{`${t('zonal.vendorCodeLabel')}: `}</AppText>
               {row.code || t('zonal.noCode')}
-            </Text>
+            </AppText>
           </View>
           <Count value={row.total} label={t('zonal.strawsUnit')} tone={tone} />
         </View>
@@ -298,7 +301,7 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
         <View style={styles.inset}>
           <View style={styles.place}>
             <Glyph name="location" size={13} color={colors.info} />
-            <Text style={styles.placeLabel} numberOfLines={2}>
+            <AppText style={styles.placeLabel} numberOfLines={2}>
               {[
                 row.plant_name || t('zonal.noPlace'),
                 row.also_covers.length
@@ -307,7 +310,7 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
               ]
                 .filter(Boolean)
                 .join(' · ')}
-            </Text>
+            </AppText>
           </View>
           <Breeds by={row.by_breed} />
         </View>
@@ -329,14 +332,14 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
         <View style={styles.head}>
           <Chip icon={icon} tone={tone} />
           <View style={styles.headBody}>
-            <Text style={styles.title} numberOfLines={1}>
+            <AppText style={styles.title} numberOfLines={1}>
               {name}
-            </Text>
+            </AppText>
             {!!row.unit && (
-              <Text style={styles.meta}>
-                <Text style={styles.metaLabel}>{`${t('zonal.unitLabel')}: `}</Text>
+              <AppText style={styles.meta}>
+                <AppText style={styles.metaLabel}>{`${t('zonal.unitLabel')}: `}</AppText>
                 {row.unit}
-              </Text>
+              </AppText>
             )}
           </View>
           {/* An empty depot with Maits still asking is the line to act on. */}
@@ -346,21 +349,23 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
         <View style={styles.figures}>
           <View style={styles.figure}>
             <Glyph name="people" size={14} color={yolk[700]} />
-            <Text style={[styles.figureValue, row.with_maits === 0 && styles.figureBad]}>
+            <AppText style={[styles.figureValue, row.with_maits === 0 && styles.figureBad]}>
               {row.with_maits}
-            </Text>
-            <Text style={styles.figureLabel}>{t('zonal.withMaits')}</Text>
-            <Text style={styles.figureNote}>
+            </AppText>
+            <AppText style={styles.figureLabel}>{t('zonal.withMaits')}</AppText>
+            <AppText style={styles.figureNote}>
               {t('zonal.heldByMaits', { count: row.maits_holding })}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.figure}>
             <Glyph name="storefront" size={14} color={colors.info} />
-            <Text style={[styles.figureValue, row.at_depots === 0 && styles.figureBad]}>
+            <AppText style={[styles.figureValue, row.at_depots === 0 && styles.figureBad]}>
               {row.at_depots}
-            </Text>
-            <Text style={styles.figureLabel}>{t('zonal.inDepots')}</Text>
-            <Text style={styles.figureNote}>{t('zonal.freeToGive', { count: row.free })}</Text>
+            </AppText>
+            <AppText style={styles.figureLabel}>{t('zonal.inDepots')}</AppText>
+            <AppText style={styles.figureNote}>
+              {t('zonal.freeToGive', { count: row.free })}
+            </AppText>
           </View>
         </View>
 
@@ -375,12 +380,12 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
       <View style={styles.head}>
         <Chip icon="storefront" tone="info" />
         <View style={styles.headBody}>
-          <Text style={styles.title} numberOfLines={1}>
+          <AppText style={styles.title} numberOfLines={1}>
             {row.name}
-          </Text>
-          <Text style={styles.meta} numberOfLines={1}>
+          </AppText>
+          <AppText style={styles.meta} numberOfLines={1}>
             {t('zonal.storeMeta', { setAside: row.straws_set_aside, open: row.open_indents })}
-          </Text>
+          </AppText>
         </View>
       </View>
 
@@ -388,9 +393,9 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
           read as three unrelated numbers; they are one shelf, part of it already packed for
           Maits who have not collected yet, and the rest still free to give out. */}
       <View style={styles.shelf} testID={`zonal-store-${row.id}-shelf`}>
-        <Text style={styles.shelfTitle}>
+        <AppText style={styles.shelfTitle}>
           {t('zonal.strawsInDepot', { count: row.straws_on_hand })}
-        </Text>
+        </AppText>
         <View style={styles.bar}>
           {row.straws_on_hand > 0 ? (
             <>
@@ -403,17 +408,17 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
         </View>
         <View style={styles.legend}>
           <View style={[styles.dot, styles.dotFree]} />
-          <Text style={styles.legendLabel}>
-            <Text style={styles.legendValue}>{row.straws_available}</Text>
+          <AppText style={styles.legendLabel}>
+            <AppText style={styles.legendValue}>{row.straws_available}</AppText>
             {` ${t('zonal.canStillGive')}`}
-          </Text>
+          </AppText>
         </View>
         <View style={styles.legend}>
           <View style={[styles.dot, styles.dotPacked]} />
-          <Text style={styles.legendLabel}>
-            <Text style={styles.legendValue}>{row.straws_set_aside}</Text>
+          <AppText style={styles.legendLabel}>
+            <AppText style={styles.legendValue}>{row.straws_set_aside}</AppText>
             {` ${t('zonal.packedForMaits')}`}
-          </Text>
+          </AppText>
         </View>
       </View>
 
@@ -424,9 +429,9 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
           {row.plant_names.map(name => (
             <View key={name} style={styles.serve}>
               <Glyph name="location" size={11} color={colors.surface} />
-              <Text style={styles.serveLabel} numberOfLines={1}>
+              <AppText style={styles.serveLabel} numberOfLines={1}>
                 {name}
-              </Text>
+              </AppText>
             </View>
           ))}
         </View>
@@ -510,15 +515,15 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
                   testID={`zonal-category-${key}`}
                 >
                   <Glyph name={icon} size={18} color={on ? colors.surface : CHIP[tone]} />
-                  <Text
+                  <AppText
                     style={[styles.categoryLabel, { color: on ? colors.surface : CHIP[tone] }]}
                     numberOfLines={1}
                   >
                     {t(`zonal.category_${key}`)}
-                  </Text>
-                  <Text style={[styles.categoryCount, on && styles.categoryCountOn]}>
+                  </AppText>
+                  <AppText style={[styles.categoryCount, on && styles.categoryCountOn]}>
                     {(products[key] ?? []).length}
-                  </Text>
+                  </AppText>
                 </Pressable>
               );
             })}
@@ -526,25 +531,25 @@ export default function ZoneStockScreen({ zoneName }: { zoneName: string }): Rea
 
           <View style={styles.totals} testID="zonal-product-totals">
             <View style={styles.total}>
-              <Text style={styles.totalValue}>{totals.withMaits}</Text>
-              <Text style={styles.totalLabel}>{t('zonal.withMaits')}</Text>
+              <AppText style={styles.totalValue}>{totals.withMaits}</AppText>
+              <AppText style={styles.totalLabel}>{t('zonal.withMaits')}</AppText>
             </View>
             <View style={styles.total}>
-              <Text style={styles.totalValue}>{totals.atDepots}</Text>
-              <Text style={styles.totalLabel}>{t('zonal.inDepots')}</Text>
+              <AppText style={styles.totalValue}>{totals.atDepots}</AppText>
+              <AppText style={styles.totalLabel}>{t('zonal.inDepots')}</AppText>
             </View>
             <View style={styles.total}>
-              <Text style={[styles.totalValue, totals.coming > 0 && styles.totalComing]}>
+              <AppText style={[styles.totalValue, totals.coming > 0 && styles.totalComing]}>
                 {totals.coming}
-              </Text>
-              <Text style={styles.totalLabel}>{t('zonal.onItsWay')}</Text>
+              </AppText>
+              <AppText style={styles.totalLabel}>{t('zonal.onItsWay')}</AppText>
             </View>
           </View>
 
           {items.length ? (
             items.map(productCard)
           ) : (
-            <Text style={styles.quiet}>{t('zonal.noProductsHere')}</Text>
+            <AppText style={styles.quiet}>{t('zonal.noProductsHere')}</AppText>
           )}
         </>
       );

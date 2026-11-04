@@ -17,7 +17,9 @@ import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import SelectBreedScreen from '../SelectBreedScreen';
+import i18n from '@/i18n';
 import { jsonResponse, problemResponse, renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 const BREEDS = [
   { code: 'HF_CROSS', name: 'HF Cross', name_hi: '', animal_type: 'COW', display_order: 1 },
@@ -96,12 +98,15 @@ describe('SelectBreedScreen', () => {
 
   afterEach(() => jest.resetAllMocks());
 
-  function renderScreen(suggestedBreed?: string | null) {
+  function renderScreen(
+    suggestedBreed?: string | null,
+    capture: React.ComponentProps<typeof SelectBreedScreen>['capture'] = CAPTURE,
+  ) {
     return renderWithStore(
       <SelectBreedScreen
         animalType="COW"
         suggestedBreed={suggestedBreed}
-        capture={CAPTURE}
+        capture={capture}
         accessToken="test-token"
         queueLabel={LABEL}
         onCreated={onCreated}
@@ -152,6 +157,33 @@ describe('SelectBreedScreen', () => {
 
     // Nobody opened the flask, so nobody read a number to send.
     expect(Object.keys(await createdBody())).not.toContain('straw_unique_no');
+  });
+
+  it('carries the office’s code, where step 3 checked her with no signal', async () => {
+    mockApi({ HF_CROSS: 18, SAHIWAL: 12 });
+    renderScreen(null, { ...CAPTURE, officeCheck: { code: '679261', day: '2026-10-28' } });
+
+    await waitFor(() => expect(screen.getByTestId('breed-SAHIWAL')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('breed-SAHIWAL'));
+    fireEvent.press(screen.getByTestId('breed-continue'));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(await createdBody()).toMatchObject({
+      office_code: '679261',
+      office_code_day: '2026-10-28',
+    });
+  });
+
+  it('sends no office code for a farmer the server checked itself', async () => {
+    mockApi({ HF_CROSS: 18, SAHIWAL: 12 });
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('breed-SAHIWAL')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('breed-SAHIWAL'));
+    fireEvent.press(screen.getByTestId('breed-continue'));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(Object.keys(await createdBody())).not.toContain('office_code');
   });
 
   it('says so when the last straw of a breed went while the screen was open', async () => {
@@ -211,19 +243,38 @@ describe('SelectBreedScreen', () => {
     expect(onCreated).not.toHaveBeenCalled();
   });
 
-  it('sends the doses the animal actually took', async () => {
-    // A difficult animal takes a second straw in the same visit. It used to go unrecorded,
-    // and a month of that ends with a flask that disagrees with the ledger.
+  it('takes one semen, and says the rule when a second is asked for', async () => {
+    // The dairy's rule: one semen per animal, the next 21 days later if she has not conceived.
     mockApi({ HF_CROSS: 18 });
     renderScreen();
 
     fireEvent.press(await screen.findByText('HF Cross'));
+    expect(screen.queryByTestId('one-semen-rule')).toBeNull();
     fireEvent.press(screen.getByTestId('doses-HF_CROSS-more'));
-    expect(screen.getByTestId('doses-HF_CROSS-value')).toHaveTextContent('2');
+
+    expect(screen.getByTestId('doses-HF_CROSS-value')).toHaveTextContent('1');
+    expect(screen.getByTestId('one-semen-rule')).toHaveTextContent(
+      /Only one semen per animal\. The next can be given 21 days later/,
+    );
 
     fireEvent.press(screen.getByTestId('breed-continue'));
+    await waitFor(async () => expect((await createdBody()).doses).toBe(1));
+  });
 
-    await waitFor(async () => expect((await createdBody()).doses).toBe(2));
+  it('says the rule in Hindi', async () => {
+    await i18n.changeLanguage('hi');
+    try {
+      mockApi({ HF_CROSS: 18 });
+      renderScreen();
+      fireEvent.press(await screen.findByTestId('breed-HF_CROSS'));
+      fireEvent.press(screen.getByTestId('doses-HF_CROSS-more'));
+      expect(screen.getByTestId('one-semen-rule')).toHaveTextContent(
+        'एक पशु को सिर्फ एक सीमेन डालें। अगला सीमेन 21 दिन बाद पड़ सकता है, अगर पशु ने गर्भ धारण न किया हो।',
+        { exact: false },
+      );
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 
   it('will not claim more doses than the flask holds of that breed', async () => {
@@ -305,19 +356,56 @@ describe('SelectBreedScreen', () => {
     await waitFor(async () => expect((await createdBody()).consumables).toEqual([]));
   });
 
+  it('makes plain which half is being filled in — the chosen tab filled, the other white', async () => {
+    mockApi({ HF_CROSS: 18 }, [supply('SHEATH', 'AI sheaths', 46)]);
+    renderScreen();
+    await screen.findByText('HF Cross');
+
+    expect(screen.getByTestId('use-tab-straws')).toHaveStyle({ backgroundColor: colors.info });
+    expect(screen.getByTestId('use-tab-consumables')).toHaveStyle({
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+    });
+
+    fireEvent.press(screen.getByTestId('use-tab-consumables'));
+
+    expect(screen.getByTestId('use-tab-consumables')).toHaveStyle({
+      backgroundColor: colors.primary,
+    });
+    expect(screen.getByTestId('use-tab-straws')).toHaveStyle({
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+    });
+  });
+
+  it('calls the straws सीमेन in Hindi', async () => {
+    await i18n.changeLanguage('hi');
+    try {
+      mockApi({ HF_CROSS: 18 });
+      renderScreen();
+      expect(await screen.findByTestId('use-tab-straws')).toHaveTextContent(/सीमेन/);
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
   it('counts both halves of the answer on the tabs', async () => {
     mockApi({ HF_CROSS: 18 }, [supply('SHEATH', 'AI sheaths', 46)]);
     renderScreen();
 
     fireEvent.press(await screen.findByText('HF Cross'));
-    fireEvent.press(screen.getByTestId('doses-HF_CROSS-more'));
 
     // The tab a Mait is not looking at still says what is on it, which is the whole reason
     // the two halves are tabs rather than two screens.
-    expect(screen.getByTestId('use-tab-straws-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('use-tab-straws-count')).toHaveTextContent('1');
     await waitFor(() =>
       expect(screen.getByTestId('use-tab-consumables-count')).toHaveTextContent('1'),
     );
+
+    // Above the button, each consumable by name and count — the line the bag is checked
+    // against tonight — not a bare "1 consumable".
+    expect(screen.getByTestId('use-tally')).toHaveTextContent(/1 HF Cross dose/);
+    expect(screen.getByTestId('use-tally')).toHaveTextContent(/AI sheaths × 1/);
   });
 
   it('says the round cannot go ahead when the flask is empty', async () => {

@@ -28,7 +28,11 @@ import { useListBreedsQuery } from '@api/endpoints';
  * honest answer is the same: there is an amount, and it is settled at the straw.
  */
 export function useServiceRate(owner: 'member' | 'nonMember'): number | null {
-  const breeds = useListBreedsQuery();
+  // Asked again every time a screen that quotes a rate opens, rather than served from
+  // whatever the app fetched earlier in the day. A rate changed in the portal has to be the
+  // figure the next farmer hears; held in memory, a handset that stayed open kept quoting the
+  // old one. With no signal the stored copy still answers at once (see `offlineCache.ts`).
+  const breeds = useListBreedsQuery(undefined, { refetchOnMountOrArgChange: true });
 
   const rates = new Set(
     (breeds.data ?? [])

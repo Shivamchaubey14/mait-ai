@@ -8,9 +8,10 @@
  * says which breed and how many doses, the platform holds that many from their stock, and ten
  * straws still complete exactly ten doses.
  *
- * **Two doses is ordinary.** A difficult animal takes a second straw in the same visit, and it
- * comes off the same flask. The screen used to allow one, so the second went unrecorded and
- * the month ended with a flask that disagreed with the ledger.
+ * **One semen, and only one.** The dairy's rule: एक पशु को सिर्फ एक सीमेन डालें — अगला सीमेन
+ * 21 दिन बाद पड़ सकता है, अगर पशु ने गर्भ धारण न किया हो. The count stays at one, and a tap on
+ * + says the rule rather than doing nothing; the server refuses a second straw as well
+ * (`ai_events/rules.py`), and step 4 has already held back an animal served in the last 21 days.
  *
  * **So do the sheaths and the gloves.** Everything a visit consumes is stock the dairy issued
  * and will be asked to replace, and none of it was ever recorded. It is a second tab rather
@@ -45,7 +46,8 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -78,8 +80,8 @@ const LOW_CONSUMABLE_FALLBACK = 5;
  */
 const NOT_CONSUMED_PER_VISIT = ['LN2'];
 
-/** The most doses one visit can claim. Beyond this it is a typo, not an insemination. */
-const MAX_DOSES = 5;
+/** One semen per animal per AI — the dairy's rule, and the server's (`ai_events/rules.py`). */
+const MAX_DOSES = 1;
 
 type Tab = 'straws' | 'consumables';
 
@@ -118,6 +120,8 @@ interface Props {
      * having seen any of the three.
      */
     nonMemberClientUuid?: string;
+    /** Where step 3 checked her with no signal: the office's code, for the server to match. */
+    officeCheck?: { code: string; day: string };
   };
   /**
    * The Mait's token, or null while the session is being restored.
@@ -157,14 +161,21 @@ function Stepper({
   min = 0,
   max,
   onChange,
+  onLimit,
   testID,
 }: {
   value: number;
   min?: number;
   max: number;
   onChange: (next: number) => void;
+  /**
+   * Called when + is tapped at the limit, where the limit is a rule a Mait should be told
+   * rather than a button that simply stops working.
+   */
+  onLimit?: () => void;
   testID: string;
 }): React.JSX.Element {
+  const atMax = value >= max;
   return (
     <View style={styles.stepper}>
       <Pressable
@@ -182,15 +193,15 @@ function Stepper({
         <Ionicons name="remove" size={18} color={value <= min ? colors.textDisabled : colors.ink} />
       </Pressable>
 
-      <Text style={styles.stepValue} testID={`${testID}-value`}>
+      <AppText style={styles.stepValue} testID={`${testID}-value`}>
         {value}
-      </Text>
+      </AppText>
 
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="+"
-        onPress={() => onChange(Math.min(max, value + 1))}
-        disabled={value >= max}
+        onPress={() => (atMax ? onLimit?.() : onChange(Math.min(max, value + 1)))}
+        disabled={atMax && !onLimit}
         style={({ pressed }) => [
           styles.step,
           styles.stepAdd,
@@ -222,6 +233,8 @@ export default function SelectBreedScreen({
   const [tab, setTab] = useState<Tab>('straws');
   const [code, setCode] = useState<string | null>(null);
   const [doses, setDoses] = useState(1);
+  /** The one-semen rule, shown once the Mait has tried to add a second. */
+  const [ruleShown, setRuleShown] = useState(false);
   /** Catalogue code → how many of it this visit took. Absent means none. */
   const [used, setUsed] = useState<Record<string, number>>({});
   const [suggestionApplied, setSuggestionApplied] = useState(false);
@@ -411,6 +424,9 @@ export default function SelectBreedScreen({
       semen_breed: chosen.breed.code,
       doses,
       consumables: Object.entries(used).map(([itemCode, qty]) => ({ code: itemCode, qty })),
+      ...(capture.officeCheck
+        ? { office_code: capture.officeCheck.code, office_code_day: capture.officeCheck.day }
+        : {}),
     };
 
     const outcome = await createEvent(draft, provisional(chosen.breed), accessToken, {
@@ -452,12 +468,19 @@ export default function SelectBreedScreen({
             <View style={styles.tallyChip}>
               <Ionicons name="checkmark" size={14} color={colors.surface} />
             </View>
-            <Text style={styles.tallyLabel} numberOfLines={1}>
-              {t('aiFlow.usedTally', {
-                doses: t('aiFlow.doseCount', { count: doses, breed: label(chosen.breed) }),
-                consumables: t('aiFlow.consumableCount', { count: consumableCount }),
-              })}
-            </Text>
+            {/* Every consumable by name and count, not "1 consumable": this is the line the
+                bag is checked against tonight, and a count says nothing about which. Allowed to
+                wrap, so a visit that used four things still says all four. */}
+            <AppText style={styles.tallyLabel}>
+              {[
+                t('aiFlow.doseCount', { count: doses, breed: label(chosen.breed) }),
+                ...supplies
+                  .filter(item => (used[item.code] ?? 0) > 0)
+                  .map(item =>
+                    t('aiFlow.consumableQty', { name: item.name, count: used[item.code] }),
+                  ),
+              ].join('  ·  ')}
+            </AppText>
           </View>
         ) : undefined
       }
@@ -474,7 +497,6 @@ export default function SelectBreedScreen({
             const active = key === tab;
             // Straws blue with the syringe, consumables green with a flask — Inventory's own.
             const solid = key === 'straws' ? colors.info : colors.primary;
-            const wash = key === 'straws' ? colors.infoWash : colors.primaryWash;
             const word = key === 'straws' ? colors.info : colors.primaryDark;
             return (
               <Pressable
@@ -482,34 +504,41 @@ export default function SelectBreedScreen({
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
                 onPress={() => setTab(key)}
+                // Chosen is filled and raised with a tick; the other is plain white with a grey
+                // edge. Both used to wear their own colour — one filled, one washed — and a Mait
+                // could not tell at a glance which half of the screen they were filling in.
                 style={[
                   styles.tab,
                   active
-                    ? { backgroundColor: solid, borderColor: solid }
-                    : { backgroundColor: wash, borderColor: solid },
+                    ? [styles.tabActive, { backgroundColor: solid, borderColor: solid }]
+                    : styles.tabIdle,
                 ]}
                 testID={`use-tab-${key}`}
               >
+                {active && <Ionicons name="checkmark-circle" size={16} color={colors.surface} />}
                 <Glyph
                   name={key === 'straws' ? STRAW_GLYPH : 'flask'}
                   size={16}
-                  color={active ? colors.surface : word}
+                  color={active ? colors.surface : colors.textMuted}
                 />
-                <Text
-                  style={[styles.tabLabel, { color: active ? colors.surface : word }]}
+                <AppText
+                  style={[styles.tabLabel, { color: active ? colors.surface : colors.textMuted }]}
                   numberOfLines={1}
                 >
                   {name}
-                </Text>
+                </AppText>
                 <View
-                  style={[styles.tabBadge, { backgroundColor: active ? colors.surface : solid }]}
+                  style={[
+                    styles.tabBadge,
+                    { backgroundColor: active ? colors.surface : colors.disabledFill },
+                  ]}
                 >
-                  <Text
-                    style={[styles.tabBadgeLabel, { color: active ? word : colors.surface }]}
+                  <AppText
+                    style={[styles.tabBadgeLabel, { color: active ? word : colors.textMuted }]}
                     testID={`use-tab-${key}-count`}
                   >
                     {badge}
-                  </Text>
+                  </AppText>
                 </View>
               </Pressable>
             );
@@ -549,6 +578,16 @@ export default function SelectBreedScreen({
           title={t('aiFlow.noStrawsAtAll')}
           body={t('aiFlow.raiseIndentSoon')}
           testID="breed-no-stock"
+        />
+      )}
+
+      {/* Said the moment a second semen is asked for: the + is not broken, the rule is. */}
+      {tab === 'straws' && ruleShown && (
+        <FlowNotice
+          tone="accent"
+          icon="alert-circle"
+          title={t('aiFlow.oneSemenRule')}
+          testID="one-semen-rule"
         />
       )}
 
@@ -592,6 +631,7 @@ export default function SelectBreedScreen({
                     min={1}
                     max={maxDoses}
                     onChange={setDoses}
+                    onLimit={() => setRuleShown(true)}
                     testID={`doses-${breed.code}`}
                   />
                 ) : undefined
@@ -612,13 +652,6 @@ export default function SelectBreedScreen({
           {/* Said where the count is made, not afterwards. The dairy's rule of thumb is one
               sheath per dose; a Mait who used one for both has to be able to say so, and a
               Mait who used two and left it at one has emptied a bag nobody will refill. */}
-          {doses > 1 && (
-            <FlowNotice
-              tone="info"
-              body={t('aiFlow.twoDosesTwoSheaths')}
-              testID="use-sheath-hint"
-            />
-          )}
 
           {!loading && supplies.length === 0 && (
             <FlowNotice
@@ -685,6 +718,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1.5,
   },
+  tabActive: {
+    shadowColor: colors.ink,
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  tabIdle: { backgroundColor: colors.surface, borderColor: colors.border },
   tabLabel: { ...typography.bodyStrong },
   tabBadge: {
     minWidth: 22,

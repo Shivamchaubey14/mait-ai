@@ -16,7 +16,8 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -147,7 +148,7 @@ function QuantityBox({
         accessibilityLabel={label}
         testID={testID}
       />
-      <Text style={styles.quantityUnit}>{unit}</Text>
+      <AppText style={styles.quantityUnit}>{unit}</AppText>
     </View>
   );
 }
@@ -370,9 +371,9 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
             <View style={[styles.chip, styles.solid_good]}>
               <Ionicons name="checkmark" size={18} color={colors.surface} />
             </View>
-            <Text style={styles.sentTitle}>{t('requestStock.sentList')}</Text>
+            <AppText style={styles.sentTitle}>{t('requestStock.sentList')}</AppText>
             <View style={[styles.badge, styles.solid_good]}>
-              <Text style={[styles.badgeLabel, { color: colors.surface }]}>{sent}</Text>
+              <AppText style={[styles.badgeLabel, { color: colors.surface }]}>{sent}</AppText>
             </View>
           </View>
           {lines.slice(0, sent).map(line => {
@@ -382,12 +383,12 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                 <View style={[styles.chipSmall, styles[`solid_${tone}`]]}>
                   <Glyph name={icon} size={14} color={onSolid(tone)} />
                 </View>
-                <Text style={styles.sentName} numberOfLines={1}>
+                <AppText style={styles.sentName} numberOfLines={1}>
                   {productLabel(line)}
-                </Text>
-                <Text style={[styles.sentQty, { color: SOLID[tone] }]}>
+                </AppText>
+                <AppText style={[styles.sentQty, { color: SOLID[tone] }]}>
                   {line.qty} {unitFor(line)}
-                </Text>
+                </AppText>
               </View>
             );
           })}
@@ -423,9 +424,9 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
         <View style={styles.footerNote}>
           <View style={styles.footerCountPill}>
             <Ionicons name="list" size={14} color={colors.info} />
-            <Text style={styles.footerCount} numberOfLines={2} testID="indent-count">
+            <AppText style={styles.footerCount} numberOfLines={2} testID="indent-count">
               {footerCount}
-            </Text>
+            </AppText>
           </View>
           {/* The only place the screen says why the button below it is grey — or, once it is
               not, where the list is about to go. Yolk while it waits, green once it can go. */}
@@ -435,7 +436,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
               size={14}
               color={blocker ? yolk[800] : colors.primaryDark}
             />
-            <Text
+            <AppText
               style={[styles.footerState, !!blocker && styles.footerStateWaiting]}
               numberOfLines={2}
               testID="indent-state"
@@ -444,7 +445,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                 (destination
                   ? t('requestStock.goesTo', { plant: destination })
                   : t('requestStock.readyToSend'))}
-            </Text>
+            </AppText>
           </View>
         </View>
       }
@@ -481,24 +482,24 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
               <View style={[styles.chip, styles[`solid_${tone}`]]}>
                 <Glyph name={icon} size={18} color={onSolid(tone)} />
                 <View style={styles.chipNumber}>
-                  <Text style={styles.chipNumberLabel}>{index + 1}</Text>
+                  <AppText style={styles.chipNumberLabel}>{index + 1}</AppText>
                 </View>
               </View>
 
               <View style={styles.rowBody}>
-                <Text style={styles.rowName} numberOfLines={1}>
+                <AppText style={styles.rowName} numberOfLines={1}>
                   {productLabel(line)}
-                </Text>
-                <Text style={styles.rowMeta} numberOfLines={1}>
+                </AppText>
+                <AppText style={styles.rowMeta} numberOfLines={1}>
                   {lineMeta(line)}
-                </Text>
+                </AppText>
               </View>
 
               <View style={styles.rowAmount}>
-                <Text style={[styles.rowQty, { color: SOLID[tone] }]}>{line.qty}</Text>
-                <Text style={[styles.rowUnit, { color: SOLID[tone] }]} numberOfLines={1}>
+                <AppText style={[styles.rowQty, { color: SOLID[tone] }]}>{line.qty}</AppText>
+                <AppText style={[styles.rowUnit, { color: SOLID[tone] }]} numberOfLines={1}>
                   {unitFor(line)}
-                </Text>
+                </AppText>
               </View>
 
               <View style={styles.edit}>
@@ -519,12 +520,12 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                 <Glyph name={icon} size={18} color={onSolid(tone)} />
               </View>
               <View style={styles.cardTitleBox}>
-                <Text style={styles.cardTitle} numberOfLines={1}>
+                <AppText style={styles.cardTitle} numberOfLines={1}>
                   {t('requestStock.lineN', { n: index + 1 })}
-                </Text>
-                <Text style={[styles.cardKind, { color: SOLID[tone] }]} numberOfLines={1}>
+                </AppText>
+                <AppText style={[styles.cardKind, { color: SOLID[tone] }]} numberOfLines={1}>
                   {t(`requestStock.category_${line.category}`)}
-                </Text>
+                </AppText>
               </View>
 
               {/* Only offered once the line says something worth folding away. On a line with
@@ -537,7 +538,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                   testID={`indent-done-${index}`}
                 >
                   <Ionicons name="checkmark" size={14} color={colors.surface} />
-                  <Text style={styles.doneLabel}>{t('requestStock.doneLine')}</Text>
+                  <AppText style={styles.doneLabel}>{t('requestStock.doneLine')}</AppText>
                 </Pressable>
               )}
 
@@ -585,7 +586,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                       size={16}
                       color={active ? onSolid(kind.tone) : SOLID[kind.tone]}
                     />
-                    <Text
+                    <AppText
                       style={[
                         styles.segmentLabel,
                         { color: active ? onSolid(kind.tone) : SOLID[kind.tone] },
@@ -593,15 +594,15 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                       numberOfLines={1}
                     >
                       {t(`requestStock.categoryShort_${category}`)}
-                    </Text>
+                    </AppText>
                   </Pressable>
                 );
               })}
             </View>
 
-            <Text style={styles.fieldLabel}>
+            <AppText style={styles.fieldLabel}>
               {line.category === 'straw' ? t('requestStock.breed') : t('requestStock.item')}
-            </Text>
+            </AppText>
             <Pressable
               accessibilityRole="button"
               onPress={() => {
@@ -622,7 +623,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                 size={18}
                 color={line.product ? SOLID[tone] : colors.textMuted}
               />
-              <Text
+              <AppText
                 style={[styles.dropdownValue, !line.product && styles.dropdownPlaceholder]}
                 numberOfLines={1}
               >
@@ -630,11 +631,11 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                   (line.category === 'straw'
                     ? t('requestStock.chooseBreed')
                     : t('requestStock.chooseItem'))}
-              </Text>
+              </AppText>
               <Ionicons name="chevron-down" size={16} color={SOLID[tone]} />
             </Pressable>
 
-            <Text style={styles.fieldLabel}>{t('requestStock.quantity')}</Text>
+            <AppText style={styles.fieldLabel}>{t('requestStock.quantity')}</AppText>
             <View style={styles.quantityRow}>
               <View style={styles.stepper}>
                 <Pressable
@@ -684,11 +685,11 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
 
               <View style={styles.stepHintPill}>
                 <Ionicons name="information-circle" size={14} color={yolk[800]} />
-                <Text style={styles.stepHint}>
+                <AppText style={styles.stepHint}>
                   {line.category === 'straw'
                     ? t('requestStock.strawStepHint')
                     : t('requestStock.oneAtATime')}
-                </Text>
+                </AppText>
               </View>
             </View>
           </View>
@@ -710,7 +711,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
         <View style={[styles.chipSmall, styles.solid_good]}>
           <Ionicons name="add" size={16} color={colors.surface} />
         </View>
-        <Text style={styles.addLabel}>{t('requestStock.addAnother')}</Text>
+        <AppText style={styles.addLabel}>{t('requestStock.addAnother')}</AppText>
       </Pressable>
 
       {/* Only once there is something to send. Said over an empty list it is a rule about
@@ -749,7 +750,7 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
             style={({ pressed }) => [styles.confirm, pressed && styles.confirmPressed]}
             testID="indent-confirm"
           >
-            <Text style={styles.confirmLabel}>{t('requestStock.confirmSend')}</Text>
+            <AppText style={styles.confirmLabel}>{t('requestStock.confirmSend')}</AppText>
             <Ionicons name="send" size={18} color={colors.surface} />
           </Pressable>
         }
@@ -762,16 +763,16 @@ export default function RequestStockScreen({ onDone }: { onDone: () => void }): 
                 <Glyph name={icon} size={16} color={onSolid(tone)} />
               </View>
               <View style={styles.reviewBody}>
-                <Text style={styles.reviewName}>
+                <AppText style={styles.reviewName}>
                   {productLabel(line) ?? t('requestStock.notChosen')}
-                </Text>
-                <Text style={styles.reviewMeta}>
+                </AppText>
+                <AppText style={styles.reviewMeta}>
                   {t(`requestStock.category_${line.category}`)} ·{' '}
                   {t('requestStock.lineN', { n: index + 1 })}
-                </Text>
+                </AppText>
               </View>
               <View style={[styles.badge, styles[`solid_${tone}`]]}>
-                <Text style={[styles.badgeLabel, { color: onSolid(tone) }]}>{line.qty}</Text>
+                <AppText style={[styles.badgeLabel, { color: onSolid(tone) }]}>{line.qty}</AppText>
               </View>
             </View>
           );

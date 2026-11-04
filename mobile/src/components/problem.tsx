@@ -22,7 +22,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +30,8 @@ import { useTranslation } from 'react-i18next';
 import { pendingCount } from '@api/queue';
 import { IT_SUPPORT_PHONE } from '@/config/env';
 import { colors, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+
+import AppText from './AppText';
 
 export type ProblemKind = 'offline' | 'server' | 'signIn' | 'exhausted';
 
@@ -175,19 +177,19 @@ export default function Problem({
           size={19}
           color={tone === 'error' ? colors.error : colors.secondaryPressed}
         />
-        <Text style={styles.title} testID="problem-title">
+        <AppText style={styles.title} testID="problem-title">
           {t(`problem.${kind}.title`)}
-        </Text>
+        </AppText>
       </View>
 
-      <Text style={styles.subtitle}>{subtitle}</Text>
+      <AppText style={styles.subtitle}>{subtitle}</AppText>
 
       {/* The answer to "is my work lost", in the same place in every variant. White, so it
           reads as a fact set apart from the colour of the alarm around it. */}
       <View style={styles.reassurance}>
-        <Text style={styles.reassuranceText} testID="problem-reassurance">
+        <AppText style={styles.reassuranceText} testID="problem-reassurance">
           {reassurance}
-        </Text>
+        </AppText>
 
         {!!attempts && (
           <View style={styles.attempts}>
@@ -199,7 +201,7 @@ export default function Problem({
                 ]}
               />
             </View>
-            <Text style={styles.attemptsLabel}>{`${attempts.made} / ${attempts.of}`}</Text>
+            <AppText style={styles.attemptsLabel}>{`${attempts.made} / ${attempts.of}`}</AppText>
           </View>
         )}
       </View>
@@ -218,9 +220,9 @@ export default function Problem({
           ) : (
             <>
               <Ionicons name="refresh" size={17} color={colors.surface} />
-              <Text style={styles.primaryLabel} numberOfLines={1}>
+              <AppText style={styles.primaryLabel} numberOfLines={1}>
                 {t(`problem.${kind}.primary`)}
-              </Text>
+              </AppText>
             </>
           )}
         </Pressable>
@@ -232,9 +234,9 @@ export default function Problem({
             style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
             testID={secondary.testID}
           >
-            <Text style={styles.secondaryLabel} numberOfLines={1}>
+            <AppText style={styles.secondaryLabel} numberOfLines={1}>
               {secondary.label}
-            </Text>
+            </AppText>
           </Pressable>
         )}
       </View>

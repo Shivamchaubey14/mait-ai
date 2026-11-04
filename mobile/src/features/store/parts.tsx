@@ -12,7 +12,8 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { AppHero, FooterAction, frameStyles } from '@/components/frame';
@@ -104,9 +105,9 @@ export function Stepper({
         />
       </Pressable>
 
-      <Text style={styles.stepValue} testID={`${testID}-value`}>
+      <AppText style={styles.stepValue} testID={`${testID}-value`}>
         {value}
-      </Text>
+      </AppText>
 
       <Pressable
         accessibilityRole="button"

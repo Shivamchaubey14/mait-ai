@@ -28,15 +28,8 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Glyph, { STRAW_GLYPH } from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
@@ -89,9 +82,9 @@ function Section({
       <View style={[styles.sectionChip, styles[`solid_${tone}`]]}>
         <Ionicons name={icon} size={14} color={tone === 'waiting' ? colors.ink : colors.surface} />
       </View>
-      <Text style={styles.sectionLabel}>{label}</Text>
+      <AppText style={styles.sectionLabel}>{label}</AppText>
       <View style={styles.sectionCount}>
-        <Text style={styles.sectionCountLabel}>{count}</Text>
+        <AppText style={styles.sectionCountLabel}>{count}</AppText>
       </View>
     </View>
   );
@@ -190,26 +183,26 @@ export default function ToIssueScreen({
       >
         <View style={styles.head}>
           <View style={[styles.avatar, styles[`solid_${tone}`]]}>
-            <Text style={[styles.avatarLabel, tone === 'waiting' && styles.avatarLabelInk]}>
+            <AppText style={[styles.avatarLabel, tone === 'waiting' && styles.avatarLabelInk]}>
               {initials(indent.mait_name)}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.headBody}>
             <View style={styles.titleLine}>
               <View style={[styles.number, styles[`solid_${tone}`]]}>
-                <Text style={[styles.numberLabel, tone === 'waiting' && styles.avatarLabelInk]}>
+                <AppText style={[styles.numberLabel, tone === 'waiting' && styles.avatarLabelInk]}>
                   {`IND-${indent.id}`}
-                </Text>
+                </AppText>
               </View>
               <Pill label={pill.label} tone={pill.tone} testID={`store-indent-${indent.id}-pill`} />
             </View>
-            <Text style={styles.name} numberOfLines={1}>
+            <AppText style={styles.name} numberOfLines={1}>
               {t('store.rowMeta', { mait: indent.mait_name, qty: indent.qty_open, item })}
-            </Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              <Text style={styles.metaLabel}>{`${t('store.vendorCode')}: `}</Text>
+            </AppText>
+            <AppText style={styles.meta} numberOfLines={1}>
+              <AppText style={styles.metaLabel}>{`${t('store.vendorCode')}: `}</AppText>
               {indent.mait_code || '—'}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.count}>
             <Glyph
@@ -217,10 +210,10 @@ export default function ToIssueScreen({
               size={14}
               color={colors.info}
             />
-            <Text style={styles.countValue}>{indent.qty_open}</Text>
-            <Text style={styles.countUnit} numberOfLines={1}>
+            <AppText style={styles.countValue}>{indent.qty_open}</AppText>
+            <AppText style={styles.countUnit} numberOfLines={1}>
               {indent.unit || item}
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -228,26 +221,26 @@ export default function ToIssueScreen({
         <View style={styles.inset}>
           <View style={styles.insetLine}>
             <Ionicons name="storefront" size={14} color={SOLID[tone]} />
-            <Text style={styles.insetText}>{shelfSentence(indent)}</Text>
+            <AppText style={styles.insetText}>{shelfSentence(indent)}</AppText>
           </View>
           {!!(indent.approved_by_name || indent.approved_by_zone) && (
             <View style={styles.insetLine}>
               <Ionicons name="checkmark-done" size={14} color={colors.primary} />
-              <Text style={styles.insetText} numberOfLines={1}>
+              <AppText style={styles.insetText} numberOfLines={1}>
                 {t('store.agreedBy', {
                   who: [indent.approved_by_name, indent.approved_by_zone]
                     .filter(Boolean)
                     .join(' · '),
                 })}
-              </Text>
+              </AppText>
             </View>
           )}
         </View>
 
         <View style={styles.foot}>
-          <Text style={[styles.footLabel, { color: SOLID[tone] }]}>
+          <AppText style={[styles.footLabel, { color: SOLID[tone] }]}>
             {indent.readiness === 'waiting' ? t('store.openIt') : t('store.handOver')}
-          </Text>
+          </AppText>
           <Ionicons name="chevron-forward" size={16} color={SOLID[tone]} />
         </View>
       </Pressable>
@@ -280,19 +273,19 @@ export default function ToIssueScreen({
             <View
               style={[styles.number, handover.locked ? styles.solid_bad : styles.solid_waiting]}
             >
-              <Text style={[styles.numberLabel, !handover.locked && styles.avatarLabelInk]}>
+              <AppText style={[styles.numberLabel, !handover.locked && styles.avatarLabelInk]}>
                 {`IND-${handover.indent_id}`}
-              </Text>
+              </AppText>
             </View>
           </View>
-          <Text style={styles.name} numberOfLines={1}>
+          <AppText style={styles.name} numberOfLines={1}>
             {t('store.notCollectedMeta', {
               mait: handover.mait_name,
               qty: handover.qty,
               item: itemLabel(handover, i18n.language),
               time: clock(handover.issued_at),
             })}
-          </Text>
+          </AppText>
         </View>
         {/* The code itself, on the row, large enough to read out from here. Locked after too
             many wrong tries — then the row says so, and opening it offers a new one. */}
@@ -300,7 +293,7 @@ export default function ToIssueScreen({
           <Pill label={t('store.lockedPill')} tone="bad" />
         ) : (
           <View style={styles.code} testID={`store-handover-${handover.id}-code`}>
-            <Text style={styles.codeLabel}>{handover.collection_code}</Text>
+            <AppText style={styles.codeLabel}>{handover.collection_code}</AppText>
           </View>
         )}
       </View>
@@ -337,7 +330,7 @@ export default function ToIssueScreen({
           ) : list.length ? (
             list.map(handoverRow)
           ) : (
-            <Text style={styles.quiet}>{t('store.notCollectedEmpty')}</Text>
+            <AppText style={styles.quiet}>{t('store.notCollectedEmpty')}</AppText>
           )}
         </>
       );
@@ -352,7 +345,7 @@ export default function ToIssueScreen({
           label={t('store.codesTitle')}
           count={waitingRows.length}
         />
-        <Text style={styles.sectionHint}>{t('store.codesHint')}</Text>
+        <AppText style={styles.sectionHint}>{t('store.codesHint')}</AppText>
         {waitingRows.map(handoverRow)}
       </View>
     ) : null;
@@ -362,9 +355,9 @@ export default function ToIssueScreen({
         return codes;
       }
       return term ? (
-        <Text style={styles.quiet} testID="store-find-none">
+        <AppText style={styles.quiet} testID="store-find-none">
           {t('store.findNone', { term })}
-        </Text>
+        </AppText>
       ) : (
         <EmptyState title={t('store.emptyTitle')} body={t('store.emptyBody')} />
       );

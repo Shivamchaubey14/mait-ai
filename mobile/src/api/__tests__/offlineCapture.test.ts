@@ -22,7 +22,15 @@ import {
   registerAnimal,
   registerNonMember,
 } from '../capture';
-import { clearQueue, eventIdFor, isDue, readQueue, rememberEventId, retryFailed } from '../queue';
+import {
+  clearQueue,
+  enqueue,
+  eventIdFor,
+  isDue,
+  readQueue,
+  rememberEventId,
+  retryFailed,
+} from '../queue';
 import { drainQueue } from '../sync';
 import type { AIEvent, AIEventDraft, Animal, NonMember } from '../types';
 
@@ -86,6 +94,16 @@ beforeEach(async () => {
 
 afterEach(() => jest.resetAllMocks());
 
+/**
+ * The requests that would change something on the server. The queue may read an event to see
+ * whether it is already settled; what these tests guard is that nothing is *sent* again.
+ */
+function writesSent(): unknown[] {
+  return (global.fetch as jest.Mock).mock.calls.filter(
+    ([, init]) => ((init as RequestInit | undefined)?.method ?? 'GET') !== 'GET',
+  );
+}
+
 describe('opening a capture with no signal', () => {
   it('carries on rather than stopping the Mait at the straw', async () => {
     // The wall this whole change exists to remove. The straw is already drawn by the time
@@ -135,6 +153,41 @@ describe('opening a capture with no signal', () => {
 
     expect(outcome.queued).toBe(true);
     expect(outcome.event).toBe(PROVISIONAL);
+  });
+});
+
+describe('completing without being held by the backlog', () => {
+  it('returns once the event is completed, even if the follow-on drain hits a hung request', async () => {
+    // The symptom "the AI sticks and never completes": completeEvent's success path drains the
+    // queue, and a drain that met a silent socket used to hang forever — so the server had
+    // completed the event but the screen sat on "Completing…" with no way forward. Each drain
+    // request is now time-bounded, so the completion resolves and the flow moves on.
+    jest.useFakeTimers();
+    // Another capture already waiting, so the follow-on drain has something to send.
+    await enqueue('completeEvent', 'uuid-other', { eventId: 99 });
+
+    (global.fetch as jest.Mock)
+      // The completion of this event: the server takes it.
+      .mockImplementationOnce(() => jsonOk({ status: 'completed' }, 200))
+      // The drain's send for the other capture: a socket that is accepted and goes silent.
+      .mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            (init.signal as AbortSignal)?.addEventListener('abort', () =>
+              reject(new Error('Aborted')),
+            );
+          }),
+      );
+
+    const pending = completeEvent(7, DRAFT.client_uuid, TOKEN);
+    await jest.advanceTimersByTimeAsync(30_000);
+    const outcome = await pending;
+    jest.useRealTimers();
+
+    // The event was completed on the server, and the call returned rather than hanging.
+    expect(outcome.sent).toBe(true);
+    // The other capture is held back for a later try, not lost.
+    expect(outcome.remaining).toBe(1);
   });
 });
 
@@ -601,7 +654,7 @@ describe('when one capture goes wrong', () => {
 
     (global.fetch as jest.Mock).mockClear();
     await drainQueue(TOKEN);
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(writesSent()).toEqual([]);
 
     // And it does go, once a person says so.
     const [job] = await readQueue();
@@ -627,7 +680,7 @@ describe('when one capture goes wrong', () => {
     // And nothing is sent while it is waiting.
     (global.fetch as jest.Mock).mockClear();
     await drainQueue(TOKEN);
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(writesSent()).toEqual([]);
   });
 
   it('is still there after the app is closed and reopened', async () => {
@@ -642,5 +695,220 @@ describe('when one capture goes wrong', () => {
     expect(jobs.map(job => job.kind)).toEqual(['createEvent', 'attachPhoto']);
     expect(jobs[0]?.payload.animal_id).toBe(7);
     expect(jobs[1]?.payload.photoUri).toBe('file:///proof.jpg');
+  });
+});
+
+describe('a member’s capture whose photo has not gone up', () => {
+  const UUID = '22222222-2222-4222-8222-222222222222';
+
+  /** The three jobs a member's capture leaves behind it, the photo first. */
+  async function queueMemberEnding() {
+    await enqueue('attachPhoto', UUID, {
+      eventId: 161,
+      photoUri: PHOTO.uri,
+      gpsLat: PHOTO.gpsLat,
+      gpsLng: PHOTO.gpsLng,
+      performedAt: PHOTO.performedAt,
+      source: PHOTO.source,
+      gpsSource: PHOTO.gpsSource,
+    });
+    await enqueue('verifyPayment', UUID, { eventId: 161, mode: 'COD' });
+    await enqueue('completeEvent', UUID, { eventId: 161, closeWithoutStock: false });
+  }
+
+  it('does not send the deduction or the close while the photo waits out its backoff', async () => {
+    // What happened on a handset: the photo failed once, and on the next drain the two jobs
+    // behind it went ahead — the deduction recorded, the close refused for want of a photo.
+    await queueMemberEnding();
+    noSignal();
+    await drainQueue(TOKEN);
+
+    (global.fetch as jest.Mock).mockClear();
+    (global.fetch as jest.Mock).mockImplementation(() => jsonOk({}, 200));
+    await drainQueue(TOKEN);
+
+    expect(writesSent()).toEqual([]);
+    expect(await readQueue()).toHaveLength(3);
+  });
+
+  it('does not send them past a photo the server refused', async () => {
+    await queueMemberEnding();
+    (global.fetch as jest.Mock).mockImplementation((url: string) =>
+      url.endsWith('/photo/') ? jsonOk({ detail: 'No GPS.' }, 400) : jsonOk({}, 200),
+    );
+    await drainQueue(TOKEN);
+    await anHourPasses();
+
+    (global.fetch as jest.Mock).mockClear();
+    (global.fetch as jest.Mock).mockImplementation(() => jsonOk({}, 200));
+    await drainQueue(TOKEN);
+
+    expect(writesSent()).toEqual([]);
+  });
+
+  it('lets go of them once the AI has been finished another way', async () => {
+    // The photo refused, and the Mait retook it from Unfinished, which closed the AI. The old
+    // jobs can never succeed and never need to; they were "8 waiting to send" on Home forever.
+    await queueMemberEnding();
+    (global.fetch as jest.Mock).mockImplementation((url: string) =>
+      url.endsWith('/photo/') ? jsonOk({ detail: 'No GPS.' }, 400) : jsonOk({}, 200),
+    );
+    await drainQueue(TOKEN);
+    expect(await readQueue()).toHaveLength(3);
+
+    (global.fetch as jest.Mock).mockClear();
+    (global.fetch as jest.Mock).mockImplementation((url: string) =>
+      url.endsWith('/ai-events/161/') ? jsonOk({ id: 161, status: 'completed' }) : jsonOk({}, 200),
+    );
+    const result = await drainQueue(TOKEN);
+
+    expect(await readQueue()).toEqual([]);
+    expect(result.remaining).toBe(0);
+    expect(writesSent()).toEqual([]);
+  });
+
+  it('keeps them while the AI is still open on the server', async () => {
+    await queueMemberEnding();
+    (global.fetch as jest.Mock).mockImplementation((url: string) =>
+      url.endsWith('/photo/') ? jsonOk({ detail: 'No GPS.' }, 400) : jsonOk({}, 200),
+    );
+    await drainQueue(TOKEN);
+
+    (global.fetch as jest.Mock).mockImplementation((url: string) =>
+      url.endsWith('/ai-events/161/')
+        ? jsonOk({ id: 161, status: 'straw_verified' })
+        : jsonOk({}, 200),
+    );
+    await drainQueue(TOKEN);
+
+    expect(await readQueue()).toHaveLength(3);
+  });
+
+  it('sends the three in order once the photo goes', async () => {
+    await queueMemberEnding();
+    const urls: string[] = [];
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      urls.push(url);
+      return jsonOk({}, 200);
+    });
+
+    await drainQueue(TOKEN);
+
+    expect(urls).toHaveLength(3);
+    expect(urls[0]).toContain('/ai-events/161/photo/');
+    expect(urls[1]).toContain('/payments/161/initiate/');
+    expect(urls[2]).toContain('/ai-events/161/complete/');
+  });
+
+  it('runs one drain when two are asked for at once, so nothing is sent twice', async () => {
+    await queueMemberEnding();
+    const urls: string[] = [];
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      urls.push(url);
+      return jsonOk({}, 200);
+    });
+
+    await Promise.all([drainQueue(TOKEN), drainQueue(TOKEN)]);
+
+    expect(urls).toHaveLength(3);
+  });
+});
+
+describe('a photo from the queue, sent the way the live upload sends it', () => {
+  /**
+   * Stands in for `XMLHttpRequest`, which is what a handset sends a queued photo over: through
+   * `fetch` the file never left the phone. Answers synchronously inside `send`.
+   */
+  class FakeXhr {
+    static answer: (request: FakeXhr) => void = request => request.reply(200, '{}');
+    static sent: FakeXhr[] = [];
+
+    method = '';
+    url = '';
+    headers: Record<string, string> = {};
+    body: unknown = null;
+    status = 0;
+    responseText = '';
+    timeout = 0;
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    ontimeout: (() => void) | null = null;
+    onabort: (() => void) | null = null;
+
+    open(method: string, url: string) {
+      this.method = method;
+      this.url = url;
+    }
+
+    setRequestHeader(name: string, value: string) {
+      this.headers[name] = value;
+    }
+
+    send(body: unknown) {
+      this.body = body;
+      FakeXhr.sent.push(this);
+      FakeXhr.answer(this);
+    }
+
+    reply(status: number, text: string) {
+      this.status = status;
+      this.responseText = text;
+      this.onload?.();
+    }
+  }
+
+  beforeEach(() => {
+    FakeXhr.sent = [];
+    FakeXhr.answer = request => request.reply(200, '{}');
+    (global as { XMLHttpRequest?: unknown }).XMLHttpRequest = FakeXhr;
+    (global.fetch as jest.Mock).mockImplementation(() => jsonOk({}, 200));
+  });
+
+  afterEach(() => {
+    delete (global as { XMLHttpRequest?: unknown }).XMLHttpRequest;
+  });
+
+  it('sends an animal’s portrait and lets the job go', async () => {
+    await enqueue('attachAnimalPhoto', 'uuid-cow', { animalId: 9, photoUri: 'file:///cow.jpg' });
+
+    const result = await drainQueue(TOKEN);
+
+    expect(FakeXhr.sent).toHaveLength(1);
+    expect(FakeXhr.sent[0]?.method).toBe('PATCH');
+    expect(FakeXhr.sent[0]?.url).toContain('/animals/9/photo/');
+    expect(FakeXhr.sent[0]?.headers.Authorization).toBe(`Bearer ${TOKEN}`);
+    expect(result.sent).toBe(1);
+    expect(await readQueue()).toEqual([]);
+  });
+
+  it('keeps it for later when the network drops it', async () => {
+    FakeXhr.answer = request => request.onerror?.();
+    await enqueue('attachAnimalPhoto', 'uuid-cow', { animalId: 9, photoUri: 'file:///cow.jpg' });
+
+    await drainQueue(TOKEN);
+
+    const [job] = await readQueue();
+    expect(job?.attempts).toBe(1);
+    expect(job?.failed).toBeFalsy();
+  });
+
+  it('sends a capture’s proof photo the same way, and reads a refusal as a refusal', async () => {
+    FakeXhr.answer = request => request.reply(400, JSON.stringify({ detail: 'No GPS.' }));
+    await enqueue('attachPhoto', 'uuid-ai', {
+      eventId: 12,
+      photoUri: PHOTO.uri,
+      gpsLat: PHOTO.gpsLat,
+      gpsLng: PHOTO.gpsLng,
+      performedAt: PHOTO.performedAt,
+      source: PHOTO.source,
+      gpsSource: PHOTO.gpsSource,
+    });
+
+    await drainQueue(TOKEN);
+
+    expect(FakeXhr.sent[0]?.url).toContain('/ai-events/12/photo/');
+    const [job] = await readQueue();
+    expect(job?.failed).toBe(true);
+    expect(job?.lastError).toContain('No GPS.');
   });
 });

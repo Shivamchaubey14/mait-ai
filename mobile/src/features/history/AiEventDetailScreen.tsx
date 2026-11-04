@@ -25,9 +25,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -143,17 +143,17 @@ function Tile({
         <View style={[styles.chip, { backgroundColor: SOLID[tone] }]}>
           <Glyph name={icon} size={15} color={onSolid(tone)} />
         </View>
-        <Text style={[styles.tileLabel, { color: WORD[tone] }]} numberOfLines={1}>
+        <AppText style={[styles.tileLabel, { color: WORD[tone] }]} numberOfLines={1}>
           {label}
-        </Text>
+        </AppText>
       </View>
-      <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
+      <AppText style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
         {value}
-      </Text>
+      </AppText>
       {!!note && (
-        <Text style={[styles.tileNote, { color: WORD[tone] }]} numberOfLines={2}>
+        <AppText style={[styles.tileNote, { color: WORD[tone] }]} numberOfLines={2}>
           {note}
-        </Text>
+        </AppText>
       )}
     </View>
   );
@@ -181,15 +181,15 @@ function TrailStep({
       <View style={styles.stepRail}>
         {/* Numbered, and the latest in green: where the capture has got to. */}
         <View style={[styles.stepDot, last && styles.stepDotLast]}>
-          <Text style={styles.stepDotLabel}>{n}</Text>
+          <AppText style={styles.stepDotLabel}>{n}</AppText>
         </View>
         {!last && <View style={styles.stepLine} />}
       </View>
       <View style={[styles.stepBody, last && styles.stepBodyLast]}>
-        <Text style={styles.stepNote}>{note}</Text>
+        <AppText style={styles.stepNote}>{note}</AppText>
         <View style={styles.stepMetaLine}>
           <Ionicons name="time-outline" size={12} color={ink[500]} />
-          <Text style={styles.stepMeta}>{meta}</Text>
+          <AppText style={styles.stepMeta}>{meta}</AppText>
         </View>
       </View>
     </View>
@@ -356,22 +356,22 @@ export default function AiEventDetailScreen({
               size={14}
               color={standing === 'waiting' ? colors.ink : colors.surface}
             />
-            <Text style={[styles.standingLabel, styles[`standingLabel_${standing}`]]}>
+            <AppText style={[styles.standingLabel, styles[`standingLabel_${standing}`]]}>
               {t(`aiEvent.state_${standing}`)}
-            </Text>
+            </AppText>
           </View>
         </View>
 
-        <Text style={styles.heroTitle} numberOfLines={1}>
+        <AppText style={styles.heroTitle} numberOfLines={1}>
           {event.owner_name}
-        </Text>
+        </AppText>
         {/* Two quiet lines rather than one long one: the first identifies the record for
             somebody on a phone call, the second identifies the animal for somebody in a yard.
             They are different questions asked by different people. */}
         <View style={styles.heroPills}>
           <View style={[styles.heroPill, styles.heroPillSlate]}>
             <Ionicons name="document-text" size={12} color={colors.surface} />
-            <Text style={styles.heroPillLabel}>{t('aiEvent.eventNo', { id: event.id })}</Text>
+            <AppText style={styles.heroPillLabel}>{t('aiEvent.eventNo', { id: event.id })}</AppText>
           </View>
           <View
             style={[styles.heroPill, member ? styles.heroPillInfo : styles.heroPillWarm]}
@@ -382,26 +382,26 @@ export default function AiEventDetailScreen({
               size={12}
               color={member ? colors.surface : colors.ink}
             />
-            <Text style={[styles.heroPillLabel, !member && { color: colors.ink }]}>
+            <AppText style={[styles.heroPillLabel, !member && { color: colors.ink }]}>
               {member ? event.member_code : t('aiEvent.nonMember')}
-            </Text>
+            </AppText>
           </View>
           {!!event.mpp_name && (
             <View style={[styles.heroPill, styles.heroPillSlate]}>
               <Ionicons name="home" size={12} color={colors.surface} />
-              <Text style={styles.heroPillLabel} numberOfLines={1}>
+              <AppText style={styles.heroPillLabel} numberOfLines={1}>
                 {event.mpp_name}
-              </Text>
+              </AppText>
             </View>
           )}
         </View>
         <View style={styles.heroFacts}>
           <Ionicons name="calendar" size={13} color={colors.surface} />
-          <Text style={styles.heroLine}>{stamp(event.performed_at ?? event.created_at)}</Text>
+          <AppText style={styles.heroLine}>{stamp(event.performed_at ?? event.created_at)}</AppText>
           <Ionicons name="paw" size={13} color={colors.surface} />
-          <Text style={[styles.heroLine, styles.heroLineShrink]} numberOfLines={1}>
+          <AppText style={[styles.heroLine, styles.heroLineShrink]} numberOfLines={1}>
             {animal}
-          </Text>
+          </AppText>
         </View>
       </View>
 
@@ -414,15 +414,15 @@ export default function AiEventDetailScreen({
               <Ionicons name="alert" size={20} color={colors.surface} />
             </View>
             <View style={styles.alertBody}>
-              <Text style={styles.alertTitle}>{t(`aiEvent.missing_${missing}`)}</Text>
-              <Text style={styles.alertText}>
+              <AppText style={styles.alertTitle}>{t(`aiEvent.missing_${missing}`)}</AppText>
+              <AppText style={styles.alertText}>
                 {/* The cash sentence only where cash was actually taken. A non-member at
                     `photo_captured` has handed over nothing yet, and telling a Mait that
                     money is unconfirmed when none was collected sends them looking for it. */}
                 {missing === 'payment_pending' && !member && charge
                   ? t('aiEvent.missingBodyCash', { amount: `₹ ${Math.round(Number(charge))}` })
                   : t(`aiEvent.missingBody_${missing}`)}
-              </Text>
+              </AppText>
             </View>
           </View>
         )}
@@ -489,24 +489,24 @@ export default function AiEventDetailScreen({
               <View style={[styles.chip, { backgroundColor: colors.primary }]}>
                 <Ionicons name="flask" size={15} color={colors.surface} />
               </View>
-              <Text style={styles.usedTitle}>{t('aiEvent.used')}</Text>
+              <AppText style={styles.usedTitle}>{t('aiEvent.used')}</AppText>
               <View style={styles.usedCount}>
-                <Text style={styles.usedCountLabel}>{event.consumables.length}</Text>
+                <AppText style={styles.usedCountLabel}>{event.consumables.length}</AppText>
               </View>
             </View>
 
             {event.consumables.map(line => (
               <View key={line.code} style={styles.usedRow}>
                 <View style={styles.usedBody}>
-                  <Text style={styles.usedName} numberOfLines={1}>
+                  <AppText style={styles.usedName} numberOfLines={1}>
                     {line.name}
-                  </Text>
-                  <Text style={styles.usedMeta}>{line.code}</Text>
+                  </AppText>
+                  <AppText style={styles.usedMeta}>{line.code}</AppText>
                 </View>
                 <View style={styles.usedQty}>
-                  <Text style={styles.usedQtyLabel}>
+                  <AppText style={styles.usedQtyLabel}>
                     {t('aiEvent.usedQty', { count: line.qty, unit: line.unit })}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             ))}
@@ -525,9 +525,9 @@ export default function AiEventDetailScreen({
                 color={chosen ? colors.ink : colors.surface}
               />
             </View>
-            <Text style={[styles.photoTitle, { color: chosen ? yolk[800] : colors.info }]}>
+            <AppText style={[styles.photoTitle, { color: chosen ? yolk[800] : colors.info }]}>
               {t('aiEvent.proofPhoto')}
-            </Text>
+            </AppText>
           </View>
           {/* Tapping it opens it whole. The card crops to a 180pt band so the page below it
               stays reachable, and a cropped photograph is exactly the wrong thing to settle
@@ -560,7 +560,7 @@ export default function AiEventDetailScreen({
             ) : (
               <View style={styles.photoEmpty} testID="ai-event-photo-empty">
                 <Ionicons name="camera-outline" size={22} color={colors.surface} />
-                <Text style={styles.photoEmptyLabel}>{t('aiEvent.noPhotoYet')}</Text>
+                <AppText style={styles.photoEmptyLabel}>{t('aiEvent.noPhotoYet')}</AppText>
               </View>
             )}
           </Pressable>
@@ -570,9 +570,9 @@ export default function AiEventDetailScreen({
               size={13}
               color={chosen ? yolk[800] : colors.info}
             />
-            <Text style={[styles.photoCaption, chosen && styles.photoCaptionChosen]}>
+            <AppText style={[styles.photoCaption, chosen && styles.photoCaptionChosen]}>
               {photoCaption}
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -588,7 +588,7 @@ export default function AiEventDetailScreen({
             <View style={[styles.chip, { backgroundColor: ink[500] }]}>
               <Ionicons name="git-commit" size={15} color={colors.surface} />
             </View>
-            <Text style={styles.trailToggleLabel}>{t('aiEvent.seeTheTrail')}</Text>
+            <AppText style={styles.trailToggleLabel}>{t('aiEvent.seeTheTrail')}</AppText>
             <Ionicons name="chevron-down" size={16} color={ink[500]} />
           </Pressable>
         ) : (
@@ -597,10 +597,10 @@ export default function AiEventDetailScreen({
               <View style={[styles.chip, { backgroundColor: ink[500] }]}>
                 <Ionicons name="git-commit" size={15} color={colors.surface} />
               </View>
-              <Text style={styles.trailTitle}>{t('aiEvent.auditTrail')}</Text>
+              <AppText style={styles.trailTitle}>{t('aiEvent.auditTrail')}</AppText>
               {trailRows.length > 0 && (
                 <View style={styles.trailCount}>
-                  <Text style={styles.trailCountLabel}>{trailRows.length}</Text>
+                  <AppText style={styles.trailCountLabel}>{trailRows.length}</AppText>
                 </View>
               )}
             </View>
@@ -608,7 +608,7 @@ export default function AiEventDetailScreen({
             {trail.isLoading ? (
               <ActivityIndicator color={colors.primary} />
             ) : trailRows.length === 0 ? (
-              <Text style={styles.trailEmpty}>{t('aiEvent.trailUnavailable')}</Text>
+              <AppText style={styles.trailEmpty}>{t('aiEvent.trailUnavailable')}</AppText>
             ) : (
               trailRows.map((entry, index) => (
                 <TrailStep
@@ -626,7 +626,7 @@ export default function AiEventDetailScreen({
         {showTrail && (
           <View style={styles.footnote}>
             <Ionicons name="lock-closed" size={13} color={ink[500]} />
-            <Text style={styles.footnoteLabel}>{t('aiEvent.trailFootnote')}</Text>
+            <AppText style={styles.footnoteLabel}>{t('aiEvent.trailFootnote')}</AppText>
           </View>
         )}
       </ScrollView>
@@ -683,12 +683,12 @@ export default function AiEventDetailScreen({
           {/* The same line the card carries, kept with the photograph it qualifies: whether
               this was taken here or chosen from the gallery is the first question asked of a
               photograph being used as proof. */}
-          <Text
+          <AppText
             style={[styles.viewerCaption, { paddingBottom: insets.bottom + spacing[4] }]}
             testID="ai-event-photo-viewer-caption"
           >
             {photoCaption}
-          </Text>
+          </AppText>
         </View>
       </Modal>
 
@@ -707,9 +707,9 @@ export default function AiEventDetailScreen({
               <ActivityIndicator color={colors.surface} />
             ) : (
               <>
-                <Text style={styles.ctaLabel} numberOfLines={1}>
+                <AppText style={styles.ctaLabel} numberOfLines={1}>
                   {t(`aiEvent.finish_${finishKey}`)}
-                </Text>
+                </AppText>
                 <Ionicons name="arrow-forward" size={18} color={colors.surface} />
               </>
             )}

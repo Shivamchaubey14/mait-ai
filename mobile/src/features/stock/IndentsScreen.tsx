@@ -25,7 +25,8 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -271,11 +272,11 @@ export default function IndentsScreen({
             <Ionicons name="arrow-back" size={20} color={colors.surface} />
           </Pressable>
           {/* Where this was opened from, so a Mait three screens deep knows which way is out. */}
-          <Text style={styles.eyebrow}>{t('nav.settings')}</Text>
+          <AppText style={styles.eyebrow}>{t('nav.settings')}</AppText>
         </View>
 
-        <Text style={styles.heroTitle}>{t('indents.title')}</Text>
-        <Text
+        <AppText style={styles.heroTitle}>{t('indents.title')}</AppText>
+        <AppText
           style={[styles.heroSubtitle, waiting > 0 && styles.heroSubtitleWaiting]}
           testID="indents-headline"
         >
@@ -284,7 +285,7 @@ export default function IndentsScreen({
             : rows.length
               ? t('indents.nothingToCollect', { count: rows.length })
               : ''}
-        </Text>
+        </AppText>
       </View>
 
       {/* Status chips, back after being taken out.
@@ -335,12 +336,12 @@ export default function IndentsScreen({
                   size={14}
                   color={active ? paint.onSolid : paint.word}
                 />
-                <Text
+                <AppText
                   style={[styles.filterLabel, { color: active ? paint.onSolid : paint.word }]}
                   numberOfLines={1}
                 >
                   {key === 'all' ? t('indents.filterAll') : t(`indents.state_${key}`)}
-                </Text>
+                </AppText>
                 {/* Only where there is something to count. A grey nought beside every unused
                     status turns the row into a report nobody asked for. */}
                 {count > 0 && (
@@ -350,14 +351,14 @@ export default function IndentsScreen({
                       { backgroundColor: active ? colors.surface : paint.solid },
                     ]}
                   >
-                    <Text
+                    <AppText
                       style={[
                         styles.filterCountLabel,
                         { color: active ? paint.word : paint.onSolid },
                       ]}
                     >
                       {count}
-                    </Text>
+                    </AppText>
                   </View>
                 )}
               </Pressable>
@@ -425,24 +426,24 @@ export default function IndentsScreen({
                   />
                 </View>
                 <View style={styles.rowBody}>
-                  <Text style={styles.rowTitle} numberOfLines={1}>
+                  <AppText style={styles.rowTitle} numberOfLines={1}>
                     {t('stock.indentLine', {
                       id: indent.id,
                       item: indent.breed ? breedName(indent.breed) : indent.item,
                       qty: indent.qty_requested,
                     })}
-                  </Text>
-                  <Text
+                  </AppText>
+                  <AppText
                     style={[styles.rowMeta, { color: collectable ? yolk[800] : paint.word }]}
                     numberOfLines={2}
                   >
                     {nextStep(indent, t)}
-                  </Text>
+                  </AppText>
                   <View style={[styles.pill, { backgroundColor: paint.solid }]}>
                     <Glyph name={STATE_GLYPH[state]} size={11} color={paint.onSolid} />
-                    <Text style={[styles.pillLabel, { color: paint.onSolid }]} numberOfLines={1}>
+                    <AppText style={[styles.pillLabel, { color: paint.onSolid }]} numberOfLines={1}>
                       {status.label}
-                    </Text>
+                    </AppText>
                   </View>
                 </View>
 
@@ -460,7 +461,7 @@ export default function IndentsScreen({
             <View style={[styles.chipSmall, { backgroundColor: yolk[500] }]}>
               <Ionicons name="warning" size={16} color={colors.ink} />
             </View>
-            <Text style={styles.footnoteText}>{t('indents.issuedIsNotReceived')}</Text>
+            <AppText style={styles.footnoteText}>{t('indents.issuedIsNotReceived')}</AppText>
           </View>
         )}
       </ScrollView>

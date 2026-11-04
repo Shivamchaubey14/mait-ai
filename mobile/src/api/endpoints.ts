@@ -15,24 +15,57 @@ import type {
   AIEvent,
   AdminAiEventsPage,
   AdminMait,
+  AdminMaitRoster,
+  PendingMaitsPage,
   AdminNonMember,
+  AdminBreed,
+  StorePlantRow,
+  StoreWrite,
+  PregnancyRateConfig,
+  CatalogueWrite,
+  AdminNonMemberDetail,
   InventoryOversight,
+  MaitStockAdjustment,
+  MaitStockDetail,
+  AdminStoreStock,
+  StoreStockUpdate,
   ProductAdmin,
   StoreAdmin,
   MaitPaymentReport,
   Leaderboard,
   PregnancyOversight,
+  ExceptionQueue,
+  QueueName,
+  MaitPregnancyChecks,
+  PregnancyWindow,
   DashboardSummary,
+  DashboardTrends,
   PayoutScheme,
-  AuditEntry,
+  AuditQuery,
+  AuditTrail,
   AdminUser,
+  AdminUserCreate,
+  AdminUserPatch,
+  PortalSectionEntry,
   Zone,
+  ZoneActivity,
+  ZoneManager,
+  ZoneManagers,
+  ZonePlantRow,
+  ZoneWrite,
   SuperOtpRow,
+  OtpPipeline,
+  OtpPipelineQuery,
   SuperOtpIssued,
   UploadJob,
+  MasterSnapshot,
+  MemberMobileChange,
+  MemberMobileSaved,
+  UploadErrorReport,
   MppCoverage,
   AIEventDraft,
   AIEventTimelineEntry,
+  AdminAiEventDetail,
   AnimalTypeCode,
   BreedConfig,
   CurrentUser,
@@ -68,10 +101,30 @@ import type {
   ZonalLookup,
   AssignResult,
   ZoneStock,
+  ZonePerformance,
   Paginated,
   StrawValidation,
   TokenPair,
 } from './types';
+
+/** A plain array or a page, as a page: some admin lists are served with pagination off. */
+function asPage<T>(body: T[] | Paginated<T> | null | undefined): Paginated<T> {
+  if (Array.isArray(body)) {
+    return { count: body.length, next: null, previous: null, results: body };
+  }
+  return body ?? { count: 0, next: null, previous: null, results: [] };
+}
+
+/**
+ * How long a request that sends or checks a farmer's code may take before it gives up.
+ *
+ * React Native's fetch has no timeout of its own. A tap on "Send the code" in a dead patch
+ * opened a connection that never answered and never failed, so the button span for as long as
+ * the Mait would watch it — and when signal came back, the stuck request did not recover with
+ * it. Capped, it fails in a bounded time with a network error the screen can name, and the
+ * screen sends again by itself once the connection returns.
+ */
+export const CODE_REQUEST_CAP_MS = 12_000;
 
 export const maitaiApi = api.injectEndpoints({
   // Fast Refresh re-evaluates this module on every save, which re-injects endpoints that are
@@ -124,7 +177,12 @@ export const maitaiApi = api.injectEndpoints({
       { detail: string; mobile_no: string; expires_in_seconds: number },
       FarmerKey
     >({
-      query: key => ({ url: '/farmers/otp/office/', method: 'POST', body: key }),
+      query: key => ({
+        url: '/farmers/otp/office/',
+        method: 'POST',
+        body: key,
+        timeout: CODE_REQUEST_CAP_MS,
+      }),
     }),
 
     /** The same for her payment authorisation code, for one of the Mait's own events. */
@@ -136,6 +194,7 @@ export const maitaiApi = api.injectEndpoints({
         url: `/payments/${eventId}/otp/office/`,
         method: 'POST',
         body: {},
+        timeout: CODE_REQUEST_CAP_MS,
       }),
     }),
 
@@ -307,11 +366,21 @@ export const maitaiApi = api.injectEndpoints({
      * Mait can satisfy alone verifies nothing.
      */
     sendFarmerOtp: builder.mutation<FarmerOtpSent, FarmerKey>({
-      query: body => ({ url: '/farmers/otp/send/', method: 'POST', body }),
+      query: body => ({
+        url: '/farmers/otp/send/',
+        method: 'POST',
+        body,
+        timeout: CODE_REQUEST_CAP_MS,
+      }),
     }),
 
     verifyFarmerOtp: builder.mutation<{ verified: boolean }, FarmerKey & { otp: string }>({
-      query: body => ({ url: '/farmers/otp/verify/', method: 'POST', body }),
+      query: body => ({
+        url: '/farmers/otp/verify/',
+        method: 'POST',
+        body,
+        timeout: CODE_REQUEST_CAP_MS,
+      }),
     }),
 
     /**
@@ -326,6 +395,8 @@ export const maitaiApi = api.injectEndpoints({
         url: `/payments/${eventId}/initiate/`,
         method: 'POST',
         body: mode ? { mode } : {},
+        // Initiating sends her the payment code.
+        timeout: CODE_REQUEST_CAP_MS,
       }),
       invalidatesTags: ['Payment', 'AIEvent'],
     }),
@@ -335,6 +406,7 @@ export const maitaiApi = api.injectEndpoints({
         url: `/payments/${eventId}/otp/verify/`,
         method: 'POST',
         body: { otp },
+        timeout: CODE_REQUEST_CAP_MS,
       }),
       invalidatesTags: ['Payment', 'AIEvent'],
     }),
@@ -571,7 +643,14 @@ export const maitaiApi = api.injectEndpoints({
      */
     listAiEvents: builder.query<
       Paginated<AIEvent>,
-      { status?: string; unfinished?: boolean; dateFrom?: string; dateTo?: string } | void
+      {
+        status?: string;
+        unfinished?: boolean;
+        dateFrom?: string;
+        dateTo?: string;
+        /** `office_call_unmatched` for the Needs attention list. */
+        farmerCheck?: string;
+      } | void
     >({
       query: args => ({
         url: '/ai-events/',
@@ -583,6 +662,7 @@ export const maitaiApi = api.injectEndpoints({
           // inseminations should not be made to download two hundred records to see it.
           ...(args?.dateFrom ? { date_from: args.dateFrom } : {}),
           ...(args?.dateTo ? { date_to: args.dateTo } : {}),
+          ...(args?.farmerCheck ? { farmer_check: args.farmerCheck } : {}),
         },
       }),
       providesTags: ['AIEvent'],
@@ -797,10 +877,7 @@ export const maitaiApi = api.injectEndpoints({
      * Invalidates `Zonal` so every figure that counts Maits and points redraws, and `MPP` so
      * the Mait's own app picks up its new coverage the next time it asks.
      */
-    assignZonalMpp: builder.mutation<
-      AssignResult,
-      { sahayakVendorCode: string; mppCode: string }
-    >({
+    assignZonalMpp: builder.mutation<AssignResult, { sahayakVendorCode: string; mppCode: string }>({
       query: ({ sahayakVendorCode, mppCode }) => ({
         url: '/zonal/assignments/',
         method: 'POST',
@@ -809,7 +886,7 @@ export const maitaiApi = api.injectEndpoints({
       invalidatesTags: ['Zonal', 'MPP'],
     }),
 
-    getAiEvent: builder.query<AIEvent, number>({
+    getAiEvent: builder.query<AdminAiEventDetail, number>({
       query: id => `/ai-events/${id}/`,
       providesTags: ['AIEvent'],
     }),
@@ -835,6 +912,29 @@ export const maitaiApi = api.injectEndpoints({
     }),
 
     /**
+     * Ask for a password-reset code (POST /auth/password/reset/request/). The code goes to the
+     * number already on the account, never to one typed here, and the answer is the same
+     * whether or not the username is real — so office accounts cannot be probed.
+     */
+    passwordResetRequest: builder.mutation<
+      { detail: string; expires_in_seconds: number },
+      { username: string }
+    >({
+      query: body => ({ url: '/auth/password/reset/request/', method: 'POST', body }),
+    }),
+
+    /**
+     * Verify the code and set the new password (POST /auth/password/reset/verify/). A wrong
+     * username, a wrong code and an expired one answer alike, by design.
+     */
+    passwordResetVerify: builder.mutation<
+      { detail: string },
+      { username: string; otp: string; new_password: string }
+    >({
+      query: body => ({ url: '/auth/password/reset/verify/', method: 'POST', body }),
+    }),
+
+    /**
      * Every AI event in the network, for the admin roster — the portal's AI events screen on a
      * handset. Scoped by the server to the account's zones (all of it for a head-office admin),
      * filterable by one search box, a status and a date range, and carrying the set-wide status
@@ -845,18 +945,22 @@ export const maitaiApi = api.injectEndpoints({
       {
         search?: string;
         status?: string;
+        mpp?: string;
         unfinished?: boolean;
         dateFrom?: string;
         dateTo?: string;
         offset?: number;
+        /** Rows per page; the Reports preview asks for ten. */
+        limit?: number;
       } | void
     >({
       query: args => ({
         url: '/ai-events/',
         params: {
-          limit: 25,
+          limit: args?.limit ?? 25,
           ...(args?.search ? { search: args.search } : {}),
           ...(args?.status ? { status: args.status } : {}),
+          ...(args?.mpp ? { mpp: args.mpp } : {}),
           ...(args?.unfinished ? { unfinished: true } : {}),
           ...(args?.dateFrom ? { date_from: args.dateFrom } : {}),
           ...(args?.dateTo ? { date_to: args.dateTo } : {}),
@@ -873,6 +977,28 @@ export const maitaiApi = api.injectEndpoints({
     }),
 
     /**
+     * Delete several AI events in one transaction (admin only) — all or nothing, so there is
+     * never a half-finished delete to puzzle over.
+     */
+    bulkDeleteAiEvents: builder.mutation<
+      { deleted: number[]; deleted_count: number; missing: number[] },
+      number[]
+    >({
+      query: ids => ({ url: '/ai-events/bulk-delete/', method: 'POST', body: { ids } }),
+      invalidatesTags: ['AIEvent'],
+    }),
+
+    /**
+     * Close a member's capture the Mait left stuck with its deduction already verified (admin
+     * only). The same thing the handset would do: the straw comes off the Mait's stock and the
+     * pregnancy check is booked. The server refuses anything else.
+     */
+    officeCompleteAiEvent: builder.mutation<AIEvent, number>({
+      query: id => ({ url: `/ai-events/${id}/office-complete/`, method: 'POST', body: {} }),
+      invalidatesTags: ['AIEvent', 'Inventory'],
+    }),
+
+    /**
      * Search members across the network, for the admin roster. One box over name, member code
      * and mobile; scoped to the account's zones by the server.
      */
@@ -884,13 +1010,134 @@ export const maitaiApi = api.injectEndpoints({
       providesTags: ['Member'],
     }),
 
+    /**
+     * The member master for the admin's Members screen: one search box, an MPP, members with
+     * no number, and numbers the office set. Paged 25 at a time over 105k rows.
+     */
+    adminListMembers: builder.query<
+      Paginated<Member>,
+      { search?: string; mpp?: string; noMobile?: boolean; office?: boolean; offset?: number }
+    >({
+      query: args => ({
+        url: '/members/',
+        params: {
+          limit: 25,
+          ...(args.search ? { search: args.search } : {}),
+          ...(args.mpp ? { mpp__mpp_code: args.mpp } : {}),
+          ...(args.noMobile ? { no_mobile: 'true' } : {}),
+          ...(args.office ? { mobile_source: 'office' } : {}),
+          ...(args.offset ? { offset: args.offset } : {}),
+        },
+      }),
+      providesTags: ['Member'],
+    }),
+
+    /**
+     * One member's full Aadhaar (GET /members/{code}/aadhaar/) — logged against the account,
+     * rate-limited, and never cached: a mutation, so RTK Query keeps no copy of it.
+     */
+    revealMemberAadhaar: builder.mutation<
+      { member_code: string; aadhar_no: string; on_file: boolean },
+      string
+    >({
+      query: code => ({ url: `/members/${encodeURIComponent(code)}/aadhaar/`, method: 'GET' }),
+    }),
+
+    /** Every change the office made to a member's number. */
+    memberMobileHistory: builder.query<{ results: MemberMobileChange[] }, string>({
+      query: code => `/members/${encodeURIComponent(code)}/mobile-history/`,
+      providesTags: ['Member'],
+    }),
+
+    /**
+     * Set a member's number (Admin only). `expected_mobile` is the number the change was opened
+     * on: if a colleague changed it since, the server answers 409 rather than letting this
+     * save quietly undo their correction.
+     */
+    changeMemberMobile: builder.mutation<
+      MemberMobileSaved,
+      { code: string; mobile_no: string; reason: string; expected_mobile: string }
+    >({
+      query: ({ code, ...body }) => ({
+        url: `/members/${encodeURIComponent(code)}/mobile/`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['Member'],
+    }),
+
     /** The Mait roster (GET /admin/users/maits/), searchable by name, vendor code or mobile. */
-    adminListMaits: builder.query<Paginated<AdminMait>, { search?: string } | void>({
+    adminListMaits: builder.query<
+      AdminMaitRoster,
+      {
+        search?: string;
+        needsMobile?: boolean;
+        notActivated?: boolean;
+        deactivated?: boolean;
+        offset?: number;
+      } | void
+    >({
       query: args => ({
         url: '/admin/users/maits/',
-        params: { limit: 25, ...(args?.search ? { search: args.search } : {}) },
+        params: {
+          limit: 25,
+          ...(args?.search ? { search: args.search } : {}),
+          ...(args?.needsMobile ? { needs_mobile: 'true' } : {}),
+          ...(args?.notActivated ? { activated: 'false' } : {}),
+          ...(args?.deactivated ? { account_active: 'false' } : {}),
+          ...(args?.offset ? { offset: args.offset } : {}),
+        },
       }),
-      providesTags: ['MPP'],
+      providesTags: ['MPP', 'Mait'],
+    }),
+
+    /**
+     * The activation queue (GET /admin/users/pending-maits/): Maits with no login yet, in name
+     * order. `summary` counts the whole backlog, not the search.
+     */
+    adminPendingMaits: builder.query<PendingMaitsPage, { search?: string } | void>({
+      query: args => ({
+        url: '/admin/users/pending-maits/',
+        params: { limit: 500, ...(args?.search ? { search: args.search } : {}) },
+      }),
+      providesTags: ['Mait'],
+    }),
+
+    /**
+     * Give a pending Mait a login and the number their OTP goes to (POST
+     * /admin/users/activate-mait/). The server checks the number against every other Mait.
+     */
+    adminActivateMait: builder.mutation<
+      AdminUser,
+      { sahayak_vendor_code: string; mobile_no: string }
+    >({
+      query: body => ({ url: '/admin/users/activate-mait/', method: 'POST', body }),
+      invalidatesTags: ['Mait'],
+    }),
+
+    /**
+     * Correct one Mait's name, number and coverage (PATCH /admin/users/maits/{code}/).
+     * `mpp_codes` is the complete set — an MPP missing from it is unassigned.
+     */
+    adminUpdateMait: builder.mutation<
+      AdminMait,
+      { code: string; name: string; mobile_no: string; mpp_codes: string[] }
+    >({
+      query: ({ code, ...body }) => ({
+        url: `/admin/users/maits/${encodeURIComponent(code)}/`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['Mait', 'MPP'],
+    }),
+
+    /** Maits who already hold a login, newest first — who was activated, and to which number. */
+    adminRecentMaitLogins: builder.query<Paginated<AdminUser>, void>({
+      query: () => ({
+        url: '/admin/users/',
+        params: { role: 'mait', ordering: '-created_at', limit: 10 },
+      }),
+      providesTags: ['Mait'],
     }),
 
     /** One collection point, whole (GET /mpp/{id}/) — the detail behind a search result. */
@@ -899,53 +1146,217 @@ export const maitaiApi = api.injectEndpoints({
       providesTags: ['MPP'],
     }),
 
-    /** The field-registered farmers, for the back office (GET /admin/non-members/). */
-    adminSearchNonMembers: builder.query<Paginated<AdminNonMember>, { search?: string } | void>({
+    /**
+     * The field-registered farmers, for the back office (GET /admin/non-members/) — browsed
+     * newest first, 25 to a page, narrowed by MPP and by the rows missing a face of the card.
+     */
+    adminListNonMembers: builder.query<
+      Paginated<AdminNonMember>,
+      { search?: string; mpp?: string; noCard?: boolean; offset?: number } | void
+    >({
       query: args => ({
         url: '/admin/non-members/',
-        params: { limit: 25, ...(args?.search ? { search: args.search } : {}) },
+        params: {
+          limit: 25,
+          ...(args?.search ? { search: args.search } : {}),
+          ...(args?.mpp ? { mpp__mpp_code: args.mpp } : {}),
+          ...(args?.noCard ? { no_card: 'true' } : {}),
+          ...(args?.offset ? { offset: args.offset } : {}),
+        },
       }),
       providesTags: ['Member'],
     }),
 
-    /** One field-registered farmer, whole (GET /admin/non-members/{id}/). */
-    adminGetNonMember: builder.query<AdminNonMember, number>({
+    /**
+     * One field-registered farmer, whole (GET /admin/non-members/{id}/) — the only response
+     * carrying her card images, and the read is audit-logged against the operator.
+     */
+    adminGetNonMember: builder.query<AdminNonMemberDetail, number>({
       query: id => `/admin/non-members/${id}/`,
       providesTags: ['Member'],
     }),
 
-    /** Straw holding across every Mait (GET /admin/inventory/) — the oversight screen. */
-    adminInventoryOversight: builder.query<InventoryOversight, void>({
-      query: () => '/admin/inventory/',
+    /**
+     * Straw holding across every Mait, and every store shelf in reach (GET /admin/inventory/)
+     * — the oversight screen. `zone` narrows it further for head office.
+     */
+    adminInventoryOversight: builder.query<InventoryOversight, { zone?: number } | void>({
+      query: args => ({
+        url: '/admin/inventory/',
+        params: args?.zone ? { zone: args.zone } : {},
+      }),
+      providesTags: ['Inventory', 'Store'],
+    }),
+
+    /** One Mait's whole stock, and what it can be adjusted with (GET /admin/inventory/{id}/). */
+    adminMaitStock: builder.query<MaitStockDetail, number>({
+      query: id => `/admin/inventory/${id}/`,
       providesTags: ['Inventory'],
     }),
 
-    /** The product catalogue with recovery rates (GET /admin/products/). */
+    /**
+     * Add to or take off a Mait's stock from the office (POST /admin/inventory/{id}/) — a
+     * manual adjustment, not an indent. Answers with the stock as it now stands.
+     */
+    adminAdjustMaitStock: builder.mutation<MaitStockDetail, { id: number } & MaitStockAdjustment>({
+      query: ({ id, ...body }) => ({ url: `/admin/inventory/${id}/`, method: 'POST', body }),
+      invalidatesTags: ['Inventory'],
+    }),
+
+    /** A store's shelf, and what it can be stocked with (GET /admin/stores/{id}/stock/). */
+    adminStoreStock: builder.query<AdminStoreStock, number>({
+      query: id => `/admin/stores/${id}/stock/`,
+      providesTags: ['Store'],
+    }),
+
+    /**
+     * A delivery (`receive`, adds) or a count (`count`, replaces) on a store's shelf
+     * (POST /admin/stores/{id}/stock/).
+     */
+    adminUpdateStoreStock: builder.mutation<AdminStoreStock, { id: number } & StoreStockUpdate>({
+      query: ({ id, ...body }) => ({ url: `/admin/stores/${id}/stock/`, method: 'POST', body }),
+      invalidatesTags: ['Store', 'Inventory'],
+    }),
+
+    /**
+     * The product catalogue with recovery rates (GET /admin/products/) — retired rows
+     * included, because the screen can show them on request.
+     */
     adminListProducts: builder.query<Paginated<ProductAdmin>, void>({
       query: () => ({ url: '/admin/products/', params: { limit: 200 } }),
       providesTags: ['Inventory'],
     }),
 
+    // A catalogue change renames what an indent asks for and what a Mait's stock is counted
+    // in, so it invalidates the stock screens and the breed picker along with the list.
+    adminCreateProduct: builder.mutation<ProductAdmin, CatalogueWrite>({
+      query: body => ({ url: '/admin/products/', method: 'POST', body }),
+      invalidatesTags: ['Inventory', 'Store'],
+    }),
+    adminUpdateProduct: builder.mutation<ProductAdmin, { id: number } & CatalogueWrite>({
+      query: ({ id, ...body }) => ({ url: `/admin/products/${id}/`, method: 'PATCH', body }),
+      invalidatesTags: ['Inventory', 'Store'],
+    }),
+    adminDeleteProduct: builder.mutation<void, number>({
+      query: id => ({ url: `/admin/products/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Inventory', 'Store'],
+    }),
+
+    /** The pregnancy diagnosis price — one pair of figures, not per breed. */
+    adminPregnancyRate: builder.query<PregnancyRateConfig, void>({
+      query: () => '/admin/pregnancy/rate/',
+      providesTags: ['Pregnancy'],
+    }),
+    adminUpdatePregnancyRate: builder.mutation<
+      PregnancyRateConfig,
+      { member_rate?: number; non_member_rate?: number }
+    >({
+      query: body => ({ url: '/admin/pregnancy/rate/', method: 'PATCH', body }),
+      invalidatesTags: ['Pregnancy'],
+    }),
+
+    /** The semen list — every breed, retired ones too (GET /admin/breeds/, unpaginated). */
+    adminListBreeds: builder.query<AdminBreed[], void>({
+      query: () => '/admin/breeds/',
+      transformResponse: (body: AdminBreed[] | Paginated<AdminBreed>) =>
+        Array.isArray(body) ? body : (body?.results ?? []),
+      providesTags: ['Animal'],
+    }),
+    adminCreateBreed: builder.mutation<AdminBreed, CatalogueWrite>({
+      query: body => ({ url: '/admin/breeds/', method: 'POST', body }),
+      invalidatesTags: ['Animal', 'Inventory', 'Store'],
+    }),
+    adminUpdateBreed: builder.mutation<AdminBreed, { id: number } & CatalogueWrite>({
+      query: ({ id, ...body }) => ({ url: `/admin/breeds/${id}/`, method: 'PATCH', body }),
+      invalidatesTags: ['Animal', 'Inventory', 'Store'],
+    }),
+    adminDeleteBreed: builder.mutation<void, number>({
+      query: id => ({ url: `/admin/breeds/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Animal', 'Inventory', 'Store'],
+    }),
+
     /** Every store/depot for the admin roster (GET /admin/stores/). */
+    // The server sends stores and zones as a plain array (pagination off), so both are
+    // normalised to a page here — every screen reads `.results`.
     adminListStores: builder.query<Paginated<StoreAdmin>, { search?: string } | void>({
       query: args => ({
         url: '/admin/stores/',
         params: { limit: 100, ...(args?.search ? { search: args.search } : {}) },
       }),
+      transformResponse: (body: StoreAdmin[] | Paginated<StoreAdmin>) => asPage(body),
       providesTags: ['Store'],
     }),
 
-    /** The indent queue for the admin roster (GET /indents/), filterable by status. */
-    adminListIndents: builder.query<Paginated<Indent>, { status?: string; offset?: number } | void>({
+    /** Every BMC/MCC, and the store that serves it (GET /admin/stores/plants/). */
+    adminStorePlants: builder.query<
+      { count: number; unserved: number; results: StorePlantRow[] },
+      void
+    >({
+      query: () => '/admin/stores/plants/',
+      providesTags: ['Store'],
+    }),
+    adminCreateStore: builder.mutation<StoreAdmin, StoreWrite>({
+      query: body => ({ url: '/admin/stores/', method: 'POST', body }),
+      invalidatesTags: ['Store', 'Inventory', 'Indent'],
+    }),
+    adminUpdateStore: builder.mutation<StoreAdmin, { id: number } & StoreWrite>({
+      query: ({ id, ...body }) => ({ url: `/admin/stores/${id}/`, method: 'PATCH', body }),
+      invalidatesTags: ['Store', 'Inventory', 'Indent'],
+    }),
+    adminDeleteStore: builder.mutation<void, number>({
+      query: id => ({ url: `/admin/stores/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Store', 'Inventory'],
+    }),
+    /** A keeper's account: a name and the number they sign in to the app with. */
+    adminAddStoreKeeper: builder.mutation<
+      StoreAdmin,
+      { id: number; full_name: string; mobile_no: string }
+    >({
+      query: ({ id, ...body }) => ({ url: `/admin/stores/${id}/keepers/`, method: 'POST', body }),
+      invalidatesTags: ['Store'],
+    }),
+    /** Take a keeper off a store. Their account stops signing in. */
+    adminRemoveStoreKeeper: builder.mutation<StoreAdmin, { id: number; userId: number }>({
+      query: ({ id, userId }) => ({
+        url: `/admin/stores/${id}/keepers/${userId}/remove/`,
+        method: 'POST',
+        body: {},
+      }),
+      invalidatesTags: ['Store'],
+    }),
+
+    /**
+     * The indent queue for the admin roster (GET /indents/) — by status, by a search over the
+     * Mait, breed, store or indent number, and `stale=true` for the ones nobody is moving.
+     */
+    adminListIndents: builder.query<
+      Paginated<Indent>,
+      { status?: string; offset?: number; search?: string; stale?: boolean } | void
+    >({
       query: args => ({
         url: '/indents/',
         params: {
           limit: 25,
           ...(args?.status ? { status: args.status } : {}),
           ...(args?.offset ? { offset: args.offset } : {}),
+          ...(args?.search ? { search: args.search } : {}),
+          ...(args?.stale ? { stale: 'true' } : {}),
         },
       }),
       providesTags: ['Indent'],
+    }),
+
+    /**
+     * Issue an approved indent from the office (POST /indents/{id}/issue/) — only for a Mait
+     * no store serves. Straw numbers when the depot slip lists them, else a quantity. Sets the
+     * stock aside; it is the Mait's once they confirm collecting it.
+     */
+    adminIssueIndent: builder.mutation<
+      Indent,
+      { id: number; qty?: number; straw_numbers?: string[] }
+    >({
+      query: ({ id, ...body }) => ({ url: `/indents/${id}/issue/`, method: 'POST', body }),
+      invalidatesTags: ['Indent', 'Zonal', 'Inventory', 'Store'],
     }),
 
     /** The Mait payment preview for a month (GET /reports/mait-payment/), bank details masked. */
@@ -957,9 +1368,48 @@ export const maitaiApi = api.injectEndpoints({
       providesTags: ['Payment'],
     }),
 
+    /**
+     * Change the payout's four figures. Every month is computed on read, so this rebuilds them
+     * all — the sheet is refetched rather than patched, never left under the old rates.
+     */
+    adminUpdatePayoutScheme: builder.mutation<PayoutScheme, Partial<PayoutScheme>>({
+      query: body => ({ url: '/reports/mait-payment/scheme/', method: 'PATCH', body }),
+      invalidatesTags: ['Payment'],
+    }),
+
     /** The Mait leaderboard (GET /dashboard/mait-performance/), ranked by inseminations. */
-    adminLeaderboard: builder.query<Leaderboard, void>({
-      query: () => '/dashboard/mait-performance/',
+    adminLeaderboard: builder.query<Leaderboard, { date_from?: string; date_to?: string } | void>({
+      query: args => ({
+        url: '/dashboard/mait-performance/',
+        params: {
+          ...(args?.date_from ? { date_from: args.date_from } : {}),
+          ...(args?.date_to ? { date_to: args.date_to } : {}),
+        },
+      }),
+    }),
+
+    /**
+     * The detail behind one Exceptions card. Failed OTPs keeps its own endpoint — deciding why
+     * a code failed needs more than a row builder — but answers in the same row shape.
+     */
+    adminExceptionQueue: builder.query<
+      ExceptionQueue,
+      { queue: QueueName; filter?: string; days?: number }
+    >({
+      query: ({ queue, filter, days }) => {
+        const params: Record<string, string | number> = {};
+        if (filter) {
+          params.filter = filter;
+        }
+        if (days) {
+          params.days = days;
+        }
+        if (queue === 'failed-otps') {
+          return { url: '/admin/otp-failures/', params: { ...params, limit: 200 } };
+        }
+        return { url: `/admin/exceptions/${queue}/`, params };
+      },
+      providesTags: ['Payment', 'Inventory', 'Indent', 'Pregnancy'],
     }),
 
     /** Pregnancy oversight across Maits (GET /admin/pregnancy/). */
@@ -968,9 +1418,31 @@ export const maitaiApi = api.injectEndpoints({
       providesTags: ['Pregnancy'],
     }),
 
+    /** One Mait's checks, behind a row of the oversight list (GET /admin/pregnancy/{id}/). */
+    adminMaitPregnancyChecks: builder.query<
+      MaitPregnancyChecks,
+      { maitId: number; window: PregnancyWindow; limit?: number }
+    >({
+      query: ({ maitId, window, limit = 100 }) => ({
+        url: `/admin/pregnancy/${maitId}/`,
+        params: { window, limit },
+      }),
+      providesTags: ['Pregnancy'],
+    }),
+
     /** The exception queues, read off the dashboard summary (GET /dashboard/summary/). */
     adminDashboardSummary: builder.query<DashboardSummary, void>({
       query: () => '/dashboard/summary/',
+    }),
+
+    /** AI events per day, for the dashboard chart (GET /dashboard/trends/). */
+    adminDashboardTrends: builder.query<DashboardTrends, { days: number }>({
+      query: ({ days }) => ({ url: '/dashboard/trends/', params: { granularity: 'daily', days } }),
+    }),
+
+    /** Each zone's share of the AI events over the same window (GET /dashboard/zones/). */
+    adminZonePerformance: builder.query<ZonePerformance, { days: number }>({
+      query: ({ days }) => ({ url: '/dashboard/zones/', params: { days } }),
     }),
 
     /** The payout scheme — commission, retainer and straw rate (GET /reports/mait-payment/scheme/). */
@@ -980,31 +1452,147 @@ export const maitaiApi = api.injectEndpoints({
     }),
 
     /** The audit trail (GET /admin/audit/), newest first, filterable by one search box. */
-    adminAuditTrail: builder.query<
-      { count: number; results: AuditEntry[] },
-      { search?: string; offset?: number } | void
+    adminAuditTrail: builder.query<AuditTrail, (AuditQuery & { offset?: number }) | void>({
+      query: args => {
+        const params: Record<string, string | number> = { limit: 50 };
+        for (const [key, value] of Object.entries(args ?? {})) {
+          if (value) {
+            params[key] = value;
+          }
+        }
+        return { url: '/admin/audit/', params };
+      },
+    }),
+
+    /**
+     * Portal accounts (GET /admin/users/), 25 to a page, searched and filtered on the server —
+     * the list is paged, so narrowing what arrived would hide matches on every other page.
+     */
+    adminListUsers: builder.query<
+      Paginated<AdminUser>,
+      { search?: string; role?: string; offset?: number } | void
     >({
       query: args => ({
-        url: '/admin/audit/',
+        url: '/admin/users/',
         params: {
           limit: 25,
           ...(args?.search ? { search: args.search } : {}),
+          ...(args?.role ? { role: args.role } : {}),
           ...(args?.offset ? { offset: args.offset } : {}),
         },
       }),
     }),
 
-    /** Portal accounts (GET /admin/users/), searchable by name, username or mobile. */
-    adminListUsers: builder.query<Paginated<AdminUser>, { search?: string } | void>({
-      query: args => ({
-        url: '/admin/users/',
-        params: { limit: 50, ...(args?.search ? { search: args.search } : {}) },
-      }),
+    /** Every section an Admin can be given, in sidebar order (GET /admin/users/portal-sections/). */
+    adminPortalSections: builder.query<{ results: PortalSectionEntry[]; count: number }, void>({
+      query: () => '/admin/users/portal-sections/',
+    }),
+
+    /**
+     * Create an office account (POST /admin/users/). A Mait is never created here — they are
+     * activated from their SAP record on the Maits screen.
+     */
+    adminCreateUser: builder.mutation<AdminUser, AdminUserCreate>({
+      query: body => ({ url: '/admin/users/', method: 'POST', body }),
+    }),
+
+    /**
+     * Change one account (PATCH /admin/users/{id}/) — only the fields sent. The answer is the
+     * whole account, which the screen puts back into its row rather than reloading the page. A
+     * Mait's login switched off shows on the Maits screen, so that list is refreshed too.
+     */
+    adminUpdateUser: builder.mutation<AdminUser, { id: number; body: AdminUserPatch }>({
+      query: ({ id, body }) => ({ url: `/admin/users/${id}/`, method: 'PATCH', body }),
+      // A zone or number given on Users & roles is a manager on Zones.
+      invalidatesTags: ['Mait', 'Zone'],
     }),
 
     /** Zones (GET /admin/zones/) — each with how much of the network it holds. */
     adminListZones: builder.query<Paginated<Zone>, void>({
       query: () => ({ url: '/admin/zones/', params: { limit: 100 } }),
+      transformResponse: (body: Zone[] | Paginated<Zone>) => asPage(body),
+      providesTags: ['Zone'],
+    }),
+
+    /**
+     * Every BMC/MCC in the master data, its size and the zone holding it (GET
+     * /admin/zones/plants/) — what a zone is built from. Typed in nowhere: they arrive with SAP.
+     */
+    adminZonePlants: builder.query<
+      { count: number; unassigned: number; results: ZonePlantRow[] },
+      void
+    >({
+      query: () => '/admin/zones/plants/',
+      providesTags: ['Zone'],
+    }),
+
+    /** Who runs the zones: number, app, and what they did in the window (GET .../managers/). */
+    adminZoneManagers: builder.query<ZoneManagers, { days: number }>({
+      query: ({ days }) => ({ url: '/admin/zones/managers/', params: { days } }),
+      providesTags: ['Zone'],
+    }),
+
+    /**
+     * What the managers have done (GET /admin/zones/activity/). `kind=decisions` drops sign-ins,
+     * which otherwise bury the two approvals somebody came to read; `manager` narrows to one.
+     */
+    adminZoneActivity: builder.query<
+      ZoneActivity,
+      { days: number; kind: 'decisions' | 'all'; manager?: number | null }
+    >({
+      query: ({ days, kind, manager }) => ({
+        url: '/admin/zones/activity/',
+        params: { days, kind, ...(manager ? { manager } : {}) },
+      }),
+      providesTags: ['Zone'],
+    }),
+
+    /** Create a zone with the centres it covers (POST /admin/zones/). */
+    adminCreateZone: builder.mutation<Zone, ZoneWrite>({
+      query: body => ({ url: '/admin/zones/', method: 'POST', body }),
+      invalidatesTags: ['Zone'],
+    }),
+
+    /** Amend a zone (PATCH /admin/zones/{id}/). `plants` is the whole membership, not an addition. */
+    adminUpdateZone: builder.mutation<Zone, { id: number; body: ZoneWrite }>({
+      query: ({ id, body }) => ({ url: `/admin/zones/${id}/`, method: 'PATCH', body }),
+      invalidatesTags: ['Zone'],
+    }),
+
+    /** Delete a zone — refused by the server while any account still reads it. */
+    adminDeleteZone: builder.mutation<void, number>({
+      query: id => ({ url: `/admin/zones/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Zone'],
+    }),
+
+    /**
+     * Set a zonal manager's number (PATCH /admin/zones/managers/{id}/) — the one thing this
+     * screen writes about a person, and the thing that decides whether they have the app.
+     */
+    adminSetZoneManagerMobile: builder.mutation<ZoneManager, { id: number; mobile_no: string }>({
+      query: ({ id, mobile_no }) => ({
+        url: `/admin/zones/managers/${id}/`,
+        method: 'PATCH',
+        body: { mobile_no },
+      }),
+      invalidatesTags: ['Zone'],
+    }),
+
+    /**
+     * The OTP pipeline (GET /admin/otp-pipeline/): every code through made → gateway accepted →
+     * typed in → used, and the Super OTP asks with a verdict each — for information only. No
+     * tag: the screen polls, as the portal does, because codes are sent all day.
+     */
+    adminOtpPipeline: builder.query<OtpPipeline, OtpPipelineQuery>({
+      query: args => {
+        const params: Record<string, string | number> = { limit: 25 };
+        for (const [key, value] of Object.entries(args)) {
+          if (value) {
+            params[key] = value;
+          }
+        }
+        return { url: '/admin/otp-pipeline/', params };
+      },
     }),
 
     /**
@@ -1039,6 +1627,30 @@ export const maitaiApi = api.injectEndpoints({
       }),
     }),
 
+    /**
+     * A farmer-check code for a Mait with no signal, checked on her phone (accounts.field_codes).
+     *
+     * The office picks the Mait who rang and the farmer in front of them — a member by code, or
+     * a non-member by number. Exactly one of `memberCode`/`farmerMobile`, as the portal's own
+     * field-code card does; the server validates the same way. The response carries `code` once,
+     * like every other issue here.
+     */
+    adminIssueFieldCode: builder.mutation<
+      SuperOtpIssued,
+      { mait: string; memberCode?: string; farmerMobile?: string; farmerName?: string }
+    >({
+      query: ({ mait, memberCode, farmerMobile, farmerName }) => ({
+        url: '/admin/super-otp/field-code/',
+        method: 'POST',
+        body: {
+          mait,
+          member_code: memberCode ?? '',
+          farmer_mobile: farmerMobile ?? '',
+          farmer_name: farmerName ?? '',
+        },
+      }),
+    }),
+
     /** Decline an ask, with the reason kept on the record (POST .../decline/). */
     adminDeclineSuperOtp: builder.mutation<SuperOtpRow, { id: number; reason: string }>({
       query: ({ id, reason }) => ({
@@ -1051,6 +1663,39 @@ export const maitaiApi = api.injectEndpoints({
     /** The SAP import history (GET /admin/uploads/), newest first — status and progress. */
     adminUploadHistory: builder.query<Paginated<UploadJob>, void>({
       query: () => ({ url: '/admin/uploads/', params: { limit: 25 } }),
+      providesTags: ['Upload'],
+    }),
+
+    /**
+     * The newest upload of one master, for the line under its card ("Last: 105,412 rows on
+     * 12 Oct"). Asked per type rather than picked out of the history: a master must not read
+     * "Never uploaded" because newer uploads of the other two pushed it off the first page.
+     */
+    adminLastUpload: builder.query<Paginated<UploadJob>, string>({
+      query: uploadType => ({
+        url: '/admin/uploads/',
+        params: { upload_type: uploadType, limit: 1 },
+      }),
+      providesTags: ['Upload'],
+    }),
+
+    /**
+     * The rows an import rejected, each with its spreadsheet row number (GET
+     * /admin/uploads/{id}/errors/) — so the fix happens against the file the admin has open.
+     */
+    adminUploadErrors: builder.query<UploadErrorReport, number>({
+      query: id => ({ url: `/admin/uploads/${id}/errors/` }),
+    }),
+
+    /** One import, polled while it runs (GET /admin/uploads/{id}/). */
+    adminUploadStatus: builder.query<UploadJob, number>({
+      query: id => ({ url: `/admin/uploads/${id}/` }),
+    }),
+
+    /** Which masters have a landed upload to hand back (GET /admin/uploads/snapshots/). */
+    adminUploadSnapshots: builder.query<{ results: MasterSnapshot[] }, void>({
+      query: () => ({ url: '/admin/uploads/snapshots/' }),
+      providesTags: ['Upload'],
     }),
 
     /**
@@ -1129,29 +1774,82 @@ export const {
   useZonalLookupQuery,
   useAssignZonalMppMutation,
   usePasswordLoginMutation,
+  usePasswordResetRequestMutation,
+  usePasswordResetVerifyMutation,
   useAdminListAiEventsQuery,
   useDeleteAiEventMutation,
+  useBulkDeleteAiEventsMutation,
+  useOfficeCompleteAiEventMutation,
   useAdminSearchMembersQuery,
   useAdminListMaitsQuery,
+  useAdminListMembersQuery,
+  useRevealMemberAadhaarMutation,
+  useMemberMobileHistoryQuery,
+  useChangeMemberMobileMutation,
+  useAdminPendingMaitsQuery,
+  useAdminActivateMaitMutation,
+  useAdminUpdateMaitMutation,
+  useAdminRecentMaitLoginsQuery,
   useGetMppQuery,
-  useAdminSearchNonMembersQuery,
+  useAdminListNonMembersQuery,
   useAdminGetNonMemberQuery,
   useAdminInventoryOversightQuery,
+  useAdminMaitStockQuery,
+  useAdminAdjustMaitStockMutation,
+  useAdminStoreStockQuery,
+  useAdminUpdateStoreStockMutation,
   useAdminListProductsQuery,
+  useAdminCreateProductMutation,
+  useAdminUpdateProductMutation,
+  useAdminDeleteProductMutation,
+  useAdminListBreedsQuery,
+  useAdminPregnancyRateQuery,
+  useAdminUpdatePregnancyRateMutation,
+  useAdminCreateBreedMutation,
+  useAdminUpdateBreedMutation,
+  useAdminDeleteBreedMutation,
   useAdminListStoresQuery,
+  useAdminStorePlantsQuery,
+  useAdminCreateStoreMutation,
+  useAdminUpdateStoreMutation,
+  useAdminDeleteStoreMutation,
+  useAdminAddStoreKeeperMutation,
+  useAdminRemoveStoreKeeperMutation,
   useAdminListIndentsQuery,
+  useAdminIssueIndentMutation,
   useAdminMaitPaymentQuery,
+  useAdminUpdatePayoutSchemeMutation,
   useAdminLeaderboardQuery,
   useAdminPregnancyOversightQuery,
+  useAdminExceptionQueueQuery,
+  useAdminMaitPregnancyChecksQuery,
   useAdminDashboardSummaryQuery,
+  useAdminDashboardTrendsQuery,
+  useAdminZonePerformanceQuery,
   useAdminPayoutSchemeQuery,
   useAdminAuditTrailQuery,
   useAdminListUsersQuery,
+  useAdminPortalSectionsQuery,
+  useAdminCreateUserMutation,
+  useAdminUpdateUserMutation,
   useAdminListZonesQuery,
+  useAdminZonePlantsQuery,
+  useAdminZoneManagersQuery,
+  useAdminZoneActivityQuery,
+  useAdminCreateZoneMutation,
+  useAdminUpdateZoneMutation,
+  useAdminDeleteZoneMutation,
+  useAdminSetZoneManagerMobileMutation,
   useAdminSuperOtpListQuery,
+  useAdminOtpPipelineQuery,
   useAdminIssueSuperOtpMutation,
   useAdminIssueSuperOtpForNumberMutation,
+  useAdminIssueFieldCodeMutation,
   useAdminDeclineSuperOtpMutation,
   useAdminUploadHistoryQuery,
+  useAdminLastUploadQuery,
+  useAdminUploadStatusQuery,
+  useAdminUploadErrorsQuery,
+  useAdminUploadSnapshotsQuery,
   useAdminMppCoverageQuery,
 } = maitaiApi;

@@ -23,15 +23,8 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Glyph from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
@@ -146,16 +139,16 @@ export default function IndentsScreen({
         {/* Who is asking: their initial on a yolk disc, their code, where they work. */}
         <View style={styles.head}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarLabel}>{initials(first.mait_name)}</Text>
+            <AppText style={styles.avatarLabel}>{initials(first.mait_name)}</AppText>
           </View>
           <View style={styles.headBody}>
-            <Text style={styles.maitName} numberOfLines={1}>
+            <AppText style={styles.maitName} numberOfLines={1}>
               {first.mait_name}
-            </Text>
-            <Text style={styles.maitMeta} numberOfLines={1}>
-              <Text style={styles.metaLabel}>{`${t('zonal.vendorCodeLabel')}: `}</Text>
+            </AppText>
+            <AppText style={styles.maitMeta} numberOfLines={1}>
+              <AppText style={styles.metaLabel}>{`${t('zonal.vendorCodeLabel')}: `}</AppText>
               {first.mait_code || '—'}
-            </Text>
+            </AppText>
           </View>
           <View style={[styles.waited, waited >= 3 && styles.waitedLong]}>
             <Ionicons
@@ -163,18 +156,18 @@ export default function IndentsScreen({
               size={12}
               color={waited >= 3 ? colors.surface : yolk[800]}
             />
-            <Text style={[styles.waitedLabel, waited >= 3 && styles.waitedLabelLong]}>
+            <AppText style={[styles.waitedLabel, waited >= 3 && styles.waitedLabelLong]}>
               {t('zonal.waitedDays', { count: waited })}
-            </Text>
+            </AppText>
           </View>
         </View>
 
         {!!first.mpp_names.length && (
           <View style={styles.places}>
             <Ionicons name="location" size={12} color={colors.info} />
-            <Text style={styles.placesLabel} numberOfLines={1}>
+            <AppText style={styles.placesLabel} numberOfLines={1}>
               {first.mpp_names.join(' · ')}
-            </Text>
+            </AppText>
           </View>
         )}
 
@@ -192,12 +185,12 @@ export default function IndentsScreen({
                   <Glyph name={itemIcon(row)} size={14} color={colors.surface} />
                 </View>
                 <View style={styles.itemBody}>
-                  <Text style={styles.itemName} numberOfLines={1}>
+                  <AppText style={styles.itemName} numberOfLines={1}>
                     {itemLabel(row, i18n.language)}
-                  </Text>
-                  <Text style={styles.itemMeta}>{`IND-${row.id}`}</Text>
+                  </AppText>
+                  <AppText style={styles.itemMeta}>{`IND-${row.id}`}</AppText>
                 </View>
-                <Text style={styles.itemQty}>{row.qty_requested}</Text>
+                <AppText style={styles.itemQty}>{row.qty_requested}</AppText>
                 <Pill
                   label={pill.label}
                   tone={pill.tone}
@@ -210,13 +203,13 @@ export default function IndentsScreen({
 
         <View style={styles.foot}>
           <Ionicons name="calendar-outline" size={13} color={colors.textMuted} />
-          <Text style={styles.footLabel} numberOfLines={1}>
+          <AppText style={styles.footLabel} numberOfLines={1}>
             {t('zonal.requestFoot', {
               count: group.rows.length,
               when: `${raised.getDate()} ${MONTHS[raised.getMonth()]}, ${clock(first.requested_at)}`,
             })}
-          </Text>
-          <Text style={styles.review}>{t('zonal.review')}</Text>
+          </AppText>
+          <AppText style={styles.review}>{t('zonal.review')}</AppText>
           <Ionicons name="chevron-forward" size={16} color={colors.primaryDark} />
         </View>
       </Pressable>
@@ -239,9 +232,9 @@ export default function IndentsScreen({
     }
     if (!groups.length) {
       return term ? (
-        <Text style={rowStyles.quiet} testID="zonal-find-none">
+        <AppText style={rowStyles.quiet} testID="zonal-find-none">
           {t('zonal.findNone', { term })}
-        </Text>
+        </AppText>
       ) : (
         <EmptyState
           title={t('zonal.emptyTitle')}

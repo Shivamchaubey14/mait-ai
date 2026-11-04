@@ -24,7 +24,7 @@ import { useTranslation } from 'react-i18next';
 
 import { attachPhoto, completeEvent, isProvisional } from '@api/capture';
 import type { CaptureProgress } from '@api/capture';
-import { ErrorCode, errorCodeOf, newClientUuid } from '@api/client';
+import { api, ErrorCode, errorCodeOf, newClientUuid } from '@api/client';
 import {
   maitaiApi,
   useGetInventorySummaryQuery,
@@ -39,9 +39,17 @@ import {
   useAttachPaymentProofMutation,
   useAskPaymentOfficeCodeMutation,
 } from '@api/endpoints';
-import { clockTime, enqueue, pendingCount, readQueue, retryFailed } from '@api/queue';
+import {
+  clockTime,
+  describeQueue,
+  enqueue,
+  readQueue,
+  retryFailed,
+  subscribeQueue,
+} from '@api/queue';
 import type { QueuedJob, QueuedLabel } from '@api/queue';
 import { drainQueue } from '@api/sync';
+import { configurePackSync, refreshPack, subscribePack } from '@api/offlinePack';
 import type { SyncProgress } from '@api/sync';
 import type {
   AIEvent,
@@ -59,9 +67,9 @@ import type { RouteKey } from '@/navigation/routes';
 import { Toast } from '@/components/toast';
 import AddNonMemberScreen from '@/features/aiFlow/AddNonMemberScreen';
 import CapturePhotoScreen from '@/features/aiFlow/CapturePhotoScreen';
-import CaptureDoneScreen from '@/features/aiFlow/CaptureDoneScreen';
+import RecordedScreen from '@/features/aiFlow/RecordedScreen';
 import CollectPaymentScreen, { PaymentMode } from '@/features/aiFlow/CollectPaymentScreen';
-import ConfirmFarmerScreen from '@/features/aiFlow/ConfirmFarmerScreen';
+import ConfirmFarmerScreen, { type OfficeCheck } from '@/features/aiFlow/ConfirmFarmerScreen';
 import MemberNothingToCollectScreen from '@/features/aiFlow/MemberNothingToCollectScreen';
 import RecordPaymentScreen from '@/features/aiFlow/RecordPaymentScreen';
 import SelectAnimalScreen from '@/features/aiFlow/SelectAnimalScreen';
@@ -70,13 +78,18 @@ import SelectFarmerScreen from '@/features/aiFlow/SelectFarmerScreen';
 import SelectMppScreen from '@/features/aiFlow/SelectMppScreen';
 import SelectNonMemberScreen from '@/features/aiFlow/SelectNonMemberScreen';
 import UnfinishedScreen from '@/features/aiFlow/UnfinishedScreen';
+import NeedsAttentionScreen, { useNeedsAttention } from '@/features/aiFlow/NeedsAttentionScreen';
 import { resumePoint, whatIsMissing } from '@/features/aiFlow/resume';
 import OwnerTypeScreen, { OwnerType } from '@/features/aiFlow/OwnerTypeScreen';
 import { useLiveScope } from '@/features/auth/liveScope';
 import { loggedOut, tokensRefreshed } from '@/features/auth/authSlice';
 import AiEventDetailScreen from '@/features/history/AiEventDetailScreen';
 import AiEventsScreen from '@/features/history/AiEventsScreen';
-import SyncQueueScreen, { toCaptures } from '@/features/history/SyncQueueScreen';
+import { radioSaysOffline, REACH_RETRY_MS, serverReachable } from '@api/reachability';
+import SyncQueueScreen, {
+  toCaptures,
+  type QueuedCapture,
+} from '@/features/history/SyncQueueScreen';
 import HomeScreen from '@/features/home/HomeScreen';
 import SettingsScreen from '@/features/settings/SettingsScreen';
 import IndentDetailScreen from '@/features/stock/IndentDetailScreen';
@@ -91,6 +104,9 @@ import RequestStockScreen from '@/features/stock/RequestStockScreen';
 import StockScreen from '@/features/stock/StockScreen';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { apiBaseUrl, RETRY_TICK_MS } from '@/config/env';
+
+/** How often the offline pack is brought up to date while the app is open and online. */
+const PACK_REFRESH_MS = 30 * 60_000;
 import { colors } from '@theme/tokens';
 
 /** Where the capture flow has got to. `null` means it is not running. */
@@ -132,8 +148,13 @@ const STEP_ORDER: CaptureStep[] = [
   'done',
 ];
 
-/** Who the capture is for. Exactly one of the two codes is ever set. */
-type Farmer =
+/**
+ * Who the capture is for. Exactly one of the two codes is ever set.
+ *
+ * `officeCheck` is set where step 3 checked her with no signal, against a code the office
+ * phoned her — carried to the event so the server can match it against the office's record.
+ */
+type Farmer = (
   | { kind: 'member'; name: string; memberCode: string }
   | {
       kind: 'nonMember';
@@ -147,12 +168,17 @@ type Farmer =
        * picked off the collection point's roster.
        */
       clientUuid?: string;
-    };
+    }
+) & { officeCheck?: OfficeCheck };
 
 export default function RootNavigator(): React.JSX.Element {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const accessToken = useAppSelector(state => state.auth.accessToken);
+  // Whose offline pack to keep, where there is one to keep: a Mait's. Null for anyone else.
+  const packOwner = useAppSelector(state =>
+    state.auth.user?.role === 'mait' ? state.auth.user.id : null,
+  );
   const refreshToken = useAppSelector(state => state.auth.refreshToken);
 
   const [tab, setTab] = useState<Tab>('home');
@@ -316,6 +342,8 @@ export default function RootNavigator(): React.JSX.Element {
   const [queueOpen, setQueueOpen] = useState(false);
   /** The list of captures still owed a finish, opened from Home. */
   const [unfinishedOpen, setUnfinishedOpen] = useState(false);
+  /** Everything on the phone that needs the Mait, opened from Home's red card. */
+  const [attentionOpen, setAttentionOpen] = useState(false);
   /**
    * The AI event being read, or null for the list.
    *
@@ -328,6 +356,34 @@ export default function RootNavigator(): React.JSX.Element {
   const [closing, setClosing] = useState(false);
   const [closeProblem, setCloseProblem] = useState<string | null>(null);
   const [queueJobs, setQueueJobs] = useState<QueuedJob[]>([]);
+
+  /**
+   * The waiting count and the waiting list, from one place.
+   *
+   * Both are the queue as it stands, so both are set together from it — after every change the
+   * queue makes, and once at launch. They used to be set apart, from a dozen spots, and could
+   * disagree: Home saying "3 waiting" over an empty waiting list.
+   */
+  const showQueue = useCallback((jobs: QueuedJob[]) => {
+    setQueueJobs(jobs);
+    setPending(jobs.length);
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    readQueue().then(jobs => {
+      if (__DEV__) {
+        console.warn(describeQueue(jobs));
+      }
+      if (alive) {
+        showQueue(jobs);
+      }
+    });
+    const stop = subscribeQueue(jobs => alive && showQueue(jobs));
+    return () => {
+      alive = false;
+      stop();
+    };
+  }, [showQueue]);
   const [draining, setDraining] = useState(false);
   /** How far the running drain has got, and which capture is on the wire. */
   const [progress, setProgress] = useState<SyncProgress | null>(null);
@@ -479,11 +535,23 @@ export default function RootNavigator(): React.JSX.Element {
       return null;
     }
     try {
-      const response = await fetch(`${apiBaseUrl()}/auth/refresh/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-        body: JSON.stringify({ refresh: refreshToken }),
-      });
+      // Bounded like every other call the drain makes (`sync.ts` fetchWithin): the drain awaits
+      // this on a 401, so a refresh that hung on a silent socket would hang the whole drain —
+      // and, through the one-drain-at-a-time guard, every sync after it. An abort here is read
+      // as "could not reach the server", so the Mait stays signed in and the queue waits.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30_000);
+      let response: Response;
+      try {
+        response = await fetch(`${apiBaseUrl()}/auth/refresh/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+          body: JSON.stringify({ refresh: refreshToken }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
       if (!response.ok) {
         dispatch(loggedOut());
         return null;
@@ -500,14 +568,17 @@ export default function RootNavigator(): React.JSX.Element {
 
   const sync = useCallback(async () => {
     setDraining(true);
+    // The farmers and villages on the phone, freshened on the same gesture — never awaited:
+    // the queue going up must not wait on a roster coming down.
+    if (packOwner !== null) {
+      refreshPack(packOwner);
+    }
     // Both directions on one gesture. Every pull-to-refresh in the app calls this, so a Mait
     // pulling any screen also re-reads who they are and what the office has changed — which
     // is the one thing they cannot see from the handset.
     const scopeRead = refreshScope();
     const result = await drainQueue(accessToken, setProgress, reauth);
     await scopeRead;
-    setPending(result.remaining);
-    setQueueJobs(await readQueue());
     setDraining(false);
     // Cleared rather than left at its last value: the line is about a send happening now, and
     // a finished count sitting under the hero reads as one that is still running.
@@ -518,14 +589,58 @@ export default function RootNavigator(): React.JSX.Element {
       // lands.
       eventsChanged();
     }
-  }, [accessToken, eventsChanged, refreshScope, reauth]);
+  }, [accessToken, eventsChanged, refreshScope, reauth, packOwner]);
+
+  /**
+   * The offline pack (`offlinePack.ts`): every MPP, farmer and animal this Mait works with,
+   * kept on the phone so steps 1–6 run with no signal.
+   *
+   * Refreshed on sign-in, whenever the connection comes back, every half hour while it holds,
+   * and by `sync` above on every pull and every return to the app. Each change to it tells the
+   * pickers to read again, so a farmer the office added appears without leaving the screen.
+   */
+  const tokenRef = useRef(accessToken);
+  tokenRef.current = accessToken;
+  const onlineRef = useRef(online);
+  onlineRef.current = online;
+
+  useEffect(() => {
+    if (packOwner === null) {
+      return;
+    }
+    configurePackSync({
+      accessToken: () => tokenRef.current,
+      reauth,
+      online: () => onlineRef.current,
+    });
+    return () => configurePackSync(null);
+  }, [packOwner, reauth]);
+
+  useEffect(
+    () => subscribePack(() => dispatch(api.util.invalidateTags(['MPP', 'Member', 'Animal']))),
+    [dispatch],
+  );
+
+  useEffect(() => {
+    if (packOwner === null || !online) {
+      return;
+    }
+    refreshPack(packOwner);
+    const timer = setInterval(() => refreshPack(packOwner), PACK_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [packOwner, online]);
+
+  /**
+   * What needs the Mait, for Home's red card and the list behind it. A Mait's only: for any
+   * other account the server would answer about nobody, so it is not asked.
+   */
+  const attentionCaptures = useMemo(() => toCaptures(queueJobs), [queueJobs]);
+  const attention = useNeedsAttention(attentionCaptures, packOwner === null);
 
   /** Read the queue for the screen that lists it, without sending anything. */
   const refreshQueue = useCallback(async () => {
-    const jobs = await readQueue();
-    setQueueJobs(jobs);
-    setPending(jobs.length);
-  }, []);
+    showQueue(await readQueue());
+  }, [showQueue]);
 
   /**
    * Drain when the connection returns, and once on mount.
@@ -541,16 +656,45 @@ export default function RootNavigator(): React.JSX.Element {
    * over it. The two below are what cover that.
    */
   useEffect(() => {
-    pendingCount().then(setPending);
-
-    const unsubscribe = NetInfo.addEventListener(state => {
-      const connected = !!state.isConnected;
-      setOnline(connected);
-      if (connected) {
-        sync();
+    // Connected is asked of the server too (`api/reachability`): a radio that is up over a
+    // link going nowhere is offline, and is asked again every half-minute until it is not,
+    // because a link like that recovers without the radio ever changing state.
+    let alive = true;
+    let asking = 0;
+    let again: ReturnType<typeof setTimeout> | null = null;
+    const stopAsking = () => {
+      if (again) {
+        clearTimeout(again);
+        again = null;
       }
+    };
+    const ask = async () => {
+      const mine = ++asking;
+      const reachable = await serverReachable();
+      if (!alive || mine !== asking) {
+        return;
+      }
+      setOnline(reachable);
+      if (reachable) {
+        sync();
+      } else {
+        again = setTimeout(ask, REACH_RETRY_MS);
+      }
+    };
+    const unsubscribe = NetInfo.addEventListener(state => {
+      stopAsking();
+      if (radioSaysOffline(state)) {
+        asking += 1;
+        setOnline(false);
+        return;
+      }
+      ask();
     });
-    return () => unsubscribe();
+    return () => {
+      alive = false;
+      stopAsking();
+      unsubscribe();
+    };
   }, [sync]);
 
   /**
@@ -589,7 +733,6 @@ export default function RootNavigator(): React.JSX.Element {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
       if (state === 'active') {
-        pendingCount().then(setPending);
         sync();
       }
     });
@@ -635,6 +778,13 @@ export default function RootNavigator(): React.JSX.Element {
     if (unfinishedOpen) {
       return reverse(() => {
         setUnfinishedOpen(false);
+        setTab('home');
+      });
+    }
+
+    if (attentionOpen) {
+      return reverse(() => {
+        setAttentionOpen(false);
         setTab('home');
       });
     }
@@ -725,6 +875,7 @@ export default function RootNavigator(): React.JSX.Element {
   }, [
     queueOpen,
     unfinishedOpen,
+    attentionOpen,
     step,
     farmer,
     ownerType,
@@ -794,7 +945,6 @@ export default function RootNavigator(): React.JSX.Element {
           outcome,
         },
       );
-      setPending(await pendingCount());
       queued = true;
     }
 
@@ -868,6 +1018,33 @@ export default function RootNavigator(): React.JSX.Element {
     setPayProblem(null);
     setPayFailed(null);
     setPayOfficeAsked(false);
+  };
+
+  /**
+   * Back into the payment step for a queued capture, where her code is asked for again.
+   *
+   * From the waiting list and from Needs attention — one handler, so the two cannot drift.
+   */
+  const enterCodeFor = (capture: QueuedCapture) => {
+    // A member owes no code, and a capture the server has not received yet has no payment to
+    // put a code against — the screen would have nothing to send, and its button did nothing.
+    // Both belong on the waiting list, which sends the capture and says how it stands.
+    if (capture.kind === 'member' || typeof capture.eventId !== 'number') {
+      setAttentionOpen(false);
+      setQueueOpen(true);
+      refreshQueue();
+      sync();
+      return;
+    }
+    const job = queueJobs.find(item => item.clientUuid === capture.clientUuid);
+    setQueueOpen(false);
+    setAttentionOpen(false);
+    setPayMode((job?.payload.mode as PaymentMode) ?? 'COD');
+    setCodeSentTo(null);
+    clearPaymentDraft();
+    setEvent({ id: capture.eventId, amount_due: capture.amount } as AIEvent);
+    setFarmer({ kind: 'nonMember', name: capture.farmer, nonMemberId: 0 });
+    setStep('recordPayment');
   };
 
   const leaveCapture = () => {
@@ -986,7 +1163,6 @@ export default function RootNavigator(): React.JSX.Element {
         // deducts as normal wherever the straw is still there.
         { withoutStock: true },
       );
-      setPending(outcome.remaining);
       setClosing(false);
 
       // Refused, not merely unsent: nothing is queued and no retry will help, so the Mait is
@@ -1073,9 +1249,11 @@ export default function RootNavigator(): React.JSX.Element {
             // Null on a capture the server has not made yet. The drain fills it in from what
             // the create came back with — see `resolveEventId` in `api/sync`.
             eventId: isProvisional(event.id) ? null : event.id,
-            mode: mode ?? 'COD',
+            // No mode for a member: she pays nothing here and the server records a deduction.
+            // Filing hers as cash made the waiting list ask for a code she never gives.
+            ...(mode ? { mode } : {}),
           },
-          captureLabel(mode ?? 'COD'),
+          captureLabel(mode),
         );
       } else {
         // A real refusal, shown rather than swallowed. The commonest by far is a breed the
@@ -1088,7 +1266,6 @@ export default function RootNavigator(): React.JSX.Element {
     }
 
     const outcome = await completeEvent(event.id, clientUuid, accessToken, captureLabel(mode));
-    setPending(outcome.remaining);
 
     // Refused, not merely unsent. Nothing is queued and no retry will help, so the Mait is
     // told why — and left on the payment screen rather than shown a screen saying it is done.
@@ -1279,7 +1456,10 @@ export default function RootNavigator(): React.JSX.Element {
             ? { kind: 'member', memberCode: farmer.memberCode }
             : { kind: 'nonMember', id: farmer.nonMemberId }
         }
-        onConfirm={() => setStep('selectAnimal')}
+        onConfirm={(_animals, officeCheck) => {
+          setFarmer(current => (current ? { ...current, officeCheck } : current));
+          setStep('selectAnimal');
+        }}
         // Back to whichever roster she was picked from. Never into the form that may have
         // made her — re-submitting it would try to register the same woman twice, which the
         // server now refuses outright.
@@ -1294,12 +1474,8 @@ export default function RootNavigator(): React.JSX.Element {
         mpp={mpp}
         accessToken={accessToken}
         online={online}
-        onCreated={(created, queued) => {
-          if (queued) {
-            // Registered on this handset, not on the server. The count under Home has just
-            // gone up and should say so before the Mait reaches the next screen.
-            pendingCount().then(setPending);
-          }
+        // Queued or sent, the count under Home follows the queue on its own.
+        onCreated={created => {
           chooseNonMember(created);
         }}
         // Back to whichever roster this was reached from — the members, if the Mait went
@@ -1326,9 +1502,6 @@ export default function RootNavigator(): React.JSX.Element {
           // what this handset is holding.
           if (!animals.some(known => known.id === selected.id)) {
             animalsChanged();
-            if (isProvisional(selected.id)) {
-              pendingCount().then(setPending);
-            }
           }
           setStep('selectBreed');
         }}
@@ -1362,17 +1535,13 @@ export default function RootNavigator(): React.JSX.Element {
             farmer.kind === 'nonMember' && isProvisional(farmer.nonMemberId)
               ? farmer.clientUuid
               : undefined,
+          officeCheck: farmer.officeCheck,
         }}
         accessToken={accessToken}
         queueLabel={captureLabel()}
-        onCreated={(created, queued) => {
+        // Queued or sent, the count under Home follows the queue on its own.
+        onCreated={created => {
           setEvent(created);
-          if (queued) {
-            // Nothing reached the server, and the count under Home has just gone up. Read
-            // back so the badge and the waiting list agree with what actually happened,
-            // rather than waiting for the next drain to notice.
-            pendingCount().then(setPending);
-          }
           setStep('capturePhoto');
         }}
         onBack={() => setStep('selectAnimal')}
@@ -1385,7 +1554,45 @@ export default function RootNavigator(): React.JSX.Element {
       <CapturePhotoScreen
         busy={uploading}
         progress={sending}
+        ctaLabel={farmer?.kind === 'member' ? t('aiFlow.recordAi') : undefined}
         onCaptured={async photo => {
+          // A member owes nothing in the yard, so the photo is the last thing the Mait does.
+          // Everything after it — the photo, the deduction, the close — goes into the queue in
+          // order and is sent from there in the background, the way a capture with no signal
+          // always has been. The Mait is told it is recorded at once and taken Home, rather than
+          // watching a bar while a weak signal carries a photograph. Anything the server
+          // refuses is on the waiting list with its reason, as every queued record is.
+          if (farmer?.kind === 'member') {
+            // The card first, so the Mait is not kept waiting on any of what follows.
+            setStep('done');
+            const eventId = isProvisional(event.id) ? null : event.id;
+            const label = captureLabel();
+            const capture = { id: event.id, uuid: clientUuid };
+            // Behind the card, in order. The photo through the same upload the screen always
+            // used — which queues it itself when there is no signal — and only then the
+            // deduction and the close, so neither can ever reach the server ahead of the
+            // photo they depend on.
+            (async () => {
+              const sent = await attachPhoto(capture.id, capture.uuid, photo, accessToken, label);
+              if (!sent.sent && !sent.queued) {
+                // Refused outright. Nothing after it is queued: the capture stays open, in
+                // Unfinished, where Home calls it out in red until it is put right.
+                return;
+              }
+              // The server records a member's deduction whatever mode is sent; the queue job
+              // carries one because a non-member's needs it.
+              await enqueue('verifyPayment', capture.uuid, { eventId, mode: 'COD' }, label);
+              await enqueue(
+                'completeEvent',
+                capture.uuid,
+                { eventId, closeWithoutStock: false },
+                label,
+              );
+              await sync();
+            })().catch(() => undefined);
+            return;
+          }
+
           setUploading(true);
           const outcome = await attachPhoto(
             event.id,
@@ -1399,13 +1606,11 @@ export default function RootNavigator(): React.JSX.Element {
           // Cleared before the step changes, so a second capture does not open its review
           // screen wearing the tail of the first one's upload.
           setSending(null);
-          setPending(outcome.remaining);
           if (outcome.sent) {
             setLastSyncAt(clockTime());
           }
-          // A member owes nothing and a non-member owes now: two different screens, and the
-          // fork was answered at step 1.
-          setStep(farmer?.kind === 'member' ? 'memberStatement' : 'collectPayment');
+          // A member has already gone Home from above; what reaches here owes payment now.
+          setStep('collectPayment');
         }}
         onBack={() => setStep('selectBreed')}
       />
@@ -1458,7 +1663,9 @@ export default function RootNavigator(): React.JSX.Element {
         code={payCode}
         onCodeChange={setPayCode}
         onResend={() => startCollection(payMode)}
-        problem={payProblem}
+        // The server's refusal of the payment or the close as well as a wrong code: this
+        // screen showed only the second, so a refused finish looked like a button doing nothing.
+        problem={payProblem ?? payFailed}
         busy={payBusy}
         onFinish={async () => {
           // With a code in hand it has to be right before anything closes. With none — no
@@ -1567,6 +1774,34 @@ export default function RootNavigator(): React.JSX.Element {
     );
   }
 
+  if (attentionOpen) {
+    return withTabs(
+      <NeedsAttentionScreen
+        attention={attention}
+        onOpenQueue={() => {
+          setAttentionOpen(false);
+          setQueueOpen(true);
+          refreshQueue();
+          sync();
+        }}
+        onEnterCode={enterCodeFor}
+        onResume={unfinished => {
+          setAttentionOpen(false);
+          resumeCapture(unfinished);
+        }}
+        onOpenEvent={eventId => {
+          setAttentionOpen(false);
+          setTab('history');
+          setEventView(eventId);
+        }}
+        onBack={() => {
+          setAttentionOpen(false);
+          setTab('home');
+        }}
+      />,
+    );
+  }
+
   if (queueOpen) {
     // The uuid on the wire is what tells one row's "Syncing" from the rest of the list's
     // "Waiting" — without it every row claimed to be moving at once.
@@ -1596,21 +1831,7 @@ export default function RootNavigator(): React.JSX.Element {
           );
           await sync();
         }}
-        onEnterCode={capture => {
-          // Back into the payment step for that capture, where the code is asked for again.
-          const job = queueJobs.find(item => item.clientUuid === capture.clientUuid);
-          setQueueOpen(false);
-          setPayMode((job?.payload.mode as PaymentMode) ?? 'COD');
-          setCodeSentTo(null);
-          clearPaymentDraft();
-          setEvent({ id: capture.eventId, amount_due: capture.amount } as AIEvent);
-          setFarmer({
-            kind: capture.kind === 'member' ? 'member' : 'nonMember',
-            name: capture.farmer,
-            ...(capture.kind === 'member' ? { memberCode: '' } : { nonMemberId: 0 }),
-          } as Farmer);
-          setStep('recordPayment');
-        }}
+        onEnterCode={enterCodeFor}
         // Home, the same place the back gesture goes. The list is reached from Home's tile, and
         // the two ways out of a screen should not land in two different places.
         onBack={() => {
@@ -1625,21 +1846,10 @@ export default function RootNavigator(): React.JSX.Element {
   }
 
   if (step === 'done') {
-    return (
-      <CaptureDoneScreen
-        event={event}
-        farmerName={farmer?.name ?? ''}
-        animalLabel={animalLabel}
-        time={clockTime()}
-        pending={pending}
-        strawsLeft={
-          event?.semen_breed ? (inventory.data?.by_breed?.[event.semen_breed] ?? null) : null
-        }
-        strawBreed={event?.semen_breed ?? ''}
-        onStartAnother={startCapture}
-        onHome={leaveCapture}
-      />
-    );
+    // A card that says it is recorded, and then Home on its own after four seconds — whether
+    // the capture went up at once or is still in the queue. Starting the next one is a tap on
+    // Home, where the Mait is going anyway.
+    return <RecordedScreen onDone={leaveCapture} />;
   }
 
   // -- the tabs --------------------------------------------------------------------------
@@ -1659,6 +1869,12 @@ export default function RootNavigator(): React.JSX.Element {
             onOpenStock={() => setTab('stock')}
             onStartCapture={startCapture}
             onOpenUnfinished={() => setUnfinishedOpen(true)}
+            // A Mait's phone counts everything that needs them, and the card opens that list.
+            attentionCount={packOwner !== null ? attention.total : undefined}
+            onOpenAttention={() => {
+              attention.refetch();
+              setAttentionOpen(true);
+            }}
             online={online}
             pending={pending}
             // Pull-to-refresh drains and stays put. It shared a prop with the tile below, so

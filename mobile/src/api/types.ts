@@ -76,6 +76,24 @@ export interface AdminMait {
   mpp_count: number;
 }
 
+/** The roster page, with counts over the whole roster rather than the filtered page. */
+export interface AdminMaitRoster extends Paginated<AdminMait> {
+  summary?: { total: number; activated: number; without_mobile: number; deactivated: number };
+}
+
+/** One Mait in the activation queue (GET /admin/users/pending-maits/). */
+export interface PendingMait {
+  sahayak_vendor_code: string;
+  name: string;
+  mobile_no: string;
+  needs_mobile: boolean;
+  mpp_count: number;
+}
+
+export interface PendingMaitsPage extends Paginated<PendingMait> {
+  summary?: { pending_total: number; without_mobile: number };
+}
+
 /** A field-registered farmer as the admin roster lists them (GET /admin/non-members/). */
 export interface AdminNonMember {
   id: number;
@@ -99,7 +117,31 @@ export interface AdminNonMember {
   cattle_buffaloes: number | null;
   cattle_total: number | null;
   daily_yield_litres: string | null;
+  /** When she agreed to be on file. Null on rows registered before consent was captured. */
+  consent_captured_at?: string | null;
   created_at: string;
+}
+
+/** One payment a non-member made, and what proves it (on GET /admin/non-members/{id}/). */
+export interface NonMemberPayment {
+  ai_event: number;
+  amount: string;
+  mode: 'CASH' | 'ONLINE' | string;
+  mode_display: string;
+  status: string;
+  status_display: string;
+  is_verified: boolean;
+  utr_number: string;
+  payment_screenshot_url: string;
+  created_at: string;
+}
+
+/** One field-registered farmer, whole: the card images, her animals and her payments. */
+export interface AdminNonMemberDetail extends AdminNonMember {
+  aadhar_front_url: string;
+  aadhar_back_url: string;
+  animals: Animal[];
+  payments: NonMemberPayment[];
 }
 
 /** One Mait's straw holding on the admin inventory oversight (GET /admin/inventory/). */
@@ -123,6 +165,120 @@ export interface InventoryOversight {
     store_straws: number;
   };
   results: InventoryOversightRow[];
+  /** Every open store in reach and what is on its shelf. Absent from an older server. */
+  stores?: OversightStore[];
+}
+
+/** One store's shelf as the oversight screen shows it (in GET /admin/inventory/). */
+export interface OversightStore {
+  id: number;
+  code: string;
+  name: string;
+  zone_name: string;
+  plant_names: string[];
+  lines: StoreStockLine[];
+  straws_on_hand: number;
+  /** Packed for a Mait who has not typed their collection code yet. */
+  straws_set_aside: number;
+  /** Approved indents waiting at this counter. */
+  open_indents: number;
+}
+
+/** What a Mait's or a store's stock can be changed with — breeds and catalogue products. */
+export interface StockCatalogue {
+  breeds: { code: string; name: string; name_hi?: string; animal_type: string }[];
+  products: {
+    id: number;
+    code?: string;
+    name: string;
+    unit: string;
+    category: 'consumable' | 'asset';
+  }[];
+}
+
+/** One consumable or piece of equipment a Mait holds. */
+export interface MaitStockItem {
+  code: string;
+  name: string;
+  unit: string;
+  qty: number;
+}
+
+/** One Mait's stock for the admin (GET/POST /admin/inventory/{mait_id}/). */
+export interface MaitStockDetail {
+  mait_id: number;
+  mait_name: string;
+  sahayak_vendor_code: string;
+  total_straws: number;
+  is_low_stock: boolean;
+  by_breed: Record<string, number>;
+  consumables: MaitStockItem[];
+  assets: MaitStockItem[];
+  catalogue: StockCatalogue;
+}
+
+/** An office adjustment to a Mait's stock. Straws by breed, the rest by catalogue id. */
+export interface MaitStockAdjustment {
+  product_type: 'straw' | 'consumable';
+  breed?: string;
+  product_ref_id?: number;
+  qty: number;
+  direction: 'add' | 'remove';
+  note?: string;
+}
+
+/** A store's shelf for the admin (GET/POST /admin/stores/{id}/stock/). */
+export interface AdminStoreStock {
+  store: StoreAdmin;
+  lines: StoreStockLine[];
+  catalogue: StockCatalogue;
+}
+
+/** The office changing a store's shelf: a delivery that adds, or a count that replaces. */
+export interface StoreStockUpdate {
+  mode: 'receive' | 'count';
+  product_type: 'straw' | 'consumable';
+  breed?: string;
+  product_ref_id?: number;
+  qty: number;
+  note?: string;
+}
+
+/** What a pregnancy diagnosis costs, flat across every breed (GET /admin/pregnancy/rate/). */
+export interface PregnancyRateConfig {
+  service: string;
+  member_rate: string;
+  non_member_rate: string;
+  updated_at?: string;
+}
+
+/** A breed on the semen list, as the admin edits it (GET /admin/breeds/). */
+export interface AdminBreed {
+  id: number;
+  code: string;
+  name: string;
+  /** What a Mait reads with the app in Hindi. */
+  name_hi: string;
+  animal_type: 'COW' | 'BUFF';
+  rate: string;
+  non_member_rate?: string;
+  display_order: number;
+  is_active: boolean;
+}
+
+/** What the product editor writes — a catalogue product or a breed. */
+export interface CatalogueWrite {
+  code?: string;
+  name?: string;
+  name_hi?: string;
+  animal_type?: 'COW' | 'BUFF';
+  category?: 'consumable' | 'asset';
+  unit?: string;
+  rate?: string | number;
+  /** A breed's second price: what a non-member pays in cash. */
+  non_member_rate?: string | number;
+  display_order?: number;
+  is_active?: boolean;
 }
 
 /** A catalogue product with its recovery rate (GET /admin/products/). */
@@ -157,10 +313,17 @@ export interface MaitPaymentRow {
   commission: string;
   fixed_amount: string;
   gross: string;
+  /** Straws and consumables issued in the month, by material — counts, never money. */
+  quantities: Record<string, number>;
+  /** What each material recovers, in rupees. */
+  recoveries?: Record<string, string>;
+  /** Stock the office credited by hand: shown beside the issued, never folded into it. */
+  admin_quantities?: Record<string, number>;
   deduction: string;
   after_deduction: string;
   tagging: string;
   net_payable: string;
+  /** Masked to the last four digits; the workbook carries it whole. */
   bank_account_no: string;
   ifsc_code: string;
   pan_no: string;
@@ -177,29 +340,44 @@ export interface MaitPaymentReport {
   totals: {
     maits: number;
     ai_performed: number;
+    commission?: string;
+    fixed_amount?: string;
     gross: string;
+    quantities?: Record<string, number>;
     deduction: string;
+    after_deduction?: string;
+    tagging?: string;
     net_payable: string;
     overdrawn: number;
   };
 }
 
-/** One Mait on the leaderboard (GET /dashboard/mait-performance/). */
+/** One Mait on the leaderboard (GET /dashboard/mait-performance/). Money as decimal strings. */
 export interface LeaderboardRow {
   mait_id: number;
   name: string;
   sahayak_vendor_code: string;
   ai_count: number;
-  collected: number;
-  cod: number;
-  online: number;
+  amount_collected: string;
+  /** The cash part of it — collected by the Mait on the spot. */
+  cod_amount: string;
+  online_amount: string;
 }
 
 export interface Leaderboard {
+  /** The range actually counted — the server clamps a future date or a span over a year. */
   date_from: string;
   date_to: string;
+  /** Calendar days in the range, Sundays included. */
+  days: number;
+  /** Everyone who worked in the range; `results` is capped, so this can be larger. */
   count: number;
-  totals: { ai_count: number; amount_collected: string };
+  totals: {
+    ai_count: number;
+    amount_collected: string;
+    cod_amount: string;
+    online_amount?: string;
+  };
   results: LeaderboardRow[];
 }
 
@@ -216,6 +394,12 @@ export interface PregnancyRow {
   not_pregnant: number;
   unsure: number;
   declined: number;
+  /** The villages the round spans. */
+  mpp_codes: string[];
+  /** Conceived of settled inseminations, as a percentage; null until one has settled. */
+  conception_rate: number | null;
+  conceived: number;
+  decided: number;
 }
 
 export interface PregnancyOversight {
@@ -229,8 +413,34 @@ export interface PregnancyOversight {
     not_pregnant: number;
     unsure: number;
     declined: number;
+    alert_window_days?: number;
+    conception_rate: number | null;
+    conceived: number;
+    decided: number;
   };
   results: PregnancyRow[];
+}
+
+/** `due` is open checks oldest first, `done` what was recorded, `all` both. */
+export type PregnancyWindow = 'due' | 'done' | 'all';
+
+/** One Mait's round (GET /admin/pregnancy/{mait_id}/). */
+export interface MaitPregnancyChecks extends Paginated<PregnancyCheck> {
+  mait: { mait_id: number; name: string; sahayak_vendor_code: string; mpp_codes: string[] };
+  summary: {
+    open: number;
+    overdue: number;
+    due_this_week: number;
+    recorded: number;
+    pregnant: number;
+    not_pregnant: number;
+    unsure: number;
+    declined: number;
+    conception_rate: number | null;
+    conceived: number;
+    decided: number;
+    alert_window_days?: number;
+  };
 }
 
 /** One sampled row inside an exception queue. */
@@ -244,6 +454,71 @@ export interface ExceptionGroup {
   count: number;
   rows: ExceptionRow[];
   more: number;
+}
+
+/** The tone a queue gives a cause or a state; null is neutral. */
+export type QueueTone = 'bad' | 'warn' | 'info' | 'good' | null;
+
+/** One line of an expanded queue row. An empty value is the answer, not a missing field. */
+export interface QueueFact {
+  label: string;
+  value: string;
+  href: string | null;
+}
+
+/**
+ * One row of any exception queue (GET /admin/exceptions/{queue}/, /admin/otp-failures/).
+ * Every queue answers in this shape, so one screen reads all six.
+ */
+export interface QueueRow {
+  id: string | number;
+  /** The cause it sits under — what the filter chips narrow by. */
+  bucket?: string;
+  title: string;
+  subtitle: string;
+  detail: string;
+  state: { label: string; tone: QueueTone };
+  metric: string;
+  /** ISO instant, or blank. */
+  when: string;
+  /** Who to ring and why: the cause decides the call. */
+  guidance: string;
+  facts: QueueFact[];
+  /** Where it is worked, as a portal page (`ai-event.html?id=12`). */
+  link: { href: string; label: string } | null;
+  /** Failed OTPs only: the number the code went to. */
+  mobile_no?: string;
+}
+
+export interface QueueBucket {
+  key: string;
+  label: string;
+  tone: QueueTone;
+  count: number;
+}
+
+export type QueueName =
+  | 'pending-payments'
+  | 'failed-otps'
+  | 'low-stock'
+  | 'stale-indents'
+  | 'overdue-checks'
+  | 'declined-checks';
+
+export interface ExceptionQueue {
+  queue: QueueName;
+  title: string;
+  subtitle: string;
+  count: number;
+  shown: number;
+  filter: string;
+  truncated: boolean;
+  windowed: boolean;
+  window_days: number;
+  buckets: QueueBucket[];
+  results: QueueRow[];
+  /** Failed OTPs only: distinct numbers, because one person failing eleven times is one call. */
+  people?: number;
 }
 
 export interface DashboardExceptions {
@@ -263,8 +538,49 @@ export interface DashboardSummary {
   last_month_to_same_day: number;
   lifetime: number;
   since: string | null;
+  /** The busiest day and month on record, as the portal shows them under the tiles. */
+  highest_day?: { value: number; label: string } | null;
+  highest_month?: { value: number; label: string } | null;
   exceptions: DashboardExceptions;
-  pregnancy: { rate: number | null; recorded: number; overdue: number; declined_30d: number };
+  /**
+   * The outcome of the checks. `conception_rate` is what the server sends — the app read
+   * `rate`, which never arrived, so the dashboard's conception tile was always blank.
+   */
+  pregnancy: {
+    conception_rate: number | null;
+    conceived: number;
+    decided: number;
+    overdue: number;
+    declined_30d: number;
+  };
+}
+
+/** One day of AI events (GET /dashboard/trends/): finished, and still open. */
+export interface DashboardTrendDay {
+  date: string;
+  label: string;
+  short_label: string;
+  completed: number;
+  pending: number;
+}
+
+export interface DashboardTrends {
+  days: number;
+  results: DashboardTrendDay[];
+}
+
+/** One zone's share of the AI events over a window (GET /dashboard/zones/). */
+export interface ZonePerformanceRow {
+  code: string;
+  name: string;
+  plants: number;
+  events: number;
+  share_percent: number;
+}
+
+export interface ZonePerformance {
+  days: number;
+  results: ZonePerformanceRow[];
 }
 
 /** One audit-trail entry (GET /admin/audit/). */
@@ -278,8 +594,47 @@ export interface AuditEntry {
   entity_label: string;
   entity_id: string;
   summary: string;
-  actor: { name: string; role?: string };
+  actor: { name: string; role?: string; initials?: string; username?: string; system?: boolean };
   ip_address: string;
+  /** A real before/after, where the call site recorded one. Most entries have none. */
+  changes?: { field: string; from: string; to: string }[];
+  /** The rest of the metadata, labelled. */
+  facts?: { label: string; value: string }[];
+  /** Ties one request's rows together — a state change and the payment behind it. */
+  request_id?: string;
+}
+
+/** A filter chip or option, with the count it would show (`facets` on GET /admin/audit/). */
+export interface AuditFacet {
+  key: string;
+  label: string;
+  tone?: string | null;
+  count: number;
+}
+
+/** The audit trail, one page of it, with the last-30-days figures and its filters' counts. */
+export interface AuditTrail {
+  count: number;
+  limit: number;
+  offset: number;
+  results: AuditEntry[];
+  summary: {
+    window_days: number;
+    total: number;
+    today: number;
+    people: number;
+    pii_access: number;
+  };
+  facets: { actions: AuditFacet[]; entity_types: AuditFacet[] };
+}
+
+/** What the trail is narrowed by — the same on screen and in the workbook. */
+export interface AuditQuery {
+  search?: string;
+  action?: string;
+  entity_type?: string;
+  date_from?: string;
+  date_to?: string;
 }
 
 /** A portal account on the admin roster (GET /admin/users/). */
@@ -299,8 +654,41 @@ export interface AdminUser {
   assigned_mpp_count: number;
   portal_sections: string[];
   portal_section_total: number;
-  zones: number[];
+  /** Zone codes held. Empty is the whole network. */
+  zones: string[];
   zone_names: string[];
+  created_at?: string;
+}
+
+/** The fields Users & roles can change on an account (PATCH /admin/users/{id}/). */
+export interface AdminUserPatch {
+  username?: string;
+  full_name?: string;
+  email?: string;
+  mobile_no?: string;
+  is_active?: boolean;
+  fixed_otp_enabled?: boolean;
+  role?: string;
+  password?: string;
+  portal_sections?: string[];
+  zones?: string[];
+}
+
+/** A new office account (POST /admin/users/). */
+export interface AdminUserCreate {
+  username: string;
+  full_name: string;
+  email: string;
+  mobile_no: string;
+  role: 'admin' | 'super_admin' | 'normal_user';
+  password: string;
+  portal_sections?: string[];
+}
+
+/** One section an Admin can be given (GET /admin/users/portal-sections/). */
+export interface PortalSectionEntry {
+  key: string;
+  label: string;
 }
 
 /** A zone on the admin roster (GET /admin/zones/). */
@@ -310,10 +698,75 @@ export interface Zone {
   name: string;
   description: string;
   is_active: boolean;
+  /** The BMC/MCC codes it holds — the whole set, on read and on write. */
+  plants?: string[];
   plant_names: string[];
   mpp_count: number;
   member_count: number;
+  /** Active accounts narrowed to it: the number that makes deleting it consequential. */
   user_count: number;
+  created_at?: string;
+}
+
+/** A zone as written (POST/PATCH /admin/zones/). `code` only on create; it never changes. */
+export interface ZoneWrite {
+  code?: string;
+  name?: string;
+  description?: string;
+  is_active?: boolean;
+  plants?: string[];
+}
+
+/** One BMC/MCC the master data knows about, and the zone holding it (GET /admin/zones/plants/). */
+export interface ZonePlantRow {
+  plant_code: string;
+  plant_name: string;
+  mpp_count: number;
+  member_count: number;
+  /** Empty when it is in no zone yet. */
+  zone_code: string;
+  zone_name: string;
+}
+
+/** An account narrowed to a zone, as the Zones screen reads it (GET /admin/zones/managers/). */
+export interface ZoneManager {
+  id: number;
+  full_name: string;
+  username: string;
+  email: string;
+  mobile_no: string;
+  is_active: boolean;
+  zone_codes: string[];
+  /** Live zones only; a switched-off one is in `inactive_zones`. */
+  zone_names: string[];
+  inactive_zones: string[];
+  sections: string[];
+  last_login_at: string | null;
+  /** A live zone and a number to send the code to — whether the handset app opens at all. */
+  app_access: boolean;
+  /** Active Maits under their live zones. */
+  maits: number;
+  activity: {
+    actions: number;
+    approved: number;
+    rejected: number;
+    last_action_at: string | null;
+  };
+}
+
+export interface ZoneManagers {
+  days: number;
+  count: number;
+  without_mobile: number;
+  idle: number;
+  results: ZoneManager[];
+}
+
+/** What the zone's managers have done (GET /admin/zones/activity/) — audit rows, as sentences. */
+export interface ZoneActivity {
+  days: number;
+  count: number;
+  results: AuditEntry[];
 }
 
 /** A store/depot for the admin roster (GET /admin/stores/). */
@@ -321,14 +774,50 @@ export interface StoreAdmin {
   id: number;
   code: string;
   name: string;
+  /** The zone it is grouped under, for grouping only. Null when none. */
+  zone?: number | null;
   zone_name: string;
   description: string;
   is_active: boolean;
+  /** The BMC/MCC codes it serves — the whole set, on read and on write. */
+  plants?: string[];
   plant_names: string[];
   mpp_count: number;
-  keepers: { full_name: string; mobile_no: string; is_active: boolean }[];
+  keepers: StoreKeeper[];
+  /** The shelf, one line per item, as the roster shows it. */
+  stock?: { item_name: string; on_hand: number; category: 'straw' | 'consumable' | 'asset' }[];
   open_indents: number;
   created_at: string;
+}
+
+/** Somebody who stands at a store's counter and signs in to the app with their number. */
+export interface StoreKeeper {
+  id?: number;
+  full_name: string;
+  mobile_no: string;
+  is_active: boolean;
+  last_login_at?: string | null;
+}
+
+/** One BMC/MCC and the store serving it (GET /admin/stores/plants/). */
+export interface StorePlantRow {
+  plant_code: string;
+  plant_name: string;
+  mpp_count: number;
+  member_count?: number;
+  zone_code?: string;
+  zone_name?: string;
+  store_id: number | null;
+  store_name: string;
+}
+
+/** What the store editor writes. `plants` is the whole set it serves. */
+export interface StoreWrite {
+  code?: string;
+  name?: string;
+  zone?: number | null;
+  is_active?: boolean;
+  plants?: string[];
 }
 
 export interface MPP {
@@ -349,6 +838,8 @@ export interface MPP {
   is_active: boolean;
   mait: number | null;
   mait_name: string | null;
+  /** The holding Mait's vendor code, or empty when nobody covers it. */
+  mait_code?: string | null;
   /** Annotated by the list endpoint. Members registered at this collection point. */
   member_count: number;
 }
@@ -361,6 +852,31 @@ export interface Member {
   mobile_no: string;
   mpp_code: string;
   activation_status: string;
+  /**
+   * The Aadhaar masked to its last four — on an Admin's list only; the server leaves it off for
+   * anybody else, which is how the screen knows whether to draw it.
+   */
+  aadhar_masked?: string;
+  /** `office` once the office has set the number: no member-master upload replaces it. */
+  mobile_source?: 'sap' | 'office' | string;
+  mobile_updated_at?: string | null;
+  mobile_updated_by_name?: string;
+}
+
+/** One change the office made to a member's number (GET /members/{code}/mobile-history/). */
+export interface MemberMobileChange {
+  when: string;
+  by: string;
+  before: string;
+  after: string;
+  reason: string;
+}
+
+/** What saving a member's new number answered (POST /members/{code}/mobile/). */
+export interface MemberMobileSaved {
+  member: Member;
+  /** Others already on this number — a warning, since a household often shares one phone. */
+  shared_with: { member_code: string; member_name: string }[];
 }
 
 export interface MemberDetail extends Member {
@@ -370,7 +886,11 @@ export interface MemberDetail extends Member {
   /** Aadhaar arrives masked (XXXXXXXX1234) and is never available in full here. */
   aadhar_no: string;
   bank_name: string;
+  ifsc_code?: string;
   folio_no: string;
+  category?: string;
+  education?: string;
+  activation_date?: string | null;
   mpp_name: string;
   /**
    * Whether a payment can be authorised for this member.
@@ -574,6 +1094,15 @@ export interface Animal {
   ai_event_count: number;
   /** When this animal was last served. Null until she has been. */
   last_ai_at: string | null;
+  /**
+   * Whether she may be served today — one semen, then 21 days, never while pregnant
+   * (`ai_events/rules.py`). '' when she may; `open` while an AI on her is unfinished;
+   * `too_soon` inside 21 days of her last; `pregnant` until she calves. Absent from servers
+   * and packs older than the rule.
+   */
+  next_ai_block?: '' | 'open' | 'too_soon' | 'pregnant';
+  /** `YYYY-MM-DD`: the first day she may be served, where something holds her back till then. */
+  next_ai_on?: string | null;
   created_at: string;
 }
 
@@ -796,6 +1325,12 @@ export interface AIEvent {
   performed_at: string | null;
   completed_at: string | null;
   cancelled_reason: string;
+  /**
+   * Where the farmer was checked on the phone with no signal: `office_call` when the office's
+   * record matched the code, `office_call_unmatched` when the office has no record of giving it.
+   * Blank for a check the server did itself. Absent from servers older than the field.
+   */
+  farmer_check?: '' | 'office_call' | 'office_call_unmatched';
   created_at: string;
 }
 
@@ -860,6 +1395,13 @@ export interface AIEventDraft {
   doses?: number;
   /** What else the visit took, by catalogue code — sheaths, gloves. Never charged to her. */
   consumables?: { code: string; qty: number }[];
+  /**
+   * The office's code the farmer read out, where the phone checked her with no signal
+   * (`api/fieldCode`), and the day of the key it was checked with. The server matches it
+   * against what the office issued; the capture is recorded either way.
+   */
+  office_code?: string;
+  office_code_day?: string;
 }
 
 /** RFC 7807 problem details — the shape of every API error (SRS §9.11). */
@@ -879,6 +1421,8 @@ export interface Indent {
   id: number;
   breed: string;
   item: string;
+  /** `straw` by breed, or `consumable` for anything from the catalogue. */
+  product_type?: 'straw' | 'consumable';
   qty_requested: number;
   qty_issued: number;
   status: IndentStatus;
@@ -1066,6 +1610,8 @@ export interface PregnancyCheck {
   ai_event_id: number;
   owner_name: string;
   owner_type: 'member' | 'non_member';
+  /** Blank, not null, when there is none: a member's number is optional in the SAP master. */
+  owner_mobile?: string;
   mpp_id: number;
   mpp_code: string;
   mpp_name: string;
@@ -1076,6 +1622,10 @@ export interface PregnancyCheck {
   animal_type: string;
   ear_tag_no: string | null;
   breed: string;
+  /** The event's own pin, as decimal strings; null where none was recorded. */
+  gps_lat?: string | null;
+  gps_lng?: string | null;
+  gps_source?: 'device' | 'photo' | '';
   /** The day of the insemination, `YYYY-MM-DD`. */
   served_on: string | null;
   due_on: string;
@@ -1472,7 +2022,39 @@ export interface ZonalEvent extends AIEvent {
   /** Whether it took. An insemination is finished ninety days later, not at the straw. */
   pregnancy_checks: PregnancyCheck[];
   timeline: AIEventTimelineEntry[];
+  /** The farmer in enough detail to settle a dispute — the admin detail carries it. */
+  owner_detail?: EventOwnerDetail | null;
+  /** The animal as she was registered, with the portrait taken in the yard. */
+  animal_detail?: EventAnimalDetail | null;
 }
+
+/** Who the event was for (GET /ai-events/{id}/ `owner_detail`). The Aadhaar comes masked. */
+export interface EventOwnerDetail {
+  type: 'member' | 'non_member';
+  name: string;
+  code: string;
+  mobile_no: string;
+  father_husband_name: string;
+  relation?: string;
+  address?: string;
+  aadhar_masked: string;
+  has_aadhar: boolean;
+  has_aadhar_image?: boolean;
+}
+
+/** The animal's registration record (GET /ai-events/{id}/ `animal_detail`). */
+export interface EventAnimalDetail {
+  id: number;
+  animal_type: AnimalTypeCode;
+  animal_type_display: string;
+  breed: string;
+  ear_tag_no: string | null;
+  photo_url: string;
+  registered_at: string;
+}
+
+/** The admin's AI event detail: the event, its checks, owner and animal — the trail apart. */
+export type AdminAiEventDetail = Omit<ZonalEvent, 'timeline'>;
 
 // ---- admin: Super OTP, SAP upload, Assignment (Round 7) --------------------------------
 
@@ -1528,6 +2110,134 @@ export interface SuperOtpRow {
   sms: SuperOtpSms | null;
 }
 
+/** A tone the server picks: good, bad, warn, info, or none. */
+export type ServerTone = 'good' | 'bad' | 'warn' | 'info' | null;
+
+export type PipelineStage =
+  | 'verified'
+  | 'office'
+  | 'sending'
+  | 'not_sent'
+  | 'awaiting'
+  | 'wrong_code'
+  | 'locked'
+  | 'timed_out'
+  | 'superseded'
+  | 'likely_lost';
+
+export type PipelineVerdict = 'justified' | 'early' | 'arrived' | 'not_needed' | 'not_tried';
+
+/** One station a code passes: made, gateway accepted, typed in, used. */
+export interface PipelineStep {
+  key: 'made' | 'gateway' | 'typed' | 'used';
+  label: string;
+  state: 'done' | 'failed' | 'waiting' | 'skipped';
+  at: string | null;
+}
+
+/** One code, read back through its pipeline (GET /admin/otp-pipeline/ `results`). */
+export interface PipelineCode {
+  id: number;
+  purpose: string;
+  step: string;
+  mobile_no: string;
+  who: { kind: string; name: string; detail: string };
+  stage: PipelineStage;
+  stage_display: string;
+  tone: ServerTone;
+  guidance: string;
+  /** Proven by somebody typing into it — never by the gateway, which only says accepted. */
+  arrived: 'yes' | 'no' | 'unknown';
+  steps: PipelineStep[];
+  attempt_count: number;
+  max_attempts: number;
+  sent_at: string;
+  expires_at: string;
+  verified_at: string | null;
+  sent_via: string;
+  gateway_message_id: string;
+  blocking: { ai_event_id: number; amount: string; mode: string; payment_status: string } | null;
+}
+
+/** A Super OTP ask, judged on the SMS before it — for information only. */
+export interface PipelineAsk {
+  id: number;
+  purpose: string;
+  step: string;
+  for_farmer: boolean;
+  full_name: string;
+  farmer_name: string;
+  context: string;
+  mobile_no: string;
+  state: SuperOtpRow['state'];
+  status_display: string;
+  asked_at: string;
+  phoned: boolean;
+  request_count: number;
+  reason: string;
+  verdict: { key: PipelineVerdict; label: string; tone: ServerTone; detail: string; note: string };
+  through_by_sms_after: boolean;
+  sms: {
+    id: number;
+    sent_at: string;
+    accepted: boolean;
+    attempt_count: number;
+    verified: boolean;
+    by_office: boolean;
+    minutes_before: number;
+  } | null;
+}
+
+export interface PipelineFunnel {
+  made: number;
+  accepted: number;
+  arrived: number;
+  verified: number;
+}
+
+export interface OtpPipeline {
+  window_days: number;
+  windows: number[];
+  truncated: boolean;
+  summary: {
+    funnel: PipelineFunnel;
+    arrival_rate: number | null;
+    likely_lost: number;
+    never_left: number;
+    office: number;
+    asks: number;
+    asks_justified: number;
+    asks_waiting: number;
+    people: number;
+  };
+  gateway: {
+    provider: string;
+    checked: number;
+    accepted: number;
+    tone: ServerTone;
+    last_accepted_at: string | null;
+  };
+  by_purpose: (PipelineFunnel & { key: string; label: string; arrival_rate: number | null })[];
+  stages: { key: PipelineStage; label: string; tone: ServerTone; count: number }[];
+  verdicts: { key: PipelineVerdict; label: string; tone: ServerTone; count: number }[];
+  steps: { key: string; label: string }[];
+  count: number;
+  offset: number;
+  limit: number;
+  results: PipelineCode[];
+  asks: PipelineAsk[];
+  asks_count: number;
+}
+
+export interface OtpPipelineQuery {
+  days?: number;
+  purpose?: string;
+  stage?: string;
+  verdict?: string;
+  search?: string;
+  offset?: number;
+}
+
 /** The issue response — the one time the plaintext code travels (POST .../issue/). */
 export interface SuperOtpIssued extends SuperOtpRow {
   code: string;
@@ -1543,7 +2253,7 @@ export interface UploadJob {
   upload_type: string;
   upload_type_display: string;
   file_name: string;
-  status: 'pending' | 'processing' | 'completed' | 'completed_with_errors' | 'failed';
+  status: 'queued' | 'processing' | 'completed' | 'completed_with_errors' | 'failed';
   status_display: string;
   uploaded_by: number | null;
   uploaded_by_name: string;
@@ -1558,6 +2268,29 @@ export interface UploadJob {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+}
+
+/** What an import refused (GET /admin/uploads/{id}/errors/). */
+export interface UploadErrorReport {
+  failed_rows: number;
+  results: { row: number | null; error: string }[];
+  /** Only the first few thousand are kept. */
+  truncated: boolean;
+}
+
+/** One master's last landed upload, offered back as a download (GET /admin/uploads/snapshots/). */
+export interface MasterSnapshot {
+  upload_type: 'member' | 'mait' | 'mpp';
+  label: string;
+  available: boolean;
+  file_name: string;
+  uploaded_at: string | null;
+  uploaded_by: string;
+  /** Already built, so the download is a file read rather than minutes of rebuilding. */
+  ready: boolean;
+  total_rows: number;
+  success_rows: number;
+  failed_rows: number;
 }
 
 /** One collection point on the Assignment/coverage view (GET /dashboard/mpp-coverage/). */

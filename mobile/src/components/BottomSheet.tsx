@@ -10,7 +10,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -140,8 +141,8 @@ export function Sheet({
 
           <View style={styles.head}>
             <View style={styles.headText}>
-              <Text style={styles.title}>{title}</Text>
-              {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+              <AppText style={styles.title}>{title}</AppText>
+              {!!subtitle && <AppText style={styles.subtitle}>{subtitle}</AppText>}
             </View>
             <Pressable
               accessibilityRole="button"
@@ -242,8 +243,8 @@ export default function BottomSheet({
               </View>
             )}
             <View style={styles.headText}>
-              <Text style={styles.title}>{title}</Text>
-              {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+              <AppText style={styles.title}>{title}</AppText>
+              {!!subtitle && <AppText style={styles.subtitle}>{subtitle}</AppText>}
             </View>
             <Pressable
               accessibilityRole="button"
@@ -273,7 +274,7 @@ export default function BottomSheet({
                     ]}
                     testID={`sheet-tab-${index}`}
                   >
-                    <Text
+                    <AppText
                       style={[
                         styles.tabLabel,
                         { color: active ? onSolid(switchTone) : INK[switchTone] },
@@ -281,7 +282,7 @@ export default function BottomSheet({
                       numberOfLines={1}
                     >
                       {section.title}
-                    </Text>
+                    </AppText>
                     <View
                       style={[
                         styles.tabCount,
@@ -290,14 +291,14 @@ export default function BottomSheet({
                         },
                       ]}
                     >
-                      <Text
+                      <AppText
                         style={[
                           styles.sectionCountLabel,
                           { color: active ? INK[switchTone] : onSolid(switchTone) },
                         ]}
                       >
                         {section.options.length}
-                      </Text>
+                      </AppText>
                     </View>
                   </Pressable>
                 );
@@ -316,18 +317,18 @@ export default function BottomSheet({
                         { backgroundColor: WASH[tone], borderColor: EDGE[tone] },
                       ]}
                     >
-                      <Text style={[styles.sectionPillLabel, { color: INK[tone] }]}>
+                      <AppText style={[styles.sectionPillLabel, { color: INK[tone] }]}>
                         {section.title}
-                      </Text>
+                      </AppText>
                     </View>
                     <View style={[styles.sectionCount, { backgroundColor: SOLID[tone] }]}>
-                      <Text style={[styles.sectionCountLabel, { color: onSolid(tone) }]}>
+                      <AppText style={[styles.sectionCountLabel, { color: onSolid(tone) }]}>
                         {section.options.length}
-                      </Text>
+                      </AppText>
                     </View>
                   </View>
                 ) : (
-                  <Text style={styles.section}>{section.title}</Text>
+                  <AppText style={styles.section}>{section.title}</AppText>
                 )}
                 {section.options.map(option => {
                   const isSelected = option.value === selected;
@@ -359,8 +360,10 @@ export default function BottomSheet({
                         </View>
                       )}
                       <View style={styles.optionBody}>
-                        <Text style={styles.optionLabel}>{option.label}</Text>
-                        {!!option.meta && <Text style={styles.optionMeta}>{option.meta}</Text>}
+                        <AppText style={styles.optionLabel}>{option.label}</AppText>
+                        {!!option.meta && (
+                          <AppText style={styles.optionMeta}>{option.meta}</AppText>
+                        )}
                       </View>
                       {!!option.badge && (
                         <View
@@ -370,7 +373,7 @@ export default function BottomSheet({
                           ]}
                           testID={`sheet-badge-${option.value}`}
                         >
-                          <Text
+                          <AppText
                             style={[
                               styles.badgeLabel,
                               !!option.badgeTone && {
@@ -380,7 +383,7 @@ export default function BottomSheet({
                             ]}
                           >
                             {option.badge}
-                          </Text>
+                          </AppText>
                         </View>
                       )}
                       {isSelected &&
@@ -413,7 +416,7 @@ const styles = StyleSheet.create({
   /* No tint. The sheet is separated from the page by its own white and its rounded top, and
      a wash over everything else only made the screen look like it had gone wrong. It still
      fills the screen, because it is what a tap outside the sheet lands on. */
-  scrim: { ...StyleSheet.absoluteFillObject },
+  scrim: { ...StyleSheet.absoluteFill },
 
   // Rounded top corners and nothing else behind them. Both an elevation shadow and a
   // partial border get drawn from a rectangular outline on Android, and either one squares

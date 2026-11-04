@@ -13,11 +13,13 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radius, shadows, spacing, typography } from '@theme/tokens';
+
+import AppText from './AppText';
 
 export type ToastTone = 'error' | 'warning' | 'info' | 'success';
 
@@ -98,7 +100,7 @@ export function Toast({
         <View style={[styles.icon, { backgroundColor: wash }]}>
           <Ionicons name={icon} size={18} color={tint} />
         </View>
-        <Text style={styles.message}>{message}</Text>
+        <AppText style={styles.message}>{message}</AppText>
         {!!onDismiss && <Ionicons name="close" size={18} color={colors.textMuted} />}
       </Pressable>
     </Animated.View>

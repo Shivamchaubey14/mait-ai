@@ -39,7 +39,8 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import { useTranslation } from 'react-i18next';
 
 import { registerNonMember } from '@api/capture';
@@ -490,7 +491,7 @@ export default function AddNonMemberScreen({
         testID="non-member-relation"
       />
       {!!fieldErrors.relation?.[0] && (
-        <Text style={styles.relationError}>{fieldErrors.relation[0]}</Text>
+        <AppText style={styles.relationError}>{fieldErrors.relation[0]}</AppText>
       )}
 
       <LabelledField
@@ -592,7 +593,7 @@ export default function AddNonMemberScreen({
           testID="non-member-aadhaar-back"
         />
       </View>
-      <Text style={styles.cardsHint}>{t('aiFlow.aadhaarCardHint')}</Text>
+      <AppText style={styles.cardsHint}>{t('aiFlow.aadhaarCardHint')}</AppText>
 
       {/* What she keeps and what it gives. Asked, not offered: this is the only record the
           dairy will ever hold of the herd behind a farmer who is not on the membership roll,
@@ -632,7 +633,7 @@ export default function AddNonMemberScreen({
       {/* Under the pair, because it answers both of them: the box a Mait is stuck on is the
           one for the kind of animal she keeps none of. Said once rather than as a hint on
           each field, where it would read twice and be read neither time. */}
-      <Text style={styles.herdHint}>{t('aiFlow.herdRequiredHint')}</Text>
+      <AppText style={styles.herdHint}>{t('aiFlow.herdRequiredHint')}</AppText>
 
       <LabelledField
         label={t('aiFlow.dailyMilk')}
@@ -664,11 +665,11 @@ export default function AddNonMemberScreen({
       >
         {/* The brand is set in green inside the sentence, because the farmer is being told
             who is keeping her details, and that is the word she should catch. */}
-        <Text style={styles.consent}>
+        <AppText style={styles.consent}>
           {consentBefore}
-          <Text style={styles.consentBrand}>{brand}</Text>
+          <AppText style={styles.consentBrand}>{brand}</AppText>
           {consentAfter}
-        </Text>
+        </AppText>
       </CheckboxRow>
 
       <FlowSpacer />

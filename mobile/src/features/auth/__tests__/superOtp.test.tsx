@@ -12,6 +12,8 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import LoginScreen from '../LoginScreen';
 import { jsonResponse, problemResponse, renderWithStore } from '@/test-utils';
 
+/** The code screen arrives behind the transition card, which commits half a second in. */
+const CODE_SCREEN = { timeout: 3000 };
 const MOBILE = '9795402473';
 const SENT = { detail: 'sent', expires_in_seconds: 300 };
 const ASKED = {
@@ -27,7 +29,7 @@ async function onCodeScreen() {
   renderWithStore(<LoginScreen />);
   fireEvent.changeText(screen.getByTestId('login-mobile'), MOBILE);
   fireEvent.press(screen.getByTestId('login-send-otp'));
-  await waitFor(() => screen.getByTestId('login-otp'));
+  await waitFor(() => screen.getByTestId('login-otp'), CODE_SCREEN);
 }
 
 describe('asking the office for a code', () => {

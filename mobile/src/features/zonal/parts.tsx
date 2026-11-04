@@ -8,7 +8,8 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 
 import type { ZonalApproval } from '@api/types';
 import { STRAW_GLYPH } from '@/components/glyph';
@@ -68,7 +69,7 @@ export function coveragePill(
  */
 export const REQUEST_WINDOW_MS = 10 * 60 * 1000;
 
-/** One Mait's request as they raised it: every item, oldest first. */
+/** One Mait's request as they raised it: every item, in the order they typed them. */
 export interface IndentGroup {
   /** The first indent's id, which is what the group is known by. */
   key: number;
@@ -80,7 +81,11 @@ export interface IndentGroup {
  *
  * Chained, not bucketed: each indent joins the Mait's latest group if it was raised within
  * the window of that group's last item, so a list typed slowly still arrives as one request.
- * The groups keep the queue's own order — oldest first, because it is a queue of people.
+ *
+ * Newest request first. It was oldest first — a queue of people, longest wait at the top — but
+ * a manager opens this screen because a request has just come in, and had to scroll past every
+ * older one to reach it. The oldest wait is still said in the hero ("oldest 6d"). Inside a
+ * request the items keep the order the Mait typed them in.
  */
 export function groupIndents(rows: ZonalApproval[]): IndentGroup[] {
   const ordered = [...rows].sort(
@@ -104,7 +109,11 @@ export function groupIndents(rows: ZonalApproval[]): IndentGroup[] {
     groups.push(group);
     latest.set(row.mait, group);
   }
-  return groups;
+  // Built oldest first, because chaining has to walk the indents in the order they were raised;
+  // shown by when each request last grew, newest at the top.
+  const lastAt = (group: IndentGroup) =>
+    new Date(group.rows[group.rows.length - 1]?.requested_at ?? 0).getTime();
+  return groups.sort((a, b) => lastAt(b) - lastAt(a));
 }
 
 /** Worst first: one empty shelf is the fact about a request, not three ready ones beside it. */
@@ -158,9 +167,9 @@ export function Segmented<T extends string>({
             style={[styles.segment, on && styles.segmentOn]}
             testID={testID ? `${testID}-${option.key}` : undefined}
           >
-            <Text style={[styles.segmentLabel, on && styles.segmentLabelOn]} numberOfLines={1}>
+            <AppText style={[styles.segmentLabel, on && styles.segmentLabelOn]} numberOfLines={1}>
               {option.label}
-            </Text>
+            </AppText>
           </Pressable>
         );
       })}
@@ -187,9 +196,9 @@ export function Row({
       <View style={styles.rowBody}>
         <View style={styles.rowTitleLine}>{title}</View>
         {!!meta && (
-          <Text style={styles.rowMeta} numberOfLines={2}>
+          <AppText style={styles.rowMeta} numberOfLines={2}>
             {meta}
-          </Text>
+          </AppText>
         )}
       </View>
       {right}
@@ -386,13 +395,13 @@ export function TrendBars({
               ]}
               testID={`${testID}-${day.date}-count`}
             >
-              <Text
+              <AppText
                 style={[styles.barValue, !day.completed && styles.barValueQuiet]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
                 {day.completed}
-              </Text>
+              </AppText>
             </View>
             <View style={styles.barTrack}>
               <View
@@ -406,9 +415,9 @@ export function TrendBars({
                 ]}
               />
             </View>
-            <Text style={[styles.barDay, isToday && styles.barDayToday]} numberOfLines={1}>
+            <AppText style={[styles.barDay, isToday && styles.barDayToday]} numberOfLines={1}>
               {day.short_label}
-            </Text>
+            </AppText>
           </View>
         );
       })}
@@ -455,21 +464,21 @@ export function Leader({
     <View style={styles.leader} testID={testID}>
       <View style={styles.leaderLine}>
         <View style={[styles.rank, styles[`rank_${tone}`]]}>
-          <Text style={styles.rankLabel}>{rank}</Text>
+          <AppText style={styles.rankLabel}>{rank}</AppText>
         </View>
         <View style={styles.leaderBody}>
           {facts.map(fact => (
-            <Text key={fact.label} style={styles.leaderFact} numberOfLines={1}>
-              <Text style={[styles.leaderFactLabel, styles[`leaderFactLabel_${tone}`]]}>
+            <AppText key={fact.label} style={styles.leaderFact} numberOfLines={1}>
+              <AppText style={[styles.leaderFactLabel, styles[`leaderFactLabel_${tone}`]]}>
                 {`${fact.label}: `}
-              </Text>
+              </AppText>
               {fact.value || '—'}
-            </Text>
+            </AppText>
           ))}
         </View>
         <View style={styles.leaderFigure}>
-          <Text style={[styles.leaderValue, styles[`leaderValue_${tone}`]]}>{value}</Text>
-          <Text style={styles.leaderUnit}>{unit}</Text>
+          <AppText style={[styles.leaderValue, styles[`leaderValue_${tone}`]]}>{value}</AppText>
+          <AppText style={styles.leaderUnit}>{unit}</AppText>
         </View>
       </View>
       <View style={[styles.leaderTrack, styles[`leaderTrack_${tone}`]]}>

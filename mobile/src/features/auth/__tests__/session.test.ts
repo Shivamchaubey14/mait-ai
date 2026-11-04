@@ -146,15 +146,49 @@ describe('signing out', () => {
    * Left behind, those jobs would drain under whoever signs in next — and until then they sat
    * on a waiting list their owner had no way to empty, because nothing in the app cleared it.
    */
-  it('takes the unsent queue with the session', async () => {
+  it('takes the unsent queue with a sign-out the Mait chose', async () => {
     await enqueue('completeEvent', 'uuid-1', { eventId: 5 });
     expect(await pendingCount()).toBe(1);
 
-    storeWithPersistence().dispatch(loggedOut());
+    storeWithPersistence().dispatch(loggedOut({ deliberate: true }));
 
     // The middleware fires the clear without awaiting it, as it does for the session itself.
     await new Promise(resolve => setImmediate(resolve));
     expect(await pendingCount()).toBe(0);
+  });
+
+  /**
+   * A refresh token spent after a week in a village with no signal used to wipe the queue on
+   * the way out — every insemination done while away, gone the moment the phone found signal.
+   */
+  it('holds the unsent queue when the server ends the session, for the same Mait only', async () => {
+    const store = storeWithPersistence();
+    store.dispatch(loggedIn({ access: 'a1', refresh: 'r1', user: USER, assignedMppCodes: [] }));
+    await enqueue('completeEvent', 'uuid-held', { eventId: 9 });
+
+    store.dispatch(loggedOut());
+    await new Promise(resolve => setImmediate(resolve));
+    // Out of the active queue, so the next person to sign in neither sees nor sends it.
+    expect(await pendingCount()).toBe(0);
+
+    // Somebody else signs in on the handset: nothing of Rohit's comes back for them.
+    store.dispatch(
+      loggedIn({
+        access: 'b1',
+        refresh: 'rb',
+        user: { ...USER, id: 8, fullName: 'OTHER MAIT' },
+        assignedMppCodes: [],
+      }),
+    );
+    await new Promise(resolve => setImmediate(resolve));
+    expect(await pendingCount()).toBe(0);
+    store.dispatch(loggedOut({ deliberate: true }));
+    await new Promise(resolve => setImmediate(resolve));
+
+    // Rohit signs back in, and his work is waiting to send again.
+    store.dispatch(loggedIn({ access: 'a2', refresh: 'r2', user: USER, assignedMppCodes: [] }));
+    await new Promise(resolve => setImmediate(resolve));
+    expect(await pendingCount()).toBe(1);
   });
 
   it('leaves the queue alone on a token refresh, which is not a sign-out', async () => {

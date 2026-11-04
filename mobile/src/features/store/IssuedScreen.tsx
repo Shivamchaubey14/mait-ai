@@ -19,7 +19,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -187,15 +188,15 @@ function Issued({
           />
         ) : (
           <View style={[styles.codeCard, collected && styles.codeCardSpent]} testID="issued-code">
-            <Text style={styles.codeLabel}>{t('store.readThis')}</Text>
-            <Text
+            <AppText style={styles.codeLabel}>{t('store.readThis')}</AppText>
+            <AppText
               style={[styles.code, collected && styles.codeSpent]}
               accessibilityLabel={handover.collection_code}
               testID="issued-code-digits"
             >
               {digits}
-            </Text>
-            <Text style={styles.codeBody}>{t('store.readThisBody')}</Text>
+            </AppText>
+            <AppText style={styles.codeBody}>{t('store.readThisBody')}</AppText>
           </View>
         )}
 
@@ -254,7 +255,7 @@ function Issued({
             style={styles.link}
             testID="issued-put-back"
           >
-            <Text style={styles.linkLabel}>{t('store.putBack')}</Text>
+            <AppText style={styles.linkLabel}>{t('store.putBack')}</AppText>
           </Pressable>
         )}
       </ScrollView>

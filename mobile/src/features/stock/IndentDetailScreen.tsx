@@ -28,10 +28,10 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -156,11 +156,11 @@ function QtyRow({
         <Glyph name={icon} size={18} color={paint.onSolid} />
       </View>
       <View style={styles.qtyBody}>
-        <Text style={styles.qtyLabel}>{label}</Text>
-        <Text style={[styles.qtyMeta, { color: paint.word }]}>{meta}</Text>
+        <AppText style={styles.qtyLabel}>{label}</AppText>
+        <AppText style={[styles.qtyMeta, { color: paint.word }]}>{meta}</AppText>
       </View>
       <View style={[styles.qtyBadge, { backgroundColor: paint.solid }]}>
-        <Text style={[styles.qtyValue, { color: paint.onSolid }]}>{value}</Text>
+        <AppText style={[styles.qtyValue, { color: paint.onSolid }]}>{value}</AppText>
       </View>
     </View>
   );
@@ -235,7 +235,7 @@ export default function IndentDetailScreen({
       >
         <Ionicons name="arrow-back" size={20} color={colors.surface} />
       </Pressable>
-      <Text style={styles.eyebrow}>{t('indents.title')}</Text>
+      <AppText style={styles.eyebrow}>{t('indents.title')}</AppText>
     </View>
   );
 
@@ -409,21 +409,21 @@ export default function IndentDetailScreen({
         {/* The status sits beside the number rather than under it: it is the answer to the
             question that brought the Mait here, and the number is only how they found it. */}
         <View style={styles.heroTitleRow}>
-          <Text style={styles.heroTitle}>{`IND-${indent.id}`}</Text>
+          <AppText style={styles.heroTitle}>{`IND-${indent.id}`}</AppText>
           <View
             style={[styles.heroPill, { backgroundColor: statusPaint.solid }]}
             testID="indent-status"
           >
             <Glyph name={STATE_GLYPH[indentState(indent)]} size={13} color={statusPaint.onSolid} />
-            <Text style={[styles.heroPillLabel, { color: statusPaint.onSolid }]}>
+            <AppText style={[styles.heroPillLabel, { color: statusPaint.onSolid }]}>
               {status.label}
-            </Text>
+            </AppText>
           </View>
         </View>
 
-        <Text style={styles.heroSubtitle}>
+        <AppText style={styles.heroSubtitle}>
           {t('indents.raisedOn', { item, date: shortDate(indent.requested_at) })}
-        </Text>
+        </AppText>
       </View>
 
       {/* The timeline moves when the office acts, not when the Mait does, so this screen goes
@@ -478,7 +478,7 @@ export default function IndentDetailScreen({
                     state === 'refused' && styles.stepBodyRefused,
                   ]}
                 >
-                  <Text
+                  <AppText
                     style={[
                       styles.stepLabel,
                       state === 'waiting' && styles.stepLabelWaiting,
@@ -486,10 +486,10 @@ export default function IndentDetailScreen({
                     ]}
                   >
                     {step.label}
-                  </Text>
-                  <Text style={[styles.stepMeta, state === 'refused' && styles.stepMetaRefused]}>
+                  </AppText>
+                  <AppText style={[styles.stepMeta, state === 'refused' && styles.stepMetaRefused]}>
                     {step.meta}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             );
@@ -500,7 +500,7 @@ export default function IndentDetailScreen({
           <View style={[styles.chipSmall, { backgroundColor: colors.info }]}>
             <Ionicons name="stats-chart" size={14} color={colors.surface} />
           </View>
-          <Text style={styles.section}>{t('indents.quantities')}</Text>
+          <AppText style={styles.section}>{t('indents.quantities')}</AppText>
         </View>
 
         <QtyRow
@@ -549,7 +549,7 @@ export default function IndentDetailScreen({
               <View style={[styles.chipSmall, { backgroundColor: colors.primary }]}>
                 <Ionicons name="swap-horizontal" size={14} color={colors.surface} />
               </View>
-              <Text style={styles.section}>{t('indents.tripsTitle')}</Text>
+              <AppText style={styles.section}>{t('indents.tripsTitle')}</AppText>
             </View>
             {handovers.map(trip => (
               <QtyRow
@@ -632,17 +632,17 @@ export default function IndentDetailScreen({
               <Ionicons name="keypad" size={16} color={colors.ink} />
             </View>
             <View style={styles.codeText}>
-              <Text style={styles.codeLabel}>{t('indents.codeLabel')}</Text>
-              <Text style={styles.codeHint}>
+              <AppText style={styles.codeLabel}>{t('indents.codeLabel')}</AppText>
+              <AppText style={styles.codeHint}>
                 {indent.store_name
                   ? t('indents.codeHint', { store: indent.store_name })
                   : t('indents.codeHintPlain')}
-              </Text>
+              </AppText>
               {/* The code is never on this phone — a handset that knew it would prove nothing
                   — so a lost one comes from the counter, and the Mait needs telling that. */}
-              <Text style={styles.codeHint} testID="indent-code-lost">
+              <AppText style={styles.codeHint} testID="indent-code-lost">
                 {t('indents.codeLost')}
-              </Text>
+              </AppText>
             </View>
             <TextInput
               value={code}
@@ -677,7 +677,7 @@ export default function IndentDetailScreen({
           ) : (
             <>
               {collectable && <Ionicons name="checkmark" size={18} color={colors.surface} />}
-              <Text style={[styles.ctaLabel, !collectable && styles.ctaLabelInert]}>
+              <AppText style={[styles.ctaLabel, !collectable && styles.ctaLabelInert]}>
                 {indent.received_at
                   ? t('indents.collectedLabel')
                   : rejected
@@ -685,7 +685,7 @@ export default function IndentDetailScreen({
                     : needsCode
                       ? t('indents.confirmQty', { qty: waitingQty })
                       : t('indents.confirmCollection')}
-              </Text>
+              </AppText>
             </>
           )}
         </Pressable>

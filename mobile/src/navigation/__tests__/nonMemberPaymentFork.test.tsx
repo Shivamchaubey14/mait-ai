@@ -371,7 +371,7 @@ describe('a non-member reaches the payment screens', () => {
     fireEvent.changeText(code, '123456');
     fireEvent.press(screen.getByTestId('payment-save'));
 
-    await waitFor(() => expect(screen.getByTestId('done-start-another')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('recorded')).toBeTruthy());
 
     // Every initiate names the mode. One without it is the refusal this test exists for.
     const initiates = paymentCalls.filter(call => call.url.includes('/initiate/'));

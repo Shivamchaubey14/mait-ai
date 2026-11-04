@@ -17,7 +17,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -33,12 +32,14 @@ import {
   useSendLoginOtpMutation,
   useVerifyLoginOtpMutation,
 } from '@api/endpoints';
+import AppText from '@/components/AppText';
+import { RouteTransitionHost, useRouteTransition } from '@/components/routeTransition';
 import { BrandLogo, BrandWordmark, LanguageToggle } from '@/components/brand';
 import Problem, { useOnline } from '@/components/problem';
 import { Toast } from '@/components/toast';
 import { OTP_EXPIRY_SECONDS, OTP_LOCK_MINUTES, OTP_MAX_ATTEMPTS } from '@/config/env';
 import { useAppDispatch } from '@/store';
-import { colors, green, MIN_TOUCH_TARGET, radius, spacing, typography, yolk } from '@theme/tokens';
+import { colors, MIN_TOUCH_TARGET, radius, spacing, typography, yolk } from '@theme/tokens';
 
 import { loggedIn } from './authSlice';
 import { toAuthUser } from './liveScope';
@@ -51,40 +52,6 @@ type Step = 'mobile' | 'otp';
 function formatMobile(digits: string): string {
   return digits.length <= 5 ? digits : `${digits.slice(0, 5)} ${digits.slice(5)}`;
 }
-
-/**
- * The three steps of signing in, each in its colour: blue the number (a fact), yolk the code
- * on its way (waiting), green signed in (done).
- */
-const STEPS = [
-  {
-    key: 'stepNumber',
-    icon: 'call',
-    solid: colors.info,
-    on: colors.surface,
-    word: colors.info,
-    wash: colors.infoWash,
-    edge: colors.info,
-  },
-  {
-    key: 'stepCode',
-    icon: 'chatbubble-ellipses',
-    solid: yolk[500],
-    on: colors.ink,
-    word: yolk[800],
-    wash: colors.secondaryWash,
-    edge: yolk[300],
-  },
-  {
-    key: 'stepIn',
-    icon: 'checkmark-done',
-    solid: colors.primary,
-    on: colors.surface,
-    word: colors.primaryDark,
-    wash: colors.primaryWash,
-    edge: green[300],
-  },
-] as const;
 
 // --------------------------------------------------------------------------------------
 // Hero
@@ -112,8 +79,8 @@ function Hero(): React.JSX.Element {
       {/* The screen asks one question, so the question is the heading. "Sign in" as a title
           describes the screen to someone who already knows what it is for; this tells a
           first-time user what to do with the only field on it. */}
-      <Text style={styles.heroTitle}>{t('auth.mobileQuestion')}</Text>
-      <Text style={styles.heroSubtitle}>{t('auth.heroSubtitle')}</Text>
+      <AppText style={styles.heroTitle}>{t('auth.mobileQuestion')}</AppText>
+      <AppText style={styles.heroSubtitle}>{t('auth.heroSubtitle')}</AppText>
     </View>
   );
 }
@@ -144,8 +111,8 @@ function Notice({
         <Ionicons name={icon} size={20} color={colors.ink} />
       </View>
       <View style={styles.noticeBody}>
-        <Text style={styles.noticeTitle}>{title}</Text>
-        <Text style={styles.noticeText}>{body}</Text>
+        <AppText style={styles.noticeTitle}>{title}</AppText>
+        <AppText style={styles.noticeText}>{body}</AppText>
       </View>
     </View>
   );
@@ -160,6 +127,8 @@ export default function LoginScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState<Step>('mobile');
+  /** The same card the signed-in shells use between pages, here between number and code. */
+  const transition = useRouteTransition();
   /** The password door, for an office admin — reached by the link below the OTP button. */
   const [adminMode, setAdminMode] = useState(false);
   const [mobileNo, setMobileNo] = useState('');
@@ -216,7 +185,11 @@ export default function LoginScreen(): React.JSX.Element {
     setError(null);
     try {
       await sendOtp(mobileNo).unwrap();
-      setStep('otp');
+      // From the number, the code screen is announced with the card. A resend from the code
+      // screen is already there, so it changes nothing on screen but the countdown.
+      if (step === 'mobile') {
+        transition.go('otp', () => setStep('otp'));
+      }
       setOtp('');
       setSecondsLeft(OTP_EXPIRY_SECONDS);
       // A fresh code is a fresh start — the old failure and its attempt count no longer
@@ -245,7 +218,7 @@ export default function LoginScreen(): React.JSX.Element {
       }
       setError(status === 429 ? t('errors.tooManyRequests') : t('errors.generic'));
     }
-  }, [mobileNo, sendOtp, t]);
+  }, [mobileNo, sendOtp, step, t, transition]);
 
   const handleVerify = useCallback(async () => {
     setError(null);
@@ -346,39 +319,44 @@ export default function LoginScreen(): React.JSX.Element {
 
   const onMobile = step === 'mobile';
 
+  // Both steps sit in the same host, so it stays mounted across the switch and the card can
+  // finish leaving over the code screen it announced.
   if (!onMobile) {
     return (
-      <OtpVerifyScreen
-        mobileNo={mobileNo}
-        otp={otp}
-        onChangeOtp={value => {
-          setOtp(value);
-          // Typing is the user answering the notice, so clear it — leaving a red banner up
-          // while they correct the code reads as though the correction already failed.
-          if (failure === 'wrong') {
+      <RouteTransitionHost transition={transition}>
+        <OtpVerifyScreen
+          mobileNo={mobileNo}
+          otp={otp}
+          onChangeOtp={value => {
+            setOtp(value);
+            // Typing is the user answering the notice, so clear it — leaving a red banner up
+            // while they correct the code reads as though the correction already failed.
+            if (failure === 'wrong') {
+              setFailure(null);
+            }
+          }}
+          onSubmit={handleVerify}
+          onResend={handleSend}
+          onEditNumber={() => {
+            setAskedOffice(false);
+            setError(null);
             setFailure(null);
-          }
-        }}
-        onSubmit={handleVerify}
-        onResend={handleSend}
-        onEditNumber={() => {
-          setAskedOffice(false);
-          setStep('mobile');
-          setError(null);
-          setFailure(null);
-          setAttemptsUsed(0);
-        }}
-        resendIn={secondsLeft}
-        lockedFor={lockedFor}
-        attemptsUsed={attemptsUsed}
-        failure={failure}
-        busy={verifyState.isLoading || sendState.isLoading}
-        error={error}
-        onDismissError={() => setError(null)}
-        onAskOffice={handleAskOffice}
-        askedOffice={askedOffice}
-        askingOffice={askState.isLoading}
-      />
+            setAttemptsUsed(0);
+            // Back is reversal: the screens cross over with no card, as everywhere else.
+            transition.back(() => setStep('mobile'));
+          }}
+          resendIn={secondsLeft}
+          lockedFor={lockedFor}
+          attemptsUsed={attemptsUsed}
+          failure={failure}
+          busy={verifyState.isLoading || sendState.isLoading}
+          error={error}
+          onDismissError={() => setError(null)}
+          onAskOffice={handleAskOffice}
+          askedOffice={askedOffice}
+          askingOffice={askState.isLoading}
+        />
+      </RouteTransitionHost>
     );
   }
 
@@ -386,171 +364,157 @@ export default function LoginScreen(): React.JSX.Element {
   const busy = sendState.isLoading;
 
   return (
-    <View style={styles.root}>
-      {/* The hero runs to the top edge, so the bar sits on Ink here rather than on the green
+    <RouteTransitionHost transition={transition}>
+      <View style={styles.root}>
+        {/* The hero runs to the top edge, so the bar sits on Ink here rather than on the green
           the rest of the app opens with. Unmounts with this step and hands back to the
           app-wide bar on the OTP screen. */}
-      <StatusBar style="light" backgroundColor={colors.ink} />
+        <StatusBar style="light" />
 
-      {/* Above the hero rather than inside the form: a failed send is about the request, not
+        {/* Above the hero rather than inside the form: a failed send is about the request, not
           about the number in the box below it. */}
-      <Toast message={error} onDismiss={() => setError(null)} testID="login-error" />
+        <Toast message={error} onDismiss={() => setError(null)} testID="login-error" />
 
-      {/* The one step in the app that cannot work offline, said plainly and in place, rather
+        {/* The one step in the app that cannot work offline, said plainly and in place, rather
           than as a toast that disappears before it has been read. */}
-      {unreachable && (
-        <View style={styles.problem}>
-          <Problem
-            kind={online ? 'server' : 'signIn'}
-            onRetry={() => {
-              setUnreachable(false);
-              handleSend();
-            }}
-            busy={sendState.isLoading}
-            onDismiss={() => setUnreachable(false)}
-            testID="login-unreachable"
-          />
-        </View>
-      )}
+        {unreachable && (
+          <View style={styles.problem}>
+            <Problem
+              kind={online ? 'server' : 'signIn'}
+              onRetry={() => {
+                setUnreachable(false);
+                handleSend();
+              }}
+              busy={sendState.isLoading}
+              onDismiss={() => setUnreachable(false)}
+              testID="login-unreachable"
+            />
+          </View>
+        )}
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <Hero />
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Hero />
 
-          {/* Safe area on the sides and bottom: on a notched handset in landscape the
+            {/* Safe area on the sides and bottom: on a notched handset in landscape the
               sheet would otherwise run under the cutout, and the CTA under the home
               indicator. The hero handles the top edge itself. */}
-          <View
-            style={[
-              styles.sheet,
-              {
-                paddingLeft: spacing[5] + insets.left,
-                paddingRight: spacing[5] + insets.right,
-                paddingBottom: spacing[6] + insets.bottom,
-              },
-            ]}
-          >
-            {/* The whole of signing in, before it starts: three steps, the first one lit. A Mait
-                signing in for the first time knows what is coming and that there is no
-                password step waiting at the end of it. */}
-            <View style={styles.steps} testID="login-steps">
-              {STEPS.map((item, index) => (
-                <View
-                  key={item.key}
-                  style={[styles.stepTile, { backgroundColor: item.wash, borderColor: item.edge }]}
-                >
-                  <View style={[styles.stepChip, { backgroundColor: item.solid }]}>
-                    <Ionicons name={item.icon} size={16} color={item.on} />
-                  </View>
-                  <Text style={[styles.stepNumber, { color: item.word }]}>{index + 1}</Text>
-                  <Text style={[styles.stepLabel, { color: item.word }]} numberOfLines={2}>
-                    {t(`auth.${item.key}`)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.labelRow}>
-              <View style={styles.labelChip}>
-                <Ionicons name="call" size={13} color={colors.surface} />
-              </View>
-              <Text style={styles.label}>{t('auth.mobileNumber')}</Text>
-              {/* How many of the ten are in, so a short number is seen before it is sent. */}
-              <View style={[styles.count, isValidMobile && styles.countDone]}>
-                <Text style={[styles.countLabel, isValidMobile && styles.countLabelDone]}>
-                  {`${mobileNo.length}/10`}
-                </Text>
-              </View>
-            </View>
             <View
               style={[
-                styles.phoneField,
-                focused && styles.phoneFieldFocused,
-                isValidMobile && styles.phoneFieldDone,
+                styles.sheet,
+                {
+                  paddingLeft: spacing[5] + insets.left,
+                  paddingRight: spacing[5] + insets.right,
+                  paddingBottom: spacing[6] + insets.bottom,
+                },
               ]}
-              testID="login-phone-field"
             >
-              {/* The country code is a fixed block, not something to be typed past. Filling
-                  it separates it from the ten digits that are the user's to change. */}
-              <View style={[styles.prefixBlock, isValidMobile && styles.prefixBlockDone]}>
-                <Ionicons name="call" size={14} color={colors.surface} />
-                <Text style={styles.prefix}>+91</Text>
-              </View>
-              <TextInput
-                style={styles.phoneInput}
-                value={formatMobile(mobileNo)}
-                onChangeText={text => setMobileNo(text.replace(/\D/g, '').slice(0, 10))}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                placeholder={t('auth.mobilePlaceholder')}
-                placeholderTextColor={colors.textDisabled}
-                keyboardType="number-pad"
-                textContentType="telephoneNumber"
-                maxLength={11} // ten digits plus the grouping space
-                autoFocus
-                accessibilityLabel={t('auth.mobileNumber')}
-                testID="login-mobile"
-              />
-              {isValidMobile && (
-                <View style={styles.valid} testID="login-mobile-valid">
-                  <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+              <View style={styles.labelRow}>
+                <View style={styles.labelChip}>
+                  <Ionicons name="call" size={13} color={colors.surface} />
                 </View>
-              )}
-            </View>
+                <AppText style={styles.label}>{t('auth.mobileNumber')}</AppText>
+                {/* How many of the ten are in, so a short number is seen before it is sent. */}
+                <View style={[styles.count, isValidMobile && styles.countDone]}>
+                  <AppText style={[styles.countLabel, isValidMobile && styles.countLabelDone]}>
+                    {`${mobileNo.length}/10`}
+                  </AppText>
+                </View>
+              </View>
+              <View
+                style={[
+                  styles.phoneField,
+                  focused && styles.phoneFieldFocused,
+                  isValidMobile && styles.phoneFieldDone,
+                ]}
+                testID="login-phone-field"
+              >
+                {/* The country code is a fixed block, not something to be typed past. Filling
+                  it separates it from the ten digits that are the user's to change. */}
+                <View style={[styles.prefixBlock, isValidMobile && styles.prefixBlockDone]}>
+                  <Ionicons name="call" size={14} color={colors.surface} />
+                  <AppText style={styles.prefix}>+91</AppText>
+                </View>
+                <TextInput
+                  style={styles.phoneInput}
+                  value={formatMobile(mobileNo)}
+                  onChangeText={text => setMobileNo(text.replace(/\D/g, '').slice(0, 10))}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  placeholder={t('auth.mobilePlaceholder')}
+                  placeholderTextColor={colors.textDisabled}
+                  keyboardType="number-pad"
+                  textContentType="telephoneNumber"
+                  maxLength={11} // ten digits plus the grouping space
+                  autoFocus
+                  accessibilityLabel={t('auth.mobileNumber')}
+                  testID="login-mobile"
+                />
+                {isValidMobile && (
+                  <View style={styles.valid} testID="login-mobile-valid">
+                    <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+                  </View>
+                )}
+              </View>
 
-            <Notice icon="key" title={t('auth.noPasswordTitle')} body={t('auth.noPasswordBody')} />
+              <Notice
+                icon="key"
+                title={t('auth.noPasswordTitle')}
+                body={t('auth.noPasswordBody')}
+              />
 
-            {/* The CTA sits at the bottom of the screen rather than under the field it
+              {/* The CTA sits at the bottom of the screen rather than under the field it
                 submits. On a one-field form the two are the same gesture, and the thumb
                 reaches the bottom edge without moving the hand. */}
-            <View style={styles.spacer} />
+              <View style={styles.spacer} />
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canSubmit || busy, busy }}
-              onPress={handleSend}
-              disabled={!canSubmit || busy}
-              style={({ pressed }) => [
-                styles.cta,
-                !canSubmit || busy ? styles.ctaDisabled : styles.ctaEnabled,
-                pressed && canSubmit && !busy && styles.ctaPressed,
-              ]}
-              testID="login-send-otp"
-            >
-              <Text style={[styles.ctaLabel, (!canSubmit || busy) && styles.ctaLabelDisabled]}>
-                {t('auth.sendOtp')}
-              </Text>
-              <View style={[styles.ctaChip, (!canSubmit || busy) && styles.ctaChipDisabled]}>
-                <Ionicons
-                  name="paper-plane"
-                  size={15}
-                  color={!canSubmit || busy ? colors.textDisabled : colors.primary}
-                />
-              </View>
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canSubmit || busy, busy }}
+                onPress={handleSend}
+                disabled={!canSubmit || busy}
+                style={({ pressed }) => [
+                  styles.cta,
+                  !canSubmit || busy ? styles.ctaDisabled : styles.ctaEnabled,
+                  pressed && canSubmit && !busy && styles.ctaPressed,
+                ]}
+                testID="login-send-otp"
+              >
+                <AppText style={[styles.ctaLabel, (!canSubmit || busy) && styles.ctaLabelDisabled]}>
+                  {t('auth.sendOtp')}
+                </AppText>
+                <View style={styles.ctaChip}>
+                  <Ionicons
+                    name="paper-plane"
+                    size={17}
+                    color={!canSubmit || busy ? colors.textDisabled : colors.surface}
+                  />
+                </View>
+              </Pressable>
 
-            {/* The office door. A quiet link rather than a second button: almost everyone on
+              {/* The office door. A quiet link rather than a second button: almost everyone on
                 this screen is a Mait, and an admin knows to look for it. */}
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setAdminMode(true)}
-              style={styles.adminLink}
-              testID="login-are-you-admin"
-            >
-              <Ionicons name="briefcase-outline" size={15} color={colors.info} />
-              <Text style={styles.adminLinkLabel}>{t('auth.areYouAdmin')}</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setAdminMode(true)}
+                style={styles.adminLink}
+                testID="login-are-you-admin"
+              >
+                <Ionicons name="briefcase-outline" size={15} color={colors.info} />
+                <AppText style={styles.adminLinkLabel}>{t('auth.areYouAdmin')}</AppText>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </RouteTransitionHost>
   );
 }
 
@@ -589,25 +553,6 @@ const styles = StyleSheet.create({
   },
 
   sheet: { flex: 1, paddingTop: spacing[5] },
-
-  steps: { flexDirection: 'row', gap: spacing[2], marginBottom: spacing[5] },
-  stepTile: {
-    flex: 1,
-    padding: spacing[2],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    alignItems: 'flex-start',
-  },
-  stepChip: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[1],
-  },
-  stepNumber: { ...typography.caption, fontFamily: typography.h2.fontFamily },
-  stepLabel: { ...typography.caption, fontFamily: typography.label.fontFamily },
 
   labelRow: {
     flexDirection: 'row',
@@ -708,23 +653,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
+    paddingHorizontal: spacing[4],
     minHeight: MIN_TOUCH_TARGET + 6,
     borderRadius: radius.md,
   },
   ctaEnabled: { backgroundColor: colors.primary },
   ctaDisabled: { backgroundColor: colors.disabledFill },
   ctaPressed: { backgroundColor: colors.primaryPressed },
-  ctaLabel: { ...typography.bodyStrong, color: colors.surface },
-  ctaLabelDisabled: { color: colors.textDisabled },
-  ctaChip: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
+  // Across the button rather than sized to itself: Android measures a Hindi label narrower
+  // than it draws it, which wrapped "कोड भेजें" onto two lines. The padding on the side away
+  // from the icon is the icon and the gap, so the words still sit in the middle of the button.
+  ctaLabel: {
+    ...typography.bodyStrong,
+    color: colors.surface,
+    flex: 1,
+    textAlign: 'center',
+    paddingLeft: 28 + spacing[2],
   },
-  ctaChipDisabled: { backgroundColor: 'transparent' },
+  ctaLabelDisabled: { color: colors.textDisabled },
+  // Straight on the button, in the label's colour — no disc of its own behind it.
+  ctaChip: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
 
   adminLink: {
     flexDirection: 'row',

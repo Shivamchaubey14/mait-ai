@@ -25,7 +25,8 @@
  */
 
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -151,14 +152,14 @@ export default function PdDoneScreen({
         <View style={styles.tick}>
           <Ionicons name="checkmark" size={26} color={colors.surface} />
         </View>
-        <Text style={styles.heroTitle}>{t('pd.doneTitle')}</Text>
-        <Text style={styles.heroSubtitle} numberOfLines={2} testID="pd-done-subject">
+        <AppText style={styles.heroTitle}>{t('pd.doneTitle')}</AppText>
+        <AppText style={styles.heroSubtitle} numberOfLines={2} testID="pd-done-subject">
           {t('pd.doneSubject', {
             name: check.owner_name,
             outcome: outcomeWord.toLowerCase(),
             days: check.days_since_ai ?? 0,
           })}
-        </Text>
+        </AppText>
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -176,16 +177,18 @@ export default function PdDoneScreen({
             />
           </View>
           <View style={styles.statusBody}>
-            <Text style={styles.statusTitle}>
+            <AppText style={styles.statusTitle}>
               {queued ? t('pd.queuedTitle') : t('pd.sentTitle')}
-            </Text>
-            <Text style={[styles.statusText, { color: queued ? yolk[800] : colors.primaryDark }]}>
+            </AppText>
+            <AppText
+              style={[styles.statusText, { color: queued ? yolk[800] : colors.primaryDark }]}
+            >
               {queued ? t('pd.queuedBody') : t('pd.sentBody')}
-            </Text>
+            </AppText>
           </View>
           {queued && (
             <View style={styles.pill}>
-              <Text style={styles.pillLabel}>{t('pd.queuedPill')}</Text>
+              <AppText style={styles.pillLabel}>{t('pd.queuedPill')}</AppText>
             </View>
           )}
         </View>
@@ -201,10 +204,10 @@ export default function PdDoneScreen({
             <Ionicons name={settlementCopy.icon} size={20} color={settle.on} />
           </View>
           <View style={styles.statusBody}>
-            <Text style={styles.settlementTitle}>{settlementCopy.title}</Text>
-            <Text style={[styles.settlementBody, { color: settle.word }]}>
+            <AppText style={styles.settlementTitle}>{settlementCopy.title}</AppText>
+            <AppText style={[styles.settlementBody, { color: settle.word }]}>
               {settlementCopy.body}
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -217,9 +220,13 @@ export default function PdDoneScreen({
               <View style={[styles.chip, { backgroundColor: ink[500] }]}>
                 <Ionicons name="hand-left" size={20} color={colors.surface} />
               </View>
-              <Text style={[styles.againTitle, styles.cardTitle]}>{t('pd.doneDeclinedTitle')}</Text>
+              <AppText style={[styles.againTitle, styles.cardTitle]}>
+                {t('pd.doneDeclinedTitle')}
+              </AppText>
             </View>
-            <Text style={[styles.againBody, { color: ink[600] }]}>{t('pd.doneDeclinedBody')}</Text>
+            <AppText style={[styles.againBody, { color: ink[600] }]}>
+              {t('pd.doneDeclinedBody')}
+            </AppText>
           </View>
         )}
 
@@ -229,11 +236,11 @@ export default function PdDoneScreen({
               <View style={[styles.chip, { backgroundColor: colors.primary }]}>
                 <Glyph name={STRAW_GLYPH} size={20} color={colors.surface} />
               </View>
-              <Text style={[styles.againTitle, styles.cardTitle]}>{t('pd.againTitle')}</Text>
+              <AppText style={[styles.againTitle, styles.cardTitle]}>{t('pd.againTitle')}</AppText>
             </View>
-            <Text style={[styles.againBody, { color: colors.primaryDark }]}>
+            <AppText style={[styles.againBody, { color: colors.primaryDark }]}>
               {t('pd.againBody')}
-            </Text>
+            </AppText>
             <Pressable
               accessibilityRole="button"
               onPress={onStartAi}
@@ -241,9 +248,9 @@ export default function PdDoneScreen({
               testID="pd-start-ai"
             >
               <Ionicons name="add" size={19} color={colors.surface} />
-              <Text style={styles.againCtaLabel} numberOfLines={1}>
+              <AppText style={styles.againCtaLabel} numberOfLines={1}>
                 {t('pd.againCta', { name: check.owner_name })}
-              </Text>
+              </AppText>
             </Pressable>
           </View>
         )}
@@ -259,8 +266,8 @@ export default function PdDoneScreen({
               <Ionicons name="navigate" size={19} color={colors.surface} />
             </View>
             <View style={styles.nextBody}>
-              <Text style={styles.nextTitle}>{t('pd.nextTitle', { count: 1 })}</Text>
-              <Text style={styles.nextMeta} numberOfLines={1}>
+              <AppText style={styles.nextTitle}>{t('pd.nextTitle', { count: 1 })}</AppText>
+              <AppText style={styles.nextMeta} numberOfLines={1}>
                 {t('pd.nextBody', {
                   name: next.owner_name,
                   where:
@@ -268,7 +275,7 @@ export default function PdDoneScreen({
                       ? t('pd.nextSameVillage')
                       : t('pd.nextOtherVillage', { mpp: next.mpp_name }),
                 })}
-              </Text>
+              </AppText>
             </View>
             <View style={styles.go}>
               <Ionicons name="chevron-forward" size={16} color={colors.info} />
@@ -279,7 +286,7 @@ export default function PdDoneScreen({
             <View style={[styles.chip, { backgroundColor: colors.primary }]}>
               <Ionicons name="checkmark-done" size={20} color={colors.surface} />
             </View>
-            <Text style={styles.allDoneText}>{t('pd.allDone')}</Text>
+            <AppText style={styles.allDoneText}>{t('pd.allDone')}</AppText>
           </View>
         )}
       </ScrollView>
@@ -292,7 +299,7 @@ export default function PdDoneScreen({
           testID="pd-back-to-list"
         >
           <Ionicons name="list" size={18} color={ink[600]} />
-          <Text style={styles.backLabel}>{t('pd.backToList')}</Text>
+          <AppText style={styles.backLabel}>{t('pd.backToList')}</AppText>
         </Pressable>
       </View>
     </View>

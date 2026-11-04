@@ -11,12 +11,12 @@ import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   TextInputProps,
   View,
   ViewStyle,
 } from 'react-native';
+import AppText from '@/components/AppText';
 
 import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
 
@@ -64,9 +64,9 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={variant === 'ghost' ? colors.primary : colors.surface} />
       ) : (
-        <Text style={[styles.buttonLabel, variant === 'ghost' && { color: colors.primary }]}>
+        <AppText style={[styles.buttonLabel, variant === 'ghost' && { color: colors.primary }]}>
           {label}
-        </Text>
+        </AppText>
       )}
     </Pressable>
   );
@@ -97,9 +97,9 @@ export function SignOutButton({
           label's font, and Nunito has no Devanagari — so "साइन आउट" came out measured for
           narrower glyphs than the ones drawn, and "आउट" wrapped out of sight, leaving "साइन".
           The full width, and the simple line breaker, leave room for what is actually drawn. */}
-      <Text style={styles.signOutLabel} textBreakStrategy="simple" testID="sign-out-label">
+      <AppText style={styles.signOutLabel} textBreakStrategy="simple" testID="sign-out-label">
         {label}
-      </Text>
+      </AppText>
     </Pressable>
   );
 }
@@ -123,16 +123,16 @@ export function TextField({
     <View style={styles.field}>
       {/* Label above the input, always visible. A placeholder-as-label disappears exactly
           when a hesitant user needs it. */}
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <AppText style={styles.fieldLabel}>{label}</AppText>
       <TextInput
         style={[styles.fieldInput, !!error && styles.fieldInputError]}
         placeholderTextColor={colors.textMuted}
         accessibilityLabel={label}
         {...inputProps}
       />
-      {!!hint && !error && <Text style={styles.fieldHint}>{hint}</Text>}
+      {!!hint && !error && <AppText style={styles.fieldHint}>{hint}</AppText>}
       {/* Errors carry a glyph as well as colour — colour alone excludes colour-blind users. */}
-      {!!error && <Text style={styles.fieldError}>{`⚠  ${error}`}</Text>}
+      {!!error && <AppText style={styles.fieldError}>{`⚠  ${error}`}</AppText>}
     </View>
   );
 }
@@ -170,7 +170,7 @@ export function Banner({
   }[tone];
   return (
     <View testID={testID} style={[styles.banner, { backgroundColor: background }]}>
-      <Text
+      <AppText
         style={[
           styles.bannerText,
           // Warning yellow fails contrast against white text, so it takes dark text.
@@ -178,7 +178,7 @@ export function Banner({
         ]}
       >
         {message}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -186,7 +186,7 @@ export function Banner({
 export function EmptyState({ message }: { message: string }): React.JSX.Element {
   return (
     <View style={styles.empty}>
-      <Text style={styles.emptyText}>{message}</Text>
+      <AppText style={styles.emptyText}>{message}</AppText>
     </View>
   );
 }
@@ -195,7 +195,7 @@ export function Loading({ label }: { label?: string }): React.JSX.Element {
   return (
     <View style={styles.empty}>
       <ActivityIndicator size="large" color={colors.primary} />
-      {!!label && <Text style={styles.emptyText}>{label}</Text>}
+      {!!label && <AppText style={styles.emptyText}>{label}</AppText>}
     </View>
   );
 }
@@ -234,17 +234,17 @@ export function ListRow({
       ]}
     >
       <View style={styles.rowBody}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
+        <AppText style={styles.rowTitle} numberOfLines={1}>
           {title}
-        </Text>
+        </AppText>
         {!!subtitle && (
-          <Text style={styles.rowSubtitle} numberOfLines={1}>
+          <AppText style={styles.rowSubtitle} numberOfLines={1}>
             {subtitle}
-          </Text>
+          </AppText>
         )}
-        {!!warning && <Text style={styles.rowWarning}>{`⚠  ${warning}`}</Text>}
+        {!!warning && <AppText style={styles.rowWarning}>{`⚠  ${warning}`}</AppText>}
       </View>
-      {!!meta && <Text style={styles.rowMeta}>{meta}</Text>}
+      {!!meta && <AppText style={styles.rowMeta}>{meta}</AppText>}
     </Pressable>
   );
 }

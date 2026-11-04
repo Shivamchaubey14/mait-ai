@@ -281,14 +281,15 @@ describe('the zonal manager’s shell', () => {
     await screen.findByTestId('zonal-profile-all-events');
   });
 
-  it('gives a head-office admin the Mait shell, not a zone they do not have', async () => {
+  it('gives a head-office admin the admin app, not a zone they do not have', async () => {
     const { store } = renderShell();
     signIn(store, HEAD_OFFICE);
 
-    // No zone, so no zonal app. The gate falls through to the default navigator rather than
-    // opening four screens that would all be scoped to nothing.
-    await screen.findByTestId('tab-home');
+    // No zone, so no zonal app — four screens all scoped to nothing. An office account without
+    // a zone gets the portal's surface instead, and never the Mait's tabs.
+    await screen.findByTestId('admin-title');
     expect(screen.queryByTestId('zonal-dashboard-hero')).toBeNull();
+    expect(screen.queryByTestId('tab-home')).toBeNull();
   });
 
   it('unmounts with the session, like the other two shells', async () => {

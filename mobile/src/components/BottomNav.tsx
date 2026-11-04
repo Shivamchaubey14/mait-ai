@@ -17,12 +17,14 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
+
+import AppText from './AppText';
 
 /**
  * The keys are the app's own names for these screens; the labels a Mait reads come from
@@ -154,19 +156,19 @@ export default function BottomNav<T extends string = Tab>({
                   that is the screen a Mait goes to when they want to look at them. */}
                 {key === badgeOn && pending > 0 && (
                   <View style={styles.badge} testID="nav-pending">
-                    <Text style={styles.badgeLabel}>{pending > 9 ? '9+' : pending}</Text>
+                    <AppText style={styles.badgeLabel}>{pending > 9 ? '9+' : pending}</AppText>
                   </View>
                 )}
               </View>
 
-              <Text
+              <AppText
                 style={[styles.label, isActive && styles.labelActive]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}
               >
                 {t(`nav.${key}`)}
-              </Text>
+              </AppText>
             </Pressable>
           );
         })}

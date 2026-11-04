@@ -44,9 +44,9 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -138,10 +138,10 @@ function Fact({
   const said = value && String(value).trim();
   return (
     <View style={styles.fact} testID={testID}>
-      <Text style={styles.factLabel}>{label}</Text>
-      <Text style={[styles.factValue, !said && styles.factMissing]}>
+      <AppText style={styles.factLabel}>{label}</AppText>
+      <AppText style={[styles.factValue, !said && styles.factMissing]}>
         {said || t('zonal.notRecorded')}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -187,7 +187,7 @@ function Card({
         <View style={[styles.chip, styles[`chip_${tone}`]]}>
           <Ionicons name={icon} size={15} color={CARD_ICON[tone]} />
         </View>
-        <Text style={[styles.cardTitle, styles[`cardTitle_${tone}`]]}>{title}</Text>
+        <AppText style={[styles.cardTitle, styles[`cardTitle_${tone}`]]}>{title}</AppText>
       </View>
       {children}
     </View>
@@ -217,8 +217,8 @@ function HeroFact({
         <Ionicons name={icon} size={14} color={tone === 'info' ? colors.surface : colors.ink} />
       </View>
       <View style={styles.heroFactBody}>
-        <Text style={styles.heroFactLabel}>{label}</Text>
-        <Text style={styles.heroFactValue}>{value}</Text>
+        <AppText style={styles.heroFactLabel}>{label}</AppText>
+        <AppText style={styles.heroFactValue}>{value}</AppText>
       </View>
     </View>
   );
@@ -238,37 +238,11 @@ export default function EventScreen({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const online = useOnline();
-  const insets = useSafeAreaInsets();
   // Live like the rest: a record opened at step 5 moves to Completed on screen when the
   // payment clears, rather than when somebody thinks to pull.
   const query = useGetZonalEventQuery(eventId, useLive());
-  const [viewing, setViewing] = useState(false);
 
   const event: ZonalEvent | undefined = query.data;
-  const photo = event?.ai_photo_url ? mediaUrl(event.ai_photo_url) : '';
-  const hasFix = !!(event?.gps_lat && event?.gps_lng);
-  const settled = event?.status === 'completed' || event?.status === 'cancelled';
-
-  /**
-   * Hand the coordinates to whatever maps app is on the handset.
-   *
-   * Not an embedded map: the portal frames one because it has a browser and a desk, and a
-   * map library here would be megabytes of JavaScript for a pin. Out in a village the useful
-   * thing is not a picture of where it happened — it is directions to it, which the phone's
-   * own maps app already does better than this app ever will.
-   */
-  const openInMaps = () => {
-    if (!event?.gps_lat || !event?.gps_lng) {
-      return;
-    }
-    const at = `${event.gps_lat},${event.gps_lng}`;
-    Linking.openURL(`geo:${at}?q=${at}`).catch(() => {
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${at}`).catch(() => {
-        // Neither a maps app nor a browser. The coordinates are on the card either way, which
-        // is what a dispute is actually settled with.
-      });
-    });
-  };
 
   if (query.isLoading) {
     return (
@@ -307,6 +281,132 @@ export default function EventScreen({
     );
   }
 
+  return (
+    <View style={zonalStyles.root}>
+      <ZonalHero
+        tag={t('zonal.eventEyebrow', { id: event.id })}
+        pill={zoneName}
+        title={event.owner_name}
+        testID="zonal-event-hero"
+      >
+        <EventHeroFacts event={event} />
+      </ZonalHero>
+
+      <ScrollView
+        contentContainerStyle={zonalStyles.body}
+        refreshControl={
+          <RefreshControl
+            refreshing={query.isFetching && !query.isLoading}
+            onRefresh={query.refetch}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        <EventRecordCards event={event} />
+      </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * Whose animal, in a word and a colour, then where and by whom — each with the code a manager
+ * reads back over the phone. Drawn on the Ink, under the record's title.
+ */
+export function EventHeroFacts({
+  event,
+  testIDPrefix = 'zonal-event',
+}: {
+  event: ZonalEvent;
+  testIDPrefix?: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const member = event.owner_type === 'member';
+  return (
+    <View style={styles.heroFacts}>
+      <View
+        style={[styles.kind, member ? styles.kindMember : styles.kindNonMember]}
+        testID={`${testIDPrefix}-owner-kind`}
+      >
+        <Ionicons
+          name={member ? 'ribbon' : 'person'}
+          size={13}
+          color={member ? colors.surface : colors.ink}
+        />
+        <AppText style={[styles.kindLabel, !member && styles.kindLabelNonMember]}>
+          {t(member ? 'zonal.member' : 'zonal.nonMember')}
+        </AppText>
+      </View>
+      <HeroFact
+        icon="business"
+        tone="info"
+        label={t('zonal.mppLabel')}
+        value={`${event.mpp_name} · ${event.mpp_code}`}
+        testID={`${testIDPrefix}-hero-mpp`}
+      />
+      <HeroFact
+        icon="person"
+        tone="warm"
+        label={t('zonal.theMait')}
+        value={[event.mait_name, event.mait_code].filter(Boolean).join(' · ')}
+        testID={`${testIDPrefix}-hero-mait`}
+      />
+    </View>
+  );
+}
+
+/**
+ * Everything under the hero: the four figures, the photographs, where, who and what, what the
+ * visit took, whether it took, and the trail. Shared by the manager's record and the admin's,
+ * so the same event is the same cards wherever it is opened.
+ *
+ * Where the detail carries them (the admin's does), the farmer's own particulars and the
+ * animal's registration portrait are laid out too — the portal's Farmer & animal card.
+ */
+export function EventRecordCards({
+  event,
+  testIDPrefix = 'zonal-event',
+}: {
+  event: ZonalEvent;
+  testIDPrefix?: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const [viewing, setViewing] = useState<string | null>(null);
+
+  const photo = event.ai_photo_url ? mediaUrl(event.ai_photo_url) : '';
+  const owner = event.owner_detail ?? null;
+  const animal = event.animal_detail ?? null;
+  const animalPhoto = animal?.photo_url ? mediaUrl(animal.photo_url) : '';
+  const hasFix = !!(event.gps_lat && event.gps_lng);
+  const settled = event.status === 'completed' || event.status === 'cancelled';
+  const id = (name: string) => `${testIDPrefix}-${name}`;
+  // Lists the record is drawn from, read defensively: the admin's trail arrives on a read of
+  // its own, and a record from before consumables were captured carries none.
+  const consumables = event.consumables ?? [];
+  const checks = event.pregnancy_checks ?? [];
+  const timeline = Array.isArray(event.timeline) ? event.timeline : [];
+
+  /**
+   * Hand the coordinates to whatever maps app is on the handset.
+   *
+   * Not an embedded map: the portal frames one because it has a browser and a desk, and a
+   * map library here would be megabytes of JavaScript for a pin. Out in a village the useful
+   * thing is not a picture of where it happened — it is directions to it, which the phone's
+   * own maps app already does better than this app ever will.
+   */
+  const openInMaps = () => {
+    if (!event.gps_lat || !event.gps_lng) {
+      return;
+    }
+    const at = `${event.gps_lat},${event.gps_lng}`;
+    Linking.openURL(`geo:${at}?q=${at}`).catch(() => {
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${at}`).catch(() => {
+        // Neither a maps app nor a browser. The coordinates are on the card either way, which
+        // is what a dispute is actually settled with.
+      });
+    });
+  };
+
   const payment = event.payment;
   const paymentTone: TileTone = !payment
     ? 'plain'
@@ -320,443 +420,447 @@ export default function EventScreen({
   const deducted = event.status === 'completed' && event.stock_deducted;
 
   return (
-    <View style={zonalStyles.root}>
-      <ZonalHero
-        tag={t('zonal.eventEyebrow', { id: event.id })}
-        pill={zoneName}
-        title={event.owner_name}
-        testID="zonal-event-hero"
-      >
-        {/* Whose animal, in a word and a colour, then where and by whom — each with the code
-            a manager reads back over the phone. */}
-        <View style={styles.heroFacts}>
-          <View
-            style={[styles.kind, member ? styles.kindMember : styles.kindNonMember]}
-            testID="zonal-event-owner-kind"
-          >
-            <Ionicons
-              name={member ? 'ribbon' : 'person'}
-              size={13}
-              color={member ? colors.surface : colors.ink}
-            />
-            <Text style={[styles.kindLabel, !member && styles.kindLabelNonMember]}>
-              {t(member ? 'zonal.member' : 'zonal.nonMember')}
-            </Text>
-          </View>
-          <HeroFact
-            icon="business"
-            tone="info"
-            label={t('zonal.mppLabel')}
-            value={`${event.mpp_name} · ${event.mpp_code}`}
-            testID="zonal-event-hero-mpp"
-          />
-          <HeroFact
-            icon="person"
-            tone="warm"
-            label={t('zonal.theMait')}
-            value={[event.mait_name, event.mait_code].filter(Boolean).join(' · ')}
-            testID="zonal-event-hero-mait"
-          />
-        </View>
-      </ZonalHero>
-
-      <ScrollView
-        contentContainerStyle={zonalStyles.body}
-        refreshControl={
-          <RefreshControl
-            refreshing={query.isFetching && !query.isLoading}
-            onRefresh={query.refetch}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {/* The four figures most arguments are settled with, two at a time — four across a
+    <>
+      {/* The four figures most arguments are settled with, two at a time — four across a
             handset would be four columns of nothing legible. Each carries the line of
             context that turns a number into an answer. */}
-        <Tiles>
-          {/* Leading with the doses rather than the number, because that is what the flask is
+      <Tiles>
+        {/* Leading with the doses rather than the number, because that is what the flask is
               short of: an insemination on a difficult animal takes two straws, and a tile
               reading one number said nothing about the second. */}
-          {/* A line each for the breed and the straw's number, and whether the flask was
+        {/* A line each for the breed and the straw's number, and whether the flask was
               debited as a pill of its own. Run together as one two-line note, the last of
               them was always the one cut off — "Dedu…" — and it is the one a stock count
               turns on. */}
-          <Tile label={t('zonal.strawTile')} tone="info" testID="zonal-event-straw">
-            <Text style={styles.strawValue} numberOfLines={1} adjustsFontSizeToFit>
-              {t('zonal.doses', { count: event.doses || 1 })}
-            </Text>
-            {!!(event.semen_breed || event.breed) && (
-              <Text style={styles.strawBreed}>{event.semen_breed || event.breed}</Text>
-            )}
-            <Text style={styles.strawNumber}>
-              {event.straw_unique_no || t('zonal.noStrawNumber')}
-            </Text>
-            <View style={styles.statusPill}>
-              <Pill
-                label={
-                  event.status === 'completed'
-                    ? event.stock_deducted
-                      ? t('zonal.deducted')
-                      : t('zonal.closedWithoutDeduction')
-                    : t('zonal.heldNotDeducted')
-                }
-                tone={deducted ? 'good' : 'waiting'}
-              />
-            </View>
-          </Tile>
-          <Tile
-            label={t('zonal.paymentTile')}
-            value={payment ? `₹ ${payment.amount}` : t('zonal.noPaymentYet')}
-            note={
-              payment
-                ? `${payment.mode_display} · ${payment.status_display}`
-                : t('zonal.paymentAtStepSix')
-            }
-            tone={paymentTone}
-            testID="zonal-event-payment"
-          />
-        </Tiles>
-        <Tiles>
-          {/* Blue when there is a fix, yolk when there is not — a record with no position is
+        <Tile label={t('zonal.strawTile')} tone="info" testID={id('straw')}>
+          <AppText style={styles.strawValue} numberOfLines={1} adjustsFontSizeToFit>
+            {t('zonal.doses', { count: event.doses || 1 })}
+          </AppText>
+          {!!(event.semen_breed || event.breed) && (
+            <AppText style={styles.strawBreed}>{event.semen_breed || event.breed}</AppText>
+          )}
+          <AppText style={styles.strawNumber}>
+            {event.straw_unique_no || t('zonal.noStrawNumber')}
+          </AppText>
+          <View style={styles.statusPill}>
+            <Pill
+              label={
+                event.status === 'completed'
+                  ? event.stock_deducted
+                    ? t('zonal.deducted')
+                    : t('zonal.closedWithoutDeduction')
+                  : t('zonal.heldNotDeducted')
+              }
+              tone={deducted ? 'good' : 'waiting'}
+            />
+          </View>
+        </Tile>
+        <Tile
+          label={t('zonal.paymentTile')}
+          value={payment ? `₹ ${payment.amount}` : t('zonal.noPaymentYet')}
+          note={
+            payment
+              ? `${payment.mode_display} · ${payment.status_display}`
+              : t('zonal.paymentAtStepSix')
+          }
+          tone={paymentTone}
+          testID={id('payment')}
+        />
+      </Tiles>
+      <Tiles>
+        {/* Blue when there is a fix, yolk when there is not — a record with no position is
               not wrong, it is missing the one thing that ties it to a village. */}
-          {/* Latitude over longitude, a line each in heading type: both on one line in display
+        {/* Latitude over longitude, a line each in heading type: both on one line in display
               type ran off the tile as "26.79…". The full precision is on the map card below. */}
-          <Tile
-            label={t('zonal.locationTile')}
-            note={
-              hasFix
-                ? t(event.gps_source === 'photo' ? 'zonal.gpsFromPhoto' : 'zonal.gpsFromDevice')
-                : t('zonal.noGpsShort')
-            }
-            tone={hasFix ? 'info' : 'waiting'}
-            testID="zonal-event-location"
-          >
-            {hasFix ? (
-              <View style={styles.coordsTile}>
-                <Text style={styles.coordsTileValue} numberOfLines={1} adjustsFontSizeToFit>
-                  {Number(event.gps_lat).toFixed(4)}
-                </Text>
-                <Text style={styles.coordsTileValue} numberOfLines={1} adjustsFontSizeToFit>
-                  {Number(event.gps_lng).toFixed(4)}
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.coordsTileNone}>—</Text>
-            )}
-          </Tile>
-          {/* The status states a state, and the product already has a component for that
+        <Tile
+          label={t('zonal.locationTile')}
+          note={
+            hasFix
+              ? t(event.gps_source === 'photo' ? 'zonal.gpsFromPhoto' : 'zonal.gpsFromDevice')
+              : t('zonal.noGpsShort')
+          }
+          tone={hasFix ? 'info' : 'waiting'}
+          testID={id('location')}
+        >
+          {hasFix ? (
+            <View style={styles.coordsTile}>
+              <AppText style={styles.coordsTileValue} numberOfLines={1} adjustsFontSizeToFit>
+                {Number(event.gps_lat).toFixed(4)}
+              </AppText>
+              <AppText style={styles.coordsTileValue} numberOfLines={1} adjustsFontSizeToFit>
+                {Number(event.gps_lng).toFixed(4)}
+              </AppText>
+            </View>
+          ) : (
+            <AppText style={styles.coordsTileNone}>—</AppText>
+          )}
+        </Tile>
+        {/* The status states a state, and the product already has a component for that
               word. Set in display type it would read as a figure — so the pill sits on a
               white chip over the tile's own wash, exactly as the portal draws it. */}
-          <Tile
-            label={t('zonal.statusTile')}
-            note={
-              event.completed_at
-                ? t('zonal.completedAt', { when: stamp(event.completed_at) })
-                : t('zonal.startedAt', { when: stamp(event.created_at) })
-            }
-            tone={statusTone}
-            testID="zonal-event-status"
-          >
-            <View style={styles.statusPill}>
-              <Pill
-                label={event.status_display}
-                tone={statusTone === 'info' ? 'plain' : statusTone}
-              />
-            </View>
-          </Tile>
-        </Tiles>
+        <Tile
+          label={t('zonal.statusTile')}
+          note={
+            event.completed_at
+              ? t('zonal.completedAt', { when: stamp(event.completed_at) })
+              : t('zonal.startedAt', { when: stamp(event.created_at) })
+          }
+          tone={statusTone}
+          testID={id('status')}
+        >
+          <View style={styles.statusPill}>
+            <Pill
+              label={event.status_display}
+              tone={statusTone === 'info' ? 'plain' : statusTone}
+            />
+          </View>
+        </Tile>
+      </Tiles>
 
-        {/* The photograph, in a dark well so it stays the brightest thing on the screen —
+      {/* The photograph, in a dark well so it stays the brightest thing on the screen —
             which is how it gets judged. The well is inside a white card rather than being the
             card, because a column of black slabs reads as things that failed to load. */}
-        <Card title={t('zonal.theProof')} icon="camera-outline" testID="zonal-event-photo-card">
-          {photo ? (
+      <Card title={t('zonal.theProof')} icon="camera-outline" testID={id('photo-card')}>
+        {photo ? (
+          <Pressable
+            accessibilityRole="imagebutton"
+            accessibilityLabel={t('zonal.openPhoto')}
+            onPress={() => setViewing(photo)}
+            style={styles.well}
+            testID={id('photo')}
+          >
+            <Image source={{ uri: photo }} style={styles.photo} resizeMode="cover" />
+            {/* Says the picture opens. Faint and small, so the photograph stays the thing
+                  being looked at — a permanent button over it is mostly button. */}
+            <View style={styles.zoom}>
+              <Ionicons name="expand-outline" size={14} color={colors.surface} />
+            </View>
+          </Pressable>
+        ) : (
+          // A light dashed frame, never a dark slab: a slab reads as an image that failed
+          // to load, and this is a record with no photograph on it.
+          <View style={styles.noPhoto} testID={id('no-photo')}>
+            <Ionicons name="camera-outline" size={22} color={ink[200]} />
+            <AppText style={styles.noPhotoText}>{t('zonal.noPhoto')}</AppText>
+          </View>
+        )}
+        {photo ? (
+          // A chosen photograph is a photograph; a live capture is evidence that this
+          // animal was served at this place and time. Yolk says which, because somebody
+          // settling a dispute six months later cannot tell them apart by looking.
+          <View style={[styles.caption, event.photo_source !== 'camera' && styles.captionChosen]}>
+            <Ionicons
+              name={event.photo_source === 'camera' ? 'camera' : 'images-outline'}
+              size={13}
+              color={event.photo_source === 'camera' ? colors.textMuted : yolk[800]}
+            />
+            <AppText
+              style={[
+                styles.captionText,
+                event.photo_source !== 'camera' && styles.captionTextChosen,
+              ]}
+            >
+              {t('zonal.photoCaption', {
+                source: t(
+                  event.photo_source === 'camera' ? 'zonal.fromCamera' : 'zonal.fromGallery',
+                ),
+                when: stamp(event.performed_at ?? event.created_at),
+              })}
+            </AppText>
+          </View>
+        ) : (
+          <AppText style={styles.plainCaption}>{t('zonal.noPhotoCaption')}</AppText>
+        )}
+      </Card>
+
+      {/* The animal herself, as the Mait registered her in the yard — a different picture
+            from the proof: that one is evidence of the act, this one is how she is recognised
+            on the next visit. Only where the detail carries her registration record. */}
+      {!!animal && (
+        <Card
+          title={t('zonal.theAnimal')}
+          icon="paw-outline"
+          tone="warm"
+          testID={id('animal-card')}
+        >
+          {animalPhoto ? (
             <Pressable
               accessibilityRole="imagebutton"
               accessibilityLabel={t('zonal.openPhoto')}
-              onPress={() => setViewing(true)}
+              onPress={() => setViewing(animalPhoto)}
               style={styles.well}
-              testID="zonal-event-photo"
+              testID={id('animal-photo')}
             >
-              <Image source={{ uri: photo }} style={styles.photo} resizeMode="cover" />
-              {/* Says the picture opens. Faint and small, so the photograph stays the thing
-                  being looked at — a permanent button over it is mostly button. */}
+              <Image source={{ uri: animalPhoto }} style={styles.photo} resizeMode="cover" />
               <View style={styles.zoom}>
                 <Ionicons name="expand-outline" size={14} color={colors.surface} />
               </View>
             </Pressable>
           ) : (
-            // A light dashed frame, never a dark slab: a slab reads as an image that failed
-            // to load, and this is a record with no photograph on it.
-            <View style={styles.noPhoto} testID="zonal-event-no-photo">
-              <Ionicons name="camera-outline" size={22} color={ink[200]} />
-              <Text style={styles.noPhotoText}>{t('zonal.noPhoto')}</Text>
+            <View style={[styles.noPhoto, styles.noPhotoWarm]} testID={id('no-animal-photo')}>
+              <Ionicons name="paw-outline" size={22} color={yolk[400]} />
+              <AppText style={styles.noPhotoText}>{t('zonal.noAnimalPhoto')}</AppText>
             </View>
           )}
-          {photo ? (
-            // A chosen photograph is a photograph; a live capture is evidence that this
-            // animal was served at this place and time. Yolk says which, because somebody
-            // settling a dispute six months later cannot tell them apart by looking.
-            <View style={[styles.caption, event.photo_source !== 'camera' && styles.captionChosen]}>
-              <Ionicons
-                name={event.photo_source === 'camera' ? 'camera' : 'images-outline'}
-                size={13}
-                color={event.photo_source === 'camera' ? colors.textMuted : yolk[800]}
-              />
-              <Text
-                style={[
-                  styles.captionText,
-                  event.photo_source !== 'camera' && styles.captionTextChosen,
-                ]}
-              >
-                {t('zonal.photoCaption', {
-                  source: t(
-                    event.photo_source === 'camera' ? 'zonal.fromCamera' : 'zonal.fromGallery',
-                  ),
-                  when: stamp(event.performed_at ?? event.created_at),
-                })}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.plainCaption}>{t('zonal.noPhotoCaption')}</Text>
-          )}
+          <AppText style={styles.plainCaption}>
+            {[
+              animal.animal_type_display,
+              animal.breed,
+              animal.ear_tag_no ? t('zonal.tagNo', { tag: animal.ear_tag_no }) : null,
+              animal.registered_at
+                ? t('zonal.registeredOn', { date: stamp(animal.registered_at) })
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </AppText>
         </Card>
+      )}
 
-        {/* A light well, not a dark one: a map is a light thing, and with no fix this is a
+      {/* A light well, not a dark one: a map is a light thing, and with no fix this is a
             card waiting for a location rather than one that failed to draw a map. */}
-        <Card
-          title={t('zonal.whereItHappened')}
-          icon="location-outline"
-          tone={hasFix ? 'info' : 'plain'}
-          testID="zonal-event-gps"
-        >
-          <View style={[styles.mapWell, !hasFix && styles.mapWellEmpty]}>
-            <View style={styles.pinChip}>
-              <Ionicons name="location" size={15} color={colors.error} />
-            </View>
-            <View style={styles.mapBody}>
-              {hasFix ? (
-                <>
-                  <Text style={styles.coords}>{`${event.gps_lat}, ${event.gps_lng}`}</Text>
-                  <Text style={styles.plainCaption}>
-                    {t(event.gps_source === 'photo' ? 'zonal.gpsFromPhoto' : 'zonal.gpsFromDevice')}
-                  </Text>
-                </>
-              ) : (
-                <Text style={styles.factMissing}>{t('zonal.noGps')}</Text>
-              )}
-            </View>
+      <Card
+        title={t('zonal.whereItHappened')}
+        icon="location-outline"
+        tone={hasFix ? 'info' : 'plain'}
+        testID={id('gps')}
+      >
+        <View style={[styles.mapWell, !hasFix && styles.mapWellEmpty]}>
+          <View style={styles.pinChip}>
+            <Ionicons name="location" size={15} color={colors.error} />
           </View>
-          {hasFix && (
-            <View style={styles.mapAction}>
-              <ZonalAction
-                label={t('zonal.openInMaps')}
-                icon="navigate-outline"
-                tone="outline"
-                onPress={openInMaps}
-                testID="zonal-event-open-maps"
-              />
-            </View>
-          )}
-        </Card>
-
-        <Card
-          title={t('zonal.whoAndWhat')}
-          icon="person-outline"
-          tone="warm"
-          testID="zonal-event-who"
-        >
-          <Fact label={t('zonal.farmer')} value={event.owner_name} />
-          <View style={styles.fact}>
-            <Text style={styles.factLabel}>{t('zonal.farmerKind')}</Text>
-            <Pill
-              label={t(member ? 'zonal.member' : 'zonal.nonMember')}
-              tone={member ? 'good' : 'waiting'}
+          <View style={styles.mapBody}>
+            {hasFix ? (
+              <>
+                <AppText style={styles.coords}>{`${event.gps_lat}, ${event.gps_lng}`}</AppText>
+                <AppText style={styles.plainCaption}>
+                  {t(event.gps_source === 'photo' ? 'zonal.gpsFromPhoto' : 'zonal.gpsFromDevice')}
+                </AppText>
+              </>
+            ) : (
+              <AppText style={styles.factMissing}>{t('zonal.noGps')}</AppText>
+            )}
+          </View>
+        </View>
+        {hasFix && (
+          <View style={styles.mapAction}>
+            <ZonalAction
+              label={t('zonal.openInMaps')}
+              icon="navigate-outline"
+              tone="outline"
+              onPress={openInMaps}
+              testID={id('open-maps')}
             />
           </View>
-          <Fact
-            label={t('zonal.collectionPoint')}
-            value={`${event.mpp_name} · ${event.mpp_code}`}
-          />
-          <Fact label={t('zonal.theMait')} value={`${event.mait_name} · ${event.mait_code}`} />
-          <Fact label={t('zonal.animal')} value={`${event.animal_type} · ${event.breed}`} />
-          <Fact label={t('zonal.earTag')} value={event.ear_tag_no} />
-        </Card>
+        )}
+      </Card>
 
-        {/* Blue, and the same blue the Mait's own app and the portal draw this card in. It is
+      <Card title={t('zonal.whoAndWhat')} icon="person-outline" tone="warm" testID={id('who')}>
+        <Fact label={t('zonal.farmer')} value={owner?.name || event.owner_name} />
+        <View style={styles.fact}>
+          <AppText style={styles.factLabel}>{t('zonal.farmerKind')}</AppText>
+          <Pill
+            label={t(member ? 'zonal.member' : 'zonal.nonMember')}
+            tone={member ? 'good' : 'waiting'}
+          />
+        </View>
+        {/* The particulars she is reached and recognised by. A non-member has no SAP record
+              to fall back on, so for her these are the only way to settle who she is. The
+              Aadhaar comes masked; the full number stays behind the read that logs it. */}
+        {!!owner && (
+          <>
+            {member && (
+              <Fact
+                label={t('zonal.memberCode')}
+                value={owner.code || event.member_code}
+                testID={id('member-code')}
+              />
+            )}
+            <Fact label={t('zonal.mobile')} value={owner.mobile_no} testID={id('mobile')} />
+            {!!owner.father_husband_name && (
+              <Fact
+                label={t('zonal.fatherHusband')}
+                value={[owner.father_husband_name, owner.relation].filter(Boolean).join(' · ')}
+              />
+            )}
+            {!member && !!owner.address && (
+              <Fact label={t('zonal.address')} value={owner.address} />
+            )}
+            <Fact
+              label={t('zonal.aadhaar')}
+              value={
+                owner.has_aadhar
+                  ? [
+                      owner.aadhar_masked || '••••',
+                      !member && owner.has_aadhar_image ? t('zonal.cardOnFile') : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : null
+              }
+              testID={id('aadhaar')}
+            />
+          </>
+        )}
+        <Fact label={t('zonal.collectionPoint')} value={`${event.mpp_name} · ${event.mpp_code}`} />
+        <Fact label={t('zonal.theMait')} value={`${event.mait_name} · ${event.mait_code}`} />
+        <Fact label={t('zonal.animal')} value={`${event.animal_type} · ${event.breed}`} />
+        <Fact label={t('zonal.earTag')} value={event.ear_tag_no} />
+      </Card>
+
+      {/* Blue, and the same blue the Mait's own app and the portal draw this card in. It is
             the half of the record a month-end stock count actually goes missing on, and white
             it sat between two other white cards reading as a footnote to them. */}
-        <Card
-          title={t('zonal.whatWasUsed')}
-          icon="cube-outline"
-          tone="info"
-          testID="zonal-event-used"
-        >
-          <View style={styles.used}>
-            <View style={styles.usedBody}>
-              <Text style={styles.usedName}>{event.semen_breed || t('zonal.unknownBreed')}</Text>
-              <Text style={styles.usedMeta}>{event.straw_unique_no}</Text>
-            </View>
-            <Text style={styles.usedQty}>{t('zonal.doses', { count: event.doses || 1 })}</Text>
+      <Card title={t('zonal.whatWasUsed')} icon="cube-outline" tone="info" testID={id('used')}>
+        <View style={styles.used}>
+          <View style={styles.usedBody}>
+            <AppText style={styles.usedName}>
+              {event.semen_breed || t('zonal.unknownBreed')}
+            </AppText>
+            <AppText style={styles.usedMeta}>{event.straw_unique_no}</AppText>
           </View>
-          {event.consumables.length ? (
-            event.consumables.map(item => (
-              <View key={item.code} style={styles.used}>
-                <View style={styles.usedBody}>
-                  <Text style={styles.usedName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.usedMeta}>{item.code}</Text>
-                </View>
-                {/* Some consumables carry no unit in the catalogue, and "1 " with a trailing
-                    space reads as a word that failed to load. */}
-                <Text style={styles.usedQty}>
-                  {[item.qty, item.unit].filter(Boolean).join(' ')}
-                </Text>
+          <AppText style={styles.usedQty}>{t('zonal.doses', { count: event.doses || 1 })}</AppText>
+        </View>
+        {consumables.length ? (
+          consumables.map(item => (
+            <View key={item.code} style={styles.used}>
+              <View style={styles.usedBody}>
+                <AppText style={styles.usedName}>{item.name}</AppText>
+                <AppText style={styles.usedMeta}>{item.code}</AppText>
               </View>
-            ))
-          ) : (
-            // Not an empty state to apologise for: every capture before consumables were
-            // recorded said nothing about its sheaths.
-            <Text style={styles.factMissing}>{t('zonal.noConsumables')}</Text>
-          )}
-        </Card>
+              {/* Some consumables carry no unit in the catalogue, and "1 " with a trailing
+                    space reads as a word that failed to load. */}
+              <AppText style={styles.usedQty}>
+                {[item.qty, item.unit].filter(Boolean).join(' ')}
+              </AppText>
+            </View>
+          ))
+        ) : (
+          // Not an empty state to apologise for: every capture before consumables were
+          // recorded said nothing about its sheaths.
+          <AppText style={styles.factMissing}>{t('zonal.noConsumables')}</AppText>
+        )}
+      </Card>
 
-        {/* Whether it took. An insemination is not finished when the straw is used — it is
+      {/* Whether it took. An insemination is not finished when the straw is used — it is
             finished when somebody puts a hand on the animal ninety days later. */}
-        <Card
-          title={t('zonal.didItTake')}
-          icon="heart-circle-outline"
-          tone="green"
-          testID="zonal-event-chain"
-        >
-          {event.pregnancy_checks.length ? (
-            event.pregnancy_checks.map((check, index) => {
-              const recorded = !!check.outcome;
-              const late = !recorded && check.days_until < 0;
-              return (
-                <View
-                  key={check.id}
-                  style={[
-                    styles.check,
-                    // An open check is the row that has not happened yet, so it is the one
-                    // the eye should land on — held apart with a rule rather than a tint,
-                    // which at this size would read as a selected row.
-                    !recorded && index > 0 && styles.checkOpen,
-                    late && index > 0 && styles.checkLate,
-                  ]}
-                  testID={`zonal-event-check-${check.id}`}
-                >
-                  <View style={styles.checkBody}>
-                    <Text style={styles.checkTitle}>
-                      {t('zonal.checkDue', { date: day(check.due_on) })}
-                    </Text>
-                    {!!check.note && (
-                      <Text style={styles.checkNote} numberOfLines={2}>
-                        {check.note}
-                      </Text>
-                    )}
-                  </View>
-                  <Pill
-                    label={
-                      recorded
-                        ? t(`zonal.outcome_${check.outcome}`, { defaultValue: check.outcome })
-                        : late
-                          ? t('zonal.checkOverdue', { days: Math.abs(check.days_until) })
-                          : t('zonal.notCheckedYet')
-                    }
-                    tone={
-                      recorded
-                        ? (OUTCOME_TONE[check.outcome] ?? 'plain')
-                        : late
-                          ? 'waiting'
-                          : 'plain'
-                    }
-                  />
+      <Card
+        title={t('zonal.didItTake')}
+        icon="heart-circle-outline"
+        tone="green"
+        testID={id('chain')}
+      >
+        {checks.length ? (
+          checks.map((check, index) => {
+            const recorded = !!check.outcome;
+            const late = !recorded && check.days_until < 0;
+            return (
+              <View
+                key={check.id}
+                style={[
+                  styles.check,
+                  // An open check is the row that has not happened yet, so it is the one
+                  // the eye should land on — held apart with a rule rather than a tint,
+                  // which at this size would read as a selected row.
+                  !recorded && index > 0 && styles.checkOpen,
+                  late && index > 0 && styles.checkLate,
+                ]}
+                testID={id(`check-${check.id}`)}
+              >
+                <View style={styles.checkBody}>
+                  <AppText style={styles.checkTitle}>
+                    {t('zonal.checkDue', { date: day(check.due_on) })}
+                  </AppText>
+                  {!!check.note && <AppText style={styles.checkNote}>{check.note}</AppText>}
                 </View>
-              );
-            })
-          ) : (
-            <Text style={styles.factMissing}>{t('zonal.noChecks')}</Text>
-          )}
-        </Card>
+                <Pill
+                  label={
+                    recorded
+                      ? t(`zonal.outcome_${check.outcome}`, { defaultValue: check.outcome })
+                      : late
+                        ? t('zonal.checkOverdue', { days: Math.abs(check.days_until) })
+                        : t('zonal.notCheckedYet')
+                  }
+                  tone={
+                    recorded ? (OUTCOME_TONE[check.outcome] ?? 'plain') : late ? 'waiting' : 'plain'
+                  }
+                />
+              </View>
+            );
+          })
+        ) : (
+          <AppText style={styles.factMissing}>{t('zonal.noChecks')}</AppText>
+        )}
+      </Card>
 
-        <Card
-          title={t('zonal.theTrail')}
-          icon="time-outline"
-          tone="slate"
-          testID="zonal-event-trail"
-        >
-          {event.timeline.length ? (
-            <>
-              {event.timeline.map((step, index) => (
-                <View key={step.id} style={styles.step} testID={`zonal-event-step-${step.id}`}>
-                  <View style={styles.rail}>
-                    <View style={styles.bead} />
-                    {(index < event.timeline.length - 1 || !settled) && (
-                      <View style={styles.thread} />
-                    )}
-                  </View>
-                  <View style={styles.stepBody}>
-                    <Text style={styles.stepTitle}>
-                      {step.note || step.to_status.replace(/_/g, ' ')}
-                    </Text>
-                    <Text style={styles.stepMeta}>
-                      {[stamp(step.created_at), step.actor_name].filter(Boolean).join(' · ')}
-                    </Text>
-                  </View>
+      <Card title={t('zonal.theTrail')} icon="time-outline" tone="slate" testID={id('trail')}>
+        {timeline.length ? (
+          <>
+            {timeline.map((step, index) => (
+              <View key={step.id} style={styles.step} testID={id(`step-${step.id}`)}>
+                <View style={styles.rail}>
+                  <View style={styles.bead} />
+                  {(index < timeline.length - 1 || !settled) && <View style={styles.thread} />}
                 </View>
-              ))}
+                <View style={styles.stepBody}>
+                  <AppText style={styles.stepTitle}>
+                    {step.note || step.to_status.replace(/_/g, ' ')}
+                  </AppText>
+                  <AppText style={styles.stepMeta}>
+                    {[stamp(step.created_at), step.actor_name].filter(Boolean).join(' · ')}
+                  </AppText>
+                </View>
+              </View>
+            ))}
 
-              {/* What the event is waiting on. A hollow bead rather than a filled one, so
+            {/* What the event is waiting on. A hollow bead rather than a filled one, so
                   "done" and "still happening" are told apart at a glance and not only by
                   position — nobody should have to work out whether a record is finished or
                   stuck. */}
-              {!settled && (
-                <View style={styles.step} testID="zonal-event-step-waiting">
-                  <View style={styles.rail}>
-                    <View style={[styles.bead, styles.beadWaiting]} />
-                  </View>
-                  <View style={styles.stepBody}>
-                    <Text style={styles.stepTitle}>{t('zonal.waitingStep')}</Text>
-                    <Text style={styles.stepMeta}>
-                      {t(`zonal.next_${event.status}`, { defaultValue: t('zonal.next_none') })}
-                    </Text>
-                  </View>
+            {!settled && (
+              <View style={styles.step} testID={id('step-waiting')}>
+                <View style={styles.rail}>
+                  <View style={[styles.bead, styles.beadWaiting]} />
                 </View>
-              )}
-            </>
-          ) : (
-            <Text style={styles.factMissing}>{t('zonal.noTrail')}</Text>
-          )}
-          <Text style={styles.plainCaption}>{t('zonal.trailIsFixed')}</Text>
-        </Card>
-      </ScrollView>
+                <View style={styles.stepBody}>
+                  <AppText style={styles.stepTitle}>{t('zonal.waitingStep')}</AppText>
+                  <AppText style={styles.stepMeta}>
+                    {t(`zonal.next_${event.status}`, { defaultValue: t('zonal.next_none') })}
+                  </AppText>
+                </View>
+              </View>
+            )}
+          </>
+        ) : (
+          <AppText style={styles.factMissing}>{t('zonal.noTrail')}</AppText>
+        )}
+        <AppText style={styles.plainCaption}>{t('zonal.trailIsFixed')}</AppText>
+      </Card>
 
       {/* A plain modal rather than a route: it is a look, not a place. Black, because the
           photograph is being judged and anything else on screen is a reference point it
           would be judged against. */}
       <Modal
-        visible={viewing}
+        visible={!!viewing}
         transparent={false}
         animationType="fade"
-        onRequestClose={() => setViewing(false)}
-        testID="zonal-event-photo-viewer"
+        onRequestClose={() => setViewing(null)}
+        testID={id('photo-viewer')}
       >
         <View style={styles.viewer}>
-          <Image source={{ uri: photo }} style={styles.viewerPhoto} resizeMode="contain" />
+          <Image source={{ uri: viewing ?? '' }} style={styles.viewerPhoto} resizeMode="contain" />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('common.close')}
-            onPress={() => setViewing(false)}
+            onPress={() => setViewing(null)}
             style={[styles.viewerClose, { top: insets.top + spacing[3] }]}
-            testID="zonal-event-photo-close"
+            testID={id('photo-close')}
           >
             <Ionicons name="close" size={22} color={colors.surface} />
           </Pressable>
         </View>
       </Modal>
-    </View>
+    </>
   );
 }
 
@@ -899,6 +1003,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: ink[50],
   },
+  noPhotoWarm: { borderColor: yolk[300], backgroundColor: colors.surface },
   noPhotoText: { ...typography.label, color: colors.textMuted },
   caption: {
     flexDirection: 'row',

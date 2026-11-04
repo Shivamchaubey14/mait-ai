@@ -14,6 +14,8 @@ import i18n from '@/i18n';
 import { jsonResponse, problemResponse, renderWithStore } from '@/test-utils';
 import { colors } from '@theme/tokens';
 
+/** The code screen arrives behind the transition card, which commits half a second in. */
+const CODE_SCREEN = { timeout: 3000 };
 const MOBILE = '9795402473';
 
 describe('LoginScreen', () => {
@@ -54,7 +56,23 @@ describe('LoginScreen', () => {
     renderWithStore(<LoginScreen />);
     typeMobileAndSend();
 
-    await waitFor(() => expect(screen.getByTestId('login-otp')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('login-otp')).toBeTruthy(), CODE_SCREEN);
+  });
+
+  it('announces the code screen with the transition card on the way there', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      jsonResponse({ detail: 'sent', expires_in_seconds: 300 }),
+    );
+    renderWithStore(<LoginScreen />);
+    typeMobileAndSend();
+
+    // Up before the code screen arrives, naming where the Mait is going.
+    await waitFor(() =>
+      expect(screen.getByTestId('route-card-title')).toHaveTextContent('Enter your code'),
+    );
+    expect(screen.queryByTestId('login-otp')).toBeNull();
+
+    await waitFor(() => expect(screen.getByTestId('login-otp')).toBeTruthy(), CODE_SCREEN);
   });
 
   it('tells the user their code was wrong', async () => {
@@ -64,7 +82,7 @@ describe('LoginScreen', () => {
 
     renderWithStore(<LoginScreen />);
     typeMobileAndSend();
-    await waitFor(() => screen.getByTestId('login-otp'));
+    await waitFor(() => screen.getByTestId('login-otp'), CODE_SCREEN);
 
     fireEvent.changeText(screen.getByTestId('login-otp'), '000000');
     fireEvent.press(screen.getByTestId('login-verify'));
@@ -83,7 +101,7 @@ describe('LoginScreen', () => {
 
     renderWithStore(<LoginScreen />);
     typeMobileAndSend();
-    await waitFor(() => screen.getByTestId('login-otp'));
+    await waitFor(() => screen.getByTestId('login-otp'), CODE_SCREEN);
 
     fireEvent.changeText(screen.getByTestId('login-otp'), '123456');
     fireEvent.press(screen.getByTestId('login-verify'));
@@ -98,7 +116,7 @@ describe('LoginScreen', () => {
 
     renderWithStore(<LoginScreen />);
     typeMobileAndSend();
-    await waitFor(() => screen.getByTestId('login-otp'));
+    await waitFor(() => screen.getByTestId('login-otp'), CODE_SCREEN);
 
     fireEvent.changeText(screen.getByTestId('login-otp'), '123456');
     fireEvent.press(screen.getByTestId('login-verify'));
@@ -129,7 +147,7 @@ describe('LoginScreen', () => {
 
     const { store } = renderWithStore(<LoginScreen />);
     typeMobileAndSend();
-    await waitFor(() => screen.getByTestId('login-otp'));
+    await waitFor(() => screen.getByTestId('login-otp'), CODE_SCREEN);
 
     fireEvent.changeText(screen.getByTestId('login-otp'), '123456');
     fireEvent.press(screen.getByTestId('login-verify'));
@@ -169,7 +187,7 @@ describe('LoginScreen', () => {
 
     renderWithStore(<LoginScreen />);
     typeMobileAndSend();
-    await waitFor(() => screen.getByTestId('login-otp'));
+    await waitFor(() => screen.getByTestId('login-otp'), CODE_SCREEN);
 
     fireEvent.changeText(screen.getByTestId('login-otp'), '123456');
     fireEvent.press(screen.getByTestId('login-verify'));
@@ -237,21 +255,12 @@ describe('LoginScreen', () => {
     fireEvent.changeText(screen.getByTestId('login-mobile'), '9999999999');
     fireEvent.press(screen.getByTestId('login-send-otp'));
 
-    await waitFor(() => expect(screen.getByTestId('login-otp')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('login-otp')).toBeTruthy(), CODE_SCREEN);
     expect(screen.queryByTestId('login-error')).toBeNull();
   });
 });
 
 describe('LoginScreen in colour', () => {
-  it('lays out the three steps of signing in, each in its colour', () => {
-    renderWithStore(<LoginScreen />);
-
-    const steps = screen.getByTestId('login-steps');
-    expect(steps).toHaveTextContent(/Your number/);
-    expect(steps).toHaveTextContent(/A code by SMS/);
-    expect(steps).toHaveTextContent(/You're in/);
-  });
-
   it('draws the number field blue while it fills and green once it can be sent', () => {
     renderWithStore(<LoginScreen />);
 

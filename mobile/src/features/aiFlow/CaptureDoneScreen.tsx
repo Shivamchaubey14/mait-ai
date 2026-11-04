@@ -13,7 +13,8 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -90,13 +91,13 @@ export default function CaptureDoneScreen({
           <View style={[styles.chip, { backgroundColor: isMember ? colors.info : colors.primary }]}>
             <Ionicons name={isMember ? 'receipt' : 'cash'} size={16} color={colors.surface} />
           </View>
-          <Text style={[styles.tileLabel, isMember ? styles.wordInfo : styles.wordGood]}>
+          <AppText style={[styles.tileLabel, isMember ? styles.wordInfo : styles.wordGood]}>
             {t('done.costToHer')}
-          </Text>
-          <Text style={styles.tileValue}>₹ {isMember ? 0 : cost}</Text>
-          <Text style={[styles.tileNote, isMember ? styles.wordInfo : styles.wordGood]}>
+          </AppText>
+          <AppText style={styles.tileValue}>₹ {isMember ? 0 : cost}</AppText>
+          <AppText style={[styles.tileNote, isMember ? styles.wordInfo : styles.wordGood]}>
             {isMember ? t('done.deductedFromMilk') : t('done.collected')}
-          </Text>
+          </AppText>
         </View>
 
         {/* Straws in their own colour, blue, with the syringe — as on Inventory. */}
@@ -104,9 +105,9 @@ export default function CaptureDoneScreen({
           <View style={[styles.chip, { backgroundColor: colors.info }]}>
             <Glyph name={STRAW_GLYPH} size={16} color={colors.surface} />
           </View>
-          <Text style={[styles.tileLabel, styles.wordInfo]}>{t('done.strawsLeft')}</Text>
-          <Text style={styles.tileValue}>{strawsLeft === null ? '—' : strawsLeft}</Text>
-          <Text style={[styles.tileNote, styles.wordInfo]}>{strawBreed}</Text>
+          <AppText style={[styles.tileLabel, styles.wordInfo]}>{t('done.strawsLeft')}</AppText>
+          <AppText style={styles.tileValue}>{strawsLeft === null ? '—' : strawsLeft}</AppText>
+          <AppText style={[styles.tileNote, styles.wordInfo]}>{strawBreed}</AppText>
         </View>
       </View>
 
@@ -130,12 +131,12 @@ export default function CaptureDoneScreen({
           />
         </View>
         <View style={styles.todayText}>
-          <Text style={styles.todayLabel}>{t('done.today')}</Text>
-          <Text
+          <AppText style={styles.todayLabel}>{t('done.today')}</AppText>
+          <AppText
             style={[styles.todayValue, { color: pending > 0 ? yolk[800] : colors.primaryDark }]}
           >
             {pending > 0 ? t('done.todayWithQueue', { pending }) : t('done.todayAllSynced')}
-          </Text>
+          </AppText>
         </View>
         <View style={styles.go}>
           <Ionicons name="chevron-forward" size={16} color={colors.ink} />

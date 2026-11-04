@@ -8,7 +8,16 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { clearQueue, enqueue, expiredJobs, pendingCount, readQueue, recordFailure } from '../queue';
+import {
+  clearQueue,
+  enqueue,
+  expiredJobs,
+  pendingCount,
+  readQueue,
+  recordFailure,
+  removeJob,
+  subscribeQueue,
+} from '../queue';
 import { drainQueue } from '../sync';
 
 const TOKEN = 'access-token';
@@ -26,6 +35,16 @@ function ok() {
 
 function status(code: number) {
   return Promise.resolve({ ok: false, status: code } as Response);
+}
+
+/**
+ * The requests that would change something on the server. The queue may read an event to see
+ * whether it is already settled; what these tests guard is that nothing is *sent* again.
+ */
+function writesSent(): unknown[] {
+  return (global.fetch as jest.Mock).mock.calls.filter(
+    ([, init]) => ((init as RequestInit | undefined)?.method ?? 'GET') !== 'GET',
+  );
 }
 
 describe('the queue', () => {
@@ -103,6 +122,42 @@ describe('draining', () => {
 
     expect(result.sent).toBe(0);
     expect(result.remaining).toBe(1);
+  });
+
+  it('abandons a request that hangs rather than wedging every later drain', async () => {
+    // A socket that is accepted and then goes silent — a half-open tunnel, a stalled worker.
+    // It only settles if aborted. Before the request cap, this hung one drain forever, and the
+    // one-drain-at-a-time guard handed that dead promise to every sync after it: the queue
+    // stopped for good until the app restarted. The cap is what keeps it a slow sync, not a
+    // dead one.
+    jest.useFakeTimers();
+    (global.fetch as jest.Mock).mockImplementationOnce(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          (init.signal as AbortSignal).addEventListener('abort', () =>
+            reject(new Error('Aborted')),
+          );
+        }),
+    );
+    await enqueue('completeEvent', 'uuid-hang', { eventId: 1 });
+
+    const first = drainQueue(TOKEN);
+    await jest.advanceTimersByTimeAsync(30_000);
+    const result = await first;
+    jest.useRealTimers();
+
+    // The hung request was abandoned: nothing sent, the job kept for another try.
+    expect(result.sent).toBe(0);
+    expect(result.remaining).toBe(1);
+
+    // And the drain settled, so a later one is not handed a dead promise — it runs and sends.
+    (global.fetch as jest.Mock).mockImplementation(ok);
+    const raw = JSON.parse((await AsyncStorage.getItem('maitai.queue.v1')) as string);
+    raw[0].nextAttemptAt = 0; // clear the backoff its abort set, so it is due now
+    await AsyncStorage.setItem('maitai.queue.v1', JSON.stringify(raw));
+
+    const second = await drainQueue(TOKEN);
+    expect(second.sent).toBe(1);
   });
 
   it('stops at the first failure rather than sending later jobs out of order', async () => {
@@ -210,7 +265,7 @@ describe('draining', () => {
 
     const result = await drainQueue(TOKEN);
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(writesSent()).toEqual([]);
     expect(result.expired).toBe(1);
     expect(result.remaining).toBe(1);
   });
@@ -296,5 +351,50 @@ describe('reporting progress', () => {
     await enqueue('completeEvent', 'uuid-1', { eventId: 1 });
 
     expect(await progressOf(null)).toEqual([]);
+  });
+});
+
+describe('one queue, told to everyone', () => {
+  beforeEach(async () => {
+    await clearQueue();
+  });
+
+  it('tells a listener the whole queue after every change, and stops when asked', async () => {
+    // Home's count and the waiting list both hear from here, so they cannot disagree.
+    const heard: number[] = [];
+    const stop = subscribeQueue(jobs => heard.push(jobs.length));
+
+    const first = await enqueue('completeEvent', 'uuid-a', { eventId: 1 });
+    await enqueue('completeEvent', 'uuid-b', { eventId: 2 });
+    await removeJob(first.id);
+    stop();
+    await enqueue('completeEvent', 'uuid-c', { eventId: 3 });
+
+    expect(heard).toEqual([1, 2, 1]);
+  });
+
+  it('loses nothing when a job is added while another is being removed', async () => {
+    // A capture queued behind its card while a background send clears what it sent. Each used
+    // to read the same list, and the later write erased the earlier.
+    const sent = await enqueue('completeEvent', 'uuid-sent', { eventId: 1 });
+
+    await Promise.all([
+      removeJob(sent.id),
+      enqueue('attachPhoto', 'uuid-new', { eventId: 2 }),
+      enqueue('completeEvent', 'uuid-new', { eventId: 2 }),
+    ]);
+
+    const left = await readQueue();
+    expect(left.map(job => job.clientUuid)).toEqual(['uuid-new', 'uuid-new']);
+    expect(left.map(job => job.kind)).toEqual(['attachPhoto', 'completeEvent']);
+  });
+
+  it('tells a listener the queue is empty when it is cleared', async () => {
+    await enqueue('completeEvent', 'uuid-a', { eventId: 1 });
+    const heard: number[] = [];
+    const stop = subscribeQueue(jobs => heard.push(jobs.length));
+    await clearQueue();
+    stop();
+    expect(heard).toEqual([0]);
   });
 });

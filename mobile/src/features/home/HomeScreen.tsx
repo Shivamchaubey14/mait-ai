@@ -16,20 +16,24 @@
  * when it is running low, and the count sits on a badge rather than floating at the edge.
  */
 
-import React, { useCallback } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 
 import { useGetInventorySummaryQuery, useListAiEventsQuery } from '@api/endpoints';
+import AppText from '@/components/AppText';
 import { LanguageToggle } from '@/components/brand';
+import DateRangeSheet, { formatRange } from '@/components/dateRange';
 import Glyph, { STRAW_GLYPH } from '@/components/glyph';
 import PageHero from '@/components/hero';
 import Problem from '@/components/problem';
 import PullToRefresh from '@/components/pullToRefresh';
+import { useReducedMotion } from '@/components/reducedMotion';
 import { EmptyState, SkeletonList } from '@/components/states';
 import { useAppSelector } from '@/store';
-import { colors, green, radius, spacing, typography, yolk } from '@theme/tokens';
+import { colors, green, ink, radius, spacing, typography, yolk } from '@theme/tokens';
 
 interface Props {
   onOpenStock: () => void;
@@ -51,6 +55,16 @@ interface Props {
   /** Open the waiting list. The yellow tile, and only the yellow tile. */
   onOpenQueue: () => void;
   lastSyncAt: string | null;
+  /**
+   * How many things on this phone need the Mait (`NeedsAttentionScreen`) — refused records,
+   * payment codes owed, office codes not on record, unfinished captures.
+   *
+   * Given, the red card counts all of them and opens that list; it used to count only the
+   * unfinished captures, and the rest had no way onto Home at all. Absent, it falls back to
+   * the unfinished count and list.
+   */
+  attentionCount?: number;
+  onOpenAttention?: () => void;
 }
 
 function isToday(iso: string): boolean {
@@ -63,15 +77,20 @@ function isToday(iso: string): boolean {
   );
 }
 
-/** Initials for the avatar. Two at most — three letters in a circle stop being readable. */
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const first = parts[0];
-  if (!first) {
-    return '?';
+/** By the hour on the handset, the way the Indent app greets the same people. */
+function greeting(now = new Date()): {
+  key: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+} {
+  const hour = now.getHours();
+  // The sun where it is: coming up over the horizon, high, going down.
+  if (hour < 12) {
+    return { key: 'home.goodMorning', icon: 'weather-sunset-up' };
   }
-  const last = parts.length > 1 ? parts[parts.length - 1] : undefined;
-  return (first.charAt(0) + (last ? last.charAt(0) : '')).toUpperCase();
+  if (hour < 17) {
+    return { key: 'home.goodAfternoon', icon: 'white-balance-sunny' };
+  }
+  return { key: 'home.goodEvening', icon: 'weather-sunset-down' };
 }
 
 export default function HomeScreen({
@@ -83,6 +102,8 @@ export default function HomeScreen({
   onSync,
   onOpenQueue,
   lastSyncAt,
+  attentionCount,
+  onOpenAttention,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const user = useAppSelector(state => state.auth.user);
@@ -90,6 +111,18 @@ export default function HomeScreen({
 
   const stock = useGetInventorySummaryQuery();
   const events = useListAiEventsQuery();
+
+  // Every insemination this Mait has finished through the app — all time, or over the dates
+  // they pick. Read off the server's `count`, not the rows: the list above is one page, and a
+  // Mait with four hundred inseminations should not download four hundred to see a number.
+  const [range, setRange] = useState<{ from: string; to: string } | null>(null);
+  const [pickingDates, setPickingDates] = useState(false);
+  const total = useListAiEventsQuery({
+    status: 'completed',
+    dateFrom: range?.from,
+    dateTo: range?.to,
+  });
+  const months = t('calendar.months', { returnObjects: true }) as string[];
 
   /**
    * What a pull means here: the holding, the day's events, and a shove at whatever is still
@@ -101,8 +134,8 @@ export default function HomeScreen({
    */
   const refresh = useCallback(async () => {
     onSync();
-    await Promise.all([stock.refetch(), events.refetch()]);
-  }, [events, onSync, stock]);
+    await Promise.all([stock.refetch(), events.refetch(), total.refetch()]);
+  }, [events, onSync, stock, total]);
 
   const today = (events.data?.results ?? []).filter(event => isToday(event.created_at));
 
@@ -117,33 +150,49 @@ export default function HomeScreen({
 
   const byBreed = Object.entries(stock.data?.by_breed ?? {}).sort((a, b) => b[1] - a[1]);
   const totalStraws = stock.data?.total_straws ?? 0;
+  /** Nothing in the flask, so the button sends the Mait to stock instead of into a capture. */
+  const noStraws = totalStraws === 0 && !stock.isLoading;
 
   // The Sahayak vendor code, which is what a Mait is known by on their paperwork, in the
   // portal and in SAP. This used to print `maitId` — a row id that matches nothing anywhere
   // outside this database — under a "MAIT" label, which is worse than showing nothing: a Mait
   // reading it out to the office would be read back a blank look. Falls back to nothing at
   // all rather than to the row id.
-  const meta = [
-    user?.sahayakVendorCode ? t('home.maitCode', { code: user.sahayakVendorCode }) : null,
-    t('home.mppCount', { count: mppCodes.length }),
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const hello = greeting();
+  const mpps = t('home.mppCount', { count: mppCodes.length });
+  const code = user?.sahayakVendorCode ?? null;
 
   return (
     <View style={styles.root}>
+      {/* Who this is, said the way the Indent app says it: a greeting, the name, and what
+          they are known by as chips. The initials circle that sat in the corner repeated the
+          name in two letters and said nothing else. */}
       <PageHero
+        eyebrow={t(hello.key)}
+        eyebrowIcon={<MaterialCommunityIcons name={hello.icon} size={26} color={yolk[400]} />}
         title={user?.fullName ?? ''}
-        subtitle={meta}
-        top={
-          <>
-            <LanguageToggle variant="compact" />
-            <View style={styles.avatar}>
-              <Text style={styles.avatarLabel}>{initialsOf(user?.fullName ?? '')}</Text>
+        top={<LanguageToggle variant="inline" />}
+      >
+        <View style={styles.chips} testID="home-identity">
+          {!!code && (
+            <View style={styles.chip}>
+              <Ionicons name="id-card" size={13} color={colors.primary} />
+              {/* The label and the number as two pieces, not one string. Android measures a
+                  line of Hindi narrower than it draws it, so "मैत कोड: 5500000054" as one
+                  string wrapped at the space and the number fell outside the chip. Digits on
+                  their own are measured exactly. */}
+              <AppText style={styles.chipLabel}>{t('home.maitCodeLabel')}</AppText>
+              <AppText style={styles.chipLabel} testID="home-mait-code">
+                {code}
+              </AppText>
             </View>
-          </>
-        }
-      />
+          )}
+          <View style={styles.chip}>
+            <Ionicons name="location" size={13} color={colors.primary} />
+            <AppText style={styles.chipLabel}>{mpps}</AppText>
+          </View>
+        </View>
+      </PageHero>
 
       {/* Where the work is, before anything else. A Mait who does not know whether today's
           records left the phone cannot judge anything else on this screen. */}
@@ -152,7 +201,7 @@ export default function HomeScreen({
           <View style={styles.offlineChip}>
             <Ionicons name="cloud-offline" size={15} color={colors.ink} />
           </View>
-          <Text style={styles.offlineLabel}>{t('home.offlineStrip')}</Text>
+          <AppText style={styles.offlineLabel}>{t('home.offlineStrip')}</AppText>
         </View>
       )}
 
@@ -167,48 +216,81 @@ export default function HomeScreen({
           button have had theirs, and the breeds scroll inside it. */}
       <PullToRefresh onRefresh={refresh} label={t('pull.holding')} testID="home-pull">
         <View style={styles.body}>
+          {/* One slim row rather than two tall tiles: the number is the whole message, so it
+              sits in a pill at the end of a line that says what it counts, and the flask under
+              it keeps the room. */}
           <View style={styles.tiles}>
-            <View style={[styles.tile, styles.tileDone]}>
-              <View style={styles.tileHead}>
-                <View style={[styles.tileIcon, styles.tileIconDone]}>
-                  <Ionicons name="checkmark" size={15} color={colors.surface} />
-                </View>
-                <Text style={styles.tileLabel} numberOfLines={1}>
-                  {t('home.today')}
-                </Text>
+            <View style={styles.today} testID="tile-today">
+              <View style={styles.todayIcon}>
+                <Ionicons name="checkmark" size={16} color={colors.surface} />
               </View>
+              <AppText style={styles.todayLabel} numberOfLines={1}>
+                {t('home.todayCount')}
+              </AppText>
               {events.isLoading ? (
-                <View style={styles.tileSkeleton} />
+                <View style={styles.countSkeleton} />
               ) : (
-                <Text style={[styles.tileValue, styles.tileValueDone]}>{today.length}</Text>
+                <View style={styles.todayCount}>
+                  <AppText style={styles.todayCountLabel} testID="tile-today-count">
+                    {today.length}
+                  </AppText>
+                </View>
               )}
-              <Text style={styles.tileFoot} numberOfLines={1}>
-                {t('home.inseminationsRecorded')}
-              </Text>
             </View>
 
+            {/* Only while something is actually waiting to go. A capture now goes up the moment
+                it is recorded, so "0 waiting" on every visit was a box about nothing. */}
+            {pending > 0 && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${pending} ${t('home.eventsToSync')}`}
+                onPress={onOpenQueue}
+                style={({ pressed }) => [styles.waiting, pressed && styles.waitingPressed]}
+                testID="tile-waiting"
+              >
+                <Ionicons name="time" size={15} color={colors.ink} />
+                <AppText style={styles.waitingCount}>{pending}</AppText>
+                <AppText style={styles.waitingLabel}>{t('home.waiting')}</AppText>
+              </Pressable>
+            )}
+          </View>
+
+          {/* The whole of the work, under the day's share of it. Slate, a colour of its own:
+              green is today, yolk is waiting, blue is the flask — this is the record. */}
+          <View style={styles.total} testID="tile-total">
+            <View style={styles.totalIcon}>
+              <Ionicons name="ribbon" size={18} color={colors.ink} />
+            </View>
+            <View style={styles.totalText}>
+              <AppText style={styles.totalLabel} numberOfLines={1}>
+                {t('home.totalAi')}
+              </AppText>
+              <AppText style={styles.totalRange} numberOfLines={1} testID="tile-total-range">
+                {range
+                  ? t('home.totalRange', { range: formatRange(range.from, range.to, months) })
+                  : t('home.totalAllTime')}
+              </AppText>
+            </View>
+            {total.isLoading || (total.isFetching && !total.data) ? (
+              <View style={styles.totalSkeleton} />
+            ) : (
+              <AppText style={styles.totalCount} testID="tile-total-count">
+                {total.isError ? '—' : (total.data?.count ?? 0).toLocaleString('en-IN')}
+              </AppText>
+            )}
             <Pressable
               accessibilityRole="button"
-              onPress={onOpenQueue}
-              style={[styles.tile, styles.tileWaiting]}
-              testID="tile-waiting"
+              accessibilityLabel={t('home.pickDates')}
+              onPress={() => setPickingDates(true)}
+              hitSlop={6}
+              style={({ pressed }) => [
+                styles.totalDates,
+                !!range && styles.totalDatesOn,
+                pressed && styles.waitingPressed,
+              ]}
+              testID="tile-total-dates"
             >
-              <View style={styles.tileHead}>
-                <View style={[styles.tileIcon, styles.tileIconWaiting]}>
-                  <Ionicons name="time" size={15} color={colors.ink} />
-                </View>
-                <Text style={styles.tileLabel} numberOfLines={1}>
-                  {t('home.waiting')}
-                </Text>
-              </View>
-              <Text style={[styles.tileValue, styles.tileValueWaiting]}>{pending}</Text>
-              <Text style={styles.tileFoot} numberOfLines={1}>
-                {pending > 0
-                  ? t('home.eventsToSync')
-                  : lastSyncAt
-                    ? t('home.allSentBody', { time: lastSyncAt })
-                    : t('home.allSentBodyPlain')}
-              </Text>
+              <Ionicons name="calendar" size={18} color={range ? colors.ink : yolk[400]} />
             </Pressable>
           </View>
 
@@ -218,12 +300,12 @@ export default function HomeScreen({
               <View style={styles.cardChip}>
                 <Glyph name={STRAW_GLYPH} size={16} color={colors.surface} />
               </View>
-              <Text style={styles.cardTitle}>{t('home.strawsWithYou')}</Text>
+              <AppText style={styles.cardTitle}>{t('home.strawsWithYou')}</AppText>
               {!stock.isLoading && !stock.isError && (
                 <View style={styles.cardTotal} testID="home-straw-total">
-                  <Text style={styles.cardTotalLabel}>
+                  <AppText style={styles.cardTotalLabel}>
                     {t('home.totalStraws', { count: totalStraws })}
-                  </Text>
+                  </AppText>
                 </View>
               )}
             </View>
@@ -271,19 +353,19 @@ export default function HomeScreen({
                           color={low ? colors.ink : colors.surface}
                         />
                       </View>
-                      <Text style={styles.breedName} numberOfLines={1}>
+                      <AppText style={styles.breedName} numberOfLines={1}>
                         {breed}
-                      </Text>
+                      </AppText>
                       {low && (
                         <View style={styles.lowBadge}>
                           <Ionicons name="warning" size={11} color={colors.ink} />
-                          <Text style={styles.lowLabel}>{t('home.low')}</Text>
+                          <AppText style={styles.lowLabel}>{t('home.low')}</AppText>
                         </View>
                       )}
                       <View style={[styles.breedCountBadge, low && styles.breedCountBadgeLow]}>
-                        <Text style={[styles.breedCount, low && styles.breedCountLow]}>
+                        <AppText style={[styles.breedCount, low && styles.breedCountLow]}>
                           {count}
-                        </Text>
+                        </AppText>
                       </View>
                     </View>
                   );
@@ -292,30 +374,26 @@ export default function HomeScreen({
             </ScrollView>
           </View>
 
-          {unfinished.length > 0 && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={onOpenUnfinished}
-              style={({ pressed }) => [styles.unfinished, pressed && styles.unfinishedPressed]}
-              testID="resume-unfinished"
-            >
-              <View style={styles.unfinishedChip}>
-                <Ionicons name="create" size={16} color={colors.ink} />
-                <View style={styles.unfinishedCount}>
-                  <Text style={styles.unfinishedCountLabel}>{unfinished.length}</Text>
-                </View>
-              </View>
-              <Text style={styles.unfinishedLabel} numberOfLines={1}>
-                {unfinished.length === 1 && unfinished[0]
-                  ? t('home.unfinished', { name: unfinished[0].owner_name })
-                  : t('unfinished.openList', { count: unfinished.length })}
-              </Text>
-              <View style={styles.resume}>
-                <Text style={styles.resumeLabel}>{t('home.resume')}</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.surface} />
-              </View>
-            </Pressable>
-          )}
+          {attentionCount !== undefined && onOpenAttention
+            ? attentionCount > 0 && (
+                <UnfinishedWarning
+                  count={attentionCount}
+                  title={t('home.attentionWarning')}
+                  detail={t('home.attentionDetail', { count: attentionCount })}
+                  onPress={onOpenAttention}
+                />
+              )
+            : unfinished.length > 0 && (
+                <UnfinishedWarning
+                  count={unfinished.length}
+                  detail={
+                    unfinished.length === 1 && unfinished[0]
+                      ? t('home.unfinishedFor', { name: unfinished[0].owner_name })
+                      : t('unfinished.openList', { count: unfinished.length })
+                  }
+                  onPress={onOpenUnfinished}
+                />
+              )}
 
           {events.isError && (
             <Problem
@@ -333,31 +411,142 @@ export default function HomeScreen({
             at the scan step with an animal already served. */}
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: totalStraws === 0 && !stock.isLoading }}
-            onPress={totalStraws === 0 && !stock.isLoading ? onOpenStock : onStartCapture}
+            accessibilityState={{ disabled: noStraws }}
+            onPress={noStraws ? onOpenStock : onStartCapture}
             style={({ pressed }) => [
               styles.cta,
-              totalStraws === 0 && !stock.isLoading ? styles.ctaEmpty : styles.ctaReady,
+              noStraws ? styles.ctaEmpty : styles.ctaReady,
               pressed && styles.ctaPressed,
             ]}
             testID="home-start-ai"
           >
-            <View style={styles.ctaChip}>
-              <Ionicons
-                name={totalStraws === 0 && !stock.isLoading ? 'cube' : 'add'}
-                size={18}
-                color={totalStraws === 0 && !stock.isLoading ? colors.info : colors.primary}
-              />
-            </View>
-            <Text style={styles.ctaLabel}>
-              {totalStraws === 0 && !stock.isLoading ? t('home.seeStock') : t('home.startNewAi')}
-            </Text>
+            {/* Words alone, either way: the label says what the button does, and an icon beside
+                it said nothing more. */}
+            <AppText style={styles.ctaLabel}>
+              {noStraws ? t('home.seeStock') : t('home.startNewAi')}
+            </AppText>
           </Pressable>
         </View>
       </PullToRefresh>
+
+      <DateRangeSheet
+        visible={pickingDates}
+        from={range?.from ?? null}
+        to={range?.to ?? null}
+        onClose={() => setPickingDates(false)}
+        onApply={(from, to) => {
+          setRange({ from, to });
+          setPickingDates(false);
+        }}
+        onClear={() => {
+          setRange(null);
+          setPickingDates(false);
+        }}
+      />
     </View>
   );
 }
+
+/**
+ * A capture left half done, said as a fault to put right rather than a note.
+ *
+ * Solid red, and glowing: an AI recorded on the animal and not on the books is a farmer who
+ * will be asked about a service she already had, and a straw the flask is short of tonight.
+ * It was a quiet yellow row that a Mait read past. The glow is a halo behind the card rather
+ * than the card itself moving, so the words never shift under a thumb — and it holds still
+ * for a handset that has asked for less motion.
+ */
+function UnfinishedWarning({
+  count,
+  title,
+  detail,
+  onPress,
+}: {
+  count: number;
+  /** The headline; the unfinished-capture wording unless the card is counting more than that. */
+  title?: string;
+  detail: string;
+  onPress: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const reduced = useReducedMotion();
+  const glow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduced) {
+      glow.setValue(0.5);
+      return undefined;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, {
+          toValue: 1,
+          duration: GLOW_MS,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(glow, {
+          toValue: 0,
+          duration: GLOW_MS,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [glow, reduced]);
+
+  return (
+    <View style={styles.warnWrap}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.warnGlow,
+          {
+            opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.6] }),
+            transform: [
+              { scale: glow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) },
+            ],
+          },
+        ]}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityHint={t('home.resume')}
+        onPress={onPress}
+        style={({ pressed }) => [styles.warn, pressed && styles.warnPressed]}
+        testID="resume-unfinished"
+      >
+        <View style={styles.warnChip}>
+          {/* A siren, not a triangle: the warning triangle is on every notice in the app, and
+              this is the one thing on Home that is a fault the Mait has to go back and fix. */}
+          <MaterialCommunityIcons name="alarm-light" size={18} color={colors.error} />
+          {count > 1 && (
+            <View style={styles.warnCount}>
+              <AppText style={styles.warnCountLabel}>{count}</AppText>
+            </View>
+          )}
+        </View>
+        <View style={styles.warnBody}>
+          {/* One line: it is a headline, and two lines of it pushed the flask off the screen. */}
+          <AppText style={styles.warnTitle} numberOfLines={1}>
+            {title ?? t('home.unfinishedWarning')}
+          </AppText>
+          <AppText style={styles.warnDetail} numberOfLines={1}>
+            {detail}
+          </AppText>
+        </View>
+        {/* A chevron rather than a "Resume" pill: the whole card is the button, and the pill took
+            the width the warning needs to stay on one line. */}
+        <Ionicons name="chevron-forward" size={20} color={colors.surface} />
+      </Pressable>
+    </View>
+  );
+}
+
+/** One breath of the glow, in and out again. Slow enough to read as a warning, not a fault. */
+const GLOW_MS = 900;
 
 /** At or below this, a breed is called out. One straw is a coincidence; two is a warning. */
 const LOW_BREED_STRAWS = 2;
@@ -366,15 +555,17 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   body: { flex: 1, padding: spacing[5], paddingBottom: spacing[4] },
 
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginTop: spacing[2] },
+  chip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing[1],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  avatarLabel: { ...typography.label, color: colors.surface },
+  chipLabel: { ...typography.label, color: colors.surface },
 
   // Squared and full width, sitting tight under the hero — it is a condition the whole screen
   // is in, not a card inside it.
@@ -396,51 +587,100 @@ const styles = StyleSheet.create({
   },
   offlineLabel: { ...typography.label, color: colors.surface, flex: 1 },
 
-  tiles: { flexDirection: 'row', gap: spacing[3], marginBottom: spacing[4] },
-  // Centred, the way the portal's stat tile is. Two figures read as a pair are scanned left
-  // to right, and centring puts them on one sightline instead of two ragged left edges — and
-  // the number is the thing being read, so it belongs under the middle of its own card.
-  tile: {
+  tiles: { flexDirection: 'row', gap: spacing[2], marginBottom: spacing[3] },
+  today: {
     flex: 1,
-    alignItems: 'center',
-    padding: spacing[4],
-    borderRadius: radius.md,
-    borderWidth: 1,
-  },
-  tileDone: { backgroundColor: colors.successWash, borderColor: green[300] },
-  tileWaiting: { backgroundColor: colors.secondaryWash, borderColor: colors.secondary },
-  tileHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing[2],
+    paddingVertical: spacing[2],
+    paddingLeft: spacing[2],
+    paddingRight: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: green[300],
+    backgroundColor: colors.successWash,
   },
-  tileIcon: {
-    width: 26,
-    height: 26,
+  todayIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  // Across the space left, so a Hindi label is never measured short and cut.
+  todayLabel: { ...typography.bodyStrong, color: colors.primaryDark, flex: 1 },
+  todayCount: {
+    minWidth: 40,
+    paddingHorizontal: spacing[3],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+  },
+  todayCountLabel: { ...typography.h2, color: colors.surface },
+  countSkeleton: {
+    width: 40,
+    height: 28,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+  },
+  // Slate, the dark of the hero, so the record reads apart from the day's green tile above
+  // it and the flask's blue below. A rounded square, the number large in white.
+  total: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    marginBottom: spacing[3],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[3],
+    borderRadius: radius.lg,
+    backgroundColor: colors.ink,
+  },
+  totalIcon: {
+    width: 36,
+    height: 36,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: yolk[400],
   },
-  tileIconDone: { backgroundColor: colors.primary },
-  // Ink on yolk, never white — yolk fails contrast under white text.
-  tileIconWaiting: { backgroundColor: yolk[500] },
-  tileLabel: { ...typography.label, color: colors.ink },
-  // Two figures, two colours, both already meaning this elsewhere in the product: green is
-  // done, yellow is pending.
-  tileValue: { ...typography.display, marginTop: spacing[2], textAlign: 'center' },
-  tileValueDone: { color: colors.primaryDark },
-  tileValueWaiting: { color: colors.secondaryPressed },
-  // One line, always. Wrapped to two it made one tile taller than the other, so a pair meant
-  // to be read side by side sat at different heights.
-  tileFoot: { ...typography.caption, color: colors.textMuted, marginTop: 2, textAlign: 'center' },
-  tileSkeleton: {
-    width: 48,
-    height: 36,
-    marginTop: spacing[2],
+  totalText: { flex: 1, gap: 2 },
+  totalLabel: { ...typography.bodyStrong, color: colors.surface },
+  totalRange: { ...typography.caption, color: ink[200] },
+  totalCount: { ...typography.h1, color: colors.surface },
+  totalSkeleton: {
+    width: 56,
+    height: 28,
     borderRadius: radius.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: ink[500],
   },
+  totalDates: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: ink[400],
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  totalDatesOn: { backgroundColor: yolk[400], borderColor: yolk[400] },
+  // Yolk, for what is waiting on the network — the colour the waiting list already uses.
+  waiting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.secondary,
+    backgroundColor: colors.secondaryWash,
+  },
+  waitingPressed: { opacity: 0.75 },
+  waitingCount: { ...typography.h3, color: colors.ink },
+  waitingLabel: { ...typography.label, color: colors.ink },
 
   // `flexShrink`, never `flexGrow`: with three breeds the card is the height of three breeds,
   // and with fifteen it is as tall as the space left and no taller. Growing it would strand a
@@ -543,65 +783,13 @@ const styles = StyleSheet.create({
   breedCount: { ...typography.h3, color: colors.info },
   breedCountLow: { color: colors.ink },
 
-  unfinished: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    marginTop: spacing[4],
-    marginBottom: spacing[4],
-    padding: spacing[4],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.secondary,
-    backgroundColor: colors.secondaryWash,
-  },
-  unfinishedPressed: { opacity: 0.7 },
-  unfinishedChip: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: yolk[500],
-  },
-  // How many, on the chip's corner: one capture and five are different mornings.
-  unfinishedCount: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.error,
-  },
-  unfinishedCountLabel: {
-    ...typography.caption,
-    fontSize: 10,
-    lineHeight: 12,
-    fontFamily: typography.label.fontFamily,
-    color: colors.surface,
-  },
-  unfinishedLabel: { ...typography.bodyStrong, color: colors.ink, flex: 1 },
-  resume: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: spacing[3],
-    paddingVertical: 5,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
-  },
-  resumeLabel: { ...typography.label, color: colors.surface },
-
   cta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
     minHeight: 56,
+    paddingHorizontal: spacing[4],
     borderRadius: radius.md,
     // `auto` on top, so the button sits just above the tab bar whatever is above it: it takes
     // the slack on a day with three breeds, and takes none on a day with fifteen because the
@@ -613,14 +801,72 @@ const styles = StyleSheet.create({
   // Blue, not grey: at zero straws the button still has somewhere useful to send them, and
   // grey read as a button that was switched off.
   ctaEmpty: { backgroundColor: colors.info },
-  ctaChip: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  ctaPressed: { opacity: 0.85 },
+  // Across the button rather than sized to itself: Android measures a Hindi label narrower
+  // than it draws it, and a label sized to that measurement wraps.
+  ctaLabel: { ...typography.bodyStrong, color: colors.surface, flex: 1, textAlign: 'center' },
+
+  // The halo sits under the card and only its opacity and size move, on the native driver.
+  // Tight above and below: Home does not scroll, and every point this takes comes off the
+  // flask card under it.
+  warnWrap: { marginTop: spacing[2], marginBottom: spacing[3] },
+  warnGlow: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: radius.md,
+    backgroundColor: colors.error,
+    shadowColor: colors.error,
+    shadowOpacity: 0.9,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 10,
+  },
+  warn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    borderRadius: radius.md,
+    backgroundColor: colors.error,
+    // Above the halo on Android, where elevation decides what is drawn on top.
+    elevation: 11,
+  },
+  warnPressed: { backgroundColor: colors.errorPressed },
+  warnChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
   },
-  ctaPressed: { opacity: 0.85 },
-  ctaLabel: { ...typography.bodyStrong, color: colors.surface },
+  // How many, on the chip's corner: one capture and five are different mornings.
+  warnCount: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.ink,
+  },
+  warnCountLabel: {
+    ...typography.caption,
+    fontSize: 10,
+    lineHeight: 12,
+    fontFamily: typography.label.fontFamily,
+    color: colors.surface,
+  },
+  warnBody: { flex: 1 },
+  warnTitle: { ...typography.label, color: colors.surface },
+  warnDetail: {
+    ...typography.caption,
+    fontSize: 11,
+    lineHeight: 14,
+    color: colors.surface,
+    opacity: 0.85,
+  },
 });

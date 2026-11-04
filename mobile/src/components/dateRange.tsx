@@ -23,7 +23,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -229,7 +230,7 @@ export default function DateRangeSheet({
             testID="date-range-clear"
           >
             <Ionicons name="close" size={18} color={colors.error} />
-            <Text style={styles.clearLabel}>{t('history.dateRangeClear')}</Text>
+            <AppText style={styles.clearLabel}>{t('history.dateRangeClear')}</AppText>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -244,7 +245,7 @@ export default function DateRangeSheet({
             testID="date-range-apply"
           >
             <Ionicons name="checkmark" size={18} color={colors.surface} />
-            <Text style={styles.applyLabel} numberOfLines={1}>
+            <AppText style={styles.applyLabel} numberOfLines={1}>
               {draftFrom
                 ? `${t('history.dateRangeApplyShort')} · ${formatRange(
                     draftFrom,
@@ -252,7 +253,7 @@ export default function DateRangeSheet({
                     months,
                   )}`
                 : t('history.dateRangeApply')}
-            </Text>
+            </AppText>
           </Pressable>
         </View>
       }
@@ -261,19 +262,19 @@ export default function DateRangeSheet({
         <View style={[styles.end, !settingTo && styles.endNext]} testID="date-range-from">
           <View style={styles.endHead}>
             <Ionicons name="calendar" size={13} color={colors.primaryDark} />
-            <Text style={styles.endLabel}>{t('history.dateRangeFrom')}</Text>
+            <AppText style={styles.endLabel}>{t('history.dateRangeFrom')}</AppText>
           </View>
-          <Text style={[styles.endValue, !draftFrom && styles.endEmpty]} numberOfLines={1}>
+          <AppText style={[styles.endValue, !draftFrom && styles.endEmpty]} numberOfLines={1}>
             {draftFrom ? longDay(draftFrom, months) : t('history.dateRangePick')}
-          </Text>
+          </AppText>
         </View>
         <Ionicons name="arrow-forward" size={18} color={colors.primary} />
         <View style={[styles.end, settingTo && styles.endNext]} testID="date-range-to">
           <View style={styles.endHead}>
             <Ionicons name="calendar" size={13} color={colors.primaryDark} />
-            <Text style={styles.endLabel}>{t('history.dateRangeTo')}</Text>
+            <AppText style={styles.endLabel}>{t('history.dateRangeTo')}</AppText>
           </View>
-          <Text
+          <AppText
             style={[styles.endValue, !(draftTo ?? draftFrom) && styles.endEmpty]}
             numberOfLines={1}
           >
@@ -282,7 +283,7 @@ export default function DateRangeSheet({
               : draftFrom
                 ? t('history.dateRangeSameDay')
                 : t('history.dateRangePick')}
-          </Text>
+          </AppText>
         </View>
       </View>
 
@@ -302,9 +303,9 @@ export default function DateRangeSheet({
               ]}
               testID={`date-range-preset-${preset}`}
             >
-              <Text style={[styles.presetLabel, on && styles.presetLabelOn]} numberOfLines={1}>
+              <AppText style={[styles.presetLabel, on && styles.presetLabelOn]} numberOfLines={1}>
                 {t(`history.dateRangePreset_${preset}`)}
-              </Text>
+              </AppText>
             </Pressable>
           );
         })}
@@ -322,9 +323,9 @@ export default function DateRangeSheet({
             <Ionicons name="chevron-back" size={20} color={colors.primaryDark} />
           </Pressable>
 
-          <Text style={styles.monthLabel} testID="date-range-month">
+          <AppText style={styles.monthLabel} testID="date-range-month">
             {`${months[month]} ${year}`}
-          </Text>
+          </AppText>
 
           <Pressable
             accessibilityRole="button"
@@ -346,9 +347,9 @@ export default function DateRangeSheet({
         <View style={styles.weekdays}>
           {weekdays.map((label, index) => (
             // Keyed by position: two of the seven initials are the same letter.
-            <Text key={index} style={[styles.weekday, index === 0 && styles.weekdaySunday]}>
+            <AppText key={index} style={[styles.weekday, index === 0 && styles.weekdaySunday]}>
               {label}
-            </Text>
+            </AppText>
           ))}
         </View>
 
@@ -378,7 +379,7 @@ export default function DateRangeSheet({
                   testID={`date-range-day-${iso}`}
                 >
                   <View style={[styles.day, (isStart || isEnd) && styles.dayEnd]}>
-                    <Text
+                    <AppText
                       style={[
                         styles.dayLabel,
                         future && styles.dayLabelFuture,
@@ -387,7 +388,7 @@ export default function DateRangeSheet({
                       ]}
                     >
                       {date.getDate()}
-                    </Text>
+                    </AppText>
                     {iso === todayIso && !(isStart || isEnd) && <View style={styles.todayDot} />}
                   </View>
                 </Pressable>

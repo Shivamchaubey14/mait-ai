@@ -17,6 +17,12 @@ import type Ionicons from '@expo/vector-icons/Ionicons';
 
 /** Every place the shell can put a Mait that is a *page* rather than a step or a sheet. */
 export type RouteKey =
+  // Signing in: the number, then the code. Announced like any arrival, because the code is
+  // what the Mait is waiting on and the card says where it is coming from.
+  | 'otp'
+  // Where an office account lands — the dashboard. The admin app has no tabs, so it is not one
+  // of the keys below.
+  | 'adminHome'
   | 'home'
   | 'stock'
   | 'history'
@@ -65,6 +71,8 @@ export interface RouteMeta {
 }
 
 export const ROUTES: Record<RouteKey, RouteMeta> = {
+  otp: { icon: 'chatbubble-ellipses', title: 'route.otp', context: 'route.otpContext' },
+  adminHome: { icon: 'speedometer', title: 'route.adminHome', context: 'route.adminHomeContext' },
   home: { icon: 'home', title: 'nav.home', context: 'route.homeContext' },
   stock: { icon: 'cube', title: 'nav.stock', context: 'route.stockContext' },
   history: { icon: 'document-text', title: 'nav.history', context: 'route.historyContext' },
@@ -145,6 +153,8 @@ export const ROUTES: Record<RouteKey, RouteMeta> = {
  * opened from a list, and the brief does not name it. Say the word and it is one line.
  */
 const ANNOUNCED: readonly RouteKey[] = [
+  'otp',
+  'adminHome',
   'home',
   'stock',
   'history',

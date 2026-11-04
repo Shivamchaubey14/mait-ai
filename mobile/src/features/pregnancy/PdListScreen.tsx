@@ -16,7 +16,8 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -141,10 +142,10 @@ function DayBadge({ check }: { check: PregnancyCheck }): React.JSX.Element {
 
   return (
     <View style={[styles.badge, styles[`badge_${urgency}`]]}>
-      <Text style={[styles.badgeNumber, styles[`badgeText_${urgency}`]]}>{count}</Text>
-      <Text style={[styles.badgeWord, styles[`badgeText_${urgency}`]]} numberOfLines={1}>
+      <AppText style={[styles.badgeNumber, styles[`badgeText_${urgency}`]]}>{count}</AppText>
+      <AppText style={[styles.badgeWord, styles[`badgeText_${urgency}`]]} numberOfLines={1}>
         {urgency === 'late' ? t('pd.late') : urgency === 'today' ? t('pd.today') : t('pd.days')}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -163,7 +164,7 @@ function Legend(): React.JSX.Element {
     <View style={styles.legend} testID="pd-legend">
       <View style={styles.legendHead}>
         <Ionicons name="information-circle" size={15} color={ink[600]} />
-        <Text style={styles.legendTitle}>{t('pd.legend')}</Text>
+        <AppText style={styles.legendTitle}>{t('pd.legend')}</AppText>
       </View>
       <View style={styles.legendRow}>
         {OUTCOMES.map(row => (
@@ -178,9 +179,12 @@ function Legend(): React.JSX.Element {
             <View style={[styles.legendMark, styles[`outcome_${row.tone}`]]}>
               <Ionicons name={row.icon} size={16} color={colors.surface} />
             </View>
-            <Text style={[styles.legendLabel, { color: PAINT[row.tone].word }]} numberOfLines={2}>
+            <AppText
+              style={[styles.legendLabel, { color: PAINT[row.tone].word }]}
+              numberOfLines={2}
+            >
               {t(row.label)}
-            </Text>
+            </AppText>
           </View>
         ))}
       </View>
@@ -232,14 +236,14 @@ function CheckRow({
       <DayBadge check={check} />
 
       <View style={styles.rowBody}>
-        <Text style={styles.rowName} numberOfLines={1}>
+        <AppText style={styles.rowName} numberOfLines={1}>
           {check.owner_name}
-        </Text>
+        </AppText>
         <View style={styles.rowMetaLine}>
           <Ionicons name={check.outcome ? 'calendar' : 'location'} size={12} color={paint.word} />
-          <Text style={[styles.rowMeta, { color: paint.word }]} numberOfLines={1}>
+          <AppText style={[styles.rowMeta, { color: paint.word }]} numberOfLines={1}>
             {meta}
-          </Text>
+          </AppText>
         </View>
         <View
           style={[styles.owner, member ? styles.owner_member : styles.owner_other]}
@@ -250,9 +254,9 @@ function CheckRow({
             size={11}
             color={member ? colors.info : yolk[800]}
           />
-          <Text style={[styles.ownerLabel, { color: member ? colors.info : yolk[800] }]}>
+          <AppText style={[styles.ownerLabel, { color: member ? colors.info : yolk[800] }]}>
             {t(member ? 'history.member' : 'history.nonMember')}
-          </Text>
+          </AppText>
         </View>
       </View>
 
@@ -295,17 +299,17 @@ export default function PdListScreen({
         <View style={styles.heroTop}>
           <BrandMark size="small" />
         </View>
-        <Text style={styles.eyebrow}>{t('pd.eyebrow')}</Text>
-        <Text style={styles.heroTitle} testID="pd-headline">
+        <AppText style={styles.eyebrow}>{t('pd.eyebrow')}</AppText>
+        <AppText style={styles.heroTitle} testID="pd-headline">
           {headline}
-        </Text>
+        </AppText>
         <View style={[styles.heroPill, overdue > 0 && styles.heroPillLate]} testID="pd-subtitle">
           <Ionicons
             name={overdue > 0 ? 'alert-circle' : 'calendar'}
             size={13}
             color={colors.surface}
           />
-          <Text style={styles.heroSubtitle}>{subtitle}</Text>
+          <AppText style={styles.heroSubtitle}>{subtitle}</AppText>
         </View>
       </View>
 
@@ -336,12 +340,12 @@ export default function PdListScreen({
                   size={16}
                   color={active ? colors.surface : paint.word}
                 />
-                <Text
+                <AppText
                   style={[styles.tabLabel, { color: active ? colors.surface : paint.word }]}
                   numberOfLines={1}
                 >
                   {key === 'week' ? t('pd.tabWeek') : t('pd.tabDone')}
-                </Text>
+                </AppText>
                 {key === 'week' && dueThisWeek > 0 && (
                   <View
                     style={[
@@ -349,14 +353,14 @@ export default function PdListScreen({
                       { backgroundColor: active ? colors.surface : paint.solid },
                     ]}
                   >
-                    <Text
+                    <AppText
                       style={[
                         styles.tabCountLabel,
                         { color: active ? paint.word : colors.surface },
                       ]}
                     >
                       {dueThisWeek}
-                    </Text>
+                    </AppText>
                   </View>
                 )}
               </Pressable>
@@ -420,7 +424,7 @@ export default function PdListScreen({
             <View style={styles.ctaChip}>
               <Ionicons name="map" size={17} color={colors.primary} />
             </View>
-            <Text style={styles.ctaLabel}>{t('pd.planRoute')}</Text>
+            <AppText style={styles.ctaLabel}>{t('pd.planRoute')}</AppText>
           </Pressable>
         </View>
       )}

@@ -22,9 +22,10 @@
  * the fact that catches the commonest mis-tap of all: the right name at the wrong MPP.
  */
 
-import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
+import NetInfo from '@react-native-community/netinfo';
 import { useTranslation } from 'react-i18next';
 
 import { ErrorCode, errorCodeOf } from '@api/client';
@@ -35,14 +36,31 @@ import {
   useSendFarmerOtpMutation,
   useVerifyFarmerOtpMutation,
 } from '@api/endpoints';
+import { fieldCode, localDay } from '@api/fieldCode';
+import { fieldCheckFor } from '@api/offlinePack';
 import type { Animal, FarmerKey } from '@api/types';
 import { Sheet } from '@/components/BottomSheet';
+import OtpInput from '@/components/OtpInput';
 import { AI_FLOW_STEPS, OTP_LENGTH } from '@/config/env';
-import { OfficeCodeAsk } from './OfficeCode';
+import { useAppSelector } from '@/store';
+import { OfficeCallCard, OfficeCodeAsk } from './OfficeCode';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
-import { FlowNotice, FlowScreen, groupedMobile, IdentityCard, LabelledField } from './components';
+import { FlowLabel, FlowNotice, FlowScreen, groupedMobile, IdentityCard } from './components';
 import { useServiceRate } from './rates';
+
+/**
+ * Wrong office codes allowed on the phone before it stops taking them. Six digits and five tries
+ * is a one-in-two-hundred-thousand guess — and every one that did get through would still have
+ * to match a code the office wrote down.
+ */
+const FIELD_MAX_TRIES = 5;
+
+/** A check done on the phone with no signal: the office's code, and the day of the key. */
+export interface OfficeCheck {
+  code: string;
+  day: string;
+}
 
 /** Zero-based index of the step this screen is the second half of. */
 const FARMER_STEP = AI_FLOW_STEPS.indexOf('selectFarmer');
@@ -50,10 +68,30 @@ const FARMER_STEP = AI_FLOW_STEPS.indexOf('selectFarmer');
 interface Props {
   /** Which farmer, in the shape the API names them by. */
   farmer: { kind: 'member'; memberCode: string } | { kind: 'nonMember'; id: number };
-  /** Their animals, handed forward so the next step costs no second round trip. */
-  onConfirm: (animals: Animal[]) => void;
+  /**
+   * Their animals, handed forward so the next step costs no second round trip — and, where
+   * she was checked with no signal, the office's code, for the capture to carry to the server.
+   */
+  onConfirm: (animals: Animal[], officeCheck?: OfficeCheck) => void;
   /** Back to the roster, or to the form. A wrong farmer is corrected there, not here. */
   onSearchAgain: () => void;
+}
+
+/** Whether the handset has any connection. An unreadable answer counts as yes: try the request. */
+async function connectedNow(): Promise<boolean> {
+  try {
+    const state = await NetInfo.fetch();
+    // Android's own "no internet" counts too: a Wi-Fi with nothing behind it is no signal.
+    return state?.isConnected !== false && state?.isInternetReachable !== false;
+  } catch {
+    return true;
+  }
+}
+
+/** No answer came back at all — no connection, or none in time. Not a refusal. */
+function noAnswer(err: unknown): boolean {
+  const status = (err as { status?: unknown })?.status;
+  return status === 'FETCH_ERROR' || status === 'TIMEOUT_ERROR';
 }
 
 export default function ConfirmFarmerScreen({
@@ -95,6 +133,20 @@ export default function ConfirmFarmerScreen({
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [verified, setVerified] = useState(false);
+
+  /**
+   * No signal at all: the office's code by voice, checked on this phone (`api/fieldCode`).
+   *
+   * Offered once a send has failed for want of signal. The Mait rings the office, the office
+   * rings her, she reads the Mait the code, and the phone checks it against the day's key in
+   * the offline pack. The capture carries the code to the server, which matches it against
+   * what the office issued.
+   */
+  const owner = useAppSelector(state => state.auth.user?.id ?? null);
+  const [byCall, setByCall] = useState(false);
+  const [officePhone, setOfficePhone] = useState('');
+  const [wrongTries, setWrongTries] = useState(0);
+  const [officeCheck, setOfficeCheck] = useState<OfficeCheck | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   /**
    * The verification runs in a sheet over this screen rather than in the page under it.
@@ -140,13 +192,37 @@ export default function ConfirmFarmerScreen({
     : [];
 
   // -- verification ------------------------------------------------------------------------
+  /**
+   * What to do again once the connection returns: send her the code, or check the one typed.
+   *
+   * A tap in a dead patch used to hang until the Mait gave up, and coming back into signal did
+   * nothing — the request that was stuck stayed stuck. The requests are capped now
+   * (`CODE_REQUEST_CAP_MS`), a network failure is said as one, and the step is repeated by
+   * itself the moment the phone has a connection again. A refusal from the server is never
+   * retried: that is the server's answer, not a missing one.
+   */
+  const [retryOnSignal, setRetryOnSignal] = useState<'send' | 'check' | null>(null);
+
   const send = async () => {
     setProblem(null);
     setCode('');
+    // No connection at all: say so now rather than after the cap runs out.
+    if (!(await connectedNow())) {
+      setRetryOnSignal('send');
+      setProblem(t('aiFlow.otpNoSignal'));
+      return;
+    }
     try {
       const result = await sendOtp(key).unwrap();
+      setRetryOnSignal(null);
       setSentTo(result.mobile_no);
     } catch (err) {
+      if (noAnswer(err)) {
+        setRetryOnSignal('send');
+        setProblem(t('aiFlow.otpNoSignal'));
+        return;
+      }
+      setRetryOnSignal(null);
       setProblem(
         (err as { data?: { detail?: string } })?.data?.detail ?? t('aiFlow.otpSendFailed'),
       );
@@ -155,13 +231,25 @@ export default function ConfirmFarmerScreen({
 
   const check = async () => {
     setProblem(null);
+    if (!(await connectedNow())) {
+      setRetryOnSignal('check');
+      setProblem(t('aiFlow.otpNoSignalCheck'));
+      return;
+    }
     try {
       await checkOtp({ ...key, otp: code.trim() }).unwrap();
+      setRetryOnSignal(null);
       setVerified(true);
       // Her phone has answered, and there is nothing else in here to do. The screen behind
       // takes it from here: the card, now confirmed, and the one button that moves on.
       setAsking(false);
     } catch (err) {
+      if (noAnswer(err)) {
+        setRetryOnSignal('check');
+        setProblem(t('aiFlow.otpNoSignalCheck'));
+        return;
+      }
+      setRetryOnSignal(null);
       // Wrong, expired and out of attempts each need a different action from a Mait standing
       // in a yard, so they are told apart rather than collapsed into "invalid".
       switch (errorCodeOf(err)) {
@@ -184,6 +272,74 @@ export default function ConfirmFarmerScreen({
       }
     }
   };
+
+  const startByCall = async () => {
+    setProblem(null);
+    setCode('');
+    // The call replaces the SMS: an SMS sent by itself when signal returns would be a second
+    // code arriving on her phone while she is reading out the first.
+    setRetryOnSignal(null);
+    setByCall(true);
+    if (owner === null) {
+      return;
+    }
+    const { key: dayKey, officePhone: phone } = await fieldCheckFor(owner, localDay());
+    setOfficePhone(phone);
+    if (!dayKey) {
+      setProblem(t('aiFlow.fieldNoKey'));
+    }
+  };
+
+  const checkByCall = async () => {
+    setProblem(null);
+    if (wrongTries >= FIELD_MAX_TRIES) {
+      setProblem(t('aiFlow.fieldLocked'));
+      return;
+    }
+    const day = localDay();
+    const { key: dayKey } = owner === null ? { key: null } : await fieldCheckFor(owner, day);
+    if (!dayKey) {
+      setProblem(t('aiFlow.fieldNoKey'));
+      return;
+    }
+    const typed = code.trim();
+    if (fieldCode(dayKey, mobile, OTP_LENGTH) === typed) {
+      setOfficeCheck({ code: typed, day });
+      setVerified(true);
+      setAsking(false);
+      return;
+    }
+    const tries = wrongTries + 1;
+    setWrongTries(tries);
+    setCode('');
+    setProblem(
+      tries >= FIELD_MAX_TRIES
+        ? t('aiFlow.fieldLocked')
+        : t('aiFlow.fieldWrong', { count: FIELD_MAX_TRIES - tries }),
+    );
+  };
+
+  // The latest of each, for the listener below, which outlives the render that made it.
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  const checkRef = useRef(check);
+  checkRef.current = check;
+
+  useEffect(() => {
+    if (!retryOnSignal || !asking) {
+      return;
+    }
+    // Once per wait. NetInfo may call this the moment it is attached, before there is an
+    // unsubscribe to call, so a flag rather than unsubscribing from inside.
+    let fired = false;
+    const unsubscribe = NetInfo.addEventListener(state => {
+      if (!fired && state.isConnected && state.isInternetReachable !== false) {
+        fired = true;
+        (retryOnSignal === 'send' ? sendRef : checkRef).current();
+      }
+    });
+    return () => unsubscribe?.();
+  }, [retryOnSignal, asking]);
 
   /**
    * Two states, not three. The middle one moved into the sheet.
@@ -211,7 +367,7 @@ export default function ConfirmFarmerScreen({
   const cta = verified
     ? {
         label: t('aiFlow.yesContinue'),
-        onPress: () => onConfirm(animals),
+        onPress: () => (officeCheck ? onConfirm(animals, officeCheck) : onConfirm(animals)),
         testID: 'farmer-confirm',
       }
     : {
@@ -239,7 +395,13 @@ export default function ConfirmFarmerScreen({
       link={
         verified
           ? undefined
-          : { label: t('aiFlow.noSearchAgain'), onPress: onSearchAgain, testID: 'farmer-reject' }
+          : {
+              label: t('aiFlow.noSearchAgain'),
+              onPress: onSearchAgain,
+              testID: 'farmer-reject',
+              // A button, not small print: this is the other answer to "is this her?".
+              button: true,
+            }
       }
     >
       {source.isLoading && <FlowNotice tone="info" title={t('common.loading')} />}
@@ -276,7 +438,13 @@ export default function ConfirmFarmerScreen({
         <FlowNotice
           tone="good"
           title={t('aiFlow.verified')}
-          body={isMember ? nothingToCollect : t('aiFlow.verifiedBody')}
+          body={
+            officeCheck
+              ? t('aiFlow.fieldVerifiedBody')
+              : isMember
+                ? nothingToCollect
+                : t('aiFlow.verifiedBody')
+          }
           testID="farmer-verified"
         />
       )}
@@ -288,12 +456,11 @@ export default function ConfirmFarmerScreen({
         <FlowNotice tone="error" title={problem} testID="farmer-otp-problem" />
       )}
 
-      {/* A statement, not a step. A member owes nothing today whatever this screen does next,
-          and saying so here stops a Mait asking her for cash she has already paid in milk.
-          Once her phone has answered it moves into the card above, so the screen still holds
-          one green card rather than two. */}
+      {/* A warning, not a statement: the thing it prevents is a Mait taking cash from a member
+          who pays in milk, so it is in the yellow that means "mind this" rather than the green
+          of something settled. Once her phone has answered it moves into the card above. */}
       {!!record && isMember && !verified && (
-        <FlowNotice tone="good" body={nothingToCollect} testID="member-nothing-to-collect" />
+        <FlowNotice tone="accent" body={nothingToCollect} testID="member-nothing-to-collect" />
       )}
       {/* The two steps that belong to the phone in her hand, in the order they happen. Her
           number is never typed here and never chosen here — it is read off her record and
@@ -301,61 +468,119 @@ export default function ConfirmFarmerScreen({
           own phone, and a check a Mait can satisfy alone checks nothing. */}
       <Sheet
         visible={asking}
-        title={sentTo ? t('aiFlow.enterHerCode') : t('aiFlow.verifyFarmer')}
-        subtitle={sentTo ? t('aiFlow.codeSentTo', { mobile: sentTo }) : t('aiFlow.codeGoesToHer')}
+        title={
+          byCall
+            ? t('aiFlow.fieldTitle')
+            : sentTo
+              ? t('aiFlow.enterHerCode')
+              : t('aiFlow.verifyFarmer')
+        }
+        subtitle={
+          byCall
+            ? t('aiFlow.fieldSubtitle')
+            : sentTo
+              ? t('aiFlow.codeSentTo', { mobile: sentTo })
+              : t('aiFlow.codeGoesToHer')
+        }
         onClose={() => setAsking(false)}
         testID="farmer-otp"
         footer={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{
-              busy: sending || checking,
-              disabled: !!sentTo && code.trim().length < OTP_LENGTH,
-            }}
-            onPress={sentTo ? check : send}
-            disabled={sending || checking || (!!sentTo && code.trim().length < OTP_LENGTH)}
-            style={({ pressed }) => [
-              styles.sheetCta,
-              !!sentTo && code.trim().length < OTP_LENGTH && styles.sheetCtaInert,
-              pressed && styles.sheetCtaPressed,
-            ]}
-            testID={sentTo ? 'farmer-check-code' : 'farmer-send-code'}
-          >
-            {sending || checking ? (
-              <ActivityIndicator color={colors.surface} />
-            ) : (
-              <>
-                <Text style={styles.sheetCtaLabel}>
+          byCall ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: code.trim().length < OTP_LENGTH }}
+              onPress={checkByCall}
+              disabled={code.trim().length < OTP_LENGTH}
+              style={({ pressed }) => [
+                styles.sheetCta,
+                code.trim().length < OTP_LENGTH && styles.sheetCtaInert,
+                pressed && styles.sheetCtaPressed,
+              ]}
+              testID="farmer-field-check"
+            >
+              <AppText style={styles.sheetCtaLabel}>{t('aiFlow.checkCode')}</AppText>
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{
+                busy: sending || checking,
+                disabled: !!sentTo && code.trim().length < OTP_LENGTH,
+              }}
+              onPress={sentTo ? check : send}
+              disabled={sending || checking || (!!sentTo && code.trim().length < OTP_LENGTH)}
+              style={({ pressed }) => [
+                styles.sheetCta,
+                !!sentTo && code.trim().length < OTP_LENGTH && styles.sheetCtaInert,
+                pressed && styles.sheetCtaPressed,
+              ]}
+              testID={sentTo ? 'farmer-check-code' : 'farmer-send-code'}
+            >
+              {sending || checking ? (
+                <ActivityIndicator color={colors.surface} />
+              ) : (
+                // Words alone: the label says where the tap goes, and the arrow said nothing more.
+                <AppText style={styles.sheetCtaLabel}>
                   {sentTo ? t('aiFlow.checkCode') : t('aiFlow.sendTheCode')}
-                </Text>
-                <Ionicons name="arrow-forward" size={18} color={colors.surface} />
-              </>
-            )}
-          </Pressable>
+                </AppText>
+              )}
+            </Pressable>
+          )
         }
       >
-        {!sentTo ? (
+        {byCall ? (
+          <View>
+            <OfficeCallCard
+              officePhone={officePhone}
+              body={
+                isMember
+                  ? t('aiFlow.fieldCallBodyMember', {
+                      code: farmer.memberCode,
+                      mobile: groupedMobile(mobile),
+                    })
+                  : t('aiFlow.fieldCallBodyNonMember', { mobile: groupedMobile(mobile) })
+              }
+              testID="farmer-field-call"
+            />
+            <FlowLabel style={styles.codeLabel}>{t('aiFlow.enterHerCode')}</FlowLabel>
+            <OtpInput
+              value={code}
+              onChangeText={setCode}
+              accessibilityLabel={t('aiFlow.enterHerCode')}
+              testID="farmer-field-input"
+            />
+            <AppText
+              style={styles.resend}
+              onPress={() => {
+                setByCall(false);
+                send();
+              }}
+              testID="farmer-field-back"
+            >
+              {t('aiFlow.fieldBackToSms')}
+            </AppText>
+          </View>
+        ) : !sentTo ? (
           <View style={styles.number} testID="farmer-otp-number">
-            <Text style={styles.numberLabel}>{t('aiFlow.mobileLabel')}</Text>
-            <Text style={styles.numberValue}>{mobile ? groupedMobile(mobile) : ''}</Text>
-            <Text style={styles.numberNote}>{t('aiFlow.codeGoesToHerBody')}</Text>
+            <AppText style={styles.numberLabel}>{t('aiFlow.mobileLabel')}</AppText>
+            <AppText style={styles.numberValue}>{mobile ? groupedMobile(mobile) : ''}</AppText>
+            <AppText style={styles.numberNote}>{t('aiFlow.codeGoesToHerBody')}</AppText>
           </View>
         ) : (
           <View>
-            <LabelledField
-              label={t('aiFlow.enterHerCode')}
-              tone="primary"
-              placeholder={t('aiFlow.otpPlaceholder')}
+            {/* The same six boxes a Mait types their own code into at sign-in, with the number
+                keypad up under them from the moment the code is sent. */}
+            <FlowLabel style={styles.codeLabel}>{t('aiFlow.enterHerCode')}</FlowLabel>
+            <OtpInput
               value={code}
-              onChangeText={text => setCode(text.replace(/\D/g, '').slice(0, OTP_LENGTH))}
-              keyboardType="number-pad"
-              maxLength={OTP_LENGTH}
+              onChangeText={setCode}
               autoFocus
+              accessibilityLabel={t('aiFlow.enterHerCode')}
               testID="farmer-otp-input"
             />
-            <Text style={styles.resend} onPress={send} testID="farmer-otp-resend">
+            <AppText style={styles.resend} onPress={send} testID="farmer-otp-resend">
               {t('aiFlow.sendAgain')}
-            </Text>
+            </AppText>
             <OfficeCodeAsk
               asked={officeAsked}
               busy={askingOffice}
@@ -367,12 +592,36 @@ export default function ConfirmFarmerScreen({
         )}
 
         {!!problem && <FlowNotice tone="error" title={problem} testID="farmer-otp-sheet-problem" />}
+
+        {/* The way out of a dead patch: offered once a send has failed for want of signal. */}
+        {!byCall && retryOnSignal === 'send' && !!mobile && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={startByCall}
+            style={styles.byCall}
+            testID="farmer-field-start"
+          >
+            <AppText style={styles.byCallLabel}>{t('aiFlow.fieldStart')}</AppText>
+          </Pressable>
+        )}
       </Sheet>
     </FlowScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  byCall: {
+    minHeight: 48,
+    marginTop: spacing[3],
+    paddingHorizontal: spacing[4],
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryWash,
+  },
+  byCallLabel: { ...typography.bodyStrong, color: colors.primaryDark, textAlign: 'center' },
   resend: { ...typography.bodyStrong, color: colors.primaryDark, paddingVertical: spacing[3] },
 
   // Her number, read back at the size a number is read back at. It is the one thing in this
@@ -386,6 +635,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.primary,
   },
+  codeLabel: { marginBottom: spacing[2] },
   numberLabel: { ...typography.caption, color: colors.textMuted },
   numberValue: { ...typography.display, fontSize: 26, lineHeight: 34, color: colors.ink },
   numberNote: {
@@ -407,5 +657,14 @@ const styles = StyleSheet.create({
   },
   sheetCtaPressed: { backgroundColor: colors.primaryPressed },
   sheetCtaInert: { backgroundColor: colors.disabledFill },
-  sheetCtaLabel: { ...typography.bodyStrong, fontSize: 16, color: colors.surface },
+  // Across the button rather than sized to itself: Android measures Hindi narrow.
+  sheetCtaLabel: {
+    ...typography.bodyStrong,
+    fontSize: 16,
+    color: colors.surface,
+    textAlign: 'center',
+    // `flex`, not `alignSelf: stretch`: in a row, stretch is the height, and the label stayed
+    // as wide as Android measured it — off the centre of the button.
+    flex: 1,
+  },
 });

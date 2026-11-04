@@ -31,7 +31,8 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -149,6 +150,12 @@ interface Props {
    * the sending, so the flow is the only thing that knows.
    */
   progress?: CaptureProgress | null;
+  /**
+   * What the button under the photo says. For a member the photo is the last thing the Mait
+   * does, so it says the AI is being recorded; for a non-member there is still the payment, and
+   * it says Continue.
+   */
+  ctaLabel?: string;
 }
 
 export default function CapturePhotoScreen({
@@ -156,6 +163,7 @@ export default function CapturePhotoScreen({
   onBack,
   busy = false,
   progress = null,
+  ctaLabel,
 }: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -422,7 +430,7 @@ export default function CapturePhotoScreen({
         subtitle={t('aiFlow.photoTakenSubtitle')}
         onBack={() => setShot(null)}
         cta={{
-          label: t('common.continue'),
+          label: ctaLabel ?? t('common.continue'),
           onPress: () => onCaptured(shot),
           busy,
           // What the wait is for. Sending the photograph is the slow half of it, and a Mait
@@ -431,10 +439,13 @@ export default function CapturePhotoScreen({
           progress: sendingProgress(progress, t),
           testID: 'photo-continue',
         }}
+        // A button of its own, not small print: a photo that does not show the animal is the
+        // one thing on this screen worth stopping for.
         link={{
           label: t('aiFlow.retake'),
           onPress: () => setShot(null),
           testID: 'photo-retake',
+          button: true,
         }}
       >
         <Image source={{ uri: shot.uri }} style={styles.preview} resizeMode="cover" />
@@ -455,7 +466,7 @@ export default function CapturePhotoScreen({
               color={shot.gpsLat == null ? colors.ink : colors.surface}
             />
           </View>
-          <Text
+          <AppText
             style={[styles.stampText, { color: shot.gpsLat == null ? yolk[800] : colors.info }]}
           >
             {shot.gpsLat == null
@@ -472,7 +483,7 @@ export default function CapturePhotoScreen({
                     lng: shot.gpsLng?.toFixed(4),
                     accuracy: Math.round(shot.accuracy ?? 0),
                   })}
-          </Text>
+          </AppText>
         </View>
 
         {/* Said before it is sent, not discovered on the record afterwards. A Mait who meant
@@ -505,7 +516,7 @@ export default function CapturePhotoScreen({
   // -- camera ----------------------------------------------------------------------------
   return (
     <View style={styles.root}>
-      <StatusBar style="light" backgroundColor={colors.ink} />
+      <StatusBar style="light" />
 
       {/* The step and the question, on the page rather than in the flow's Ink card — the card
           is a frame for a body, and here the body is a live camera that wants the room. */}
@@ -520,11 +531,11 @@ export default function CapturePhotoScreen({
           >
             <Ionicons name="arrow-back" size={20} color={colors.surface} />
           </Pressable>
-          <Text style={styles.stepLabel}>
+          <AppText style={styles.stepLabel}>
             {t('aiFlow.stepOf', { current: AI_FLOW_STEPS.length, total: AI_FLOW_STEPS.length })}
-          </Text>
+          </AppText>
         </View>
-        <Text style={styles.title}>{t('aiFlow.takePhoto')}</Text>
+        <AppText style={styles.title}>{t('aiFlow.takePhoto')}</AppText>
       </View>
 
       {/* A dashed frame around the preview: it reads as a space to be filled, which is what
@@ -542,7 +553,7 @@ export default function CapturePhotoScreen({
 
         {/* What has to be in shot, said at the top rather than across the middle: the middle
             is where the animal goes. */}
-        <Text style={styles.frameHint}>{t('aiFlow.animalAndMaitInFrame')}</Text>
+        <AppText style={styles.frameHint}>{t('aiFlow.animalAndMaitInFrame')}</AppText>
       </View>
 
       {/* The two facts that will be stamped on the record, shown before the shutter so a Mait
@@ -552,11 +563,11 @@ export default function CapturePhotoScreen({
           <Ionicons name="location-outline" size={16} color={colors.surface} />
           {/* Always a pin by the time this row is on screen — the viewfinder does not open
               without one — so it reads the coordinates rather than hedging about them. */}
-          <Text style={styles.stampValue} numberOfLines={1}>
+          <AppText style={styles.stampValue} numberOfLines={1}>
             {`${pin.fix.coords.latitude.toFixed(4)}, ${pin.fix.coords.longitude.toFixed(4)}`}
-          </Text>
+          </AppText>
         </View>
-        <Text style={styles.stampValue}>{stamp(now)}</Text>
+        <AppText style={styles.stampValue}>{stamp(now)}</AppText>
       </View>
 
       <View style={[styles.controls, { paddingBottom: insets.bottom + spacing[4] }]}>
@@ -620,14 +631,14 @@ export default function CapturePhotoScreen({
           ) : (
             <>
               <Ionicons name="images-outline" size={16} color={colors.surface} />
-              <Text style={styles.galleryLabel}>{t('aiFlow.chooseFromGallery')}</Text>
+              <AppText style={styles.galleryLabel}>{t('aiFlow.chooseFromGallery')}</AppText>
             </>
           )}
         </Pressable>
 
-        <Text style={styles.cameraOnly}>
+        <AppText style={styles.cameraOnly}>
           {galleryDenied ? t('aiFlow.galleryDenied') : t('aiFlow.chosenIsMarked')}
-        </Text>
+        </AppText>
       </View>
     </View>
   );

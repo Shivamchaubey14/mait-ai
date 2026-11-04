@@ -32,10 +32,11 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
+import AppText from '@/components/AppText';
 import { useReducedMotion } from '@/components/reducedMotion';
 import { ROUTES, announces } from '@/navigation/routes';
 import type { RouteKey } from '@/navigation/routes';
@@ -459,12 +460,12 @@ function RouteCard({
           </View>
 
           <View style={styles.text}>
-            <Text style={styles.title} numberOfLines={1} testID="route-card-title">
+            <AppText style={styles.title} numberOfLines={1} testID="route-card-title">
               {t(meta.title)}
-            </Text>
-            <Text style={styles.context} numberOfLines={1}>
+            </AppText>
+            <AppText style={styles.context} numberOfLines={1}>
               {t(meta.context)}
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -500,14 +501,14 @@ const styles = StyleSheet.create({
   host: { flex: 1 },
   page: { flex: 1 },
   scrim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     // rgba(12,21,27,.34) — the darkest step of the ink scale, carried at 34% by the animated
     // opacity above rather than baked into a colour this palette does not have.
     backgroundColor: ink[900],
   },
 
   cardLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     // Dead centre, horizontally and vertically. It sat at 44% of the height to keep clear of
     // the thumb that had just tapped the bottom bar; centred it reads as the one thing on
@@ -535,7 +536,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  text: { flexShrink: 1 },
+  // Grows into the card's width rather than sitting at its own measured one: Android measures
+  // Hindi narrower than it draws it, and a one-line title sized to that measurement would be
+  // cut off with an ellipsis.
+  text: { flexShrink: 1, flexGrow: 1 },
   title: { fontFamily: fonts.headingBold, fontSize: 16, lineHeight: 21, color: colors.surface },
   context: { fontFamily: fonts.body, fontSize: 11, lineHeight: 15, color: ink[200] },
 

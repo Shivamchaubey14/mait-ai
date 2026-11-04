@@ -39,7 +39,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Animated, Easing, PanResponder, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, PanResponder, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -246,9 +247,9 @@ export function RefreshDots({
       {/* Only once the pull means something. A label under a grey row is a caption on
           nothing, and it is the first thing a thumb covers on the way down. */}
       {stage !== 'idle' && lit > 0 && (
-        <Text style={styles.label} numberOfLines={1} testID="refresh-label">
+        <AppText style={styles.label} numberOfLines={1} testID="refresh-label">
           {label}
-        </Text>
+        </AppText>
       )}
     </View>
   );

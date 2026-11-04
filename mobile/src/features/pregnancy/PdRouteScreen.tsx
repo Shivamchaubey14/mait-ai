@@ -19,7 +19,8 @@
  */
 
 import React, { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -154,10 +155,10 @@ function Plot({
             !point.here && point.index === 1 && styles.pinFirst,
           ]}
         >
-          <Text style={styles.pinLabel}>{point.here ? '•' : point.index}</Text>
+          <AppText style={styles.pinLabel}>{point.here ? '•' : point.index}</AppText>
         </View>
       ))}
-      <Text style={styles.plotNote}>{t('route2.noMap')}</Text>
+      <AppText style={styles.plotNote}>{t('route2.noMap')}</AppText>
     </View>
   );
 }
@@ -254,9 +255,9 @@ function RouteMap({
       <View style={styles.plotFoot}>
         <View style={styles.sketchPill}>
           <Ionicons name={fromHere ? 'navigate' : 'help-circle'} size={12} color={colors.surface} />
-          <Text style={styles.sketchPillLabel} numberOfLines={1}>
+          <AppText style={styles.sketchPillLabel} numberOfLines={1}>
             {fromHere ? t('route2.youAreHere') : t('route2.noFix')}
-          </Text>
+          </AppText>
         </View>
       </View>
     </View>
@@ -293,7 +294,7 @@ export default function PdRouteScreen({
     <View style={styles.root}>
       <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.heroTop}>
-          <Text style={styles.eyebrow}>{t('route2.title')}</Text>
+          <AppText style={styles.eyebrow}>{t('route2.title')}</AppText>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}
@@ -305,14 +306,14 @@ export default function PdRouteScreen({
           </Pressable>
         </View>
 
-        <Text style={styles.heroTitle} testID="route-headline">
+        <AppText style={styles.heroTitle} testID="route-headline">
           {t('route2.stops', { count: stops.length, km: option.total_km })}
-        </Text>
-        <Text style={styles.heroSubtitle}>
+        </AppText>
+        <AppText style={styles.heroSubtitle}>
           {t(orderKey === 'shortest' ? 'route2.summaryShortest' : 'route2.summaryLate', {
             time: readableTime(option.minutes_total),
           })}
-        </Text>
+        </AppText>
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -343,13 +344,13 @@ export default function PdRouteScreen({
                     stop.days_until < 0 && styles.numberLate,
                   ]}
                 >
-                  <Text style={styles.numberLabel}>{index + 1}</Text>
+                  <AppText style={styles.numberLabel}>{index + 1}</AppText>
                 </View>
 
                 <View style={styles.stopBody}>
-                  <Text style={styles.stopName} numberOfLines={1}>
+                  <AppText style={styles.stopName} numberOfLines={1}>
                     {stop.owner_name}
-                  </Text>
+                  </AppText>
                   <View style={styles.stopMetaLine}>
                     <Ionicons
                       name={stop.days_until < 0 ? 'alert-circle' : 'location'}
@@ -362,7 +363,7 @@ export default function PdRouteScreen({
                             : colors.info
                       }
                     />
-                    <Text
+                    <AppText
                       style={[
                         styles.stopMeta,
                         index === 0 && { color: colors.primaryDark },
@@ -371,14 +372,14 @@ export default function PdRouteScreen({
                       numberOfLines={1}
                     >
                       {`${stop.note || stop.mpp_name} · ${dueLabel(stop, t)}`}
-                    </Text>
+                    </AppText>
                   </View>
                 </View>
 
                 {/* From the stop before it, not from the start — what this leg costs. */}
                 <View style={styles.stopKm}>
                   <Ionicons name="walk" size={12} color={colors.surface} />
-                  <Text style={styles.stopKmLabel}>{`${stop.leg_km} km`}</Text>
+                  <AppText style={styles.stopKmLabel}>{`${stop.leg_km} km`}</AppText>
                 </View>
               </Pressable>
             ))}
@@ -386,9 +387,9 @@ export default function PdRouteScreen({
             {withoutLocation > 0 && (
               <View style={styles.unplacedBox}>
                 <Ionicons name="warning" size={16} color={yolk[800]} />
-                <Text style={styles.unplaced} testID="route-unplaced">
+                <AppText style={styles.unplaced} testID="route-unplaced">
                   {t('route2.unplaced', { count: withoutLocation })}
-                </Text>
+                </AppText>
               </View>
             )}
           </>
@@ -410,7 +411,7 @@ export default function PdRouteScreen({
             testID="route-open-maps"
           >
             <Ionicons name="navigate" size={19} color={colors.surface} />
-            <Text style={styles.ctaLabel}>{t('route2.openInMaps')}</Text>
+            <AppText style={styles.ctaLabel}>{t('route2.openInMaps')}</AppText>
           </Pressable>
 
           <Pressable
@@ -420,7 +421,7 @@ export default function PdRouteScreen({
             testID="route-reorder"
           >
             <Ionicons name="swap-vertical" size={18} color={ink[600]} />
-            <Text style={styles.secondaryLabel}>{t('route2.reorder')}</Text>
+            <AppText style={styles.secondaryLabel}>{t('route2.reorder')}</AppText>
           </Pressable>
         </View>
       )}
@@ -509,9 +510,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing[3],
     backgroundColor: colors.background,
   },
-  map: { ...StyleSheet.absoluteFillObject },
+  map: { ...StyleSheet.absoluteFill },
   // The fallback ground, inside the same frame the map would fill.
-  plotCanvas: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.background },
+  plotCanvas: { ...StyleSheet.absoluteFill, backgroundColor: colors.background },
   plotPin: { position: 'absolute', marginLeft: -13, marginTop: -13 },
   plotNote: {
     position: 'absolute',

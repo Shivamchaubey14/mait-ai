@@ -10,10 +10,15 @@
  * buffalo, her breed, her ear tag if she carries one, and a photograph. The photo is the point
  * of the whole sheet — most animals in this data have no tag, and "the black one" is not a
  * record. Next visit, the row shows her face.
+ *
+ * **So the photo is required.** She cannot be saved without one: an animal registered with no
+ * face and no tag is the duplicate cow of tomorrow, registered again by a Mait who could not
+ * tell she was already on the list.
  */
 
 import React, { useEffect, useState } from 'react';
-import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -48,7 +53,7 @@ export interface AnimalDraftInput {
   animalType: AnimalTypeCode;
   breed: string | null;
   earTag: string;
-  /** Where the camera wrote her portrait, or null if the Mait skipped it. */
+  /** Where the camera wrote her portrait. Required: the sheet will not save without it. */
   photoUri: string | null;
 }
 
@@ -96,6 +101,8 @@ export default function AddAnimalSheet({
   const [breed, setBreed] = useState<string | null>(null);
   const [earTag, setEarTag] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  // Her breed and her photo, both required; and nothing while a save is already on its way.
+  const ready = !!breed && !!photoUri && !saving;
   const [camera, setCamera] = useState(false);
 
   const { mounted, translateY, backdropOpacity } = useSheetMotion(visible);
@@ -179,12 +186,12 @@ export default function AddAnimalSheet({
 
         <View style={styles.header}>
           <View style={styles.headerText}>
-            <Text style={styles.title}>{t('aiFlow.addAnimal')}</Text>
-            <Text style={styles.forWhom} numberOfLines={1}>
+            <AppText style={styles.title}>{t('aiFlow.addAnimal')}</AppText>
+            <AppText style={styles.forWhom} numberOfLines={1}>
               {owner.code
                 ? t('aiFlow.forFarmerWithCode', { name: owner.name, code: owner.code })
                 : t('aiFlow.forFarmer', { name: owner.name })}
-            </Text>
+            </AppText>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -208,7 +215,7 @@ export default function AddAnimalSheet({
           showsVerticalScrollIndicator={false}
         >
           <FlowScroll.Provider value={api}>
-            <Text style={styles.label}>{t('aiFlow.animalTypeLabel')}</Text>
+            <AppText style={styles.label}>{t('aiFlow.animalTypeLabel')}</AppText>
             <Segmented
               options={ANIMAL_TYPES.map(code => ({
                 value: code,
@@ -265,11 +272,13 @@ export default function AddAnimalSheet({
               )}
 
               <View style={styles.photoText}>
-                <Text style={styles.photoTitle}>{t('aiFlow.animalPhotoTitle')}</Text>
-                <Text style={styles.photoBody}>{t('aiFlow.animalPhotoBody')}</Text>
+                <AppText style={styles.photoTitle}>{t('aiFlow.animalPhotoTitle')}</AppText>
+                <AppText style={styles.photoBody}>{t('aiFlow.animalPhotoBody')}</AppText>
               </View>
 
-              <Text style={styles.take}>{photoUri ? t('aiFlow.retake') : t('aiFlow.take')}</Text>
+              <AppText style={styles.take}>
+                {photoUri ? t('aiFlow.retake') : t('aiFlow.take')}
+              </AppText>
             </Pressable>
             {/* Inside the scroll, with the refusal above it. A button pinned to the sheet's
                 floor is a button that rides up on the keyboard, which is the one thing this
@@ -279,21 +288,28 @@ export default function AddAnimalSheet({
                 form. */}
             {!!refusal && <FlowNotice tone="error" title={refusal} testID="animal-error" />}
 
+            {/* Said beside the button it holds back, so a greyed Save is never a mystery. */}
+            {!photoUri && (
+              <AppText style={styles.photoRequired} testID="animal-photo-required">
+                {t('aiFlow.animalPhotoRequired')}
+              </AppText>
+            )}
+
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: !breed || saving, busy: saving }}
-              onPress={() => onSave({ animalType, breed, earTag, photoUri })}
-              disabled={!breed || saving}
+              accessibilityState={{ disabled: !ready, busy: saving }}
+              onPress={() => photoUri && onSave({ animalType, breed, earTag, photoUri })}
+              disabled={!ready}
               style={({ pressed }) => [
                 styles.save,
-                !breed || saving ? styles.saveDisabled : styles.saveEnabled,
-                pressed && !!breed && !saving && styles.savePressed,
+                ready ? styles.saveEnabled : styles.saveDisabled,
+                pressed && ready && styles.savePressed,
               ]}
               testID="animal-save"
             >
-              <Text style={[styles.saveLabel, (!breed || saving) && styles.saveLabelDisabled]}>
+              <AppText style={[styles.saveLabel, !ready && styles.saveLabelDisabled]}>
                 {t('aiFlow.saveAnimal')}
-              </Text>
+              </AppText>
             </Pressable>
           </FlowScroll.Provider>
         </ScrollView>
@@ -303,8 +319,8 @@ export default function AddAnimalSheet({
 }
 
 const styles = StyleSheet.create({
-  root: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end' },
-  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(21,35,45,0.45)' },
+  root: { ...StyleSheet.absoluteFill, justifyContent: 'flex-end' },
+  scrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(21,35,45,0.45)' },
 
   // Shrinks rather than overflows. With the keyboard up there is less room, and the sheet
   // giving way is what keeps the button and the field being typed into on screen — the
@@ -381,6 +397,12 @@ const styles = StyleSheet.create({
   photoText: { flex: 1 },
   photoTitle: { ...typography.bodyStrong, color: colors.ink },
   photoBody: { ...typography.caption, color: colors.info, marginTop: 2 },
+  photoRequired: {
+    ...typography.caption,
+    color: colors.error,
+    textAlign: 'center',
+    marginTop: spacing[3],
+  },
   // Yolk 800: the action here is optional and must not read as the screen's primary green.
   take: { ...typography.bodyStrong, color: yolk[800] },
 

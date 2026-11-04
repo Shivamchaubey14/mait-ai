@@ -8,11 +8,6 @@
     "userInterfaceStyle": "light",
     "primaryColor": "#3BB77E",
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#253D4E"
-    },
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
@@ -43,6 +38,15 @@
       ],
       "expo-secure-store",
       "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#253D4E"
+        }
+      ],
       [
         "expo-camera",
         {

@@ -34,7 +34,8 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
@@ -129,7 +130,11 @@ export function toCaptures(jobs: QueuedJob[], sendingUuid?: string | null): Queu
     }
     capture.eventId ??= label?.eventId ?? (job.payload.eventId as number | undefined);
 
-    if (job.kind === 'verifyPayment') {
+    // A non-member's payment waits on her code. A member's never does: she pays nothing in
+    // the yard, the charge comes off her milk, and the queued job only records that — so it
+    // is not something the Mait owes. Counting it as a code sent a member's capture to the
+    // cash-and-UPI proof screen, which cannot close a member's AI however often it is tapped.
+    if (job.kind === 'verifyPayment' && (job.label?.kind ?? capture.kind) !== 'member') {
       capture.needsCode = true;
     }
     capture.sending = capture.sending || job.clientUuid === sendingUuid;
@@ -263,30 +268,30 @@ export default function SyncQueueScreen({
               hourly that their record still does not work. */}
           {capture.rejected !== undefined && (
             <View style={styles.attentionBody}>
-              <Text style={styles.reason} testID={`queue-rejected-${capture.clientUuid}`}>
+              <AppText style={styles.reason} testID={`queue-rejected-${capture.clientUuid}`}>
                 {capture.rejected || t('queue.rejectedNoReason')}
-              </Text>
-              <Text style={styles.reason}>{t('queue.rejectedWhatNow')}</Text>
-              <Text
+              </AppText>
+              <AppText style={styles.reason}>{t('queue.rejectedWhatNow')}</AppText>
+              <AppText
                 style={styles.action}
                 onPress={() => onRetryCapture(capture)}
                 testID={`queue-retry-${capture.clientUuid}`}
               >
                 {t('queue.tryThisAgain')}
-              </Text>
+              </AppText>
             </View>
           )}
 
           {capture.needsCode && capture.rejected === undefined && (
             <View style={styles.attentionBody}>
-              <Text style={styles.reason}>{t('queue.codeNeverEntered')}</Text>
-              <Text
+              <AppText style={styles.reason}>{t('queue.codeNeverEntered')}</AppText>
+              <AppText
                 style={styles.action}
                 onPress={() => onEnterCode(capture)}
                 testID={`queue-enter-code-${capture.clientUuid}`}
               >
                 {t('queue.enterTheCode')}
-              </Text>
+              </AppText>
             </View>
           )}
         </View>

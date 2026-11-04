@@ -13,7 +13,8 @@
  */
 
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -42,10 +43,10 @@ export function OfficeCodeAsk({
           <Ionicons name="call" size={17} color={colors.surface} />
         </View>
         <View style={styles.body}>
-          <Text style={styles.title}>{t('aiFlow.officeAskedTitle')}</Text>
-          <Text style={styles.text}>
+          <AppText style={styles.title}>{t('aiFlow.officeAskedTitle')}</AppText>
+          <AppText style={styles.text}>
             {t('aiFlow.officeAskedBody', { mobile: sentTo ?? t('aiFlow.herNumber') })}
-          </Text>
+          </AppText>
         </View>
       </View>
     );
@@ -65,12 +66,65 @@ export function OfficeCodeAsk({
       ) : (
         <Ionicons name="help-buoy" size={16} color={colors.primaryDark} />
       )}
-      <Text style={styles.linkLabel}>{t('aiFlow.officeAsk')}</Text>
+      <AppText style={styles.linkLabel}>{t('aiFlow.officeAsk')}</AppText>
     </Pressable>
   );
 }
 
+/**
+ * "Call the office" — the no-signal version of the ask above (`api/fieldCode`).
+ *
+ * With no data the app cannot ask for her; the Mait does, by voice, which still gets through
+ * where data does not. So the card is what to say on that call — who they are and which
+ * farmer — and the button that dials it. The office then rings *her*, exactly as above.
+ */
+export function OfficeCallCard({
+  officePhone,
+  body,
+  testID = 'office-call',
+}: {
+  /** Blank where the dairy has set none: the card then just says to ring the office. */
+  officePhone: string;
+  body: string;
+  testID?: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.asked} testID={testID}>
+      <View style={styles.icon}>
+        <Ionicons name="call" size={17} color={colors.surface} />
+      </View>
+      <View style={styles.body}>
+        <AppText style={styles.title}>{t('aiFlow.fieldCallTitle')}</AppText>
+        <AppText style={styles.text}>{body}</AppText>
+        {officePhone ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => Linking.openURL(`tel:${officePhone}`).catch(() => undefined)}
+            style={styles.dial}
+            testID={`${testID}-dial`}
+          >
+            <Ionicons name="call-outline" size={16} color={colors.primaryDark} />
+            <AppText style={styles.linkLabel}>
+              {t('aiFlow.fieldCall', { phone: officePhone })}
+            </AppText>
+          </Pressable>
+        ) : (
+          <AppText style={styles.text}>{t('aiFlow.fieldNoOfficeNumber')}</AppText>
+        )}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  dial: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing[2],
+    minHeight: MIN_TOUCH_TARGET,
+  },
   link: {
     flexDirection: 'row',
     alignItems: 'center',

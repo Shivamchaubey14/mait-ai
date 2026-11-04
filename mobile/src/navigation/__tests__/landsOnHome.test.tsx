@@ -18,7 +18,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import Shell from '../Shell';
 import { clearQueue } from '@api/queue';
 import type { InventorySummary } from '@api/types';
-import { loggedIn, loggedOut } from '@/features/auth/authSlice';
+import { loggedIn, loggedOut, sessionRestored } from '@/features/auth/authSlice';
 import type { AuthUser } from '@/features/auth/authSlice';
 import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
 
@@ -174,5 +174,33 @@ describe('where a session starts', () => {
     // happens when the component itself goes.
     await waitFor(() => expect(outstanding()).toBe(0));
     await screen.findByTestId('login-mobile');
+  });
+});
+
+describe('arriving from the code screen', () => {
+  it('announces Home with the transition card, then opens it', async () => {
+    const { store } = renderShell();
+    await screen.findByTestId('login-mobile');
+    signIn(store);
+
+    // The card is up over the screen being left, naming where the Mait is going.
+    await waitFor(() => expect(screen.getByTestId('route-card-title')).toHaveTextContent('Home'));
+    expect(screen.queryByTestId('home-start-ai')).toBeNull();
+
+    await screen.findByTestId('home-start-ai', {}, { timeout: 3000 });
+  });
+
+  it('opens straight on Home for a session already on the handset', async () => {
+    // A cold start: the login screen was never shown, so there is nothing to announce.
+    const store = makeStore();
+    act(() => {
+      store.dispatch(
+        sessionRestored({ access: 'a', refresh: 'r', user: USER, assignedMppCodes: [] }),
+      );
+    });
+    renderWithStore(<Shell fontsLoaded />, { store });
+
+    await screen.findByTestId('home-start-ai');
+    expect(screen.queryByTestId('route-card')).toBeNull();
   });
 });

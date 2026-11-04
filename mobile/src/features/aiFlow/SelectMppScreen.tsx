@@ -10,7 +10,8 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -94,9 +95,9 @@ export default function SelectMppScreen({ onSelect, onBack }: Props): React.JSX.
         chosen ? (
           <View style={styles.chosen} testID="mpp-chosen">
             <Ionicons name="checkmark-circle" size={18} color={colors.primaryDark} />
-            <Text style={styles.chosenLabel} numberOfLines={1}>
+            <AppText style={styles.chosenLabel} numberOfLines={1}>
               {t('aiFlow.mppChosen', { name: chosen.mpp_name })}
-            </Text>
+            </AppText>
           </View>
         ) : undefined
       }

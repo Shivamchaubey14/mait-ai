@@ -19,7 +19,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import RootNavigator from '../index';
-import { clearQueue } from '@api/queue';
+import { clearQueue, enqueue } from '@api/queue';
 import type { InventorySummary } from '@api/types';
 import { loggedIn } from '@/features/auth/authSlice';
 import type { AuthUser } from '@/features/auth/authSlice';
@@ -136,6 +136,8 @@ describe('back from the tabs', () => {
 
 describe('back from the waiting list', () => {
   it('goes to Home, the screen it was opened from', async () => {
+    // Something waiting to go, which is when Home shows the tile that opens the list.
+    await enqueue('completeEvent', 'uuid-waiting', { eventId: 5 });
     renderApp();
     fireEvent.press(await screen.findByTestId('tile-waiting'));
     await screen.findByText('Nothing here is lost');

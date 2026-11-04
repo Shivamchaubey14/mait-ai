@@ -21,7 +21,8 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Glyph, { STRAW_GLYPH } from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
@@ -116,7 +117,7 @@ export default function HistoryScreen({ zoneName }: { zoneName: string }): React
                     color={done ? colors.surface : current ? colors.ink : colors.textMuted}
                   />
                 </View>
-                <Text
+                <AppText
                   style={[
                     styles.stepLabel,
                     done && styles.stepLabelDone,
@@ -125,7 +126,7 @@ export default function HistoryScreen({ zoneName }: { zoneName: string }): React
                   numberOfLines={1}
                 >
                   {step.label}
-                </Text>
+                </AppText>
               </View>
             </React.Fragment>
           );
@@ -152,13 +153,13 @@ export default function HistoryScreen({ zoneName }: { zoneName: string }): React
           <View style={styles.headText}>
             <View style={styles.titleLine}>
               <View style={[styles.number, approved ? styles.numberGood : styles.numberBad]}>
-                <Text style={styles.numberLabel}>
+                <AppText style={styles.numberLabel}>
                   {row.indent_id ? `IND-${row.indent_id}` : t('zonal.goneIndent')}
-                </Text>
+                </AppText>
               </View>
-              <Text style={[styles.verdict, approved ? styles.verdictGood : styles.verdictBad]}>
+              <AppText style={[styles.verdict, approved ? styles.verdictGood : styles.verdictBad]}>
                 {t(approved ? 'zonal.youApproved' : 'zonal.youRejected')}
-              </Text>
+              </AppText>
             </View>
             {!!item && (
               <View style={styles.itemLine}>
@@ -167,29 +168,29 @@ export default function HistoryScreen({ zoneName }: { zoneName: string }): React
                   size={13}
                   color={colors.info}
                 />
-                <Text style={styles.title} numberOfLines={1}>
+                <AppText style={styles.title} numberOfLines={1}>
                   {t('zonal.qtyItem', { qty: row.qty, item })}
-                </Text>
+                </AppText>
               </View>
             )}
           </View>
           <View style={styles.time}>
             <Ionicons name="time-outline" size={11} color={colors.textMuted} />
-            <Text style={styles.timeLabel}>{clock(row.when)}</Text>
+            <AppText style={styles.timeLabel}>{clock(row.when)}</AppText>
           </View>
         </View>
 
         {/* Who, and where from — each on a white inset with its label. */}
         <View style={styles.inset}>
-          <Text style={styles.fact} numberOfLines={1}>
-            <Text style={styles.factLabel}>{`${t('zonal.theMait')}: `}</Text>
+          <AppText style={styles.fact} numberOfLines={1}>
+            <AppText style={styles.factLabel}>{`${t('zonal.theMait')}: `}</AppText>
             {[row.mait_name, row.mait_code].filter(Boolean).join(' · ') || '—'}
-          </Text>
+          </AppText>
           {!!row.store_name && (
-            <Text style={styles.fact} numberOfLines={1}>
-              <Text style={styles.factLabel}>{`${t('zonal.depotLabel')}: `}</Text>
+            <AppText style={styles.fact} numberOfLines={1}>
+              <AppText style={styles.factLabel}>{`${t('zonal.depotLabel')}: `}</AppText>
               {row.store_name}
-            </Text>
+            </AppText>
           )}
         </View>
 
@@ -201,9 +202,9 @@ export default function HistoryScreen({ zoneName }: { zoneName: string }): React
               <View style={styles.since}>
                 <Pill label={row.status_label} tone={row.status_tone} />
                 {issued > 0 && issued < row.qty && (
-                  <Text style={styles.sinceNote}>
+                  <AppText style={styles.sinceNote}>
                     {t('zonal.handedSoFar', { issued, qty: row.qty })}
-                  </Text>
+                  </AppText>
                 )}
               </View>
             )}
@@ -212,9 +213,9 @@ export default function HistoryScreen({ zoneName }: { zoneName: string }): React
           !!row.reason && (
             <View style={styles.reason}>
               <Ionicons name="chatbubble-ellipses" size={14} color={colors.error} />
-              <Text style={styles.reasonText} numberOfLines={3}>
+              <AppText style={styles.reasonText} numberOfLines={3}>
                 {t('zonal.youSaid', { reason: row.reason })}
-              </Text>
+              </AppText>
             </View>
           )
         )}
@@ -253,9 +254,11 @@ export default function HistoryScreen({ zoneName }: { zoneName: string }): React
               <View style={styles.dayChip}>
                 <Ionicons name="calendar" size={13} color={colors.surface} />
               </View>
-              <Text style={styles.day}>{dayLabel(day.rows[0]?.when ?? '', t, i18n.language)}</Text>
+              <AppText style={styles.day}>
+                {dayLabel(day.rows[0]?.when ?? '', t, i18n.language)}
+              </AppText>
               <View style={styles.dayCount}>
-                <Text style={styles.dayCountLabel}>{day.rows.length}</Text>
+                <AppText style={styles.dayCountLabel}>{day.rows.length}</AppText>
               </View>
             </View>
             {day.rows.map(decisionRow)}

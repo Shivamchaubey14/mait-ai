@@ -14,7 +14,8 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -94,7 +95,7 @@ export function AppHero({
       style={[styles.hero, done && styles.heroDone, { paddingTop: insets.top + spacing[4] }]}
       testID={testID}
     >
-      <StatusBar style="light" backgroundColor={done ? colors.primaryDark : colors.ink} />
+      <StatusBar style="light" />
 
       {done ? (
         <View style={styles.doneRow}>
@@ -106,19 +107,19 @@ export function AppHero({
         <View style={styles.top}>
           {tag ? (
             <View style={styles.tag} testID={testID ? `${testID}-tag` : undefined}>
-              <Text style={styles.tagLabel} numberOfLines={1}>
+              <AppText style={styles.tagLabel} numberOfLines={1}>
                 {tag}
-              </Text>
+              </AppText>
             </View>
           ) : (
-            !!eyebrow && <Text style={styles.eyebrow}>{eyebrow}</Text>
+            !!eyebrow && <AppText style={styles.eyebrow}>{eyebrow}</AppText>
           )}
           <View style={styles.topRight}>
             {!!pill && (
               <View style={styles.storePill} testID="store-pill">
-                <Text style={styles.storePillLabel} numberOfLines={1}>
+                <AppText style={styles.storePillLabel} numberOfLines={1}>
                   {pill}
-                </Text>
+                </AppText>
               </View>
             )}
             {!!onBack && (
@@ -136,7 +137,7 @@ export function AppHero({
         </View>
       )}
 
-      <Text
+      <AppText
         style={[
           styles.title,
           { fontSize, lineHeight: Math.round(fontSize * 1.3) },
@@ -147,11 +148,11 @@ export function AppHero({
         minimumFontScale={0.75}
       >
         {title}
-      </Text>
+      </AppText>
       {!!subtitle && (
-        <Text style={[styles.subtitle, done && styles.subtitleDone, done && styles.centred]}>
+        <AppText style={[styles.subtitle, done && styles.subtitleDone, done && styles.centred]}>
           {subtitle}
-        </Text>
+        </AppText>
       )}
       {children}
     </View>
@@ -226,18 +227,18 @@ export function Tile({
           <Glyph name={icon} size={14} color={colors.surface} />
         </View>
       )}
-      <Text style={[tileStyles.tileLabel, tileStyles[`tileLabel_${tone}`]]} numberOfLines={2}>
+      <AppText style={[tileStyles.tileLabel, tileStyles[`tileLabel_${tone}`]]} numberOfLines={2}>
         {label}
-      </Text>
+      </AppText>
       {children ?? (
-        <Text style={[tileStyles.tileValue, tileStyles[`tileValue_${tone}`]]} numberOfLines={1}>
+        <AppText style={[tileStyles.tileValue, tileStyles[`tileValue_${tone}`]]} numberOfLines={1}>
           {value}
-        </Text>
+        </AppText>
       )}
       {!!note && (
-        <Text style={tileStyles.tileNote} numberOfLines={2}>
+        <AppText style={tileStyles.tileNote} numberOfLines={2}>
           {note}
-        </Text>
+        </AppText>
       )}
     </>
   );
@@ -286,9 +287,9 @@ export function Pill({
 }): React.JSX.Element {
   return (
     <View style={[styles.pill, styles[`pill_${tone}`]]} testID={testID}>
-      <Text style={[styles.pillLabel, styles[`pillLabel_${tone}`]]} numberOfLines={1}>
+      <AppText style={[styles.pillLabel, styles[`pillLabel_${tone}`]]} numberOfLines={1}>
         {label}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -370,7 +371,7 @@ export function FooterAction({
           }
         />
       )}
-      <Text
+      <AppText
         style={[
           styles.actionLabel,
           outline && styles.actionLabelOutline,
@@ -380,7 +381,7 @@ export function FooterAction({
         numberOfLines={1}
       >
         {label}
-      </Text>
+      </AppText>
     </Pressable>
   );
 }

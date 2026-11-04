@@ -15,8 +15,10 @@
  * own setting. The facts sit on the cards as pills and figures rather than as a grey line.
  */
 
-import React from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
+import { ConfirmDialog } from '@/components/confirmDialog';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -75,10 +77,10 @@ function Card({
           <Ionicons name={icon} size={18} color={ON_CHIP[tone]} />
         </View>
         <View style={styles.titleLine}>
-          <Text style={[styles.cardTitle, styles[`cardTitle_${tone}`]]}>{title}</Text>
+          <AppText style={[styles.cardTitle, styles[`cardTitle_${tone}`]]}>{title}</AppText>
           {badge !== undefined && (
             <View style={styles.count}>
-              <Text style={styles.countLabel}>{badge}</Text>
+              <AppText style={styles.countLabel}>{badge}</AppText>
             </View>
           )}
         </View>
@@ -106,10 +108,10 @@ function Figure({
   return (
     <View style={styles.figure} testID={testID}>
       <Ionicons name={icon} size={16} color={color} />
-      <Text style={[styles.figureValue, { color }]}>{value}</Text>
-      <Text style={styles.figureLabel} numberOfLines={2}>
+      <AppText style={[styles.figureValue, { color }]}>{value}</AppText>
+      <AppText style={styles.figureLabel} numberOfLines={2}>
         {label}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -126,24 +128,18 @@ export default function StoreProfileScreen(): React.JSX.Element {
   const plants = store?.plant_names ?? [];
   const figure = (value: number | undefined) => (value === undefined ? '—' : String(value));
 
-  const signOut = () => {
-    Alert.alert(t('store.signOutTitle'), t('store.signOutBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('settings.signOut'),
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            if (refreshToken) {
-              await logout(refreshToken).unwrap();
-            }
-          } catch {
-            // The token is unreachable either way; a session left in storage is the worse outcome.
-          }
-          dispatch(loggedOut());
-        },
-      },
-    ]);
+  // Asked in our own card rather than the system alert — see components/confirmDialog.
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const signOut = () => setConfirmingSignOut(true);
+  const finishSignOut = async () => {
+    try {
+      if (refreshToken) {
+        await logout(refreshToken).unwrap();
+      }
+    } catch {
+      // The token is unreachable either way; a session left in storage is the worse outcome.
+    }
+    dispatch(loggedOut({ deliberate: true }));
   };
 
   return (
@@ -197,21 +193,21 @@ export default function StoreProfileScreen(): React.JSX.Element {
           tone="green"
           right={
             <View style={styles.aside}>
-              <Text style={styles.storeName} numberOfLines={2}>
+              <AppText style={styles.storeName} numberOfLines={2}>
                 {store?.name ?? user?.storeName ?? '—'}
-              </Text>
+              </AppText>
               {!!store && (
                 <View style={styles.pills}>
                   <View style={[styles.pill, styles.pillGreen]}>
                     <Ionicons name="barcode-outline" size={12} color={colors.surface} />
-                    <Text style={styles.pillLabel}>{store.code}</Text>
+                    <AppText style={styles.pillLabel}>{store.code}</AppText>
                   </View>
                   {!!store.zone_name && (
                     <View style={[styles.pill, styles.pillInk]}>
                       <Ionicons name="map" size={12} color={colors.surface} />
-                      <Text style={styles.pillLabel} numberOfLines={1}>
+                      <AppText style={styles.pillLabel} numberOfLines={1}>
                         {store.zone_name}
-                      </Text>
+                      </AppText>
                     </View>
                   )}
                 </View>
@@ -233,14 +229,14 @@ export default function StoreProfileScreen(): React.JSX.Element {
                   {plants.map(name => (
                     <View key={name} style={[styles.pill, styles.pillYolk]}>
                       <Ionicons name="location" size={12} color={colors.ink} />
-                      <Text style={[styles.pillLabel, styles.pillLabelInk]} numberOfLines={1}>
+                      <AppText style={[styles.pillLabel, styles.pillLabelInk]} numberOfLines={1}>
                         {name}
-                      </Text>
+                      </AppText>
                     </View>
                   ))}
                 </View>
               ) : (
-                <Text style={styles.quiet}>{t('store.servesNone')}</Text>
+                <AppText style={styles.quiet}>{t('store.servesNone')}</AppText>
               )}
             </View>
           }
@@ -257,6 +253,16 @@ export default function StoreProfileScreen(): React.JSX.Element {
 
         <SignOutButton label={t('settings.signOut')} onPress={signOut} testID="profile-sign-out" />
       </ScrollView>
+      <ConfirmDialog
+        visible={confirmingSignOut}
+        title={t('store.signOutTitle')}
+        body={t('store.signOutBody')}
+        confirmLabel={t('settings.signOut')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={finishSignOut}
+        onCancel={() => setConfirmingSignOut(false)}
+        testID="store-sign-out-dialog"
+      />
     </View>
   );
 }

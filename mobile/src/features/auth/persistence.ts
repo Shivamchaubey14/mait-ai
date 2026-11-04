@@ -10,7 +10,8 @@
 import type { Middleware } from '@reduxjs/toolkit';
 
 import { clearCache } from '@api/offlineCache';
-import { clearQueue } from '@api/queue';
+import { clearPack } from '@api/offlinePack';
+import { clearQueue, holdQueue, restoreHeldQueue } from '@api/queue';
 
 import { loggedIn, loggedOut, profileRefreshed, tokensRefreshed } from './authSlice';
 import { clearSession, saveSession } from './session';
@@ -19,8 +20,20 @@ import { clearSession, saveSession } from './session';
 const WRITES: string[] = [loggedIn.type, tokensRefreshed.type, profileRefreshed.type];
 
 export const sessionPersistence: Middleware = store => next => action => {
+  // Read before the reducer runs: a sign-out empties the session, and the held queue has to
+  // be filed under whoever it belonged to.
+  const owner = (store.getState() as { auth?: { user?: { id?: number } | null } }).auth?.user?.id;
   const result = next(action);
   const type = (action as { type?: string })?.type;
+
+  if (type === loggedIn.type) {
+    // Whatever the server's last sign-out held for this Mait goes back in the queue, and the
+    // next drain sends it.
+    const id = (store.getState() as { auth: { user: { id: number } | null } }).auth.user?.id;
+    if (id !== undefined) {
+      restoreHeldQueue(id);
+    }
+  }
 
   if (type && WRITES.includes(type)) {
     const { auth } = store.getState() as {
@@ -49,6 +62,20 @@ export const sessionPersistence: Middleware = store => next => action => {
     // in place, so a dropped connection never costs a Mait their login.
     clearSession();
 
+    const deliberate = !!(action as { payload?: { deliberate?: boolean } }).payload?.deliberate;
+    if (!deliberate) {
+      /**
+       * The server ended the session, not the Mait. Their unsent work is held under their id
+       * rather than cleared (`holdQueue`), and the stored rosters stay — they are keyed by
+       * owner, so nobody else can be answered with them, and the same Mait signing back in
+       * in a village with no signal still has a round to work.
+       */
+      if (owner !== undefined) {
+        holdQueue(owner);
+      }
+      return result;
+    }
+
     /**
      * The queue goes with the session, which it never used to.
      *
@@ -72,6 +99,11 @@ export const sessionPersistence: Middleware = store => next => action => {
      * cache is a fallback for a read the next signed-in Mait would not be allowed to make.
      */
     clearCache();
+
+    // And the whole working set the offline pack keeps — every farmer at every MPP they cover.
+    if (owner !== undefined) {
+      clearPack(owner);
+    }
   }
 
   return result;

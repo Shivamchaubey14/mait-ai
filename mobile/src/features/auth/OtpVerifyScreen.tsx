@@ -17,7 +17,7 @@
  * one), or the attempts are gone (wait, or call the IT department).
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   KeyboardAvoidingView,
   Linking,
@@ -25,8 +25,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -34,6 +32,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import AppText from '@/components/AppText';
+import OtpInput from '@/components/OtpInput';
 import { Toast } from '@/components/toast';
 import {
   IT_SUPPORT_PHONE,
@@ -94,61 +94,6 @@ function mmss(totalSeconds: number): string {
 }
 
 // --------------------------------------------------------------------------------------
-// Digit cells
-// --------------------------------------------------------------------------------------
-/**
- * Rounded slots rather than circles: a square-ish cell gives the digit room to sit at a size
- * that survives sunlight and a cracked screen, and the filled ones read as a block of six at
- * a glance, which is how the code is checked against the SMS.
- */
-function DigitCells({
-  value,
-  failure,
-  focused,
-}: {
-  value: string;
-  failure: OtpFailure;
-  focused: boolean;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <View
-      style={styles.cellRow}
-      accessible
-      accessibilityRole="text"
-      accessibilityLabel={t('auth.enterSixDigitCode')}
-      accessibilityValue={{ text: value.split('').join(' ') }}
-    >
-      {Array.from({ length: OTP_LENGTH }).map((_, index) => {
-        const digit = value[index] ?? '';
-        const isNext = focused && index === value.length && !failure;
-        return (
-          <View
-            key={index}
-            style={[
-              styles.cell,
-              !!digit && styles.cellFilled,
-              isNext && styles.cellNext,
-              failure === 'wrong' && styles.cellWrong,
-              failure === 'expired' && styles.cellExpired,
-              failure === 'locked' && styles.cellLocked,
-            ]}
-          >
-            {digit ? (
-              <Text style={styles.cellDigit}>{digit}</Text>
-            ) : (
-              // A caret only in the cell about to be typed into, so the eye knows where the
-              // next digit lands without a blinking animation to chase.
-              isNext && <View style={styles.caret} />
-            )}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-// --------------------------------------------------------------------------------------
 // Notice
 // --------------------------------------------------------------------------------------
 /**
@@ -177,9 +122,9 @@ function FailureNotice({
         {/* A glyph as well as a colour — colour alone excludes colour-blind users, and the
             wrong/expired pair is exactly the distinction they would lose. */}
         <Ionicons name="alert-circle" size={16} color={colors.surface} />
-        <Text style={styles.inlineErrorText}>
+        <AppText style={styles.inlineErrorText}>
           {`${t('auth.wrongCodeTitle')}. ${t('auth.wrongCodeBody', { count: attemptsLeft })}`}
-        </Text>
+        </AppText>
       </View>
     );
   }
@@ -219,8 +164,8 @@ function FailureNotice({
         />
       </View>
       <View style={styles.noticeBody}>
-        <Text style={styles.noticeTitle}>{config.title}</Text>
-        <Text style={styles.noticeText}>{config.body}</Text>
+        <AppText style={styles.noticeTitle}>{config.title}</AppText>
+        <AppText style={styles.noticeText}>{config.body}</AppText>
       </View>
     </View>
   );
@@ -249,8 +194,6 @@ export default function OtpVerifyScreen({
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const inputRef = useRef<TextInput>(null);
-  const [focused, setFocused] = useState(false);
 
   const locked = failure === 'locked';
   const attemptsLeft = Math.max(0, OTP_MAX_ATTEMPTS - attemptsUsed);
@@ -266,15 +209,6 @@ export default function OtpVerifyScreen({
     const [head, ...rest] = t('auth.resendCodeIn', { time: countdown }).split(countdown);
     return [head, rest.join(countdown)];
   }, [countdown, t]);
-
-  // Focus on mount so the keyboard is already up — one less tap for someone holding a
-  // phone in one hand and a flask in the other.
-  useEffect(() => {
-    if (!locked) {
-      const timer = setTimeout(() => inputRef.current?.focus(), 250);
-      return () => clearTimeout(timer);
-    }
-  }, [locked]);
 
   /** True once there is nothing left to verify and the only move is to fetch a fresh code. */
   const lockLifted = locked && lockedFor <= 0;
@@ -311,7 +245,7 @@ export default function OtpVerifyScreen({
     <View style={styles.root}>
       {/* The hero runs to the top edge, so the bar sits on Ink rather than on the green the
           rest of the app opens with. */}
-      <StatusBar style="light" backgroundColor={colors.ink} />
+      <StatusBar style="light" />
 
       <Toast message={error} onDismiss={onDismissError} testID="otp-error" />
 
@@ -344,12 +278,12 @@ export default function OtpVerifyScreen({
               </Pressable>
               <View style={styles.heroNumberPill}>
                 <Ionicons name="call" size={13} color={colors.surface} />
-                <Text style={styles.heroNumber}>{displayMobile}</Text>
+                <AppText style={styles.heroNumber}>{displayMobile}</AppText>
               </View>
             </View>
 
-            <Text style={styles.heroTitle}>{t('auth.verifyTitle')}</Text>
-            <Text style={styles.heroSubtitle}>{t('auth.verifySubtitle')}</Text>
+            <AppText style={styles.heroTitle}>{t('auth.verifyTitle')}</AppText>
+            <AppText style={styles.heroSubtitle}>{t('auth.verifySubtitle')}</AppText>
           </View>
 
           <View
@@ -362,29 +296,17 @@ export default function OtpVerifyScreen({
               },
             ]}
           >
-            <View style={styles.cellsWrap}>
-              <DigitCells value={otp} failure={failure} focused={focused} />
-
-              {/* One real input, invisible and stretched across the cells. Typing fills
-                  them directly, and because it is a genuine TextInput rather than a
-                  keypress handler, SMS autofill, paste and screen readers all still work. */}
-              <TextInput
-                ref={inputRef}
-                style={styles.hiddenInput}
-                value={otp}
-                onChangeText={text => onChangeOtp(text.replace(/\D/g, '').slice(0, OTP_LENGTH))}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                keyboardType="number-pad"
-                textContentType="oneTimeCode"
-                autoComplete="sms-otp"
-                maxLength={OTP_LENGTH}
-                editable={!locked}
-                caretHidden
-                accessibilityLabel={t('auth.enterSixDigitCode')}
-                testID="login-otp"
-              />
-            </View>
+            <OtpInput
+              value={otp}
+              onChangeText={onChangeOtp}
+              refusal={failure}
+              editable={!locked}
+              // Open so the keypad is already up — one less tap for someone holding a phone in
+              // one hand and a flask in the other.
+              autoFocus={!locked}
+              accessibilityLabel={t('auth.enterSixDigitCode')}
+              testID="login-otp"
+            />
 
             {/* Directly under the cells, because that is where the eye already is and where
                 the correction gets typed. */}
@@ -398,11 +320,11 @@ export default function OtpVerifyScreen({
                 {resendIn > 0 ? (
                   <View style={styles.timerPill} testID="otp-timer">
                     <Ionicons name="time" size={14} color={colors.info} />
-                    <Text style={styles.timerLabel}>
+                    <AppText style={styles.timerLabel}>
                       {beforeTime}
-                      <Text style={styles.timerValue}>{countdown}</Text>
+                      <AppText style={styles.timerValue}>{countdown}</AppText>
                       {afterTime}
-                    </Text>
+                    </AppText>
                   </View>
                 ) : (
                   <View style={styles.flex} />
@@ -421,9 +343,9 @@ export default function OtpVerifyScreen({
                     size={15}
                     color={canResend ? colors.surface : ink[400]}
                   />
-                  <Text style={[styles.resendLabel, !canResend && styles.resendLabelDisabled]}>
+                  <AppText style={[styles.resendLabel, !canResend && styles.resendLabelDisabled]}>
                     {t('auth.resend')}
-                  </Text>
+                  </AppText>
                 </Pressable>
               </View>
             )}
@@ -442,10 +364,10 @@ export default function OtpVerifyScreen({
                   <Ionicons name="cellular" size={18} color={colors.surface} />
                 </View>
                 <View style={styles.helpBody}>
-                  <Text style={styles.noticeTitle}>{t('auth.needsSignalTitle')}</Text>
-                  <Text style={[styles.noticeText, { color: colors.info }]}>
+                  <AppText style={styles.noticeTitle}>{t('auth.needsSignalTitle')}</AppText>
+                  <AppText style={[styles.noticeText, { color: colors.info }]}>
                     {t('auth.needsSignalBody')}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             )}
@@ -461,10 +383,10 @@ export default function OtpVerifyScreen({
                     <Ionicons name="call" size={18} color={colors.surface} />
                   </View>
                   <View style={styles.helpBody}>
-                    <Text style={styles.noticeTitle}>{t('auth.officeAskedTitle')}</Text>
-                    <Text style={styles.noticeText}>
+                    <AppText style={styles.noticeTitle}>{t('auth.officeAskedTitle')}</AppText>
+                    <AppText style={styles.noticeText}>
                       {t('auth.officeAskedBody', { number: displayMobile })}
-                    </Text>
+                    </AppText>
                   </View>
                 </View>
               ) : (
@@ -479,7 +401,7 @@ export default function OtpVerifyScreen({
                   <View style={styles.officeLinkChip}>
                     <Ionicons name="help-buoy" size={16} color={colors.ink} />
                   </View>
-                  <Text style={styles.officeLinkLabel}>{t('auth.askOffice')}</Text>
+                  <AppText style={styles.officeLinkLabel}>{t('auth.askOffice')}</AppText>
                   <Ionicons name="chevron-forward" size={16} color={yolk[800]} />
                 </Pressable>
               ))}
@@ -505,9 +427,9 @@ export default function OtpVerifyScreen({
                 size={18}
                 color={canPress ? colors.surface : colors.textDisabled}
               />
-              <Text style={[styles.ctaLabel, !canPress && styles.ctaLabelDisabled]}>
+              <AppText style={[styles.ctaLabel, !canPress && styles.ctaLabelDisabled]}>
                 {primary.label}
-              </Text>
+              </AppText>
             </Pressable>
 
             {/* A lock is the one state with nothing left to press, so it gets the way out
@@ -521,7 +443,7 @@ export default function OtpVerifyScreen({
                 testID="otp-call-it"
               >
                 <Ionicons name="call" size={16} color={colors.error} />
-                <Text style={styles.callItLabel}>{t('auth.callIt')}</Text>
+                <AppText style={styles.callItLabel}>{t('auth.callIt')}</AppText>
               </Pressable>
             )}
           </View>
@@ -624,44 +546,6 @@ const styles = StyleSheet.create({
   // natural height when the notice pushes the content past the fold and the screen scrolls.
   sheet: { flexGrow: 1, paddingTop: spacing[6] },
 
-  // -- code entry -----------------------------------------------------------------------
-  cellsWrap: { position: 'relative' },
-  cellRow: { flexDirection: 'row', gap: spacing[2] },
-  cell: {
-    flex: 1,
-    height: 58,
-    maxWidth: 60,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.info,
-    backgroundColor: colors.infoWash,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // A typed digit firms the outline up. Only the outline — a fill or a shadow here would
-  // make the six cells read as two groups, when the point is that they are one code.
-  cellFilled: { borderColor: colors.primary, backgroundColor: colors.primaryWash },
-  cellNext: { borderColor: colors.primary, borderWidth: 2.5, backgroundColor: colors.surface },
-  // The outline carries the refusal, not a fill. The digits stay Ink and fully legible,
-  // because the next thing the user does is read them back against the SMS.
-  cellWrong: { borderColor: colors.error, backgroundColor: colors.errorWash },
-  cellExpired: { borderColor: yolk[500], backgroundColor: colors.secondaryWash },
-  cellLocked: { borderColor: colors.error, backgroundColor: colors.errorWash },
-  cellDigit: { ...typography.h2, fontSize: 24, lineHeight: 30, color: colors.ink },
-  caret: { width: 2, height: 24, borderRadius: radius.pill, backgroundColor: colors.primary },
-
-  // Invisible, but a real focusable input covering the whole row — so a tap anywhere on
-  // the cells opens the keyboard, and the text itself is never drawn twice.
-  hiddenInput: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    opacity: 0,
-    color: 'transparent',
-  },
-
   // -- resend ---------------------------------------------------------------------------
   resendRow: {
     flexDirection: 'row',
@@ -746,13 +630,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
+    paddingHorizontal: spacing[4],
     minHeight: MIN_TOUCH_TARGET + 6,
     borderRadius: radius.md,
   },
   ctaEnabled: { backgroundColor: colors.primary },
   ctaDisabled: { backgroundColor: colors.disabledFill },
   ctaPressed: { backgroundColor: colors.primaryPressed },
-  ctaLabel: { ...typography.bodyStrong, color: colors.surface },
+  // Across the button rather than sized to itself: Android measures a Hindi label narrower
+  // than it draws it, and a label sized to that measurement wrapped "साइन इन" to "साइन" with
+  // "इन" pushed off the button. The padding on the side away from the icon is the icon and the
+  // gap, so the words still sit in the middle of the button rather than of the space beside it.
+  ctaLabel: {
+    ...typography.bodyStrong,
+    color: colors.surface,
+    flex: 1,
+    textAlign: 'center',
+    paddingRight: 18 + spacing[2],
+  },
   ctaLabelDisabled: { color: colors.textDisabled },
 
   callIt: {

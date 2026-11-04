@@ -26,7 +26,8 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -142,9 +143,9 @@ function StatePill({ state, label }: { state: RowState; label: string }): React.
   const look = LOOK[state];
   return (
     <View style={[styles.pill, { backgroundColor: look.solid }]} testID={`ai-event-pill-${state}`}>
-      <Text style={[styles.pillLabel, { color: look.onSolid }]} numberOfLines={1}>
+      <AppText style={[styles.pillLabel, { color: look.onSolid }]} numberOfLines={1}>
         {label}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -179,21 +180,21 @@ function EventRow({
       </View>
 
       <View style={styles.rowBody}>
-        <Text style={styles.rowName} numberOfLines={1}>
+        <AppText style={styles.rowName} numberOfLines={1}>
           {event.owner_name}
-        </Text>
+        </AppText>
         <View style={styles.rowMetaLine}>
           <Glyph
             name={needs ? 'warning' : STRAW_GLYPH}
             size={12}
             color={needs ? colors.error : look.word}
           />
-          <Text
+          <AppText
             style={[styles.rowMeta, { color: needs ? colors.error : ink[500] }]}
             numberOfLines={1}
           >
             {meta}
-          </Text>
+          </AppText>
         </View>
         <View style={styles.rowFoot}>
           <StatePill state={state} label={label} />
@@ -209,7 +210,7 @@ function EventRow({
               size={11}
               color={event.owner_type === 'member' ? colors.info : yolk[800]}
             />
-            <Text
+            <AppText
               style={[
                 styles.ownerLabel,
                 { color: event.owner_type === 'member' ? colors.info : yolk[800] },
@@ -217,7 +218,7 @@ function EventRow({
               numberOfLines={1}
             >
               {t(event.owner_type === 'member' ? 'history.member' : 'history.nonMember')}
-            </Text>
+            </AppText>
           </View>
         </View>
       </View>
@@ -401,11 +402,11 @@ export default function AiEventsScreen({
           <BrandMark size="small" />
         </View>
 
-        <Text style={styles.heroTitle} testID="ai-events-headline">
+        <AppText style={styles.heroTitle} testID="ai-events-headline">
           {waiting > 0
             ? t('history.todayWaiting', { count: todayCount, waiting })
             : t('history.todayOnly', { count: todayCount })}
-        </Text>
+        </AppText>
       </View>
 
       {/* One control, four answers, always carrying a value — a thing already chosen rather
@@ -442,12 +443,12 @@ export default function AiEventsScreen({
                   size={14}
                   color={active ? colors.surface : colors.info}
                 />
-                <Text
+                <AppText
                   style={[styles.rangeLabel, active && styles.rangeLabelActive]}
                   numberOfLines={1}
                 >
                   {t(`history.range_${key}`)}
-                </Text>
+                </AppText>
               </Pressable>
             );
           })}
@@ -464,9 +465,9 @@ export default function AiEventsScreen({
                 shares a row with three others that have to stay readable — the twenty-odd
                 points a redundant calendar icon costs come straight out of "This week". */}
             {dates ? (
-              <Text style={[styles.rangeLabel, styles.rangeLabelActive]} numberOfLines={1}>
+              <AppText style={[styles.rangeLabel, styles.rangeLabelActive]} numberOfLines={1}>
                 {formatRange(dates.from, dates.to, months)}
-              </Text>
+              </AppText>
             ) : (
               <Ionicons name="calendar-number" size={16} color={colors.info} />
             )}
@@ -521,9 +522,9 @@ export default function AiEventsScreen({
                 {visible.length === 0 && (
                   <View style={styles.noneOfState} testID="ai-events-none-of-state">
                     <Ionicons name="checkmark-circle" size={18} color={colors.primaryDark} />
-                    <Text style={styles.noneOfStateLabel}>
+                    <AppText style={styles.noneOfStateLabel}>
                       {t('history.noneOfState', { state: t(stateKey(only ?? 'synced')) })}
-                    </Text>
+                    </AppText>
                   </View>
                 )}
                 {days.map(day => (
@@ -534,10 +535,10 @@ export default function AiEventsScreen({
                       <View style={styles.dayHead}>
                         <View style={styles.dayPill}>
                           <Ionicons name="calendar" size={13} color={colors.info} />
-                          <Text style={styles.dayLabel}>{day.label}</Text>
+                          <AppText style={styles.dayLabel}>{day.label}</AppText>
                         </View>
                         <View style={styles.dayCount}>
-                          <Text style={styles.dayCountLabel}>{day.rows.length}</Text>
+                          <AppText style={styles.dayCountLabel}>{day.rows.length}</AppText>
                         </View>
                       </View>
                     )}

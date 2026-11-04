@@ -17,7 +17,8 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -95,10 +96,10 @@ function Option({
           <Ionicons name={paint.icon} size={20} color={colors.surface} />
         </View>
         <View style={styles.optionText}>
-          <Text style={styles.optionLabel}>{label}</Text>
-          <Text style={[styles.optionPath, { color: paint.word }]} numberOfLines={2}>
+          <AppText style={styles.optionLabel}>{label}</AppText>
+          <AppText style={[styles.optionPath, { color: paint.word }]} numberOfLines={2}>
             {path}
-          </Text>
+          </AppText>
         </View>
         <View
           style={[
@@ -117,16 +118,20 @@ function Option({
         <View style={styles.figure}>
           <View style={styles.figureHead}>
             <Ionicons name="map" size={13} color={paint.word} />
-            <Text style={[styles.figureLabel, { color: paint.word }]}>{t('route2.distance')}</Text>
+            <AppText style={[styles.figureLabel, { color: paint.word }]}>
+              {t('route2.distance')}
+            </AppText>
           </View>
-          <Text style={styles.figureValue}>{`${option.total_km} km`}</Text>
+          <AppText style={styles.figureValue}>{`${option.total_km} km`}</AppText>
         </View>
         <View style={styles.figure}>
           <View style={styles.figureHead}>
             <Ionicons name="time" size={13} color={paint.word} />
-            <Text style={[styles.figureLabel, { color: paint.word }]}>{t('route2.onTheRoad')}</Text>
+            <AppText style={[styles.figureLabel, { color: paint.word }]}>
+              {t('route2.onTheRoad')}
+            </AppText>
           </View>
-          <Text style={styles.figureValue}>{readableTime(option.minutes_on_road)}</Text>
+          <AppText style={styles.figureValue}>{readableTime(option.minutes_on_road)}</AppText>
         </View>
       </View>
     </Pressable>
@@ -167,18 +172,18 @@ export default function PdReorderScreen({
           >
             <Ionicons name="arrow-back" size={20} color={colors.surface} />
           </Pressable>
-          <Text style={styles.eyebrow}>{t('route2.reorderEyebrow')}</Text>
+          <AppText style={styles.eyebrow}>{t('route2.reorderEyebrow')}</AppText>
         </View>
 
-        <Text style={styles.heroTitle}>{t('route2.reorderAsk')}</Text>
-        <Text style={styles.heroSubtitle} numberOfLines={2}>
+        <AppText style={styles.heroTitle}>{t('route2.reorderAsk')}</AppText>
+        <AppText style={styles.heroSubtitle} numberOfLines={2}>
           {lateStop
             ? t('route2.reorderSubject', {
                 name: lateStop.owner_name,
                 km: route.options.late_first.total_km,
               })
             : t('route2.reorderSubjectNone')}
-        </Text>
+        </AppText>
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -204,7 +209,7 @@ export default function PdReorderScreen({
         {/* Where the numbers come from, in the place the numbers are being weighed. */}
         <View style={styles.note} testID="reorder-note">
           <Ionicons name="information-circle" size={18} color={colors.info} />
-          <Text style={styles.noteText}>{t('route2.estimate')}</Text>
+          <AppText style={styles.noteText}>{t('route2.estimate')}</AppText>
         </View>
       </ScrollView>
 
@@ -216,7 +221,7 @@ export default function PdReorderScreen({
           testID="reorder-use"
         >
           <Ionicons name="checkmark" size={18} color={colors.surface} />
-          <Text style={styles.ctaLabel}>{t('route2.useThisOrder')}</Text>
+          <AppText style={styles.ctaLabel}>{t('route2.useThisOrder')}</AppText>
         </Pressable>
       </View>
     </View>

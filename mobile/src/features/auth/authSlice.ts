@@ -144,7 +144,19 @@ const authSlice = createSlice({
       }
     },
 
-    loggedOut: () => ({ ...initialState, restored: true }),
+    /**
+     * The session is over. `deliberate` only when a person pressed Sign out.
+     *
+     * The flag decides what happens to the unsent work (`persistence.ts`): a deliberate sign
+     * out, which has already warned about it, clears the queue; anything else — the server
+     * ending the session, a refresh token spent after a week offline — holds it for the same
+     * Mait to send after signing back in. Absent means held, so a sign-out path nobody thought
+     * about fails safe rather than losing inseminations.
+     */
+    loggedOut: (_state, _action: PayloadAction<{ deliberate?: boolean } | undefined>) => ({
+      ...initialState,
+      restored: true,
+    }),
   },
 });
 

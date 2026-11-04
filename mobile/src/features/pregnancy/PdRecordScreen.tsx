@@ -49,10 +49,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -173,11 +173,11 @@ function Choice({
       </View>
 
       <View style={styles.choiceBody}>
-        <Text style={styles.choiceLabel}>{label}</Text>
+        <AppText style={styles.choiceLabel}>{label}</AppText>
         {/* What this answer *does*, before it is chosen. */}
-        <Text style={[styles.choiceHint, { color: paint.word }]} numberOfLines={2}>
+        <AppText style={[styles.choiceHint, { color: paint.word }]} numberOfLines={2}>
           {hint}
-        </Text>
+        </AppText>
       </View>
 
       {/* A filled tick rather than a dot: this is read in sunlight, and a ring with a smaller
@@ -217,7 +217,7 @@ function Section({
       <View style={[styles.sectionChip, { backgroundColor: PAINT[tone].solid }]}>
         <Ionicons name={icon} size={13} color={colors.surface} />
       </View>
-      <Text style={[styles.sectionLabel, { color: PAINT[tone].word }]}>{label}</Text>
+      <AppText style={[styles.sectionLabel, { color: PAINT[tone].word }]}>{label}</AppText>
     </View>
   );
 }
@@ -339,7 +339,7 @@ export default function PdRecordScreen({
       >
         <Ionicons name="arrow-back" size={20} color={colors.surface} />
       </Pressable>
-      <Text style={styles.eyebrow}>{t('pd.eyebrow')}</Text>
+      <AppText style={styles.eyebrow}>{t('pd.eyebrow')}</AppText>
     </View>
   );
 
@@ -373,10 +373,10 @@ export default function PdRecordScreen({
       <View style={styles.root}>
         <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
           {heroTop(onBack)}
-          <Text style={styles.heroTitle}>{t('pd.recorded')}</Text>
-          <Text style={styles.heroSubtitle} numberOfLines={2}>
+          <AppText style={styles.heroTitle}>{t('pd.recorded')}</AppText>
+          <AppText style={styles.heroSubtitle} numberOfLines={2}>
             {subject}
-          </Text>
+          </AppText>
         </View>
 
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -399,12 +399,12 @@ export default function PdRecordScreen({
               />
             </View>
             <View style={styles.choiceBody}>
-              <Text style={styles.choiceLabel}>{answer}</Text>
-              <Text style={styles.choiceHint}>
+              <AppText style={styles.choiceLabel}>{answer}</AppText>
+              <AppText style={styles.choiceHint}>
                 {check.checked_at
                   ? t('pd.recordedOn', { date: shortDate(check.checked_at.slice(0, 10)) })
                   : ''}
-              </Text>
+              </AppText>
             </View>
           </View>
 
@@ -412,26 +412,28 @@ export default function PdRecordScreen({
           {!!check.calving_due_on && (
             <View style={[styles.note, styles.note_good]}>
               <Ionicons name="calendar" size={15} color={colors.primaryDark} />
-              <Text
+              <AppText
                 style={[styles.noteText, { color: colors.primaryDark }]}
                 testID="pd-recorded-calving"
               >
                 {t('pd.recordedCalving', { date: shortDate(check.calving_due_on) })}
-              </Text>
+              </AppText>
             </View>
           )}
           {check.outcome === 'unsure' && (
             <View style={[styles.note, styles.note_warm]}>
               <Ionicons name="repeat" size={15} color={yolk[800]} />
-              <Text style={[styles.noteText, { color: yolk[800] }]}>{t('pd.recordedRecheck')}</Text>
+              <AppText style={[styles.noteText, { color: yolk[800] }]}>
+                {t('pd.recordedRecheck')}
+              </AppText>
             </View>
           )}
           {check.outcome === 'declined' && (
             <View style={[styles.note, styles.note_slate]}>
               <Ionicons name="hand-left" size={15} color={ink[600]} />
-              <Text style={[styles.noteText, { color: ink[600] }]} testID="pd-recorded-declined">
+              <AppText style={[styles.noteText, { color: ink[600] }]} testID="pd-recorded-declined">
                 {t('pd.recordedDeclined')}
-              </Text>
+              </AppText>
             </View>
           )}
 
@@ -441,7 +443,7 @@ export default function PdRecordScreen({
           {!!check.note && (
             <View style={styles.remarkRead} testID="pd-recorded-remark">
               <Section icon="chatbubble-ellipses" label={t('pd.recordedRemark')} tone="info" />
-              <Text style={styles.remarkReadText}>{check.note}</Text>
+              <AppText style={styles.remarkReadText}>{check.note}</AppText>
             </View>
           )}
 
@@ -450,7 +452,7 @@ export default function PdRecordScreen({
             <View style={[styles.sectionChip, styles.lockChip]}>
               <Ionicons name="lock-closed" size={14} color={colors.surface} />
             </View>
-            <Text style={styles.lockedText}>{t('pd.cannotChange')}</Text>
+            <AppText style={styles.lockedText}>{t('pd.cannotChange')}</AppText>
           </View>
         </ScrollView>
       </View>
@@ -471,10 +473,10 @@ export default function PdRecordScreen({
         <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
           {heroTop(onBack)}
 
-          <Text style={styles.heroTitle}>{t('pd.consentAsk')}</Text>
-          <Text style={styles.heroSubtitle} numberOfLines={2}>
+          <AppText style={styles.heroTitle}>{t('pd.consentAsk')}</AppText>
+          <AppText style={styles.heroSubtitle} numberOfLines={2}>
             {subject}
-          </Text>
+          </AppText>
         </View>
 
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -504,7 +506,7 @@ export default function PdRecordScreen({
           {declining && (
             <View style={styles.aside} testID="pd-decline-note">
               <Ionicons name="information-circle" size={18} color={colors.info} />
-              <Text style={styles.asideText}>{t('pd.declineWhatHappens')}</Text>
+              <AppText style={styles.asideText}>{t('pd.declineWhatHappens')}</AppText>
             </View>
           )}
         </ScrollView>
@@ -525,7 +527,7 @@ export default function PdRecordScreen({
                 <ActivityIndicator color={colors.surface} />
               ) : (
                 <>
-                  <Text style={styles.ctaLabel}>{t('pd.declineSave')}</Text>
+                  <AppText style={styles.ctaLabel}>{t('pd.declineSave')}</AppText>
                   <Ionicons name="arrow-forward" size={18} color={colors.surface} />
                 </>
               )}
@@ -541,10 +543,10 @@ export default function PdRecordScreen({
       <View style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}>
         {heroTop(() => setConsented(null))}
 
-        <Text style={styles.heroTitle}>{t('pd.ask')}</Text>
-        <Text style={styles.heroSubtitle} numberOfLines={2}>
+        <AppText style={styles.heroTitle}>{t('pd.ask')}</AppText>
+        <AppText style={styles.heroSubtitle} numberOfLines={2}>
           {subject}
-        </Text>
+        </AppText>
       </View>
 
       <ScrollView
@@ -581,8 +583,10 @@ export default function PdRecordScreen({
             />
           </View>
           <View style={styles.chargeBody}>
-            <Text style={styles.chargeTitle}>{chargeLine}</Text>
-            <Text style={[styles.chargeHint, { color: PAINT[chargeTone].word }]}>{chargeHint}</Text>
+            <AppText style={styles.chargeTitle}>{chargeLine}</AppText>
+            <AppText style={[styles.chargeHint, { color: PAINT[chargeTone].word }]}>
+              {chargeHint}
+            </AppText>
           </View>
         </View>
 
@@ -645,13 +649,13 @@ export default function PdRecordScreen({
           )}
 
           <View style={styles.photoBody}>
-            <Text style={styles.photoTitle}>{t('pd.photoTitle')}</Text>
-            <Text
+            <AppText style={styles.photoTitle}>{t('pd.photoTitle')}</AppText>
+            <AppText
               style={[styles.photoHint, needsPhoto && styles.photoHintRequired]}
               numberOfLines={2}
             >
               {photoUri ? t('pd.photoTaken') : t('pd.photoHint')}
-            </Text>
+            </AppText>
           </View>
 
           <View
@@ -666,9 +670,9 @@ export default function PdRecordScreen({
               },
             ]}
           >
-            <Text style={styles.photoActionLabel}>
+            <AppText style={styles.photoActionLabel}>
               {photoUri ? t('pd.photoRetake') : t('pd.photoTake')}
-            </Text>
+            </AppText>
           </View>
         </Pressable>
 
@@ -694,7 +698,7 @@ export default function PdRecordScreen({
               maxLength={255}
               testID="pd-remark-input"
             />
-            <Text style={styles.remarkFoot}>{t('pd.remarkOptional')}</Text>
+            <AppText style={styles.remarkFoot}>{t('pd.remarkOptional')}</AppText>
           </View>
         )}
       </ScrollView>
@@ -716,9 +720,9 @@ export default function PdRecordScreen({
             <ActivityIndicator color={colors.surface} />
           ) : (
             <>
-              <Text style={[styles.ctaLabel, !canSave && styles.ctaLabelInert]}>
+              <AppText style={[styles.ctaLabel, !canSave && styles.ctaLabelInert]}>
                 {t('pd.save')}
-              </Text>
+              </AppText>
               <Ionicons
                 name="arrow-forward"
                 size={18}

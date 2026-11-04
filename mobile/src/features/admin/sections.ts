@@ -45,15 +45,36 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'mait-payment', label: 'Mait payment', icon: 'wallet', built: true },
   { key: 'users', label: 'Users & roles', icon: 'shield-checkmark', built: true },
   { key: 'super-otp', label: 'Super OTP', icon: 'key', built: true },
+  { key: 'otp-pipeline', label: 'OTP pipeline', icon: 'git-commit', built: true },
   { key: 'zones', label: 'Zones', icon: 'map', built: true },
   { key: 'logs', label: 'Audit log', icon: 'list', built: true },
 ];
 
-/** The section the admin app opens on. AI events is the first built screen (Round 2). */
-export const ADMIN_HOME = 'ai-events';
+/**
+ * The section the admin app opens on: the dashboard, as the portal does — the day's numbers
+ * and what needs a person, before any one list.
+ */
+export const ADMIN_HOME = 'dashboard';
 
-const FALLBACK: AdminSection = { key: 'ai-events', label: 'AI events', icon: 'document-text', built: true };
+const FALLBACK: AdminSection = {
+  key: 'ai-events',
+  label: 'AI events',
+  icon: 'document-text',
+  built: true,
+};
 
 export function sectionFor(key: string): AdminSection {
   return ADMIN_SECTIONS.find(section => section.key === key) ?? ADMIN_SECTIONS[0] ?? FALLBACK;
+}
+
+/**
+ * A section's name in the language the app is in. The labels above are English and were shown
+ * as they are, so the drawer stayed in English for a Hindi reader; the names live in the
+ * translations now, with the label as the fallback for a section added before its name is.
+ */
+export function sectionName(
+  t: (key: string, options?: { defaultValue: string }) => string,
+  section: AdminSection,
+): string {
+  return t(`admin.sections.${section.key}`, { defaultValue: section.label });
 }

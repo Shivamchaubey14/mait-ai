@@ -14,6 +14,7 @@
 // attempts left" line would simply come out wrong in front of a Mait.
 import 'intl-pluralrules';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
@@ -49,3 +50,35 @@ i18n.use(initReactI18next).init({
 });
 
 export default i18n;
+
+const DEVANAGARI = /[ऀ-ॿ]/;
+
+/** True when a string contains Hindi (Devanagari) letters. */
+export function hasDevanagari(text: string): boolean {
+  return DEVANAGARI.test(text);
+}
+
+/**
+ * The language the Mait last chose, kept on the handset.
+ *
+ * Without it every launch started in English: a Mait who picked हिन्दी on the sign-in screen
+ * got English back the next morning, and had to find the switch again in a language they had
+ * already said they do not read.
+ */
+const LANGUAGE_KEY = 'maitai.language.v1';
+
+i18n.on('languageChanged', lng => {
+  AsyncStorage.setItem(LANGUAGE_KEY, lng).catch(() => undefined);
+});
+
+/** Put back the saved language. Called once at launch, before the first screen is drawn. */
+export async function restoreLanguage(): Promise<void> {
+  try {
+    const saved = await AsyncStorage.getItem(LANGUAGE_KEY);
+    if (saved && SUPPORTED_LANGUAGES.some(lang => lang.code === saved) && saved !== i18n.language) {
+      await i18n.changeLanguage(saved);
+    }
+  } catch {
+    // Unreadable storage leaves English, which is where a first launch starts anyway.
+  }
+}

@@ -22,15 +22,8 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -209,9 +202,9 @@ export default function StoreHistoryScreen({
     }
     if (!rows.length) {
       return term ? (
-        <Text style={styles.quiet} testID="history-find-none">
+        <AppText style={styles.quiet} testID="history-find-none">
           {t('store.findNone', { term })}
-        </Text>
+        </AppText>
       ) : (
         <EmptyState title={t('store.historyEmptyTitle')} body={t('store.historyEmptyBody')} />
       );
@@ -222,9 +215,9 @@ export default function StoreHistoryScreen({
           <View style={styles.dayChip}>
             <Ionicons name="calendar" size={13} color={colors.surface} />
           </View>
-          <Text style={styles.dayHeading}>{day.heading}</Text>
+          <AppText style={styles.dayHeading}>{day.heading}</AppText>
           <View style={styles.dayCount}>
-            <Text style={styles.dayCountLabel}>{day.rows.length}</Text>
+            <AppText style={styles.dayCountLabel}>{day.rows.length}</AppText>
           </View>
         </View>
         {day.rows.map(row => {
@@ -251,13 +244,15 @@ export default function StoreHistoryScreen({
               <View style={styles.rowBody}>
                 <View style={styles.titleLine}>
                   <View style={[styles.number, styles[`solid_${look.tone}`]]}>
-                    <Text style={[styles.numberLabel, look.tone === 'waiting' && styles.inkText]}>
+                    <AppText
+                      style={[styles.numberLabel, look.tone === 'waiting' && styles.inkText]}
+                    >
                       {`IND-${row.indent_id}`}
-                    </Text>
+                    </AppText>
                   </View>
-                  <Text style={styles.rowTitle} numberOfLines={1}>
+                  <AppText style={styles.rowTitle} numberOfLines={1}>
                     {row.mait_name}
-                  </Text>
+                  </AppText>
                 </View>
                 <View style={styles.whatLine}>
                   <Glyph
@@ -265,15 +260,15 @@ export default function StoreHistoryScreen({
                     size={13}
                     color={colors.info}
                   />
-                  <Text style={styles.rowMeta} numberOfLines={1}>
+                  <AppText style={styles.rowMeta} numberOfLines={1}>
                     {t('store.historyWhat', { qty: row.qty, item: itemLabel(row, i18n.language) })}
-                  </Text>
+                  </AppText>
                 </View>
                 <View style={styles.stateLine}>
                   {statePill(row, t)}
                   <View style={styles.time}>
                     <Ionicons name="time-outline" size={11} color={colors.textMuted} />
-                    <Text style={styles.timeLabel}>{clock(row.issued_at)}</Text>
+                    <AppText style={styles.timeLabel}>{clock(row.issued_at)}</AppText>
                   </View>
                 </View>
               </View>
@@ -328,9 +323,9 @@ export default function StoreHistoryScreen({
                 style={[styles.window, on && styles.windowOn]}
                 testID={`history-window-${key}`}
               >
-                <Text style={[styles.windowLabel, on && styles.windowLabelOn]}>
+                <AppText style={[styles.windowLabel, on && styles.windowLabelOn]}>
                   {t(`store.historyChip_${key}`)}
-                </Text>
+                </AppText>
               </Pressable>
             );
           })}
@@ -344,9 +339,9 @@ export default function StoreHistoryScreen({
           >
             <Ionicons name="calendar" size={16} color={dates ? colors.surface : colors.info} />
             {!!dates && (
-              <Text style={[styles.windowLabel, styles.windowLabelOn]} numberOfLines={1}>
+              <AppText style={[styles.windowLabel, styles.windowLabelOn]} numberOfLines={1}>
                 {formatRange(dates.from, dates.to, months)}
-              </Text>
+              </AppText>
             )}
           </Pressable>
         </View>
@@ -387,7 +382,7 @@ export default function StoreHistoryScreen({
               <View style={styles.totalsChip}>
                 <Ionicons name="arrow-up-circle" size={15} color={colors.surface} />
               </View>
-              <Text style={styles.totalsLabel}>{t('store.historyTotals')}</Text>
+              <AppText style={styles.totalsLabel}>{t('store.historyTotals')}</AppText>
             </View>
             <View style={styles.totalsItems}>
               {totals.map(total => (
@@ -397,14 +392,14 @@ export default function StoreHistoryScreen({
                     size={13}
                     color={colors.surface}
                   />
-                  <Text style={styles.totalItemLabel}>{`${total.qty} ${total.item}`}</Text>
+                  <AppText style={styles.totalItemLabel}>{`${total.qty} ${total.item}`}</AppText>
                 </View>
               ))}
             </View>
             {waiting > 0 && (
-              <Text style={styles.totalsWaiting}>
+              <AppText style={styles.totalsWaiting}>
                 {t('store.historyWaitingCount', { count: waiting })}
-              </Text>
+              </AppText>
             )}
           </View>
         )}

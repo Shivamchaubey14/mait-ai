@@ -16,7 +16,9 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
+import { ConfirmDialog } from '@/components/confirmDialog';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +27,6 @@ import { useLogoutMutation } from '@api/endpoints';
 import AdminAssignmentScreen from '@/features/admin/AdminAssignmentScreen';
 import AdminAuditScreen from '@/features/admin/AdminAuditScreen';
 import AdminDashboardScreen from '@/features/admin/AdminDashboardScreen';
-import AdminDrawer from '@/features/admin/AdminDrawer';
 import AdminEventsScreen from '@/features/admin/AdminEventsScreen';
 import AdminExceptionsScreen from '@/features/admin/AdminExceptionsScreen';
 import AdminIndentsScreen from '@/features/admin/AdminIndentsScreen';
@@ -35,6 +36,7 @@ import AdminMaitPaymentScreen from '@/features/admin/AdminMaitPaymentScreen';
 import AdminMaitsScreen from '@/features/admin/AdminMaitsScreen';
 import AdminMembersScreen from '@/features/admin/AdminMembersScreen';
 import AdminMppsScreen from '@/features/admin/AdminMppsScreen';
+import AdminOtpPipelineScreen from '@/features/admin/AdminOtpPipelineScreen';
 import AdminNonMembersScreen from '@/features/admin/AdminNonMembersScreen';
 import AdminPregnancyScreen from '@/features/admin/AdminPregnancyScreen';
 import AdminProductsScreen from '@/features/admin/AdminProductsScreen';
@@ -45,7 +47,8 @@ import AdminSuperOtpScreen from '@/features/admin/AdminSuperOtpScreen';
 import AdminUploadsScreen from '@/features/admin/AdminUploadsScreen';
 import AdminUsersScreen from '@/features/admin/AdminUsersScreen';
 import AdminZonesScreen from '@/features/admin/AdminZonesScreen';
-import { ADMIN_HOME, sectionFor } from '@/features/admin/sections';
+import AdminRail from '@/features/admin/AdminRail';
+import { ADMIN_HOME, sectionFor, sectionName } from '@/features/admin/sections';
 import { loggedOut } from '@/features/auth/authSlice';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { colors, radius, spacing, typography } from '@theme/tokens';
@@ -66,47 +69,36 @@ export default function AdminNavigator(): React.JSX.Element {
   const [logout] = useLogoutMutation();
 
   const [section, setSection] = useState<string>(ADMIN_HOME);
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const current = sectionFor(section);
 
-  // Back closes the drawer first, then returns to the home section, then leaves the app. A
-  // screen with an open record adds its own handler, which runs before this one and wins.
+  // Back returns to the home section, then leaves the app. A screen with an open record adds
+  // its own handler, which runs before this one and wins.
   const goBack = useCallback((): boolean => {
-    if (drawerOpen) {
-      setDrawerOpen(false);
-      return true;
-    }
     if (section !== ADMIN_HOME) {
       setSection(ADMIN_HOME);
       return true;
     }
     return false;
-  }, [drawerOpen, section]);
+  }, [section]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', goBack);
     return () => sub.remove();
   }, [goBack]);
 
-  const signOut = () => {
-    Alert.alert(t('admin.signOutTitle'), t('admin.signOutBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('settings.signOut'),
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            if (refreshToken) {
-              await logout(refreshToken).unwrap();
-            }
-          } catch {
-            // The token is unreachable either way; a session left in storage is the worse one.
-          }
-          dispatch(loggedOut());
-        },
-      },
-    ]);
+  // Asked in our own card rather than the system alert — see components/confirmDialog.
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const signOut = () => setConfirmingSignOut(true);
+  const finishSignOut = async () => {
+    try {
+      if (refreshToken) {
+        await logout(refreshToken).unwrap();
+      }
+    } catch {
+      // The token is unreachable either way; a session left in storage is the worse one.
+    }
+    dispatch(loggedOut({ deliberate: true }));
   };
 
   let screen: React.JSX.Element;
@@ -135,19 +127,21 @@ export default function AdminNavigator(): React.JSX.Element {
   } else if (section === 'pregnancy') {
     screen = <AdminPregnancyScreen />;
   } else if (section === 'exceptions') {
-    screen = <AdminExceptionsScreen />;
+    screen = <AdminExceptionsScreen onOpenSection={setSection} />;
   } else if (section === 'mait-payment') {
     screen = <AdminMaitPaymentScreen />;
   } else if (section === 'dashboard') {
-    screen = <AdminDashboardScreen />;
+    screen = <AdminDashboardScreen onOpenExceptions={() => setSection('exceptions')} />;
   } else if (section === 'users') {
     screen = <AdminUsersScreen />;
   } else if (section === 'zones') {
-    screen = <AdminZonesScreen />;
+    screen = <AdminZonesScreen onOpenSection={setSection} />;
   } else if (section === 'logs') {
     screen = <AdminAuditScreen />;
   } else if (section === 'super-otp') {
     screen = <AdminSuperOtpScreen />;
+  } else if (section === 'otp-pipeline') {
+    screen = <AdminOtpPipelineScreen onOpenSection={setSection} />;
   } else if (section === 'uploads') {
     screen = <AdminUploadsScreen />;
   } else if (section === 'assignments') {
@@ -160,69 +154,67 @@ export default function AdminNavigator(): React.JSX.Element {
         <View style={styles.soonChip}>
           <Ionicons name={current.icon} size={28} color={colors.info} />
         </View>
-        <Text style={styles.soonTitle}>{current.label}</Text>
-        <Text style={styles.soonText}>{t('admin.sectionSoon')}</Text>
+        <AppText style={styles.soonTitle}>{sectionName(t, current)}</AppText>
+        <AppText style={styles.soonText}>{t('admin.sectionSoon')}</AppText>
       </View>
     );
   }
 
   return (
+    // The sections down the left, always in view, the way the portal's aside is; the open
+    // section beside them. There is no menu to open.
     <View style={styles.root}>
-      <View style={[styles.bar, { paddingTop: insets.top + spacing[2] }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('admin.openMenu')}
-          onPress={() => setDrawerOpen(true)}
-          hitSlop={8}
-          style={styles.hamburger}
-          testID="admin-hamburger"
-        >
-          <Ionicons name="menu" size={24} color={colors.surface} />
-        </Pressable>
-        <Text style={styles.barTitle} numberOfLines={1}>
-          {current.label}
-        </Text>
+      <AdminRail activeKey={section} onSelect={setSection} onSignOut={signOut} />
+
+      <View style={styles.flex}>
+        <View style={[styles.bar, { paddingTop: insets.top + spacing[2] }]}>
+          <AppText style={styles.barTitle} numberOfLines={1} testID="admin-title">
+            {sectionName(t, current)}
+          </AppText>
+          <AppText style={styles.barWho} numberOfLines={1}>
+            {[user?.fullName, t(ROLE_LABEL[user?.role ?? 'admin'] ?? 'admin.role.admin')]
+              .filter(Boolean)
+              .join(' · ')}
+          </AppText>
+        </View>
+
+        <View style={styles.flex}>{screen}</View>
       </View>
-
-      <View style={styles.flex}>{screen}</View>
-
-      <AdminDrawer
-        visible={drawerOpen}
-        activeKey={section}
-        name={user?.fullName ?? ''}
-        roleLabel={t(ROLE_LABEL[user?.role ?? 'admin'] ?? 'admin.role.admin')}
-        onSelect={key => {
-          setSection(key);
-          setDrawerOpen(false);
-        }}
-        onClose={() => setDrawerOpen(false)}
-        onSignOut={() => {
-          setDrawerOpen(false);
-          signOut();
-        }}
+      <ConfirmDialog
+        visible={confirmingSignOut}
+        title={t('admin.signOutTitle')}
+        body={t('admin.signOutBody')}
+        confirmLabel={t('settings.signOut')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={finishSignOut}
+        onCancel={() => setConfirmingSignOut(false)}
+        testID="admin-sign-out-dialog"
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, flexDirection: 'row', backgroundColor: colors.background },
   flex: { flex: 1 },
 
   bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
     paddingHorizontal: spacing[4],
     paddingBottom: spacing[3],
     backgroundColor: colors.ink,
-    borderBottomLeftRadius: radius.lg,
+    // Square on the left, where it meets the rail; rounded only at the open end.
     borderBottomRightRadius: radius.lg,
   },
-  hamburger: { padding: spacing[1] },
-  barTitle: { ...typography.h2, color: colors.surface, flex: 1 },
+  barTitle: { ...typography.h2, color: colors.surface },
+  barWho: { ...typography.caption, color: colors.surface, opacity: 0.72 },
 
-  soonBody: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing[6], gap: spacing[3] },
+  soonBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing[6],
+    gap: spacing[3],
+  },
   soonChip: {
     width: 64,
     height: 64,

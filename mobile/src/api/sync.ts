@@ -196,6 +196,91 @@ async function withResolvedRefs(job: QueuedJob): Promise<Record<string, unknown>
   return resolveOne(withFarmer, 'animal_id', 'animal_client_uuid', 'animal');
 }
 
+/** How long a queued photo may take to go before it is given up on and tried again later. */
+const PHOTO_SEND_CAP_MS = 90_000;
+
+/** Statuses whose response may carry no body, which a `Response` refuses to be built with. */
+const NO_BODY = new Set([101, 204, 205, 304]);
+
+/**
+ * Send a form carrying a file — a photo, a card — the way the live upload does.
+ *
+ * Over `XMLHttpRequest`, not `fetch`. A photo sent from the queue through `fetch` never
+ * reached the server: the handset gave up before a byte left it, every time, and the job sat
+ * on Home as "waiting to send" through six retries — an animal's portrait, and before it a
+ * capture's proof photo. The same file went up first time through the live screen, which has
+ * always used `XMLHttpRequest`. So the queue sends files the way that has worked.
+ *
+ * Answers as a `Response`, so everything after it reads a status and a body exactly as it
+ * reads a `fetch`. Rejects only where `fetch` would: nothing reached a server.
+ */
+function sendForm(
+  url: string,
+  method: 'PATCH' | 'POST',
+  headers: Record<string, string>,
+  form: FormData,
+): Promise<Response> {
+  // Every handset has it; a test environment without it gets the plain request instead.
+  if (typeof XMLHttpRequest === 'undefined') {
+    return fetch(url, { method, headers, body: form });
+  }
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open(method, url);
+    Object.entries(headers).forEach(([name, value]) => request.setRequestHeader(name, value));
+    request.timeout = PHOTO_SEND_CAP_MS;
+    request.onload = () => {
+      if (!request.status) {
+        reject(new Error('Network request failed'));
+        return;
+      }
+      resolve(
+        new Response(NO_BODY.has(request.status) ? null : request.responseText, {
+          status: request.status,
+        }),
+      );
+    };
+    request.onerror = () => reject(new Error('Network request failed'));
+    request.ontimeout = () => reject(new Error('Photo upload timed out'));
+    request.onabort = () => reject(new Error('Photo upload aborted'));
+    request.send(form);
+  });
+}
+
+/**
+ * How long any one queued request may take before it is abandoned and tried again later.
+ *
+ * React Native's `fetch` has no timeout of its own, so a connection that accepts the socket
+ * and then goes silent — a half-open Cloudflare tunnel, a stalled worker, a tower with no
+ * backhaul — leaves the request pending for as long as the OS keeps the socket, which is
+ * minutes. One such request is enough to hang the whole drain, and because `drainQueue` hands
+ * every later caller the one `running` promise, a hung drain wedges *all* future syncs until
+ * the app restarts. Bounding each call is what keeps a bad connection a slow sync rather than
+ * a dead one: an abort is caught like any network failure, the job waits out its backoff, and
+ * the next drain tries again. The idempotency key makes the retry safe if the first attempt
+ * had in fact landed.
+ *
+ * Generous on purpose — a real request over 2G finishes well inside it; only a dead socket
+ * reaches it. File uploads are bounded separately by `PHOTO_SEND_CAP_MS`, which is longer
+ * because a photo legitimately takes longer than a JSON body.
+ */
+const REQUEST_CAP_MS = 30_000;
+
+/** `fetch`, but abandoned after `ms` so a silent socket cannot hang the drain forever. */
+async function fetchWithin(
+  url: string,
+  init: RequestInit,
+  ms: number = REQUEST_CAP_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function send(job: QueuedJob, accessToken: string): Promise<Response> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
@@ -212,7 +297,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
    * already exists rather than a second one who can be asked for cash again.
    */
   if (job.kind === 'createNonMember') {
-    return fetch(`${apiBaseUrl()}/non-members/`, {
+    return fetchWithin(`${apiBaseUrl()}/non-members/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(job.payload),
@@ -244,11 +329,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
       name: 'aadhaar-back.jpg',
       type: 'image/jpeg',
     } as unknown as Blob);
-    return fetch(`${apiBaseUrl()}/non-members/${nonMemberId}/aadhaar/`, {
-      method: 'PATCH',
-      headers,
-      body: card,
-    });
+    return sendForm(`${apiBaseUrl()}/non-members/${nonMemberId}/aadhaar/`, 'PATCH', headers, card);
   }
 
   /**
@@ -259,7 +340,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
    * of the capture in the queue, because the capture cannot name her until this has landed.
    */
   if (job.kind === 'createAnimal') {
-    return fetch(`${apiBaseUrl()}/animals/`, {
+    return fetchWithin(`${apiBaseUrl()}/animals/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(job.payload),
@@ -280,11 +361,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
       name: 'animal.jpg',
       type: 'image/jpeg',
     } as unknown as Blob);
-    return fetch(`${apiBaseUrl()}/animals/${animalId}/photo/`, {
-      method: 'PATCH',
-      headers,
-      body: portrait,
-    });
+    return sendForm(`${apiBaseUrl()}/animals/${animalId}/photo/`, 'PATCH', headers, portrait);
   }
 
   /**
@@ -296,7 +373,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
    * key in the header are both for.
    */
   if (job.kind === 'createEvent') {
-    return fetch(`${apiBaseUrl()}/ai-events/`, {
+    return fetchWithin(`${apiBaseUrl()}/ai-events/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(await withResolvedRefs(job)),
@@ -315,7 +392,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
     if (eventId === null) {
       throw new AwaitingEventId();
     }
-    return fetch(`${apiBaseUrl()}/payments/${eventId}/initiate/`, {
+    return fetchWithin(`${apiBaseUrl()}/payments/${eventId}/initiate/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: job.payload.mode }),
@@ -330,7 +407,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
    * own so a result found in a village needs no second trip to the yard.
    */
   if (job.kind === 'recordPd') {
-    return fetch(`${apiBaseUrl()}/pregnancy-checks/${job.payload.checkId}/record/`, {
+    return fetchWithin(`${apiBaseUrl()}/pregnancy-checks/${job.payload.checkId}/record/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -349,7 +426,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
     if (eventId === null) {
       throw new AwaitingEventId();
     }
-    return fetch(`${apiBaseUrl()}/ai-events/${eventId}/complete/`, {
+    return fetchWithin(`${apiBaseUrl()}/ai-events/${eventId}/complete/`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       // Defaulted false for a job queued by an older build, and for every ordinary capture:
@@ -379,11 +456,7 @@ async function send(job: QueuedJob, accessToken: string): Promise<Response> {
   form.append('photo_source', String(job.payload.source ?? 'camera'));
   form.append('gps_source', String(job.payload.gpsSource ?? 'device'));
 
-  return fetch(`${apiBaseUrl()}/ai-events/${eventId}/photo/`, {
-    method: 'PATCH',
-    headers,
-    body: form,
-  });
+  return sendForm(`${apiBaseUrl()}/ai-events/${eventId}/photo/`, 'PATCH', headers, form);
 }
 
 /**
@@ -421,7 +494,107 @@ async function rememberCreated(job: QueuedJob, response: Response): Promise<void
  * Returns rather than throws: a failed drain is the normal state of a phone in a village,
  * and the caller shows a count, not an error.
  */
-export async function drainQueue(
+/** The jobs that belong to an AI capture, as against an indent, a PD or a registration. */
+const CAPTURE_KINDS: ReadonlySet<QueuedJob['kind']> = new Set([
+  'createEvent',
+  'attachPhoto',
+  'verifyPayment',
+  'completeEvent',
+]);
+
+/** An event in either of these states has nothing left for the queue to do. */
+const SETTLED = new Set(['completed', 'cancelled']);
+
+/**
+ * Drop the queued jobs of any capture the server has already closed or cancelled.
+ *
+ * A capture's jobs can stop moving — a refused photo waiting on a person, a backoff, a job too
+ * old to resend — while the AI itself is finished some other way: the photo retaken from
+ * Unfinished, the office closing it from the portal. Those jobs can never succeed and never
+ * need to, but they sat in the queue for good, and Home went on saying "8 waiting to send"
+ * about work that was done. So the queue asks the server about each capture that is stuck, and
+ * lets go of the ones it has already settled.
+ *
+ * Only stuck captures are asked about, one request each, so a healthy queue costs nothing.
+ * Asked about and not answered — no signal, an error — the jobs are left exactly as they were.
+ * Returns how many jobs were cleared.
+ */
+export async function settleFinishedCaptures(accessToken: string): Promise<number> {
+  const jobs = await readQueue();
+  const now = Date.now();
+  const expired = new Set((await expiredJobs()).map(job => job.id));
+
+  const stuck = new Set<string>();
+  jobs.forEach(job => {
+    // Anything that is not going out this drain: refused, too old to resend, or waiting out a
+    // backoff. Any of them may belong to an AI already finished another way, and each would
+    // otherwise sit in the count until it next came due. Asking is a read and sends nothing;
+    // with no signal it simply goes unanswered.
+    if (CAPTURE_KINDS.has(job.kind) && (!isDue(job, now) || expired.has(job.id))) {
+      stuck.add(job.clientUuid);
+    }
+  });
+
+  let cleared = 0;
+  for (const clientUuid of stuck) {
+    const own = jobs.filter(job => job.clientUuid === clientUuid && CAPTURE_KINDS.has(job.kind));
+    const onJob = own
+      .map(job => job.payload.eventId)
+      .find((id): id is number => typeof id === 'number' && id > 0);
+    const eventId = onJob ?? (await eventIdFor(clientUuid));
+    if (!eventId) {
+      continue;
+    }
+    try {
+      const response = await fetchWithin(`${apiBaseUrl()}/ai-events/${eventId}/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'ngrok-skip-browser-warning': 'true',
+        },
+      });
+      if (!response.ok) {
+        continue;
+      }
+      const event = (await response.json()) as { status?: string };
+      if (event.status && SETTLED.has(event.status)) {
+        for (const job of own) {
+          await removeJob(job.id);
+        }
+        cleared += own.length;
+      }
+    } catch {
+      // No signal, or an answer that is not an event: the jobs stay, and are asked about again.
+    }
+  }
+  return cleared;
+}
+
+/** The drain in progress, if there is one. */
+let running: Promise<SyncResult> | null = null;
+
+/**
+ * Send what is queued — one drain at a time.
+ *
+ * Several things start a drain: the network coming back, the app coming to the front, a
+ * timer, a pull, the end of a capture. Two running at once each read the queue and send from
+ * it, so the same job goes twice and their writes to the queue overwrite each other. A drain
+ * asked for while one is running is answered by that one.
+ */
+export function drainQueue(
+  accessToken: string | null,
+  onProgress?: (progress: SyncProgress) => void,
+  reauth?: Reauth,
+): Promise<SyncResult> {
+  if (running) {
+    return running;
+  }
+  running = drainOnce(accessToken, onProgress, reauth).finally(() => {
+    running = null;
+  });
+  return running;
+}
+
+async function drainOnce(
   accessToken: string | null,
   /**
    * Called before each capture goes out, and once more with nothing in flight when the drain
@@ -444,6 +617,10 @@ export async function drainQueue(
       failed: jobs.filter(job => job.failed).length,
     };
   }
+
+  // Before anything is sent: drop what the server has already settled another way, so the
+  // count on Home is of work that is genuinely still to go.
+  await settleFinishedCaptures(accessToken);
 
   const stale = await expiredJobs();
   const jobs = await readQueue();
@@ -503,7 +680,15 @@ export async function drainQueue(
   for (const job of jobs) {
     // Past the idempotency window a resend would be read as a new request, so it is left in
     // place and reported instead.
+    //
+    // And whatever is not being sent this time — too old, refused, or still waiting out its
+    // backoff — holds back the rest of its own capture. Order is the whole point of this queue:
+    // a close sent ahead of the photo it depends on is refused by the server, and a deduction
+    // sent ahead of it is recorded against a capture that has no proof. Skipping only the one
+    // job let the jobs behind it jump the queue, and a member's AI was left with her deduction
+    // taken and no photo to close it with.
     if (isStale(job) || !isDue(job, now) || stopped.has(job.clientUuid)) {
+      stopped.add(job.clientUuid);
       continue;
     }
 

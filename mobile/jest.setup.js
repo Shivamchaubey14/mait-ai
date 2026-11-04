@@ -44,6 +44,14 @@ jest.mock('@react-native-async-storage/async-storage', () => {
         keys.forEach(key => store.delete(key));
         return Promise.resolve();
       },
+      // The queue holds and restores a signed-out Mait's work as one read and one write.
+      multiGet: keys =>
+        Promise.resolve(keys.map(key => [key, store.has(key) ? store.get(key) : null])),
+      multiSet: pairs => {
+        pairs.forEach(([key, value]) => store.set(key, String(value)));
+        return Promise.resolve();
+      },
+      getAllKeys: () => Promise.resolve([...store.keys()]),
       clear: () => {
         store.clear();
         return Promise.resolve();
@@ -88,6 +96,19 @@ jest.mock('expo-image-manipulator', () => {
   };
 });
 
+// The SAP upload screen picks a file and hands a downloaded master to the share sheet. Both
+// are native; a test says which file was picked.
+jest.mock('expo-document-picker', () => ({
+  __esModule: true,
+  getDocumentAsync: jest.fn(() => Promise.resolve({ canceled: true, assets: null })),
+}));
+
+jest.mock('expo-sharing', () => ({
+  __esModule: true,
+  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
+  shareAsync: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('@react-native-community/netinfo', () => ({
   addEventListener: jest.fn(),
   // Tests default to "online". Offline behaviour is opt-in per test so a suite never
@@ -108,4 +129,33 @@ jest.mock('react-native-webview', () => {
   const React = require('react');
   const { View } = require('react-native');
   return { __esModule: true, WebView: props => React.createElement(View, props) };
+});
+
+// The Lottie player is native; under Jest it is a plain view carrying its props, so a test can
+// see that an animation is there without a renderer to play it.
+jest.mock('lottie-react-native', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const LottieView = props => React.createElement(View, { testID: props.testID });
+  return { __esModule: true, default: LottieView };
+});
+
+// The offline pack's files. expo-file-system has no JS implementation under Jest; an in-memory
+// map keeps the four calls `offlinePack.ts` makes, and a test can reach it to seed or inspect.
+jest.mock('@/api/packFiles', () => {
+  const files = new Map();
+  return {
+    __files: files,
+    readPackFile: name => Promise.resolve(files.has(name) ? files.get(name) : null),
+    writePackFile: (name, text) => {
+      files.set(name, text);
+      return Promise.resolve();
+    },
+    removePackFile: name => {
+      files.delete(name);
+      return Promise.resolve();
+    },
+    listPackFiles: prefix =>
+      Promise.resolve([...files.keys()].filter(name => name.startsWith(prefix))),
+  };
 });

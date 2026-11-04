@@ -13,11 +13,12 @@
  * tag, so a face is the difference between "the black one" and a record.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { registerAnimal } from '@api/capture';
+import { readQueue } from '@api/queue';
 import { useListBreedsQuery } from '@api/endpoints';
 import { splitRejection } from '@api/problem';
 import type { Animal, AnimalTypeCode } from '@api/types';
@@ -69,6 +70,39 @@ function longDate(iso: string): string | null {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+/**
+ * Why she cannot be served today, in the Mait's words — or null when she can.
+ *
+ * The dairy's rule (`ai_events/rules.py`): one semen per animal, the next 21 days later if
+ * she has not conceived. The server says so with every animal and refuses an AI that breaks
+ * it; saying it here is what stops a straw being drawn for an AI that will then be refused.
+ * `queued` is this phone's own knowledge: an AI on her waiting to send, which the server — and
+ * so the copy in the pack — cannot know about yet.
+ */
+function servingBlock(
+  animal: Animal,
+  queued: boolean,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string | null {
+  if (queued) {
+    return t('aiFlow.blockQueued');
+  }
+  const from = animal.next_ai_on ? longDate(`${animal.next_ai_on}T00:00:00`) : null;
+  switch (animal.next_ai_block) {
+    case 'open':
+      return t('aiFlow.blockOpen');
+    case 'pregnant':
+      return t('aiFlow.blockPregnant', { date: from ?? '' });
+    case 'too_soon':
+      return t('aiFlow.blockTooSoon', {
+        last: animal.last_ai_at ? longDate(animal.last_ai_at) : '',
+        date: from ?? '',
+      });
+    default:
+      return null;
+  }
+}
+
 export default function SelectAnimalScreen({
   owner,
   animals,
@@ -96,6 +130,42 @@ export default function SelectAnimalScreen({
   // for its own list when it opens.
   const { data: breeds = [] } = useListBreedsQuery(animalType);
   const [saving, setSaving] = useState(false);
+
+  /**
+   * Animals with an AI on this phone that has not reached the server yet — by row id, or by
+   * the key of a cow registered here with no signal. The server cannot hold these back until
+   * it has heard of them, so the phone does.
+   */
+  const [queued, setQueued] = useState<{ ids: Set<number>; refs: Set<string> }>({
+    ids: new Set(),
+    refs: new Set(),
+  });
+  useEffect(() => {
+    let alive = true;
+    readQueue().then(jobs => {
+      if (!alive) {
+        return;
+      }
+      const ids = new Set<number>();
+      const refs = new Set<string>();
+      jobs
+        .filter(job => job.kind === 'createEvent')
+        .forEach(job => {
+          if (typeof job.payload.animal_id === 'number') {
+            ids.add(job.payload.animal_id);
+          }
+          if (typeof job.payload.animal_client_uuid === 'string') {
+            refs.add(job.payload.animal_client_uuid);
+          }
+        });
+      setQueued({ ids, refs });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const isQueued = (animal: Animal) =>
+    queued.ids.has(animal.id) || (!!animal.client_uuid && queued.refs.has(animal.client_uuid));
 
   const hindi = i18n.language.startsWith('hi');
   const breedName = useMemo(
@@ -126,7 +196,13 @@ export default function SelectAnimalScreen({
     return out;
   }, [animals, t]);
 
-  const onRecord = animals.filter(animal => animal.animal_type === animalType);
+  // Newest first: the animal a Mait has just registered is the one they are most likely to be
+  // standing in front of, and at the foot of a long list it was the one they had to scroll for.
+  const onRecord = animals
+    .filter(animal => animal.animal_type === animalType)
+    .sort(
+      (a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0) || b.id - a.id,
+    );
 
   const chooseType = (next: AnimalTypeCode) => {
     setAnimalType(next);
@@ -229,7 +305,10 @@ export default function SelectAnimalScreen({
     setRefusal(message || outcome.problem || t('errors.generic'));
   };
 
-  const chosen = animals.find(animal => animal.id === selectedId) ?? null;
+  const picked = animals.find(animal => animal.id === selectedId) ?? null;
+  // A blocked animal can never be the one carried forward, whatever was tapped before the
+  // queue was read.
+  const chosen = picked && !servingBlock(picked, isQueued(picked), t) ? picked : null;
 
   return (
     <View style={styles.root}>
@@ -259,6 +338,17 @@ export default function SelectAnimalScreen({
           testID="animal-type"
         />
 
+        {/* Straight under the cow / buffalo switch and above the list, whatever is on record:
+            registering the animal in front of the Mait is as likely as finding her, and it
+            should not sit under a list that grows. Dashed — a place for an animal rather than
+            another animal. */}
+        <AddCard
+          title={t('aiFlow.addAnimal')}
+          subtitle={t('aiFlow.earTagOptionalHint')}
+          onPress={() => setAdding(true)}
+          testID="animal-add-card"
+        />
+
         {onRecord.length === 0 && (
           <FlowNotice
             tone="info"
@@ -268,37 +358,42 @@ export default function SelectAnimalScreen({
           />
         )}
 
-        {onRecord.map(animal => (
-          <OptionCard
-            key={animal.id}
-            swatchLabel={animal.photo_url ? undefined : tokens[animal.id]}
-            iconNode={
-              animal.photo_url ? (
-                <Image
-                  source={{ uri: mediaUrl(animal.photo_url) }}
-                  style={styles.portrait}
-                  resizeMode="cover"
-                  accessibilityIgnoresInvertColors
-                />
-              ) : undefined
-            }
-            title={title(animal)}
-            subtitle={describe(animal)}
-            tone="accent"
-            check
-            selected={selectedId === animal.id}
-            onPress={() => setSelectedId(animal.id)}
-            testID={`animal-${animal.id}`}
-          />
-        ))}
+        {onRecord.map(animal => {
+          const block = servingBlock(animal, isQueued(animal), t);
+          return (
+            <OptionCard
+              key={animal.id}
+              swatchLabel={animal.photo_url ? undefined : tokens[animal.id]}
+              iconNode={
+                animal.photo_url ? (
+                  <Image
+                    source={{ uri: mediaUrl(animal.photo_url) }}
+                    style={styles.portrait}
+                    resizeMode="cover"
+                    accessibilityIgnoresInvertColors
+                  />
+                ) : undefined
+              }
+              title={title(animal)}
+              subtitle={describe(animal)}
+              // Shown, never hidden: a Mait who cannot find the cow in front of them concludes
+              // the app lost her. Greyed with the reason, she is found and the reason is read.
+              blockedReason={block ?? undefined}
+              pill={block ? t('aiFlow.notToday') : undefined}
+              pillTone="error"
+              tone="accent"
+              check
+              selected={!block && selectedId === animal.id}
+              onPress={() => setSelectedId(animal.id)}
+              testID={`animal-${animal.id}`}
+            />
+          );
+        })}
 
-        {/* Dashed, under the list: a place for an animal rather than another animal. */}
-        <AddCard
-          title={t('aiFlow.addAnimal')}
-          subtitle={t('aiFlow.earTagOptionalHint')}
-          onPress={() => setAdding(true)}
-          testID="animal-add-card"
-        />
+        {/* The rule itself, once, under the list — whenever it is holding an animal back. */}
+        {onRecord.some(animal => servingBlock(animal, isQueued(animal), t)) && (
+          <FlowNotice tone="accent" body={t('aiFlow.oneSemenRule')} testID="animal-rule" />
+        )}
       </FlowScreen>
 
       {/* Always rendered, opened by the prop. Torn out of the tree on the closing tap it

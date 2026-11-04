@@ -9,8 +9,18 @@
 import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
+import NetInfo from '@react-native-community/netinfo';
+
 import ConfirmFarmerScreen from '../ConfirmFarmerScreen';
-import { jsonResponse, problemResponse, renderWithStore } from '@/test-utils';
+import { loggedIn } from '@/features/auth/authSlice';
+import { jsonResponse, makeStore, problemResponse, renderWithStore } from '@/test-utils';
+import * as offlinePack from '@api/offlinePack';
+import { fieldCode, localDay } from '@api/fieldCode';
+import { colors } from '@theme/tokens';
+
+// Any day's key will do: the screen and the test work the code out the same way, and the
+// agreement with the server is pinned in api/__tests__/fieldCode.test.ts.
+const DAY_KEY = '87CnkMDiNKEokx5ABXzZIvrnr8cp57KjwtJN5lDvTSQ=';
 
 const MEMBER = {
   id: 1,
@@ -174,6 +184,63 @@ describe('ConfirmFarmerScreen', () => {
     expect(Object.keys(body)).not.toContain('mobile_no');
   });
 
+  /**
+   * A tap in a dead patch used to spin until the Mait gave up, and coming back into signal did
+   * nothing — the stuck request stayed stuck and the code never went.
+   */
+  it('says there is no signal, and sends the code by itself once it returns', async () => {
+    mockApi(MEMBER);
+    let listener: ((state: object) => void) | undefined;
+    (NetInfo.fetch as jest.Mock).mockResolvedValue({ isConnected: false });
+    (NetInfo.addEventListener as jest.Mock).mockImplementation(fn => {
+      listener = fn;
+      return jest.fn();
+    });
+    renderMember();
+    await waitFor(() => screen.getByText('KAVITA DEVI'));
+
+    fireEvent.press(screen.getByTestId('farmer-verify'));
+    fireEvent.press(await screen.findByTestId('farmer-send-code'));
+    expect(await screen.findByTestId('farmer-otp-sheet-problem')).toHaveTextContent(
+      /No signal right now/,
+    );
+    const sent = () =>
+      (global.fetch as jest.Mock).mock.calls.filter(([input]) =>
+        String(typeof input === 'string' ? input : input.url).includes('/farmers/otp/send/'),
+      ).length;
+    expect(sent()).toBe(0);
+
+    // Signal comes back. Nobody presses anything.
+    (NetInfo.fetch as jest.Mock).mockResolvedValue({ isConnected: true });
+    await waitFor(() => expect(listener).toBeDefined());
+    listener!({ isConnected: true, isInternetReachable: true });
+
+    expect(await screen.findByTestId('farmer-otp-input')).toBeTruthy();
+    expect(sent()).toBe(1);
+  });
+
+  it('names a request that got no answer as no signal, not as a failed send', async () => {
+    mockApi(MEMBER);
+    (NetInfo.fetch as jest.Mock).mockResolvedValue({ isConnected: true });
+    const answer = (global.fetch as jest.Mock).getMockImplementation()!;
+    (global.fetch as jest.Mock).mockImplementation(async (input: string | Request) => {
+      const href = typeof input === 'string' ? input : input.url;
+      if (href.includes('/farmers/otp/send/')) {
+        throw new TypeError('Network request failed');
+      }
+      return answer(input);
+    });
+    renderMember();
+    await waitFor(() => screen.getByText('KAVITA DEVI'));
+
+    fireEvent.press(screen.getByTestId('farmer-verify'));
+    fireEvent.press(await screen.findByTestId('farmer-send-code'));
+
+    expect(await screen.findByTestId('farmer-otp-sheet-problem')).toHaveTextContent(
+      /sent as soon as signal returns/,
+    );
+  });
+
   it('offers Yes, continue only once she has answered', async () => {
     mockApi(MEMBER);
     renderMember();
@@ -249,11 +316,24 @@ describe('ConfirmFarmerScreen', () => {
     expect(screen.queryByTestId('member-nothing-to-collect')).toBeNull();
   });
 
-  it('says there is nothing to collect from a member', async () => {
+  it('warns the Mait not to take money from a member', async () => {
     mockApi(MEMBER);
     renderMember();
 
-    await waitFor(() => expect(screen.getByTestId('member-nothing-to-collect')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId('member-nothing-to-collect')).toHaveTextContent(
+        /Please do not take money from the member/,
+      ),
+    );
+  });
+
+  it('offers searching again as a button of its own, not small print', async () => {
+    mockApi(MEMBER);
+    renderMember();
+
+    await waitFor(() => screen.getByText('KAVITA DEVI'));
+    expect(screen.getByTestId('farmer-reject')).toHaveTextContent('No, search again');
+    expect(screen.getByTestId('farmer-reject')).toHaveStyle({ borderColor: colors.info });
   });
 
   it('sends a wrong one back rather than offering to edit it', async () => {
@@ -265,5 +345,114 @@ describe('ConfirmFarmerScreen', () => {
 
     expect(onSearchAgain).toHaveBeenCalled();
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  describe('with no signal at all — the office’s code by phone', () => {
+    /** A Mait signed in, so the screen knows whose keys to read. */
+    function renderSignedIn() {
+      const store = makeStore();
+      store.dispatch(
+        loggedIn({
+          access: 'a',
+          refresh: 'r',
+          user: {
+            id: 7,
+            fullName: 'Rohit',
+            role: 'mait',
+            mobileNo: '',
+            maitId: 1,
+            sahayakVendorCode: null,
+          },
+          assignedMppCodes: ['001303'],
+        }),
+      );
+      return renderWithStore(
+        <ConfirmFarmerScreen
+          farmer={{ kind: 'member', memberCode: MEMBER.member_code }}
+          onConfirm={onConfirm}
+          onSearchAgain={onSearchAgain}
+        />,
+        { store },
+      );
+    }
+
+    async function reachTheCall(key: string | null = DAY_KEY) {
+      jest
+        .spyOn(offlinePack, 'fieldCheckFor')
+        .mockResolvedValue({ key, officePhone: '01234567890' });
+      mockApi(MEMBER);
+      (NetInfo.fetch as jest.Mock).mockResolvedValue({ isConnected: false });
+      (NetInfo.addEventListener as jest.Mock).mockImplementation(() => jest.fn());
+      renderSignedIn();
+      await waitFor(() => screen.getByText('KAVITA DEVI'));
+
+      fireEvent.press(screen.getByTestId('farmer-verify'));
+      fireEvent.press(await screen.findByTestId('farmer-send-code'));
+      fireEvent.press(await screen.findByTestId('farmer-field-start'));
+      await screen.findByTestId('farmer-field-call');
+    }
+
+    const herCode = () => fieldCode(DAY_KEY, MEMBER.mobile_no);
+
+    it('is offered once the SMS cannot go, and says what to tell the office', async () => {
+      await reachTheCall();
+
+      expect(screen.getByTestId('farmer-field-call')).toHaveTextContent(
+        new RegExp(MEMBER.member_code),
+      );
+      expect(screen.getByTestId('farmer-field-call-dial')).toHaveTextContent(/01234567890/);
+    });
+
+    it('checks her code on the phone, and hands it on for the server to match', async () => {
+      await reachTheCall();
+
+      fireEvent.changeText(screen.getByTestId('farmer-field-input'), herCode());
+      fireEvent.press(screen.getByTestId('farmer-field-check'));
+      expect(await screen.findByTestId('farmer-verified')).toHaveTextContent(/office's code/);
+
+      fireEvent.press(screen.getByTestId('farmer-confirm'));
+      expect(onConfirm).toHaveBeenCalledWith(expect.any(Array), {
+        code: herCode(),
+        day: localDay(),
+      });
+      // Nothing about it needed the network.
+      const verifies = (global.fetch as jest.Mock).mock.calls.filter(([input]) =>
+        String(typeof input === 'string' ? input : input.url).includes('/otp/verify/'),
+      );
+      expect(verifies).toHaveLength(0);
+    });
+
+    it('counts wrong codes down, then stops taking them', async () => {
+      await reachTheCall();
+      const wrong = herCode() === '000000' ? '111111' : '000000';
+
+      for (let left = 4; left >= 1; left--) {
+        fireEvent.changeText(screen.getByTestId('farmer-field-input'), wrong);
+        fireEvent.press(screen.getByTestId('farmer-field-check'));
+        expect(await screen.findByTestId('farmer-otp-sheet-problem')).toHaveTextContent(
+          new RegExp(`${left} tries left`),
+        );
+      }
+      fireEvent.changeText(screen.getByTestId('farmer-field-input'), wrong);
+      fireEvent.press(screen.getByTestId('farmer-field-check'));
+      await waitFor(() =>
+        expect(screen.getByTestId('farmer-otp-sheet-problem')).toHaveTextContent(/Too many/),
+      );
+
+      // Not even the right one, now.
+      fireEvent.changeText(screen.getByTestId('farmer-field-input'), herCode());
+      fireEvent.press(screen.getByTestId('farmer-field-check'));
+      await waitFor(() =>
+        expect(screen.getByTestId('farmer-otp-sheet-problem')).toHaveTextContent(/Too many/),
+      );
+      expect(screen.queryByTestId('farmer-verified')).toBeNull();
+    });
+
+    it('says to find signal when the phone has no key for today', async () => {
+      await reachTheCall(null);
+      expect(await screen.findByTestId('farmer-otp-sheet-problem')).toHaveTextContent(
+        /no office key for today/,
+      );
+    });
   });
 });

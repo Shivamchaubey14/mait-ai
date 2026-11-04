@@ -200,6 +200,78 @@ async function writeQueue(jobs: QueuedJob[]): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
 }
 
+/** Told the whole queue, as it now stands, every time it changes. */
+export type QueueListener = (jobs: QueuedJob[]) => void;
+const listeners = new Set<QueueListener>();
+
+/**
+ * Hear about every change to the queue.
+ *
+ * The count on Home and the rows of the waiting list are the same fact — what is still to be
+ * sent — and they used to be two copies of it, each set from its own handful of places. One
+ * was refreshed and the other was not, and Home said "3 waiting" over a waiting list with
+ * nothing on it. Both now come from here, from the queue itself, after every change it makes.
+ * Returns the way to stop listening.
+ */
+export function subscribeQueue(listener: QueueListener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/**
+ * What is in the queue, one line per job, in the Metro terminal — development builds only.
+ *
+ * The queue lives on the handset, where nobody at a desk can see it. When Home says something
+ * is waiting that the server says is done, this is how to find out what it is.
+ */
+export function describeQueue(jobs: QueuedJob[]): string {
+  if (jobs.length === 0) {
+    return '[queue] empty';
+  }
+  const lines = jobs.map(
+    job =>
+      `  ${job.kind} · ${job.label?.farmer || '—'} · event ${String(job.payload.eventId ?? '—')} · ` +
+      `${job.failed ? `REFUSED: ${job.lastError ?? ''}` : `attempts ${job.attempts}`} · ${job.clientUuid}`,
+  );
+  return [`[queue] ${jobs.length} job(s):`, ...lines].join('\n');
+}
+
+function announce(jobs: QueuedJob[]): void {
+  if (__DEV__) {
+    console.warn(describeQueue(jobs));
+  }
+  listeners.forEach(listener => {
+    try {
+      listener(jobs);
+    } catch {
+      // A screen that cannot take the news must not stop the queue, or the next listener.
+    }
+  });
+}
+
+/** The change being written, so the next one waits for it. */
+let writing: Promise<void> = Promise.resolve();
+
+/**
+ * Change the queue, one change at a time.
+ *
+ * Every change reads the whole queue, alters it, and writes it back. Two at once — a capture
+ * queued behind its card while a background send removes what it has sent — each read the same
+ * list and the later write erased the earlier: a job lost, or one already sent brought back to
+ * be counted and sent again. So changes wait their turn, and each one reads what the last left.
+ */
+function mutate(change: (jobs: QueuedJob[]) => QueuedJob[]): Promise<void> {
+  const run = writing.then(async () => {
+    const next = change(await readQueue());
+    await writeQueue(next);
+    announce(next);
+  });
+  writing = run.catch(() => undefined);
+  return run;
+}
+
 /**
  * Add a job, in order.
  *
@@ -222,15 +294,12 @@ export async function enqueue(
     attempts: 0,
     ...(label ? { label } : {}),
   };
-  const jobs = await readQueue();
-  jobs.push(job);
-  await writeQueue(jobs);
+  await mutate(jobs => [...jobs, job]);
   return job;
 }
 
 export async function removeJob(id: string): Promise<void> {
-  const jobs = await readQueue();
-  await writeQueue(jobs.filter(job => job.id !== id));
+  await mutate(jobs => jobs.filter(job => job.id !== id));
 }
 
 /**
@@ -246,8 +315,7 @@ export async function recordFailure(
   message: string,
   { permanent = false, status }: { permanent?: boolean; status?: number } = {},
 ): Promise<void> {
-  const jobs = await readQueue();
-  await writeQueue(
+  await mutate(jobs =>
     jobs.map(job => {
       if (job.id !== id) {
         return job;
@@ -278,8 +346,7 @@ export function isDue(job: QueuedJob, now: number = Date.now()): boolean {
  * a refusal that un-refused itself would be back to retrying forever.
  */
 export async function retryFailed(id: string): Promise<void> {
-  const jobs = await readQueue();
-  await writeQueue(
+  await mutate(jobs =>
     jobs.map(job =>
       job.id === id ? { ...job, failed: false, failedStatus: undefined, nextAttemptAt: 0 } : job,
     ),
@@ -347,8 +414,7 @@ export async function blockDependentsOf(
   reason: string,
 ): Promise<void> {
   const payloadKey = kind === 'animal' ? 'animal_client_uuid' : 'non_member_client_uuid';
-  const jobs = await readQueue();
-  await writeQueue(
+  await mutate(jobs =>
     jobs.map(job =>
       job.payload[payloadKey] === ref && !job.failed
         ? { ...job, failed: true, lastError: reason }
@@ -380,5 +446,91 @@ export async function pendingCount(): Promise<number> {
  * Mait it belongs to. A job that will not send needs a person to look at it, not a wipe.
  */
 export async function clearQueue(): Promise<void> {
-  await AsyncStorage.multiRemove([STORAGE_KEY, SERVER_IDS_KEY]);
+  const run = writing.then(async () => {
+    await AsyncStorage.multiRemove([STORAGE_KEY, SERVER_IDS_KEY]);
+    announce([]);
+  });
+  writing = run.catch(() => undefined);
+  await run;
+}
+
+/** Where one Mait's unsent work waits while they are signed out by the server, not by choice. */
+const HELD_PREFIX = 'maitai.queue.held.v1';
+
+/**
+ * Put the queue aside for its owner, without losing a job of it.
+ *
+ * A session ends two ways. A Mait signs out from a button, having been warned about anything
+ * unsent — that is `clearQueue`. Or the server ends it: the refresh token runs out after a
+ * week in a village with no signal, or the office revokes it. That used to clear the queue
+ * too, so a Mait who rode back into signal after eight days lost the inseminations they had
+ * done while away — the one outcome this queue exists to prevent.
+ *
+ * So a session the server ended keeps its work. The jobs and the id map move under the
+ * owner's user id, out of the active queue, so whoever signs in next neither sees them nor
+ * sends them under their own token. `restoreHeldQueue` brings them back when the same Mait
+ * signs in again.
+ */
+export async function holdQueue(owner: number): Promise<void> {
+  const run = writing.then(async () => {
+    const [rawJobs, rawIds] = (await AsyncStorage.multiGet([STORAGE_KEY, SERVER_IDS_KEY])).map(
+      pair => pair[1],
+    );
+    const jobs = rawJobs ? (JSON.parse(rawJobs) as QueuedJob[]) : [];
+    if (jobs.length > 0) {
+      const key = `${HELD_PREFIX}.${owner}`;
+      // Added to anything already held for them, never written over it.
+      const before = await AsyncStorage.getItem(key);
+      const held = before
+        ? (JSON.parse(before) as { jobs: QueuedJob[]; serverIds: Record<string, number> })
+        : { jobs: [], serverIds: {} };
+      const ids = rawIds ? (JSON.parse(rawIds) as Record<string, number>) : {};
+      await AsyncStorage.setItem(
+        key,
+        JSON.stringify({
+          jobs: [...held.jobs, ...jobs],
+          serverIds: { ...held.serverIds, ...ids },
+        }),
+      );
+    }
+    await AsyncStorage.multiRemove([STORAGE_KEY, SERVER_IDS_KEY]);
+    announce([]);
+  });
+  writing = run.catch(() => undefined);
+  await run;
+}
+
+/**
+ * Hand a Mait back the work held for them when the server ended their last session.
+ *
+ * Merged behind anything already queued, in the order it was captured, so the drain sends it
+ * exactly as it would have. A no-op for anyone with nothing held.
+ */
+export async function restoreHeldQueue(owner: number): Promise<number> {
+  let restored = 0;
+  const run = writing.then(async () => {
+    const key = `${HELD_PREFIX}.${owner}`;
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) {
+      return;
+    }
+    const held = JSON.parse(raw) as { jobs: QueuedJob[]; serverIds: Record<string, number> };
+    const [rawJobs, rawIds] = (await AsyncStorage.multiGet([STORAGE_KEY, SERVER_IDS_KEY])).map(
+      pair => pair[1],
+    );
+    const jobs = rawJobs ? (JSON.parse(rawJobs) as QueuedJob[]) : [];
+    const ids = rawIds ? (JSON.parse(rawIds) as Record<string, number>) : {};
+    const known = new Set(jobs.map(job => job.id));
+    const merged = [...jobs, ...held.jobs.filter(job => !known.has(job.id))];
+    await AsyncStorage.multiSet([
+      [STORAGE_KEY, JSON.stringify(merged)],
+      [SERVER_IDS_KEY, JSON.stringify({ ...held.serverIds, ...ids })],
+    ]);
+    await AsyncStorage.removeItem(key);
+    restored = held.jobs.length;
+    announce(merged);
+  });
+  writing = run.catch(() => undefined);
+  await run;
+  return restored;
 }

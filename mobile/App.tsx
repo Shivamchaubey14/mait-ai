@@ -6,13 +6,15 @@
  */
 
 import React, { useEffect } from 'react';
+import { LogBox } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
 import { Quicksand_600SemiBold, Quicksand_700Bold, useFonts } from '@expo-google-fonts/quicksand';
 import { NunitoSans_400Regular, NunitoSans_600SemiBold } from '@expo-google-fonts/nunito-sans';
+import { TiroDevanagariHindi_400Regular } from '@expo-google-fonts/tiro-devanagari-hindi';
 
-import '@/i18n';
+import { restoreLanguage } from '@/i18n';
 import { maitaiApi } from '@api/endpoints';
 import { profileRefreshed, sessionRestored } from '@/features/auth/authSlice';
 import { toAuthUser } from '@/features/auth/liveScope';
@@ -20,17 +22,23 @@ import { loadSession } from '@/features/auth/session';
 import { discoverServerAddress, restoreServerAddress } from '@/config/serverAddress';
 import Shell from '@/navigation/Shell';
 import { store } from '@/store';
-import { colors } from '@theme/tokens';
+
+// The queue's own report of what it holds (see `describeQueue`) is for the Metro terminal, not
+// for a yellow box over the screen of whoever is testing on a handset.
+if (__DEV__) {
+  LogBox.ignoreLogs(['[queue]']);
+}
 
 export default function App(): React.JSX.Element {
-  // Quicksand for headings, Nunito Sans for body (docs/SCREEN_INVENTORY.md). Rendering
-  // before they load would show the system font and then reflow — visible, and worse on the
-  // low-end hardware this runs on.
+  // Quicksand for headings, Nunito Sans for body (docs/SCREEN_INVENTORY.md), Tiro Devanagari
+  // Hindi for anything in Hindi (see `AppText`). Rendering before they load would show the
+  // system font and then reflow — visible, and worse on the low-end hardware this runs on.
   const [fontsLoaded] = useFonts({
     Quicksand_600SemiBold,
     Quicksand_700Bold,
     NunitoSans_400Regular,
     NunitoSans_600SemiBold,
+    TiroDevanagariHindi_400Regular,
   });
 
   // Read once at launch. A Mait stays signed in until they sign out — the access token
@@ -38,8 +46,9 @@ export default function App(): React.JSX.Element {
   // refresh token does rather than as long as the app happens to stay in memory.
   useEffect(() => {
     // The server's last known address first, before any request can go out — then ask whether
-    // it has moved, without holding the launch up for the answer.
-    restoreServerAddress()
+    // it has moved, without holding the launch up for the answer. The saved language beside it,
+    // so the first screen is drawn in it rather than in English and then redrawn.
+    Promise.all([restoreServerAddress(), restoreLanguage()])
       .then(() => {
         discoverServerAddress({ force: true });
         return loadSession();
@@ -98,7 +107,7 @@ export default function App(): React.JSX.Element {
   return (
     <Provider store={store}>
       <SafeAreaProvider>
-        <StatusBar style="light" backgroundColor={colors.primary} />
+        <StatusBar style="light" />
         {/* The splash renders in the system font for the moment before the real ones
             arrive. That is deliberate — a blank Ink field would look like a hang, and the
             wordmark is type either way. */}

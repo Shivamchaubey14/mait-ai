@@ -109,14 +109,38 @@ export const unsafeForTextOnLight = [colors.warning, colors.secondary];
  * registers — a bare "Quicksand" resolves to nothing and silently falls back to the system
  * font, which looks almost right and is therefore easy to miss.
  *
- * Two families only. No third face anywhere.
+ * Two families for Latin, plus one for Hindi: neither Quicksand nor Nunito Sans has
+ * Devanagari, so Hindi text would otherwise fall back to whatever the handset ships.
  */
 export const fonts = {
   headingBold: 'Quicksand_700Bold',
   heading: 'Quicksand_600SemiBold',
   body: 'NunitoSans_400Regular',
   bodyStrong: 'NunitoSans_600SemiBold',
+  /** Hindi (Devanagari). `AppText` switches to it on its own. One weight only. */
+  hindi: 'TiroDevanagariHindi_400Regular',
 } as const;
+
+/**
+ * What a style becomes when the text in it is Hindi — the same treatment as the Indent app
+ * (shwetDhara_project/mobile), so the two read alike on one handset.
+ *
+ * Tiro has one weight, so the weight is dropped rather than faked. A point larger, because
+ * Devanagari at the Latin size reads small. The line height rises to 1.5x so the matras above
+ * and below the line are not clipped. No letter-spacing, which breaks the headline joining
+ * the letters, and no uppercase, which Devanagari does not have.
+ */
+export function hindiTextStyle(style: { fontSize?: number; lineHeight?: number }) {
+  const size = (style.fontSize ?? 15) + 1;
+  return {
+    fontFamily: fonts.hindi,
+    fontWeight: 'normal',
+    fontSize: size,
+    lineHeight: Math.max(style.lineHeight ?? 0, Math.round(size * 1.5)),
+    letterSpacing: 0,
+    textTransform: 'none',
+  } as const;
+}
 
 /**
  * Numbers, the +91 prefix and OTP digits use the heading face so they read as display

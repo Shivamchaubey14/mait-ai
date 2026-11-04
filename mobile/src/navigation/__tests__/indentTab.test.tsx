@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { BackHandler } from 'react-native';
+import { BackHandler, type HardwareBackPressEvent } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { act, fireEvent, screen } from '@testing-library/react-native';
 
@@ -113,7 +113,7 @@ describe('the Indent tab', () => {
   });
 
   it('goes Home on Android’s back, like every other tab', async () => {
-    const handlers: (() => boolean | null | undefined)[] = [];
+    const handlers: Parameters<typeof BackHandler.addEventListener>[1][] = [];
     jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_, handler) => {
       handlers.push(handler);
       return { remove: () => {} } as ReturnType<typeof BackHandler.addEventListener>;
@@ -123,7 +123,10 @@ describe('the Indent tab', () => {
     await screen.findByTestId('indent-count');
 
     act(() => {
-      handlers[handlers.length - 1]?.();
+      handlers[handlers.length - 1]?.({
+        type: 'hardwareBackPress',
+        timeStamp: Date.now(),
+      } satisfies HardwareBackPressEvent);
     });
 
     expect(await screen.findByTestId('home-start-ai')).toBeTruthy();

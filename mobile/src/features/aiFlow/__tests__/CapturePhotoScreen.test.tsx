@@ -24,6 +24,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import CapturePhotoScreen from '../CapturePhotoScreen';
 import type { CapturedPhoto } from '../CapturePhotoScreen';
 import { renderWithStore } from '@/test-utils';
+import { colors } from '@theme/tokens';
 
 const mockTakePicture = jest.fn();
 const mockLaunchLibrary = jest.fn();
@@ -296,6 +297,19 @@ describe('the wait after Continue', () => {
     await screen.findByTestId('photo-continue');
     return onCaptured;
   }
+
+  it('says what the button does for a member: it records the AI', async () => {
+    await reviewing({ ctaLabel: 'Record the AI' });
+
+    expect(screen.getByTestId('photo-continue')).toHaveTextContent('Record the AI');
+  });
+
+  it('offers a retake as a button of its own, not small print', async () => {
+    await reviewing({});
+
+    expect(screen.getByTestId('photo-retake')).toHaveTextContent('Take it again');
+    expect(screen.getByTestId('photo-retake')).toHaveStyle({ borderColor: colors.info });
+  });
 
   it('shows nothing extra while the button is simply waiting to be pressed', async () => {
     await reviewing({});

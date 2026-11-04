@@ -23,7 +23,8 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Glyph from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
@@ -77,14 +78,14 @@ function Figure({
     <View style={styles.figure} testID={testID}>
       <View style={styles.figureHead}>
         <Ionicons name={icon} size={13} color={colors.textMuted} />
-        <Text style={styles.figureLabel} numberOfLines={1}>
+        <AppText style={styles.figureLabel} numberOfLines={1}>
           {label}
-        </Text>
+        </AppText>
       </View>
-      <Text style={[styles.figureValue, styles[`figureValue_${tone}`]]}>{value}</Text>
-      <Text style={styles.figureHint} numberOfLines={1}>
+      <AppText style={[styles.figureValue, styles[`figureValue_${tone}`]]}>{value}</AppText>
+      <AppText style={styles.figureHint} numberOfLines={1}>
         {hint}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -258,42 +259,42 @@ export default function ApprovalScreen({
             <View style={[styles.chip, styles.chipWarm]}>
               <Ionicons name="person" size={15} color={colors.surface} />
             </View>
-            <Text style={[styles.cardTitle, styles.titleWarm]}>{t('zonal.whoIsAsking')}</Text>
+            <AppText style={[styles.cardTitle, styles.titleWarm]}>{t('zonal.whoIsAsking')}</AppText>
             <View style={[styles.waited, waited >= 3 && styles.waitedLong]}>
               <Ionicons
                 name="time-outline"
                 size={12}
                 color={waited >= 3 ? colors.surface : yolk[800]}
               />
-              <Text style={[styles.waitedLabel, waited >= 3 && styles.waitedLabelLong]}>
+              <AppText style={[styles.waitedLabel, waited >= 3 && styles.waitedLabelLong]}>
                 {t('zonal.waitedDays', { count: waited })}
-              </Text>
+              </AppText>
             </View>
           </View>
           <View style={styles.inset}>
-            <Text style={styles.fact}>
-              <Text style={styles.factLabel}>{`${t('zonal.maitNameLabel')}: `}</Text>
+            <AppText style={styles.fact}>
+              <AppText style={styles.factLabel}>{`${t('zonal.maitNameLabel')}: `}</AppText>
               {first.mait_name}
-            </Text>
-            <Text style={styles.fact}>
-              <Text style={styles.factLabel}>{`${t('zonal.vendorCodeLabel')}: `}</Text>
+            </AppText>
+            <AppText style={styles.fact}>
+              <AppText style={styles.factLabel}>{`${t('zonal.vendorCodeLabel')}: `}</AppText>
               {first.mait_code || '—'}
-            </Text>
-            <Text style={styles.fact}>
-              <Text style={styles.factLabel}>{`${t('zonal.raisedLabel')}: `}</Text>
+            </AppText>
+            <AppText style={styles.fact}>
+              <AppText style={styles.factLabel}>{`${t('zonal.raisedLabel')}: `}</AppText>
               {`${raised.getDate()} ${MONTHS[raised.getMonth()]} ${raised.getFullYear()}, ${clock(
                 first.requested_at,
               )}`}
-            </Text>
+            </AppText>
           </View>
           {!!first.mpp_names.length && (
             <View style={styles.chips}>
               {first.mpp_names.map(name => (
                 <View key={name} style={styles.place}>
                   <Ionicons name="location" size={12} color={colors.info} />
-                  <Text style={styles.placeLabel} numberOfLines={1}>
+                  <AppText style={styles.placeLabel} numberOfLines={1}>
                     {name}
-                  </Text>
+                  </AppText>
                 </View>
               ))}
             </View>
@@ -308,18 +309,20 @@ export default function ApprovalScreen({
               <View style={[styles.chip, styles.chipInk]}>
                 <Ionicons name="chatbubble-ellipses" size={14} color={colors.surface} />
               </View>
-              <Text style={styles.cardTitle}>{t('zonal.theirNote')}</Text>
+              <AppText style={styles.cardTitle}>{t('zonal.theirNote')}</AppText>
             </View>
             {notes.map(note => (
-              <Text key={note} style={styles.note}>
+              <AppText key={note} style={styles.note}>
                 {`“${note}”`}
-              </Text>
+              </AppText>
             ))}
           </View>
         )}
 
         {many && (
-          <Text style={styles.section}>{t('zonal.itemsInRequest', { count: rows.length })}</Text>
+          <AppText style={styles.section}>
+            {t('zonal.itemsInRequest', { count: rows.length })}
+          </AppText>
         )}
 
         {rows.map(row => {
@@ -337,14 +340,14 @@ export default function ApprovalScreen({
                   <Glyph name={itemIcon(row)} size={18} color={colors.surface} />
                 </View>
                 <View style={styles.itemBody}>
-                  <Text style={styles.itemName} numberOfLines={2}>
+                  <AppText style={styles.itemName} numberOfLines={2}>
                     {item}
-                  </Text>
-                  <Text style={styles.itemMeta}>{`IND-${row.id}`}</Text>
+                  </AppText>
+                  <AppText style={styles.itemMeta}>{`IND-${row.id}`}</AppText>
                 </View>
                 <View style={styles.qty}>
-                  <Text style={styles.qtyValue}>{row.qty_requested}</Text>
-                  <Text style={styles.qtyUnit}>{row.unit || t('zonal.asked')}</Text>
+                  <AppText style={styles.qtyValue}>{row.qty_requested}</AppText>
+                  <AppText style={styles.qtyUnit}>{row.unit || t('zonal.asked')}</AppText>
                 </View>
               </View>
 
@@ -355,7 +358,7 @@ export default function ApprovalScreen({
                   tone={pill.tone}
                   testID={many ? `zonal-decision-pill-${row.id}` : 'zonal-decision-pill'}
                 />
-                <Text style={styles.verdictBody}>{verdict(row)}</Text>
+                <AppText style={styles.verdictBody}>{verdict(row)}</AppText>
               </View>
 
               {/* Read against each other: a Mait holding thirty who asks for twenty-five is a
@@ -409,7 +412,7 @@ export default function ApprovalScreen({
 
         <View style={styles.aside}>
           <Ionicons name="information-circle" size={18} color={colors.info} />
-          <Text style={styles.asideText}>{t('zonal.whatHappensNext')}</Text>
+          <AppText style={styles.asideText}>{t('zonal.whatHappensNext')}</AppText>
         </View>
       </ScrollView>
 
@@ -466,7 +469,7 @@ export default function ApprovalScreen({
           </View>
         }
       >
-        <Text style={styles.reasonLabel}>{t('zonal.reasonLabel')}</Text>
+        <AppText style={styles.reasonLabel}>{t('zonal.reasonLabel')}</AppText>
         <TextInput
           value={reason}
           onChangeText={setReason}
@@ -477,7 +480,7 @@ export default function ApprovalScreen({
           maxLength={200}
           testID="zonal-reason-input"
         />
-        <Text style={styles.reasonHint}>{t('zonal.reasonHint')}</Text>
+        <AppText style={styles.reasonHint}>{t('zonal.reasonHint')}</AppText>
       </Sheet>
     </View>
   );

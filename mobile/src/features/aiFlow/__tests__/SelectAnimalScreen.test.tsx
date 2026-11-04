@@ -11,8 +11,39 @@ import { Image } from 'react-native';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import SelectAnimalScreen from '../SelectAnimalScreen';
+import { clearQueue, enqueue } from '@api/queue';
 import type { Animal } from '@api/types';
 import { jsonResponse, renderWithStore } from '@/test-utils';
+
+/** The camera, reduced to what this screen cares about: a photo came back. */
+jest.mock('../FlowCamera', () => {
+  const Actual = jest.requireActual('react');
+  const { Pressable, Text } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: ({
+      testIDPrefix,
+      onCaptured,
+    }: {
+      testIDPrefix: string;
+      onCaptured: (uri: string) => void;
+    }) =>
+      Actual.createElement(
+        Pressable,
+        {
+          testID: `${testIDPrefix}-stub`,
+          onPress: () => onCaptured(`file:///${testIDPrefix}.jpg`),
+        },
+        Actual.createElement(Text, null, 'capture'),
+      ),
+  };
+});
+
+/** Photograph her in the sheet — required before she can be saved. */
+function takeHerPhoto() {
+  fireEvent.press(screen.getByTestId('animal-photo'));
+  fireEvent.press(screen.getByTestId('animal-camera-stub'));
+}
 
 const OWNER = { name: 'KAVITA DEVI', memberCode: '0906167700010001' };
 
@@ -81,6 +112,25 @@ describe('SelectAnimalScreen', () => {
     renderScreen([TAGGED, UNTAGGED]);
 
     expect(screen.getByText('KAVITA DEVI has 2 on record.')).toBeTruthy();
+  });
+
+  it('puts the add card under the cow / buffalo switch, and the newest animal under it', () => {
+    const older = animal({ id: 5, created_at: '2026-01-01T05:00:00Z' });
+    const newest = animal({ id: 6, created_at: '2026-06-01T05:00:00Z' });
+    const middle = animal({ id: 7, created_at: '2026-03-01T05:00:00Z' });
+    renderScreen([older, newest, middle]);
+
+    // In the order they are drawn, top to bottom.
+    const order = screen
+      .getAllByTestId(/^animal-(type-COW|add-card|\d+)$/)
+      .map(node => String(node.props.testID));
+    expect(order).toEqual([
+      'animal-type-COW',
+      'animal-add-card',
+      'animal-6',
+      'animal-7',
+      'animal-5',
+    ]);
   });
 
   it('tells one cow from another by tag, and by when she was last served', async () => {
@@ -232,6 +282,7 @@ describe('SelectAnimalScreen', () => {
     fireEvent.press(screen.getByTestId('animal-breed-HF_CROSS'));
 
     created = jsonResponse(animal({ id: 9, animal_type: 'BUFF' }), 201);
+    takeHerPhoto();
     fireEvent.press(screen.getByTestId('animal-save'));
 
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 9 })));
@@ -239,6 +290,75 @@ describe('SelectAnimalScreen', () => {
       member_code: OWNER.memberCode,
       animal_type: 'BUFF',
       breed: 'HF_CROSS',
+    });
+  });
+
+  it('will not save an animal without her photo, and says so', async () => {
+    renderScreen([]);
+
+    fireEvent.press(screen.getByTestId('animal-add-card'));
+    fireEvent.press(screen.getByTestId('animal-breed'));
+    await waitFor(() => expect(screen.getByTestId('animal-breed-HF_CROSS')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('animal-breed-HF_CROSS'));
+
+    expect(screen.getByTestId('animal-photo-required')).toHaveTextContent(/photo/i);
+    expect(screen.getByTestId('animal-save')).toBeDisabled();
+    fireEvent.press(screen.getByTestId('animal-save'));
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/animals/'),
+      expect.anything(),
+    );
+
+    takeHerPhoto();
+    expect(screen.queryByTestId('animal-photo-required')).toBeNull();
+    expect(screen.getByTestId('animal-save')).not.toBeDisabled();
+  });
+
+  describe('one semen, then 21 days', () => {
+    afterEach(() => clearQueue());
+
+    it('holds back an animal served inside 21 days, saying from when', () => {
+      const served = animal({
+        id: 11,
+        last_ai_at: '2026-10-20T06:30:00Z',
+        next_ai_block: 'too_soon',
+        next_ai_on: '2026-11-10',
+      });
+      renderScreen([served, TAGGED]);
+
+      expect(screen.getByTestId('animal-11')).toHaveTextContent(/Next semen from 10 Nov 2026/);
+      expect(screen.getByTestId('animal-rule')).toHaveTextContent(
+        /Only one semen per animal\. The next can be given 21 days later/,
+      );
+
+      fireEvent.press(screen.getByTestId('animal-11'));
+      expect(screen.getByTestId('animal-continue')).toBeDisabled();
+    });
+
+    it('holds back a pregnant animal until she calves', () => {
+      renderScreen([animal({ id: 12, next_ai_block: 'pregnant', next_ai_on: '2027-06-01' })]);
+      expect(screen.getByTestId('animal-12')).toHaveTextContent(/Pregnant.*1 Jun 2027/);
+    });
+
+    it('holds back an animal with an AI still unfinished', () => {
+      renderScreen([animal({ id: 13, next_ai_block: 'open' })]);
+      expect(screen.getByTestId('animal-13')).toHaveTextContent(/unfinished/);
+    });
+
+    it('holds back an animal served on this phone, before the server has heard', async () => {
+      await enqueue('createEvent', 'capture-1', { animal_id: 14, mpp_code: '001303' });
+      renderScreen([animal({ id: 14 })]);
+
+      await waitFor(() =>
+        expect(screen.getByTestId('animal-14')).toHaveTextContent(/waiting to send/),
+      );
+    });
+
+    it('lets every other animal through', () => {
+      renderScreen([TAGGED]);
+      expect(screen.queryByTestId('animal-rule')).toBeNull();
+      fireEvent.press(screen.getByTestId('animal-1'));
+      expect(screen.getByTestId('animal-continue')).not.toBeDisabled();
     });
   });
 
@@ -255,6 +375,7 @@ describe('SelectAnimalScreen', () => {
       { errors: { ear_tag_no: ['That ear tag is already registered.'] } },
       400,
     );
+    takeHerPhoto();
     fireEvent.press(screen.getByTestId('animal-save'));
 
     await waitFor(() =>

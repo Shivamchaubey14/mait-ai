@@ -17,7 +17,8 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -99,11 +100,11 @@ function EventRow({
     >
       <View style={styles.rowTop}>
         <View style={[styles.number, styles[`number_${tone}`]]}>
-          <Text style={styles.numberLabel}>{`#${row.id}`}</Text>
+          <AppText style={styles.numberLabel}>{`#${row.id}`}</AppText>
         </View>
-        <Text style={styles.rowName} numberOfLines={1}>
+        <AppText style={styles.rowName} numberOfLines={1}>
           {row.owner_name || t('zonal.notRecorded')}
-        </Text>
+        </AppText>
         <Pill
           label={t(member ? 'zonal.member' : 'zonal.nonMember')}
           tone={member ? 'good' : 'waiting'}
@@ -111,21 +112,25 @@ function EventRow({
       </View>
 
       <View style={styles.rowFacts}>
-        <Text style={styles.rowFact} numberOfLines={1}>
-          <Text style={[styles.rowFactLabel, styles.labelInfo]}>{`${t('zonal.mppLabel')}: `}</Text>
+        <AppText style={styles.rowFact} numberOfLines={1}>
+          <AppText
+            style={[styles.rowFactLabel, styles.labelInfo]}
+          >{`${t('zonal.mppLabel')}: `}</AppText>
           {[row.mpp_name, row.mpp_code].filter(Boolean).join(' · ')}
-        </Text>
-        <Text style={styles.rowFact} numberOfLines={1}>
-          <Text style={[styles.rowFactLabel, styles.labelWarm]}>{`${t('zonal.theMait')}: `}</Text>
+        </AppText>
+        <AppText style={styles.rowFact} numberOfLines={1}>
+          <AppText
+            style={[styles.rowFactLabel, styles.labelWarm]}
+          >{`${t('zonal.theMait')}: `}</AppText>
           {[row.mait_name, row.mait_code].filter(Boolean).join(' · ')}
-        </Text>
+        </AppText>
       </View>
 
       <View style={styles.rowFoot}>
         <Ionicons name="calendar-outline" size={13} color={colors.textMuted} />
-        <Text style={styles.rowWhen} numberOfLines={1}>
+        <AppText style={styles.rowWhen} numberOfLines={1}>
           {[stamp(row.created_at), row.breed].filter(Boolean).join(' · ')}
-        </Text>
+        </AppText>
         <Pill label={row.status_display} tone={PILL_TONE[tone]} />
         <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
       </View>
@@ -287,17 +292,17 @@ export default function AllEventsScreen({
           testID="zonal-events-dates"
         >
           <View style={styles.dateBox}>
-            <Text style={styles.dateLabel}>{t('zonal.fromDate')}</Text>
-            <Text style={[styles.dateValue, !dates && styles.dateEmpty]} numberOfLines={1}>
+            <AppText style={styles.dateLabel}>{t('zonal.fromDate')}</AppText>
+            <AppText style={[styles.dateValue, !dates && styles.dateEmpty]} numberOfLines={1}>
               {dates ? dayOf(dates.from) : t('zonal.anyDate')}
-            </Text>
+            </AppText>
           </View>
           <Ionicons name="arrow-forward" size={16} color={colors.info} />
           <View style={styles.dateBox}>
-            <Text style={styles.dateLabel}>{t('zonal.toDate')}</Text>
-            <Text style={[styles.dateValue, !dates && styles.dateEmpty]} numberOfLines={1}>
+            <AppText style={styles.dateLabel}>{t('zonal.toDate')}</AppText>
+            <AppText style={[styles.dateValue, !dates && styles.dateEmpty]} numberOfLines={1}>
               {dates ? dayOf(dates.to) : t('zonal.anyDate')}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.calendarChip}>
             <Ionicons name="calendar" size={16} color={colors.surface} />
@@ -311,7 +316,7 @@ export default function AllEventsScreen({
             testID="zonal-events-clear"
           >
             <Ionicons name="close-circle" size={16} color={colors.error} />
-            <Text style={styles.clearLabel}>{t('zonal.clearDates')}</Text>
+            <AppText style={styles.clearLabel}>{t('zonal.clearDates')}</AppText>
           </Pressable>
         )}
       </View>

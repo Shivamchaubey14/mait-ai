@@ -14,7 +14,8 @@
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -70,10 +71,12 @@ export default function CollectPaymentScreen({
         <View style={styles.amountChip}>
           <Ionicons name="cash" size={22} color={colors.ink} />
         </View>
-        <Text style={styles.amountLabel}>{t('payment.toCollectFrom', { name: farmerName })}</Text>
-        <Text style={styles.amount}>
+        <AppText style={styles.amountLabel}>
+          {t('payment.toCollectFrom', { name: farmerName })}
+        </AppText>
+        <AppText style={styles.amount}>
           {event.amount_due ? `₹ ${Math.round(Number(event.amount_due))}` : t('payment.unpriced')}
-        </Text>
+        </AppText>
       </View>
 
       <OptionCard
@@ -103,7 +106,7 @@ export default function CollectPaymentScreen({
       {!online && (
         <View style={styles.offline} testID="payment-offline">
           <Ionicons name="cloud-offline" size={18} color={ink[600]} />
-          <Text style={styles.offlineText}>{t('payment.offlineTakeCash')}</Text>
+          <AppText style={styles.offlineText}>{t('payment.offlineTakeCash')}</AppText>
         </View>
       )}
 

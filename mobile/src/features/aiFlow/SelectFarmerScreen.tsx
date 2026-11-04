@@ -79,12 +79,14 @@ export default function SelectFarmerScreen({
         disabled: !chosen,
         testID: 'farmer-continue',
       }}
-      // A text link, not a second card in the list: it is a different kind of answer to the
-      // question the screen is asking, and it leaves the flow rather than advancing it.
+      // Not a second card in the list: it is a different kind of answer to the question the
+      // screen is asking, and it leaves the flow rather than advancing it. A blue button rather
+      // than a text link, so a Mait standing with a non-member can find the way to register her.
       link={{
         label: t('aiFlow.sheIsNotAMember'),
         onPress: onAddNonMember,
         testID: 'add-non-member',
+        button: true,
       }}
     >
       {isError && <FlowNotice tone="error" title={t('errors.generic')} testID="member-error" />}

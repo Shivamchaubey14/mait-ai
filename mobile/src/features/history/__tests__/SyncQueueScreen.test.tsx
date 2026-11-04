@@ -43,6 +43,18 @@ const KAVITA = job({
 });
 
 describe('toCaptures', () => {
+  it('asks no code of a member, whose charge comes off her milk', () => {
+    const [amaravti] = toCaptures([
+      job({
+        clientUuid: 'amaravti',
+        kind: 'verifyPayment',
+        payload: { eventId: null },
+        label: { farmer: 'Amaravti Devi', kind: 'member', amount: '100.00', at: '16:30' },
+      }),
+    ]);
+    expect(amaravti!.needsCode).toBe(false);
+  });
+
   it('groups jobs into one row per insemination', () => {
     const captures = toCaptures([
       KAVITA,

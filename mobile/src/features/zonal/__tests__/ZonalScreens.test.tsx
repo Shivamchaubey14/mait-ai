@@ -410,7 +410,7 @@ const EVENT: ZonalEvent = {
   ],
 };
 
-type Route = (request: Request) => Response | undefined;
+type Route = (request: Request) => Response | undefined | Promise<Response | undefined>;
 
 /** How many times the dashboard has been asked for, so a refetch can be seen to happen. */
 function dashboardCalls(): number {
@@ -421,7 +421,7 @@ function dashboardCalls(): number {
 
 function mockApi(route: Route = () => undefined) {
   (global.fetch as jest.Mock).mockImplementation(async (input: Request) => {
-    const answer = route(input);
+    const answer = await route(input);
     if (answer) {
       return answer;
     }
@@ -1042,7 +1042,8 @@ describe('IndentsScreen', () => {
   it('keeps two trips to the request screen as two requests', () => {
     const later = approval({ id: 30, requested_at: '2026-09-19T09:00:00Z' });
     const groups = groupIndents([...LIST, later]);
-    expect(groups.map(group => group.rows.map(row => row.id))).toEqual([[20, 21], [30]]);
+    // Newest request first, so the one that just came in is the one at the top.
+    expect(groups.map(group => group.rows.map(row => row.id))).toEqual([[30], [20, 21]]);
     // Different Maits are never merged, however close together they asked.
     expect(groupIndents(QUEUE)).toHaveLength(4);
   });
@@ -1429,7 +1430,11 @@ describe('ZonalProfileScreen', () => {
   it('gives the zone, the patch and the language a colour and a figure each', async () => {
     mockApi();
     renderWithStore(
-      <ZonalProfileScreen onOpenEvents={jest.fn()} onOpenAssign={jest.fn()} onOpenSearch={jest.fn()} />,
+      <ZonalProfileScreen
+        onOpenEvents={jest.fn()}
+        onOpenAssign={jest.fn()}
+        onOpenSearch={jest.fn()}
+      />,
     );
 
     await waitFor(() => expect(screen.getByTestId('zonal-profile-maits')).toHaveTextContent(/11/));
@@ -1498,17 +1503,58 @@ describe('AssignMppScreen', () => {
     },
   ];
 
-  it('lists the zone, assigns a typed code, and names who it moved from', async () => {
-    const assigned = jest.fn();
+  /** What the zone's lookup answers for a typed code: the points, each with its holder. */
+  const HITS = {
+    maits: [],
+    mpps: [
+      {
+        mpp_code: '009001',
+        mpp_name: 'NANDGAON',
+        plant_name: 'AKBARPUR',
+        mait: { name: 'Sunil Kumar', sahayak_vendor_code: '5500000054', mobile_no: '' },
+      },
+      { mpp_code: '009002', mpp_name: 'KOSI', plant_name: 'AKBARPUR', mait: null },
+    ],
+    scope: { scoped: true, zones: ['Ayodhya'], plant_codes: ['AKBARPUR'] },
+  };
+
+  it('suggests the zone’s points as a code is typed, each naming who holds it', async () => {
     mockApi((input: Request) => {
       if (input.url.includes('/zonal/maits/')) {
         return jsonResponse({ results: MAITS });
       }
+      if (input.url.includes('/zonal/lookup/')) {
+        return jsonResponse(HITS);
+      }
+      return undefined;
+    });
+
+    renderWithStore(<AssignMppScreen />);
+    await waitFor(() => expect(screen.getByTestId('assign-mait-5500000099')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('assign-mait-5500000099'));
+
+    fireEvent.changeText(screen.getByTestId('assign-mpp-input'), '0090');
+
+    await waitFor(() => expect(screen.getByTestId('assign-suggestion-009001')).toBeTruthy());
+    expect(screen.getByTestId('assign-holder-009001')).toHaveTextContent('With Sunil Kumar');
+    expect(screen.getByTestId('assign-holder-009002')).toHaveTextContent('Not assigned to anyone');
+  });
+
+  it('picks points as chips, takes one back off with its ×, and assigns the rest', async () => {
+    const assigned: string[] = [];
+    mockApi(async (input: Request) => {
+      if (input.url.includes('/zonal/maits/')) {
+        return jsonResponse({ results: MAITS });
+      }
+      if (input.url.includes('/zonal/lookup/')) {
+        return jsonResponse(HITS);
+      }
       if (input.url.includes('/zonal/assignments/')) {
-        assigned(input);
+        const body = (await input.clone().json()) as { mpp_code: string };
+        assigned.push(body.mpp_code);
         return jsonResponse({
           mait: { ...MAITS[1], mpp_codes: ['009001'], mpp_count: 1 },
-          mpp: { mpp_code: '009001', mpp_name: 'NANDGAON' },
+          mpp: { mpp_code: body.mpp_code, mpp_name: 'NANDGAON' },
           moved_from: { sahayak_vendor_code: '5500000054', name: 'Sunil Kumar' },
           already_assigned: false,
         });
@@ -1517,24 +1563,38 @@ describe('AssignMppScreen', () => {
     });
 
     renderWithStore(<AssignMppScreen />);
-
-    // The zone roster lands; pick the Mait with nothing yet.
     await waitFor(() => expect(screen.getByTestId('assign-mait-5500000099')).toBeTruthy());
     fireEvent.press(screen.getByTestId('assign-mait-5500000099'));
 
-    fireEvent.changeText(screen.getByTestId('assign-mpp-input'), '009001');
+    fireEvent.changeText(screen.getByTestId('assign-mpp-input'), '0090');
+    fireEvent.press(await screen.findByTestId('assign-suggestion-009001'));
+    fireEvent.changeText(screen.getByTestId('assign-mpp-input'), '0090');
+    fireEvent.press(await screen.findByTestId('assign-suggestion-009002'));
+
+    expect(screen.getByTestId('assign-chips')).toHaveTextContent(/009001/);
+    expect(screen.getByTestId('assign-chips')).toHaveTextContent(/009002/);
+    expect(screen.getByTestId('assign-submit')).toHaveTextContent('Assign 2 MPPs');
+
+    // The × takes one back off before anything is sent.
+    fireEvent.press(screen.getByTestId('assign-chip-remove-009002'));
+    expect(screen.getByTestId('assign-chips')).not.toHaveTextContent(/009002/);
+
     fireEvent.press(screen.getByTestId('assign-submit'));
 
-    await waitFor(() => expect(screen.getByTestId('assign-result')).toBeTruthy());
-    expect(screen.getByTestId('assign-result')).toHaveTextContent(/009001/);
-    expect(screen.getByTestId('assign-result')).toHaveTextContent(/Sunil Kumar/);
-    expect(assigned).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByTestId('assign-result-009001')).toBeTruthy());
+    expect(screen.getByTestId('assign-result-009001')).toHaveTextContent(/Sunil Kumar/);
+    expect(assigned).toEqual(['009001']);
+    // What went is cleared from the chips.
+    expect(screen.queryByTestId('assign-chips')).toBeNull();
   });
 
-  it('shows the server’s refusal when the code is outside the zone', async () => {
+  it('keeps a point the server refused, with the server’s reason', async () => {
     mockApi((input: Request) => {
       if (input.url.includes('/zonal/maits/')) {
         return jsonResponse({ results: MAITS });
+      }
+      if (input.url.includes('/zonal/lookup/')) {
+        return jsonResponse(HITS);
       }
       if (input.url.includes('/zonal/assignments/')) {
         return jsonResponse({ mpp_code: ['No such MPP in your zone.'] }, 404);
@@ -1543,14 +1603,18 @@ describe('AssignMppScreen', () => {
     });
 
     renderWithStore(<AssignMppScreen />);
-
     await waitFor(() => expect(screen.getByTestId('assign-mait-5500000054')).toBeTruthy());
     fireEvent.press(screen.getByTestId('assign-mait-5500000054'));
-    fireEvent.changeText(screen.getByTestId('assign-mpp-input'), '999999');
+    fireEvent.changeText(screen.getByTestId('assign-mpp-input'), '0090');
+    fireEvent.press(await screen.findByTestId('assign-suggestion-009002'));
     fireEvent.press(screen.getByTestId('assign-submit'));
 
-    await waitFor(() => expect(screen.getByTestId('assign-error')).toBeTruthy());
-    expect(screen.getByTestId('assign-error')).toHaveTextContent(/No such MPP in your zone/);
+    await waitFor(() => expect(screen.getByTestId('assign-result-009002')).toBeTruthy());
+    expect(screen.getByTestId('assign-result-009002')).toHaveTextContent(
+      /No such MPP in your zone/,
+    );
+    // Still a chip, to be put right and sent again.
+    expect(screen.getByTestId('assign-chips')).toHaveTextContent(/009002/);
   });
 
   it('refuses to send an empty code', async () => {

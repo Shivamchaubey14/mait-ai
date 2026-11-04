@@ -11,10 +11,12 @@
  */
 
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { colors, MIN_TOUCH_TARGET, radius, shadows, spacing, typography } from '@theme/tokens';
+
+import AppText from './AppText';
 
 // --------------------------------------------------------------------------------------
 // Loading
@@ -69,10 +71,8 @@ function CentredState({
       <View style={[styles.centredIcon, { backgroundColor: wash }]}>
         <Ionicons name={icon} size={26} color={tint} />
       </View>
-      <Text style={styles.centredTitle}>{title}</Text>
-      <Text style={styles.centredBody} adjustsFontSizeToFit numberOfLines={2}>
-        {body}
-      </Text>
+      <AppText style={styles.centredTitle}>{title}</AppText>
+      <AppText style={styles.centredBody}>{body}</AppText>
 
       {!!action && (
         <Pressable
@@ -86,7 +86,7 @@ function CentredState({
           {action.busy ? (
             <ActivityIndicator color={colors.surface} />
           ) : (
-            <Text style={styles.centredCtaLabel}>{action.label}</Text>
+            <AppText style={styles.centredCtaLabel}>{action.label}</AppText>
           )}
         </Pressable>
       )}
@@ -165,13 +165,13 @@ export function SyncBanner({
       </View>
 
       <View style={styles.bannerBody}>
-        <Text style={styles.bannerTitle}>{title}</Text>
-        {!!body && <Text style={styles.bannerText}>{body}</Text>}
+        <AppText style={styles.bannerTitle}>{title}</AppText>
+        {!!body && <AppText style={styles.bannerText}>{body}</AppText>}
       </View>
 
       {!!metric && (
         <View style={[styles.bannerMetric, { backgroundColor: palette.wash }]}>
-          <Text style={[styles.bannerMetricLabel, { color: palette.tint }]}>{metric}</Text>
+          <AppText style={[styles.bannerMetricLabel, { color: palette.tint }]}>{metric}</AppText>
         </View>
       )}
 
@@ -182,7 +182,7 @@ export function SyncBanner({
           style={({ pressed }) => [styles.bannerAction, pressed && styles.bannerActionPressed]}
           testID={testID ? `${testID}-action` : undefined}
         >
-          <Text style={styles.bannerActionLabel}>{action.label}</Text>
+          <AppText style={styles.bannerActionLabel}>{action.label}</AppText>
           <Ionicons name="chevron-forward" size={14} color={colors.primaryDark} />
         </Pressable>
       )}
@@ -230,15 +230,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing[4],
   },
-  centredTitle: { ...typography.h2, color: colors.ink, textAlign: 'center' },
+  // Across the card, like the body under it: sized to its own measurement, which Android takes
+  // narrow for Hindi, "आपके पास कोई सीमेन नहीं" lost its last word off the end of the line.
+  centredTitle: { ...typography.h2, color: colors.ink, textAlign: 'center', alignSelf: 'stretch' },
   centredBody: {
     ...typography.body,
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing[2],
-    // Wide enough for one line of the copy these states carry; Devanagari runs longer than
-    // English, so two lines stays available rather than clipping.
-    paddingHorizontal: 0,
+    // At its own size, wrapping as it needs to — never shrunk to fit. Shrunk to two lines it
+    // came out smaller than every other line in Hindi, which runs longer than the English.
+    // Across the card rather than sized to its own measurement, which Android takes narrow
+    // for Hindi.
+    alignSelf: 'stretch',
   },
   centredCta: {
     alignItems: 'center',

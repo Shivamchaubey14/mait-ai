@@ -11,7 +11,8 @@
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
+import AppText from '@/components/AppText';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 
@@ -54,7 +55,7 @@ export default function OwnerTypeScreen({
     return (
       <>
         {sentence.slice(0, at)}
-        <Text style={styles.amount}>{amount}</Text>
+        <AppText style={styles.amount}>{amount}</AppText>
         {sentence.slice(at + amount.length)}
       </>
     );
@@ -108,7 +109,7 @@ export default function OwnerTypeScreen({
         testID="owner-non-member"
       />
 
-      <Text style={styles.note}>{t('aiFlow.ownerTypeNote')}</Text>
+      <AppText style={styles.note}>{t('aiFlow.ownerTypeNote')}</AppText>
 
       <FlowSpacer />
     </FlowScreen>

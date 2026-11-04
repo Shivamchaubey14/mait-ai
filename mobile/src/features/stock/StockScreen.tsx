@@ -32,7 +32,8 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -144,9 +145,9 @@ function StockRow({
       </View>
       <View style={styles.rowBody}>
         <View style={styles.rowTitleLine}>
-          <Text style={styles.rowName} numberOfLines={1}>
+          <AppText style={styles.rowName} numberOfLines={1}>
             {name}
-          </Text>
+          </AppText>
           {!!badge && (
             <View style={[styles.pill, styles[`pill${badge.tone}` as const]]}>
               <Ionicons
@@ -154,21 +155,21 @@ function StockRow({
                 size={11}
                 color={badge.tone === 'warn' ? colors.ink : colors.surface}
               />
-              <Text style={[styles.pillLabel, styles[`pillLabel${badge.tone}` as const]]}>
+              <AppText style={[styles.pillLabel, styles[`pillLabel${badge.tone}` as const]]}>
                 {badge.label}
-              </Text>
+              </AppText>
             </View>
           )}
         </View>
-        <Text style={styles.rowMeta} numberOfLines={1}>
+        <AppText style={styles.rowMeta} numberOfLines={1}>
           {meta}
-        </Text>
+        </AppText>
       </View>
 
       {!!value && (
         <View style={[styles.rowFigure, styles[`solid_${look}`]]}>
-          <Text style={[styles.rowValue, { color: onSolid(look) }]}>{value}</Text>
-          {!!unit && <Text style={[styles.rowUnit, { color: onSolid(look) }]}>{unit}</Text>}
+          <AppText style={[styles.rowValue, { color: onSolid(look) }]}>{value}</AppText>
+          {!!unit && <AppText style={[styles.rowUnit, { color: onSolid(look) }]}>{unit}</AppText>}
         </View>
       )}
     </View>
@@ -182,9 +183,9 @@ function GroupHead({ label, meta }: { label: string; meta: string }): React.JSX.
       <View style={styles.groupChip}>
         <Ionicons name="paw" size={13} color={colors.surface} />
       </View>
-      <Text style={styles.groupLabel}>{label}</Text>
+      <AppText style={styles.groupLabel}>{label}</AppText>
       <View style={styles.groupCount}>
-        <Text style={styles.groupMeta}>{meta}</Text>
+        <AppText style={styles.groupMeta}>{meta}</AppText>
       </View>
     </View>
   );
@@ -198,8 +199,8 @@ function Warning({ title, body }: { title: string; body: string }): React.JSX.El
         <Ionicons name="warning" size={16} color={colors.ink} />
       </View>
       <View style={styles.warningBody}>
-        <Text style={styles.warningTitle}>{title}</Text>
-        <Text style={styles.warningText}>{body}</Text>
+        <AppText style={styles.warningTitle}>{title}</AppText>
+        <AppText style={styles.warningText}>{body}</AppText>
       </View>
     </View>
   );
@@ -218,10 +219,10 @@ function Footnote({
   return (
     <View style={styles.footnote}>
       <Ionicons name="information-circle" size={18} color={colors.info} />
-      <Text style={styles.footnoteText}>{text}</Text>
+      <AppText style={styles.footnoteText}>{text}</AppText>
       {!!action && (
         <Pressable accessibilityRole="button" onPress={onPress} testID="stock-footnote-action">
-          <Text style={styles.footnoteAction}>{action}</Text>
+          <AppText style={styles.footnoteAction}>{action}</AppText>
         </Pressable>
       )}
     </View>
@@ -326,17 +327,17 @@ export default function StockScreen({
           <BrandMark size="small" />
         </View>
 
-        <Text style={styles.heroTitle}>{head.title}</Text>
+        <AppText style={styles.heroTitle}>{head.title}</AppText>
         {!!head.subtitle && (
-          <Text style={styles.heroSubtitle}>
+          <AppText style={styles.heroSubtitle}>
             {head.subtitle}
             {!!head.accent && (
               <>
                 {head.subtitle ? ' · ' : ''}
-                <Text style={styles.heroAccent}>{head.accent}</Text>
+                <AppText style={styles.heroAccent}>{head.accent}</AppText>
               </>
             )}
-          </Text>
+          </AppText>
         )}
       </View>
 
@@ -363,17 +364,19 @@ export default function StockScreen({
                 testID={`stock-tab-${key}`}
               >
                 <Glyph name={icon} size={18} color={active ? onSolid(tone) : SOLID[tone]} />
-                <Text
+                <AppText
                   style={[styles.tabLabel, { color: active ? onSolid(tone) : SOLID[tone] }]}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
                 >
                   {t(`stock.tab.${key}`)}
-                </Text>
+                </AppText>
                 {!loading && !failed && (
                   <View style={[styles.tabCount, active && styles.tabCountActive]}>
-                    <Text style={[styles.tabCountLabel, { color: SOLID[tone] }]}>{count}</Text>
+                    <AppText style={[styles.tabCountLabel, { color: SOLID[tone] }]}>
+                      {count}
+                    </AppText>
                   </View>
                 )}
               </Pressable>

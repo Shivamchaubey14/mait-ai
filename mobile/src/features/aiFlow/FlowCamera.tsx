@@ -23,7 +23,8 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -145,8 +146,8 @@ export default function FlowCamera({
   if (!permission?.granted) {
     return (
       <View style={[styles.root, styles.gate, { paddingTop: insets.top + spacing[5] }]}>
-        <Text style={styles.gateTitle}>{t('aiFlow.cameraNeededTitle')}</Text>
-        <Text style={styles.gateBody}>{permissionBody}</Text>
+        <AppText style={styles.gateTitle}>{t('aiFlow.cameraNeededTitle')}</AppText>
+        <AppText style={styles.gateBody}>{permissionBody}</AppText>
 
         <Pressable
           accessibilityRole="button"
@@ -154,7 +155,7 @@ export default function FlowCamera({
           style={styles.primary}
           testID={`${testIDPrefix}-allow`}
         >
-          <Text style={styles.primaryLabel}>{t('aiFlow.allowCamera')}</Text>
+          <AppText style={styles.primaryLabel}>{t('aiFlow.allowCamera')}</AppText>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -162,7 +163,7 @@ export default function FlowCamera({
           style={styles.link}
           testID={`${testIDPrefix}-skip`}
         >
-          <Text style={styles.linkLabel}>{t('common.cancel')}</Text>
+          <AppText style={styles.linkLabel}>{t('common.cancel')}</AppText>
         </Pressable>
       </View>
     );
@@ -186,7 +187,7 @@ export default function FlowCamera({
             style={styles.secondary}
             testID={`${testIDPrefix}-retake`}
           >
-            <Text style={styles.secondaryLabel}>{t('aiFlow.retake')}</Text>
+            <AppText style={styles.secondaryLabel}>{t('aiFlow.retake')}</AppText>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -194,7 +195,7 @@ export default function FlowCamera({
             style={styles.primary}
             testID={`${testIDPrefix}-use`}
           >
-            <Text style={styles.primaryLabel}>{t('aiFlow.usePhoto')}</Text>
+            <AppText style={styles.primaryLabel}>{t('aiFlow.usePhoto')}</AppText>
           </Pressable>
         </View>
       </View>
@@ -227,7 +228,7 @@ export default function FlowCamera({
         >
           <Ionicons name="close" size={20} color={colors.surface} />
         </Pressable>
-        <Text style={styles.instruction}>{instruction}</Text>
+        <AppText style={styles.instruction}>{instruction}</AppText>
       </View>
 
       <View style={[styles.controls, { paddingBottom: insets.bottom + spacing[5] }]}>
@@ -247,7 +248,7 @@ export default function FlowCamera({
 }
 
 const styles = StyleSheet.create({
-  root: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.ink },
+  root: { ...StyleSheet.absoluteFill, backgroundColor: colors.ink },
   gate: { padding: spacing[5], justifyContent: 'center' },
   gateTitle: { ...typography.h2, color: colors.surface, textAlign: 'center' },
   gateBody: {
@@ -261,7 +262,7 @@ const styles = StyleSheet.create({
 
   // An outline, not a mask. A darkened surround would hide whether the Mait's thumb is over
   // a corner of the card, which is the commonest way one of these comes out unusable.
-  guideLayer: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  guideLayer: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   cardGuide: {
     width: '86%',
     // 1.586:1, the ID-1 card the Aadhaar is printed on.

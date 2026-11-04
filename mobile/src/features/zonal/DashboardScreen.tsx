@@ -26,7 +26,8 @@
  */
 
 import React from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Glyph, { STRAW_GLYPH } from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
@@ -148,17 +149,17 @@ export default function DashboardScreen({
 
         <View style={[zonalStyles.card, styles.chartCard]} testID="zonal-trend-card">
           <View style={styles.cardHead}>
-            <Text style={[zonalStyles.cardTitle, styles.chartTitle]}>
+            <AppText style={[zonalStyles.cardTitle, styles.chartTitle]}>
               {t('zonal.lastSevenDays')}
-            </Text>
-            <Text style={[zonalStyles.cardMeta, styles.chartMeta]}>
+            </AppText>
+            <AppText style={[zonalStyles.cardMeta, styles.chartMeta]}>
               {data.best_day
                 ? t('zonal.bestDay', {
                     count: data.best_day.completed,
                     day: data.best_day.label,
                   })
                 : t('zonal.noWorkYet')}
-            </Text>
+            </AppText>
           </View>
           <TrendBars days={data.trend} bestDate={data.best_day?.date} testID="zonal-trend" />
         </View>
@@ -168,9 +169,9 @@ export default function DashboardScreen({
         {data.in_progress > 0 && (
           <View style={styles.aside} testID="zonal-in-progress">
             <Ionicons name="hourglass-outline" size={18} color={colors.secondaryPressed} />
-            <Text style={styles.asideText}>
+            <AppText style={styles.asideText}>
               {t('zonal.inProgress', { count: data.in_progress })}
-            </Text>
+            </AppText>
           </View>
         )}
 
@@ -181,13 +182,13 @@ export default function DashboardScreen({
                 <View style={[styles.headChip, styles.headChipWarm]}>
                   <Ionicons name="people" size={15} color={colors.surface} />
                 </View>
-                <Text style={[zonalStyles.cardTitle, styles.titleWarm]}>
+                <AppText style={[zonalStyles.cardTitle, styles.titleWarm]}>
                   {t('zonal.busiestMaits')}
-                </Text>
+                </AppText>
               </View>
-              <Text style={[zonalStyles.cardMeta, styles.metaWarm]}>
+              <AppText style={[zonalStyles.cardMeta, styles.metaWarm]}>
                 {t('zonal.thisWeekShort')}
-              </Text>
+              </AppText>
             </View>
             {data.busiest_maits.map((row, index) => (
               <Leader
@@ -214,13 +215,13 @@ export default function DashboardScreen({
                 <View style={[styles.headChip, styles.headChipInfo]}>
                   <Ionicons name="location" size={15} color={colors.surface} />
                 </View>
-                <Text style={[zonalStyles.cardTitle, styles.titleInfo]}>
+                <AppText style={[zonalStyles.cardTitle, styles.titleInfo]}>
                   {t('zonal.busiestVillages')}
-                </Text>
+                </AppText>
               </View>
-              <Text style={[zonalStyles.cardMeta, styles.metaInfo]}>
+              <AppText style={[zonalStyles.cardMeta, styles.metaInfo]}>
                 {t('zonal.thisWeekShort')}
-              </Text>
+              </AppText>
             </View>
             {data.busiest_villages.map((row, index) => (
               <Leader
@@ -244,7 +245,7 @@ export default function DashboardScreen({
           <View style={[styles.headChip, styles.headChipGreen]}>
             <Ionicons name="flash" size={14} color={colors.surface} />
           </View>
-          <Text style={styles.sectionTitle}>{t('zonal.justHappened')}</Text>
+          <AppText style={styles.sectionTitle}>{t('zonal.justHappened')}</AppText>
         </View>
         {data.happening.length ? (
           data.happening.map(capture => (
@@ -263,22 +264,22 @@ export default function DashboardScreen({
                 <Glyph name={STRAW_GLYPH} size={16} color={colors.surface} />
               </View>
               <View style={styles.captureBody}>
-                <Text style={styles.captureTitle} numberOfLines={1}>
+                <AppText style={styles.captureTitle} numberOfLines={1}>
                   {capture.breed || t('zonal.unknownBreed')}
-                </Text>
-                <Text style={styles.captureMeta} numberOfLines={1}>
-                  <Text style={styles.captureLabel}>{`${t('zonal.mppLabel')}: `}</Text>
+                </AppText>
+                <AppText style={styles.captureMeta} numberOfLines={1}>
+                  <AppText style={styles.captureLabel}>{`${t('zonal.mppLabel')}: `}</AppText>
                   {[capture.mpp_name, capture.mpp_code].filter(Boolean).join(' · ')}
-                </Text>
-                <Text style={styles.captureMeta} numberOfLines={1}>
-                  <Text style={styles.captureLabel}>{`${t('zonal.theMait')}: `}</Text>
+                </AppText>
+                <AppText style={styles.captureMeta} numberOfLines={1}>
+                  <AppText style={styles.captureLabel}>{`${t('zonal.theMait')}: `}</AppText>
                   {[capture.mait_name, capture.mait_code].filter(Boolean).join(' · ')}
-                </Text>
+                </AppText>
               </View>
               <View style={styles.captureWhen}>
-                <Text style={styles.captureWhenLabel}>
+                <AppText style={styles.captureWhenLabel}>
                   {whenLabel(capture.when, t, i18n.language)}
-                </Text>
+                </AppText>
               </View>
               {/* The chevron is what says these rows open. Without it a manager reads them
                   as a ticker and never finds the record behind them. */}
@@ -286,7 +287,7 @@ export default function DashboardScreen({
             </Pressable>
           ))
         ) : (
-          <Text style={rowStyles.quiet}>{t('zonal.nothingHappened')}</Text>
+          <AppText style={rowStyles.quiet}>{t('zonal.nothingHappened')}</AppText>
         )}
       </>
     );
@@ -307,7 +308,7 @@ export default function DashboardScreen({
           testID="zonal-live"
         >
           <View style={[styles.liveDot, stale && styles.liveDotStale]} />
-          <Text style={styles.liveLabel}>{liveLabel}</Text>
+          <AppText style={styles.liveLabel}>{liveLabel}</AppText>
           <Ionicons name="refresh" size={14} color={colors.surface} />
         </Pressable>
       </ZonalHero>

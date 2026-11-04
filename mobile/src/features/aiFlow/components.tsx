@@ -32,12 +32,12 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   TextInputProps,
   View,
   ViewStyle,
 } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -78,9 +78,6 @@ function ProgressSegments({ step }: { step: number }): React.JSX.Element {
     </View>
   );
 }
-
-/** The footer arrow, and the width the label is balanced against on the other side. */
-const ARROW_SIZE = 18;
 
 /** How long the indeterminate sweep takes to cross the track once. */
 const SWEEP_MS = 1100;
@@ -139,9 +136,9 @@ export function FlowProgress({
 
   return (
     <View style={styles.progress} testID={testID}>
-      <Text style={styles.progressLabel} numberOfLines={1}>
+      <AppText style={styles.progressLabel} numberOfLines={1}>
         {label}
-      </Text>
+      </AppText>
 
       <View
         style={styles.progressTrack}
@@ -346,8 +343,12 @@ interface FlowScreenProps {
     progress?: { label: string; fraction: number | null };
     testID?: string;
   };
-  /** A secondary route out of the step. A text link, never a second button. */
-  link?: { label: string; onPress: () => void; testID?: string };
+  /**
+   * A secondary route out of the step. A text link — or, with `button`, an outlined blue
+   * button, for the step where the way out is as likely as the way on and has to be seen as
+   * a choice rather than small print (*No, search again* under *Yes, continue*).
+   */
+  link?: { label: string; onPress: () => void; testID?: string; button?: boolean };
   /** A line above the CTA — a running total, a readiness note. */
   footerNote?: React.ReactNode;
   /**
@@ -509,16 +510,16 @@ export function FlowScreen({
       ) : (
         <View style={styles.heroTop}>
           {backControl}
-          {!!(eyebrow ?? label) && <Text style={styles.stepLabel}>{eyebrow ?? label}</Text>}
+          {!!(eyebrow ?? label) && <AppText style={styles.stepLabel}>{eyebrow ?? label}</AppText>}
         </View>
       )}
 
       {/* Six full segments on a screen that has finished are six segments nobody reads. */}
       {step !== null && !done && <ProgressSegments step={step ?? -1} />}
 
-      <Text style={[styles.heroTitle, done && styles.heroCentred]}>{title}</Text>
+      <AppText style={[styles.heroTitle, done && styles.heroCentred]}>{title}</AppText>
       {!!subtitle && (
-        <Text style={[styles.heroSubtitle, done && styles.heroCentred]}>{subtitle}</Text>
+        <AppText style={[styles.heroSubtitle, done && styles.heroCentred]}>{subtitle}</AppText>
       )}
     </View>
   );
@@ -527,10 +528,7 @@ export function FlowScreen({
     <View style={styles.root}>
       {/* Whatever the glyphs are actually sitting on, which is now always the hero. Get this
           the wrong way round and the clock disappears into the header. */}
-      <StatusBar
-        style="light"
-        backgroundColor={tone === 'good' ? colors.primaryDark : colors.ink}
-      />
+      <StatusBar style="light" />
 
       {/* Fixed. The step number, the progress and the question are the frame the body is
           answered inside — they have to stay put while the list under them moves, or a Mait
@@ -605,10 +603,15 @@ export function FlowScreen({
               <Pressable
                 accessibilityRole="button"
                 onPress={link.onPress}
-                style={styles.link}
+                style={({ pressed }) => [
+                  link.button ? styles.linkButton : styles.link,
+                  link.button && pressed && styles.linkButtonPressed,
+                ]}
                 testID={link.testID}
               >
-                <Text style={styles.linkLabel}>{link.label}</Text>
+                <AppText style={link.button ? styles.linkButtonLabel : styles.linkLabel}>
+                  {link.label}
+                </AppText>
               </Pressable>
             )}
 
@@ -636,23 +639,12 @@ export function FlowScreen({
                 ]}
                 testID={cta.testID}
               >
-                {/* Balances the arrow, so the label sits on the button's centre line rather
-                    than on the centre of the label-and-arrow pair — which reads as a label
-                    nudged to the left, and the longer the label the more it shows. */}
-                {!cta.disabled && !cta.busy && <View style={styles.ctaBalance} />}
-
-                <Text
+                <AppText
                   style={[styles.ctaLabel, (cta.disabled || cta.busy) && styles.ctaLabelDisabled]}
                   numberOfLines={1}
                 >
                   {cta.label}
-                </Text>
-
-                {/* The arrow is a promise that tapping moves you on. An inert button makes
-                    no such promise, so it does not draw one. */}
-                {!cta.disabled && !cta.busy && (
-                  <Ionicons name="arrow-forward" size={ARROW_SIZE} color={colors.surface} />
-                )}
+                </AppText>
               </Pressable>
             )}
           </View>
@@ -862,7 +854,7 @@ export function OptionCard({
         ]}
       >
         {!!swatchLabel && (
-          <Text
+          <AppText
             style={[
               styles.swatchLabel,
               {
@@ -871,7 +863,7 @@ export function OptionCard({
             ]}
           >
             {swatchLabel}
-          </Text>
+          </AppText>
         )}
         {!swatchLabel &&
           (iconNode ??
@@ -885,7 +877,7 @@ export function OptionCard({
       </View>
 
       <View style={styles.cardBody}>
-        <Text
+        <AppText
           style={[
             styles.cardTitle,
             size === 'roomy' && styles.cardTitleRoomy,
@@ -894,17 +886,20 @@ export function OptionCard({
           numberOfLines={1}
         >
           {title}
-        </Text>
+        </AppText>
         {blocked ? (
-          <Text style={styles.cardReason}>{blockedReason}</Text>
+          <AppText style={styles.cardReason}>{blockedReason}</AppText>
         ) : (
           !!subtitle && (
-            <Text
+            <AppText
               style={[styles.cardSubtitle, { color: SWATCH_TINT[selected ? 'primary' : tone] }]}
-              numberOfLines={1}
+              // A roomy card has the room to say a whole sentence, and is given one — who a
+              // member is, what a non-member pays. Held to a line, those were shrunk to nothing
+              // and cut off. A row in a list stays one line, so the list stays a list.
+              numberOfLines={size === 'roomy' ? undefined : 1}
             >
               {subtitle}
-            </Text>
+            </AppText>
           )
         )}
       </View>
@@ -919,7 +914,7 @@ export function OptionCard({
             blocked && styles.pillBlocked,
           ]}
         >
-          <Text
+          <AppText
             style={[
               styles.pillLabel,
               pillTone === 'accent' && styles.pillLabelAccent,
@@ -929,7 +924,7 @@ export function OptionCard({
             ]}
           >
             {pill}
-          </Text>
+          </AppText>
         </View>
       )}
 
@@ -988,12 +983,12 @@ export function Segmented<T extends string>({
             style={[styles.segment2, active && styles.segment2Active]}
             testID={testID ? `${testID}-${option.value}` : undefined}
           >
-            <Text
+            <AppText
               style={[styles.segmentLabel, active && styles.segmentLabelActive]}
               numberOfLines={1}
             >
               {option.label}
-            </Text>
+            </AppText>
           </Pressable>
         );
       })}
@@ -1049,9 +1044,9 @@ export function RadioGroup<T extends string>({
             <View style={[styles.radio, active && styles.radioOn]}>
               {active && <Ionicons name="checkmark" size={14} color={colors.surface} />}
             </View>
-            <Text style={[styles.radioLabel, active && styles.radioLabelOn]} numberOfLines={1}>
+            <AppText style={[styles.radioLabel, active && styles.radioLabelOn]} numberOfLines={1}>
               {option.label}
-            </Text>
+            </AppText>
           </Pressable>
         );
       })}
@@ -1114,15 +1109,15 @@ export function CaptureTile({
         </View>
       )}
 
-      <Text style={styles.captureLabel} numberOfLines={1}>
+      <AppText style={styles.captureLabel} numberOfLines={1}>
         {label}
-      </Text>
-      <Text
+      </AppText>
+      <AppText
         style={[styles.captureHint, { color: uri ? colors.primaryDark : colors.info }]}
         numberOfLines={1}
       >
         {uri ? t('aiFlow.retake') : hint}
-      </Text>
+      </AppText>
     </Pressable>
   );
 }
@@ -1161,9 +1156,9 @@ export function AddCard({
         <Ionicons name="add" size={22} color={colors.surface} />
       </View>
       <View style={styles.cardBody}>
-        <Text style={styles.cardTitle}>{title}</Text>
+        <AppText style={styles.cardTitle}>{title}</AppText>
         {!!subtitle && (
-          <Text style={[styles.cardSubtitle, { color: colors.info }]}>{subtitle}</Text>
+          <AppText style={[styles.cardSubtitle, { color: colors.info }]}>{subtitle}</AppText>
         )}
       </View>
     </Pressable>
@@ -1207,7 +1202,7 @@ export function FieldCard({
           <Ionicons name="create" size={18} color={onSolid(tone)} />
         </View>
         <View style={styles.cardBody}>
-          <Text style={[styles.fieldLabel, { color: SWATCH_TINT[tone] }]}>{label}</Text>
+          <AppText style={[styles.fieldLabel, { color: SWATCH_TINT[tone] }]}>{label}</AppText>
           <TextInput
             style={styles.fieldInput}
             placeholderTextColor={colors.textDisabled}
@@ -1220,8 +1215,8 @@ export function FieldCard({
           />
         </View>
       </View>
-      {!!error && <Text style={styles.fieldError}>{error}</Text>}
-      {!error && !!hint && <Text style={styles.fieldHint}>{hint}</Text>}
+      {!!error && <AppText style={styles.fieldError}>{error}</AppText>}
+      {!error && !!hint && <AppText style={styles.fieldHint}>{hint}</AppText>}
     </View>
   );
 }
@@ -1266,10 +1261,10 @@ export function LabelledField({
 
   return (
     <View ref={wrap} style={styles.fieldWrap}>
-      <Text style={[styles.labelledLabel, { color: SWATCH_TINT[tone] }]}>
+      <AppText style={[styles.labelledLabel, { color: SWATCH_TINT[tone] }]}>
         {label}
-        {!!optionalNote && <Text style={styles.optionalNote}> {optionalNote}</Text>}
-      </Text>
+        {!!optionalNote && <AppText style={styles.optionalNote}> {optionalNote}</AppText>}
+      </AppText>
       <View
         style={[
           styles.labelledBox,
@@ -1304,8 +1299,8 @@ export function LabelledField({
           }}
         />
       </View>
-      {!!error && <Text style={styles.fieldError}>{error}</Text>}
-      {!error && !!hint && <Text style={styles.fieldHint}>{hint}</Text>}
+      {!!error && <AppText style={styles.fieldError}>{error}</AppText>}
+      {!error && !!hint && <AppText style={styles.fieldHint}>{hint}</AppText>}
     </View>
   );
 }
@@ -1379,10 +1374,10 @@ export function Dropdown<T extends string>({
 
   return (
     <View style={styles.fieldWrap}>
-      <Text style={styles.sheetLabel}>
+      <AppText style={styles.sheetLabel}>
         {label}
-        {!!optionalNote && <Text style={styles.optionalNote}> {optionalNote}</Text>}
-      </Text>
+        {!!optionalNote && <AppText style={styles.optionalNote}> {optionalNote}</AppText>}
+      </AppText>
 
       <Pressable
         accessibilityRole="button"
@@ -1392,12 +1387,12 @@ export function Dropdown<T extends string>({
         style={[styles.labelledBox, !!chosen && styles.labelledBoxFocused]}
         testID={testID}
       >
-        <Text
+        <AppText
           style={[styles.dropdownValue, !chosen && styles.dropdownPlaceholder]}
           numberOfLines={1}
         >
           {chosen?.label ?? placeholder}
-        </Text>
+        </AppText>
         <Ionicons name="chevron-down" size={20} color={chosen ? colors.primaryDark : colors.info} />
       </Pressable>
 
@@ -1410,7 +1405,7 @@ export function Dropdown<T extends string>({
           onPress={() => setOpen(false)}
         >
           <Pressable style={styles.dropdownSheet} onPress={() => {}}>
-            <Text style={styles.dropdownHeading}>{label}</Text>
+            <AppText style={styles.dropdownHeading}>{label}</AppText>
             <ScrollView keyboardShouldPersistTaps="handled">
               {options.map(option => {
                 const active = option.value === value;
@@ -1426,9 +1421,11 @@ export function Dropdown<T extends string>({
                     style={({ pressed }) => [styles.dropdownOption, pressed && styles.cardPressed]}
                     testID={testID ? `${testID}-${option.value}` : undefined}
                   >
-                    <Text style={[styles.dropdownOptionLabel, active && styles.dropdownOptionOn]}>
+                    <AppText
+                      style={[styles.dropdownOptionLabel, active && styles.dropdownOptionOn]}
+                    >
                       {option.label}
-                    </Text>
+                    </AppText>
                     {active && <Ionicons name="checkmark" size={18} color={colors.primary} />}
                   </Pressable>
                 );
@@ -1516,14 +1513,14 @@ export function IdentityCard({
   return (
     <View style={styles.identity} testID={testID}>
       <View style={styles.avatar}>
-        <Text style={styles.avatarLabel}>{initials(name)}</Text>
+        <AppText style={styles.avatarLabel}>{initials(name)}</AppText>
       </View>
 
-      <Text style={styles.identityName}>{name}</Text>
+      <AppText style={styles.identityName}>{name}</AppText>
       {!!code && (
         <View style={styles.identityCodePill}>
           <Ionicons name="card" size={13} color={colors.surface} />
-          <Text style={styles.identityCode}>{code}</Text>
+          <AppText style={styles.identityCode}>{code}</AppText>
         </View>
       )}
 
@@ -1534,8 +1531,8 @@ export function IdentityCard({
       <View style={styles.facts}>
         {facts.map(fact => (
           <View key={fact.label} style={styles.fact}>
-            <Text style={styles.factLabel}>{fact.label}</Text>
-            <Text style={styles.factValue}>{fact.value}</Text>
+            <AppText style={styles.factLabel}>{fact.label}</AppText>
+            <AppText style={styles.factValue}>{fact.value}</AppText>
           </View>
         ))}
       </View>
@@ -1562,10 +1559,10 @@ export function InfoRow({
 }): React.JSX.Element {
   return (
     <View style={[styles.infoRow, !last && styles.infoRowRuled]}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue} numberOfLines={1}>
+      <AppText style={styles.infoLabel}>{label}</AppText>
+      <AppText style={styles.infoValue} numberOfLines={1}>
         {value}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -1588,12 +1585,12 @@ export function InfoTile({
   return (
     <View style={styles.tile} testID={testID}>
       <View style={styles.cardBody}>
-        <Text style={styles.tileLabel}>{label}</Text>
-        <Text style={styles.tileValue}>{value}</Text>
+        <AppText style={styles.tileLabel}>{label}</AppText>
+        <AppText style={styles.tileValue}>{value}</AppText>
       </View>
       {!!pill && (
         <View style={styles.tilePill}>
-          <Text style={[styles.pillLabel, { color: colors.surface }]}>{pill}</Text>
+          <AppText style={[styles.pillLabel, { color: colors.surface }]}>{pill}</AppText>
         </View>
       )}
     </View>
@@ -1670,22 +1667,22 @@ export function FlowNotice({
         />
       </View>
       <View style={styles.cardBody}>
-        {!!title && <Text style={styles.cardTitle}>{title}</Text>}
+        {!!title && <AppText style={styles.cardTitle}>{title}</AppText>}
         {!!body && (
-          <Text style={[styles.cardSubtitle, !title && styles.noticeBodyAlone]}>{body}</Text>
+          <AppText style={[styles.cardSubtitle, !title && styles.noticeBodyAlone]}>{body}</AppText>
         )}
       </View>
 
       {!!pill && (
         <View style={[styles.noticePill, { borderColor: swatch, backgroundColor: swatch }]}>
-          <Text
+          <AppText
             style={[
               styles.noticePillLabel,
               { color: tone === 'accent' ? colors.ink : colors.surface },
             ]}
           >
             {pill}
-          </Text>
+          </AppText>
         </View>
       )}
     </View>
@@ -1705,7 +1702,7 @@ export function FlowLabel({
   return (
     <View style={[styles.labelRow, style]}>
       <View style={styles.labelDot} />
-      <Text style={styles.label}>{children}</Text>
+      <AppText style={styles.label}>{children}</AppText>
     </View>
   );
 }
@@ -2285,6 +2282,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   linkLabel: { ...typography.bodyStrong, color: colors.primaryDark },
+  // Blue and outlined, so it reads as the other answer rather than as a second green action.
+  linkButton: {
+    minHeight: MIN_TOUCH_TARGET + 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[5],
+    marginBottom: spacing[3],
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.info,
+    backgroundColor: colors.infoWash,
+  },
+  linkButtonPressed: { opacity: 0.8 },
+  // Across the button, as every label in a button is: Android measures Hindi narrow.
+  linkButtonLabel: {
+    ...typography.bodyStrong,
+    color: colors.info,
+    textAlign: 'center',
+    alignSelf: 'stretch',
+  },
   // A rounded rectangle, the same one Home, Inventory and the sign-in screens use. It was a
   // bordered, shadowed pill back when it had to match the action floating in the tab bar;
   // that pill is gone, and a primary action should be one shape everywhere or a Mait learns
@@ -2298,7 +2315,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     borderRadius: radius.lg,
   },
-  ctaBalance: { width: ARROW_SIZE },
   ctaEnabled: { backgroundColor: colors.primary },
   ctaDisabled: { backgroundColor: colors.disabledFill },
   ctaPressed: { backgroundColor: colors.primaryPressed },
@@ -2312,7 +2328,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
-    flexShrink: 1,
+    // Words alone, across the whole button: the label says where the tap goes, and the arrow
+    // that used to sit beside it said nothing more. Filling the button rather than sizing to
+    // itself keeps it on the centre line — Android measures Hindi narrow.
+    flex: 1,
   },
   ctaLabelDisabled: { color: colors.textDisabled },
 });

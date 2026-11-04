@@ -20,15 +20,8 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Glyph, { STRAW_GLYPH } from '@/components/glyph';
 import type { GlyphName } from '@/components/glyph';
 import { useTranslation } from 'react-i18next';
@@ -100,13 +93,13 @@ function StepHead({
   return (
     <View style={styles.stepHead}>
       <View style={[styles.stepNum, styles[`solid_${tone}`]]}>
-        <Text style={[styles.stepNumLabel, { color: onSolid(tone) }]}>{n}</Text>
+        <AppText style={[styles.stepNumLabel, { color: onSolid(tone) }]}>{n}</AppText>
       </View>
       <Glyph name={icon} size={15} color={SOLID[tone]} />
-      <Text style={[styles.stepLabel, { color: SOLID[tone] }]}>
+      <AppText style={[styles.stepLabel, { color: SOLID[tone] }]}>
         {label}
-        {!!optional && <Text style={styles.optional}>{`  ${optional}`}</Text>}
-      </Text>
+        {!!optional && <AppText style={styles.optional}>{`  ${optional}`}</AppText>}
+      </AppText>
     </View>
   );
 }
@@ -205,7 +198,7 @@ function ReceiveSheet({
       testID="receive-sheet"
       footer={
         <View style={styles.sheetFooter}>
-          {!!problem && <Text style={styles.sheetProblem}>{problem}</Text>}
+          {!!problem && <AppText style={styles.sheetProblem}>{problem}</AppText>}
           <StoreAction
             label={picked ? t('store.receiveCta', { qty }) : t('store.receiveCtaPick')}
             icon={picked ? 'add' : undefined}
@@ -250,14 +243,14 @@ function ReceiveSheet({
                   size={20}
                   color={on ? onSolid(look.tone) : SOLID[look.tone]}
                 />
-                <Text
+                <AppText
                   style={[styles.kindLabel, { color: on ? onSolid(look.tone) : SOLID[look.tone] }]}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
                 >
                   {t(look.label)}
-                </Text>
+                </AppText>
               </Pressable>
             );
           })}
@@ -280,27 +273,27 @@ function ReceiveSheet({
                   testID={`receive-animal-${option}`}
                 >
                   <Glyph name="paw" size={15} color={on ? colors.surface : colors.info} />
-                  <Text style={[styles.animalLabel, on && styles.animalLabelOn]}>
+                  <AppText style={[styles.animalLabel, on && styles.animalLabelOn]}>
                     {t(`aiFlow.animalType.${option}`)}
-                  </Text>
+                  </AppText>
                 </Pressable>
               );
             })}
           </View>
         )}
 
-        <Text style={[styles.cardHint, { color: SOLID[tone] }]}>
+        <AppText style={[styles.cardHint, { color: SOLID[tone] }]}>
           {kind === 'straw' ? t('store.breed') : t('store.product')}
-        </Text>
+        </AppText>
         <View style={styles.chips}>
           {catalogue.isLoading ? (
             <SkeletonList rows={1} />
           ) : !options.length ? (
             // The office keeps this list. Blank space here reads as a screen that failed to
             // load, when what it means is that nobody has configured a breed for this animal.
-            <Text style={styles.noneHere} testID="receive-no-options">
+            <AppText style={styles.noneHere} testID="receive-no-options">
               {kind === 'straw' ? t('store.noBreeds') : t('store.noProducts')}
-            </Text>
+            </AppText>
           ) : (
             options.map(option => {
               const on = option.value === picked;
@@ -318,9 +311,9 @@ function ReceiveSheet({
                     size={14}
                     color={on ? onSolid(tone) : SOLID[tone]}
                   />
-                  <Text style={[styles.chipLabel, { color: on ? onSolid(tone) : colors.ink }]}>
+                  <AppText style={[styles.chipLabel, { color: on ? onSolid(tone) : colors.ink }]}>
                     {option.label}
-                  </Text>
+                  </AppText>
                 </Pressable>
               );
             })
@@ -334,10 +327,10 @@ function ReceiveSheet({
         <StepHead n={2} icon="calculator" tone="good" label={t('store.qtyArrived')} />
         <View style={styles.qtyHead}>
           <View style={styles.qtyText}>
-            <Text style={styles.qtyValue} testID="receive-qty-figure">
+            <AppText style={styles.qtyValue} testID="receive-qty-figure">
               {qty}
-              {!!label && <Text style={styles.qtyItem}>{`  ${label}`}</Text>}
-            </Text>
+              {!!label && <AppText style={styles.qtyItem}>{`  ${label}`}</AppText>}
+            </AppText>
           </View>
           <Stepper value={qty} min={1} max={100000} onChange={setQty} testID="receive-qty" />
         </View>
@@ -354,7 +347,9 @@ function ReceiveSheet({
               style={[styles.jump, qty === step && styles.jumpOn]}
               testID={`receive-qty-${step}`}
             >
-              <Text style={[styles.jumpLabel, qty === step && styles.chipLabelOn]}>{step}</Text>
+              <AppText style={[styles.jumpLabel, qty === step && styles.chipLabelOn]}>
+                {step}
+              </AppText>
             </Pressable>
           ))}
         </View>
@@ -400,20 +395,22 @@ function StockRow({ line, kind }: { line: StoreStockLine; kind: Kind }): React.J
         <Glyph name={icon} size={16} color={tone === 'waiting' ? colors.ink : colors.surface} />
       </View>
       <View style={styles.rowBody}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
+        <AppText style={styles.rowTitle} numberOfLines={1}>
           {itemLabel(line, i18n.language)}
           {!!line.unit && line.product_type !== 'straw' && (
-            <Text style={styles.rowUnitInline}>{`  ${line.unit}`}</Text>
+            <AppText style={styles.rowUnitInline}>{`  ${line.unit}`}</AppText>
           )}
-        </Text>
-        <Text style={styles.rowMeta}>
-          <Text style={styles.rowFree}>{t('store.freeToIssue', { count: line.available })}</Text>
+        </AppText>
+        <AppText style={styles.rowMeta}>
+          <AppText style={styles.rowFree}>
+            {t('store.freeToIssue', { count: line.available })}
+          </AppText>
           {line.set_aside > 0 && (
-            <Text style={styles.rowPacked}>
+            <AppText style={styles.rowPacked}>
               {`  ·  ${t('store.setAside', { count: line.set_aside })}`}
-            </Text>
+            </AppText>
           )}
-        </Text>
+        </AppText>
         {/* Free in green over a yolk track: the yolk left showing is what is packed. */}
         {!empty && (
           <View style={styles.bar}>
@@ -427,15 +424,15 @@ function StockRow({ line, kind }: { line: StoreStockLine; kind: Kind }): React.J
         )}
       </View>
       <View style={[styles.badge, empty ? styles.solid_bad : styles[`solid_${tone}`]]}>
-        <Text
+        <AppText
           style={[styles.badgeValue, tone === 'waiting' && !empty && styles.badgeInk]}
           testID={`stock-line-${key}-count`}
         >
           {line.on_hand}
-        </Text>
-        <Text style={[styles.badgeUnit, tone === 'waiting' && !empty && styles.badgeInk]}>
+        </AppText>
+        <AppText style={[styles.badgeUnit, tone === 'waiting' && !empty && styles.badgeInk]}>
           {t('store.onHand')}
-        </Text>
+        </AppText>
       </View>
     </View>
   );
@@ -452,13 +449,13 @@ function KindSection({ kind, lines }: { kind: Kind; lines: StoreStockLine[] }): 
         <View style={[styles.sectionChip, styles[`solid_${tone}`]]}>
           <Glyph name={icon} size={15} color={tone === 'waiting' ? colors.ink : colors.surface} />
         </View>
-        <Text style={[styles.sectionTitle, { color: SOLID[tone] }]}>{t(label)}</Text>
+        <AppText style={[styles.sectionTitle, { color: SOLID[tone] }]}>{t(label)}</AppText>
         <View style={[styles.sectionCount, styles[`row_${tone}`]]}>
-          <Text style={[styles.sectionCountLabel, { color: SOLID[tone] }]}>
+          <AppText style={[styles.sectionCountLabel, { color: SOLID[tone] }]}>
             {lines.length
               ? t('store.kindCount', { count: lines.length, total })
               : t('store.kindNone')}
-          </Text>
+          </AppText>
         </View>
       </View>
       {lines.length ? (
@@ -472,9 +469,9 @@ function KindSection({ kind, lines }: { kind: Kind; lines: StoreStockLine[] }): 
       ) : (
         <View style={[styles.none, styles[`row_${tone}`]]} testID={`stock-section-${kind}-none`}>
           <Glyph name="alert-circle" size={16} color={SOLID[tone]} />
-          <Text style={[styles.noneText, { color: SOLID[tone] }]}>
+          <AppText style={[styles.noneText, { color: SOLID[tone] }]}>
             {t('store.kindNoneBody', { kind: t(label).toLowerCase() })}
-          </Text>
+          </AppText>
         </View>
       )}
     </View>
@@ -553,9 +550,9 @@ export default function StoreStockScreen({ storeName }: { storeName: string }): 
 
             <View style={styles.key}>
               <View style={[styles.keyDot, styles.solid_good]} />
-              <Text style={styles.keyLabel}>{t('store.keyFree')}</Text>
+              <AppText style={styles.keyLabel}>{t('store.keyFree')}</AppText>
               <View style={[styles.keyDot, styles.solid_waiting]} />
-              <Text style={styles.keyLabel}>{t('store.keyPacked')}</Text>
+              <AppText style={styles.keyLabel}>{t('store.keyPacked')}</AppText>
             </View>
 
             <KindSection kind={shown} lines={byKind[shown]} />

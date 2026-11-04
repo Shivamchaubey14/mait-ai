@@ -17,8 +17,10 @@
  * as a grey line under a heading, so the screen reads at a glance like the rest of the app.
  */
 
-import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
+import { ConfirmDialog } from '@/components/confirmDialog';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -72,7 +74,7 @@ function Card({
         <View style={[styles.cardChip, styles[`cardChip_${tone}`]]}>
           <Ionicons name={icon} size={18} color={CHIP_ICON[tone]} />
         </View>
-        <Text style={[styles.cardTitle, styles[`cardTitle_${tone}`]]}>{title}</Text>
+        <AppText style={[styles.cardTitle, styles[`cardTitle_${tone}`]]}>{title}</AppText>
         {right}
       </View>
       {children}
@@ -95,8 +97,8 @@ function Figure({
   return (
     <View style={styles.figure} testID={testID}>
       <Ionicons name={icon} size={16} color={yolk[800]} />
-      <Text style={styles.figureValue}>{value}</Text>
-      <Text style={styles.figureLabel}>{label}</Text>
+      <AppText style={styles.figureValue}>{value}</AppText>
+      <AppText style={styles.figureLabel}>{label}</AppText>
     </View>
   );
 }
@@ -124,25 +126,19 @@ export default function ZonalProfileScreen({
   // is never blank on a slow connection.
   const zones = home.data?.manager.zones ?? user?.zones ?? [];
 
-  const signOut = () => {
-    Alert.alert(t('zonal.signOutTitle'), t('zonal.signOutBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('settings.signOut'),
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            if (refreshToken) {
-              await logout(refreshToken).unwrap();
-            }
-          } catch {
-            // The token is unreachable either way; a session left in storage is the worse
-            // outcome.
-          }
-          dispatch(loggedOut());
-        },
-      },
-    ]);
+  // Asked in our own card rather than the system alert — see components/confirmDialog.
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const signOut = () => setConfirmingSignOut(true);
+  const finishSignOut = async () => {
+    try {
+      if (refreshToken) {
+        await logout(refreshToken).unwrap();
+      }
+    } catch {
+      // The token is unreachable either way; a session left in storage is the worse
+      // outcome.
+    }
+    dispatch(loggedOut({ deliberate: true }));
   };
 
   return (
@@ -165,8 +161,8 @@ export default function ZonalProfileScreen({
             <Ionicons name="list" size={20} color={colors.surface} />
           </View>
           <View style={styles.rowBody}>
-            <Text style={styles.doorTitle}>{t('zonal.allEventsTitle')}</Text>
-            <Text style={styles.doorText}>{t('zonal.allEventsBody')}</Text>
+            <AppText style={styles.doorTitle}>{t('zonal.allEventsTitle')}</AppText>
+            <AppText style={styles.doorText}>{t('zonal.allEventsBody')}</AppText>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.info} />
         </Pressable>
@@ -183,8 +179,8 @@ export default function ZonalProfileScreen({
             <Ionicons name="search" size={20} color={colors.surface} />
           </View>
           <View style={styles.rowBody}>
-            <Text style={styles.searchTitle}>{t('zonal.searchTitle')}</Text>
-            <Text style={styles.doorText}>{t('zonal.searchDoorBody')}</Text>
+            <AppText style={styles.searchTitle}>{t('zonal.searchTitle')}</AppText>
+            <AppText style={styles.doorText}>{t('zonal.searchDoorBody')}</AppText>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.ink} />
         </Pressable>
@@ -201,8 +197,8 @@ export default function ZonalProfileScreen({
             <Ionicons name="git-branch" size={20} color={colors.surface} />
           </View>
           <View style={styles.rowBody}>
-            <Text style={styles.assignTitle}>{t('zonal.assignTitle')}</Text>
-            <Text style={styles.doorText}>{t('zonal.assignSubtitle')}</Text>
+            <AppText style={styles.assignTitle}>{t('zonal.assignTitle')}</AppText>
+            <AppText style={styles.doorText}>{t('zonal.assignSubtitle')}</AppText>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.primary} />
         </Pressable>
@@ -219,14 +215,14 @@ export default function ZonalProfileScreen({
                 {zones.map(zone => (
                   <View key={zone} style={styles.zone}>
                     <Ionicons name="location" size={14} color={colors.surface} />
-                    <Text style={styles.zoneLabel} numberOfLines={1}>
+                    <AppText style={styles.zoneLabel} numberOfLines={1}>
                       {zone}
-                    </Text>
+                    </AppText>
                   </View>
                 ))}
               </View>
             ) : (
-              <Text style={styles.quiet}>{t('zonal.noZone')}</Text>
+              <AppText style={styles.quiet}>{t('zonal.noZone')}</AppText>
             )
           }
           testID="zonal-profile-zone"
@@ -263,6 +259,16 @@ export default function ZonalProfileScreen({
           testID="zonal-profile-sign-out"
         />
       </ScrollView>
+      <ConfirmDialog
+        visible={confirmingSignOut}
+        title={t('zonal.signOutTitle')}
+        body={t('zonal.signOutBody')}
+        confirmLabel={t('settings.signOut')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={finishSignOut}
+        onCancel={() => setConfirmingSignOut(false)}
+        testID="zonal-sign-out-dialog"
+      />
     </View>
   );
 }

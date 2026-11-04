@@ -17,19 +17,47 @@
  * whoever held it, which is why the answer names them, so a manager sees whose round changed.
  */
 
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import AppText from '@/components/AppText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 
-import { useAssignZonalMppMutation, useListZonalMaitsQuery } from '@api/endpoints';
-import type { ZonalMait } from '@api/types';
+import {
+  useAssignZonalMppMutation,
+  useListZonalMaitsQuery,
+  useZonalLookupQuery,
+} from '@api/endpoints';
+import type { AssignResult, ZonalMait, ZonalMppHit } from '@api/types';
 import { Banner, Button, EmptyState, ListRow, Loading, TextField } from '@/components';
 import PageHero from '@/components/hero';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
 import { zonalStyles } from './parts';
 import { useLive } from './live';
+
+/** How long after the last keystroke the zone is asked for matches. */
+const SUGGEST_DELAY_MS = 150;
+
+/** As many matches as fit above the keyboard without a scroll. */
+const MAX_SUGGESTIONS = 8;
+
+/** One line of what an assignment said, for one point. */
+interface Outcome {
+  code: string;
+  tone: 'info' | 'warning' | 'error';
+  text: string;
+}
+
+/** The value, once it has stopped changing for `delay` ms. */
+function useDebounced(value: string, delay: number): string {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return settled;
+}
 
 /** The first human-readable line out of a DRF field-error body, or a fallback. */
 function messageOf(error: unknown, fallback: string): string {
@@ -55,49 +83,117 @@ export default function AssignMppScreen(): React.JSX.Element {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<ZonalMait | null>(null);
-  const [mppCode, setMppCode] = useState('');
+  /** What is being typed into the MPP box. */
+  const [mppQuery, setMppQuery] = useState('');
+  /** The points picked so far, each a chip with an × on it, assigned together. */
+  const [picked, setPicked] = useState<ZonalMppHit[]>([]);
+  /** What the last assignment said, one line per point. */
+  const [outcomes, setOutcomes] = useState<Outcome[]>([]);
   const [codeError, setCodeError] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState(false);
 
   const maits = useListZonalMaitsQuery({ search: search.trim() }, useLive());
-  const [assign, assignState] = useAssignZonalMppMutation();
+  const [assign] = useAssignZonalMppMutation();
+
+  /**
+   * The zone's points matching what is typed, with whoever holds each — asked as the manager
+   * types, a moment after they pause, so the list keeps up without a request per keystroke.
+   * It used to be a code typed blind and assigned to find out whose it had been.
+   */
+  const typed = useDebounced(mppQuery.trim(), SUGGEST_DELAY_MS);
+  const lookup = useZonalLookupQuery({ q: typed }, { skip: typed.length === 0 });
+  const hits = typed
+    ? (lookup.data?.mpps ?? [])
+        .filter(hit => !picked.some(chosen => chosen.mpp_code === hit.mpp_code))
+        .slice(0, MAX_SUGGESTIONS)
+    : [];
 
   const rows = maits.data?.results ?? [];
-  const result = assignState.data;
+
+  const startOver = () => {
+    setMppQuery('');
+    setPicked([]);
+    setOutcomes([]);
+    setCodeError(null);
+  };
 
   const pickMait = (mait: ZonalMait) => {
     setSelected(mait);
-    setMppCode('');
-    setCodeError(null);
-    assignState.reset();
+    startOver();
   };
 
   const changeMait = () => {
     setSelected(null);
-    assignState.reset();
+    startOver();
   };
 
+  const pickMpp = (hit: ZonalMppHit) => {
+    setPicked(current => [...current, hit]);
+    setMppQuery('');
+    setCodeError(null);
+    setOutcomes([]);
+  };
+
+  const unpickMpp = (code: string) => {
+    setPicked(current => current.filter(hit => hit.mpp_code !== code));
+  };
+
+  /** What one point's assignment said, in the words the manager reads. */
+  const describe = (result: AssignResult): Outcome => ({
+    code: result.mpp.mpp_code,
+    tone: result.already_assigned ? 'warning' : 'info',
+    text: result.already_assigned
+      ? t('zonal.assignAlready', { name: result.mait.name, mpp: result.mpp.mpp_code })
+      : [
+          t('zonal.assignDone', { name: result.mait.name, mpp: result.mpp.mpp_code }),
+          result.moved_from ? t('zonal.assignMovedFrom', { name: result.moved_from.name }) : null,
+        ]
+          .filter(Boolean)
+          .join(' '),
+  });
+
+  /**
+   * Hand every picked point to the chosen Mait, one after another.
+   *
+   * One at a time rather than at once: each move is absolute and names the Mait it came from,
+   * and the server answers each on its own. What went is cleared from the chips; what did not
+   * stays, with its reason, so it can be put right and sent again.
+   */
   const submit = async () => {
-    const code = mppCode.trim();
-    if (!code) {
-      setCodeError(t('zonal.assignEnterCode'));
-      return;
-    }
     if (!selected) {
       return;
     }
-    setCodeError(null);
-    try {
-      const outcome = await assign({
-        sahayakVendorCode: selected.sahayak_vendor_code,
-        mppCode: code,
-      }).unwrap();
-      // The Mait's coverage grew — show it against the fresh row, and clear the box for the
-      // next point, because a manager settling a round assigns several in a sitting.
-      setSelected(outcome.mait);
-      setMppCode('');
-    } catch {
-      // The banner below reads the error off the mutation state; nothing to do here but stop.
+    if (picked.length === 0) {
+      setCodeError(t('zonal.assignEnterCode'));
+      return;
     }
+    setCodeError(null);
+    setAssigning(true);
+    const said: Outcome[] = [];
+    const left: ZonalMppHit[] = [];
+    let mait = selected;
+    for (const hit of picked) {
+      try {
+        const result = await assign({
+          sahayakVendorCode: selected.sahayak_vendor_code,
+          mppCode: hit.mpp_code,
+        }).unwrap();
+        mait = result.mait;
+        said.push(describe(result));
+      } catch (error) {
+        left.push(hit);
+        said.push({
+          code: hit.mpp_code,
+          tone: 'error',
+          text: `${hit.mpp_code}: ${messageOf(error, t('zonal.assignFailed'))}`,
+        });
+      }
+    }
+    // The Mait's coverage grew — show it against the fresh row.
+    setSelected(mait);
+    setPicked(left);
+    setOutcomes(said);
+    setAssigning(false);
   };
 
   const coverageLabel = (mait: ZonalMait) =>
@@ -118,12 +214,12 @@ export default function AssignMppScreen(): React.JSX.Element {
                 <Ionicons name="person" size={18} color={colors.surface} />
               </View>
               <View style={styles.chosenBody}>
-                <Text style={styles.chosenName} numberOfLines={1}>
+                <AppText style={styles.chosenName} numberOfLines={1}>
                   {selected.name}
-                </Text>
-                <Text style={styles.chosenMeta} numberOfLines={1}>
+                </AppText>
+                <AppText style={styles.chosenMeta} numberOfLines={1}>
                   {selected.sahayak_vendor_code} · {coverageLabel(selected)}
-                </Text>
+                </AppText>
               </View>
               <Button
                 label={t('zonal.assignChangeMait')}
@@ -136,9 +232,9 @@ export default function AssignMppScreen(): React.JSX.Element {
             <TextField
               label={t('zonal.assignMppLabel')}
               placeholder={t('zonal.assignMppPlaceholder')}
-              value={mppCode}
+              value={mppQuery}
               onChangeText={text => {
-                setMppCode(text);
+                setMppQuery(text);
                 if (codeError) {
                   setCodeError(null);
                 }
@@ -146,48 +242,102 @@ export default function AssignMppScreen(): React.JSX.Element {
               autoCapitalize="characters"
               autoCorrect={false}
               error={codeError}
-              onSubmitEditing={submit}
-              returnKeyType="done"
               testID="assign-mpp-input"
             />
 
-            {result && !assignState.isLoading && (
-              <Banner
-                tone={result.already_assigned ? 'warning' : 'info'}
-                testID="assign-result"
-                message={
-                  result.already_assigned
-                    ? t('zonal.assignAlready', {
-                        name: result.mait.name,
-                        mpp: result.mpp.mpp_code,
-                      })
-                    : [
-                        t('zonal.assignDone', {
-                          name: result.mait.name,
-                          mpp: result.mpp.mpp_code,
-                        }),
-                        result.moved_from
-                          ? t('zonal.assignMovedFrom', { name: result.moved_from.name })
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' ')
-                }
-              />
+            {/* What matches, as it is typed, each saying whose round it is on now. */}
+            {hits.length > 0 && (
+              <View style={styles.suggestions} testID="assign-suggestions">
+                {hits.map(hit => {
+                  const theirs = hit.mait?.sahayak_vendor_code === selected.sahayak_vendor_code;
+                  return (
+                    <Pressable
+                      key={hit.mpp_code}
+                      accessibilityRole="button"
+                      onPress={() => pickMpp(hit)}
+                      style={({ pressed }) => [
+                        styles.suggestion,
+                        pressed && styles.suggestionPressed,
+                      ]}
+                      testID={`assign-suggestion-${hit.mpp_code}`}
+                    >
+                      <View style={styles.suggestionBody}>
+                        <AppText style={styles.suggestionCode}>{hit.mpp_code}</AppText>
+                        <AppText style={styles.suggestionName} numberOfLines={1}>
+                          {hit.mpp_name}
+                        </AppText>
+                      </View>
+                      <View
+                        style={[
+                          styles.holder,
+                          theirs ? styles.holderTheirs : hit.mait ? styles.holderOther : null,
+                        ]}
+                        testID={`assign-holder-${hit.mpp_code}`}
+                      >
+                        <AppText style={styles.holderLabel} numberOfLines={1}>
+                          {theirs
+                            ? t('zonal.assignAlreadyTheirs')
+                            : hit.mait
+                              ? t('zonal.assignHeldBy', { name: hit.mait.name })
+                              : t('zonal.assignFree')}
+                        </AppText>
+                      </View>
+                      <Ionicons name="add-circle" size={22} color={colors.primary} />
+                    </Pressable>
+                  );
+                })}
+              </View>
             )}
 
-            {assignState.isError && (
-              <Banner
-                tone="error"
-                testID="assign-error"
-                message={messageOf(assignState.error, t('zonal.assignFailed'))}
-              />
+            {!!typed && !lookup.isFetching && hits.length === 0 && picked.length === 0 && (
+              <AppText style={styles.noMatch} testID="assign-no-match">
+                {t('zonal.assignNoMatch', { query: typed })}
+              </AppText>
             )}
+
+            {/* The picked points, each with an × to take it back off, as on the portal. */}
+            {picked.length > 0 && (
+              <View style={styles.pickedWrap}>
+                <AppText style={styles.pickedLabel}>{t('zonal.assignPickedLabel')}</AppText>
+                <View style={styles.chips} testID="assign-chips">
+                  {picked.map(hit => (
+                    <View key={hit.mpp_code} style={styles.chip}>
+                      <AppText style={styles.chipLabel}>{hit.mpp_code}</AppText>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={t('zonal.assignRemove', { mpp: hit.mpp_code })}
+                        onPress={() => unpickMpp(hit.mpp_code)}
+                        hitSlop={10}
+                        style={styles.chipRemove}
+                        testID={`assign-chip-remove-${hit.mpp_code}`}
+                      >
+                        <Ionicons name="close" size={14} color={colors.surface} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {outcomes.map(outcome => (
+              <Banner
+                key={`${outcome.code}-${outcome.tone}`}
+                tone={outcome.tone}
+                testID={`assign-result-${outcome.code}`}
+                message={outcome.text}
+              />
+            ))}
 
             <Button
-              label={assignState.isLoading ? t('zonal.assigning') : t('zonal.assignButton')}
+              label={
+                assigning
+                  ? t('zonal.assigning')
+                  : picked.length > 0
+                    ? t('zonal.assignButtonCount', { count: picked.length })
+                    : t('zonal.assignButton')
+              }
               onPress={submit}
-              loading={assignState.isLoading}
+              loading={assigning}
               testID="assign-submit"
             />
           </>
@@ -256,6 +406,69 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   chosenBody: { flex: 1 },
+
+  suggestions: {
+    marginTop: -spacing[2],
+    marginBottom: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  suggestionPressed: { backgroundColor: colors.primaryWash },
+  suggestionBody: { flex: 1 },
+  suggestionCode: { ...typography.bodyStrong, color: colors.ink },
+  suggestionName: { ...typography.caption, color: colors.textMuted },
+  // Whose round the point is on now: free in grey, someone else's in yolk, theirs in green.
+  holder: {
+    maxWidth: '45%',
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.disabledFill,
+  },
+  holderOther: { backgroundColor: colors.secondaryWash },
+  holderTheirs: { backgroundColor: colors.primaryWash },
+  holderLabel: { ...typography.caption, color: colors.ink },
+  noMatch: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: -spacing[2],
+    marginBottom: spacing[3],
+  },
+
+  pickedWrap: { marginBottom: spacing[3] },
+  pickedLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing[2] },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    paddingLeft: spacing[3],
+    paddingRight: spacing[1],
+    paddingVertical: spacing[1],
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
+  chipLabel: { ...typography.label, color: colors.surface },
+  chipRemove: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
   chosenName: { ...typography.h3, color: colors.primaryDark },
   chosenMeta: { ...typography.caption, color: colors.ink, marginTop: 2 },
 });

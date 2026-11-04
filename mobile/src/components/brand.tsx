@@ -7,10 +7,12 @@
  */
 
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { colors, fonts, green, MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme/tokens';
+
+import AppText from './AppText';
 
 // --------------------------------------------------------------------------------------
 // Brand mark
@@ -41,21 +43,21 @@ export function BrandLogo({ size = 96 }: { size?: number }) {
 }
 
 /**
- * The white "MAIT AI / FIELD CAPTURE" pill.
+ * The mark in a header: the badge and the name beside it.
  *
- * Both lines stay in English at every language setting. A product name that changes script
+ * The same pairing the splash and the sign-in hero use, so the product looks like one thing
+ * from the launcher icon to the last screen. It used to be a white "MAIT AI / FIELD CAPTURE"
+ * text pill here, which was the only place the logo was not the logo.
+ *
+ * The name stays in English at every language setting: a product name that changes script
  * between sessions stops being recognisable, which is the one thing a mark has to do.
  */
 export function BrandMark({ size = 'large' }: { size?: 'large' | 'small' }) {
-  const { t } = useTranslation();
   const small = size === 'small';
-
   return (
-    <View style={[styles.markCard, small && styles.markCardSmall]}>
-      <Text style={[styles.markName, small && styles.markNameSmall]}>{t('brand.name')}</Text>
-      <Text style={[styles.markTagline, small && styles.markTaglineSmall]}>
-        {t('brand.tagline')}
-      </Text>
+    <View style={styles.mark} testID="brand-mark">
+      <BrandLogo size={small ? 32 : 56} />
+      <BrandWordmark size="small" />
     </View>
   );
 }
@@ -73,7 +75,9 @@ export function BrandMark({ size = 'large' }: { size?: 'large' | 'small' }) {
 export function BrandWordmark({ size = 'large' }: { size?: 'large' | 'small' }) {
   const { t } = useTranslation();
   return (
-    <Text style={size === 'small' ? styles.wordmarkSmall : styles.wordmark}>{t('brand.name')}</Text>
+    <AppText style={size === 'small' ? styles.wordmarkSmall : styles.wordmark}>
+      {t('brand.name')}
+    </AppText>
   );
 }
 
@@ -116,7 +120,7 @@ export function LanguageToggle({
         style={({ pressed }) => [styles.compact, pressed && styles.compactPressed]}
         testID="language-compact"
       >
-        <Text style={styles.toggleLabel}>{current === 'en' ? 'EN' : 'हिं'}</Text>
+        <AppText style={styles.toggleLabel}>{current === 'en' ? 'EN' : 'हिं'}</AppText>
       </Pressable>
     );
   }
@@ -143,9 +147,9 @@ export function LanguageToggle({
               style={[styles.toggleOption, active && styles.toggleOptionLight]}
               testID={`language-${code}`}
             >
-              <Text style={[styles.toggleLabelDark, active && styles.toggleLabelOnGreen]}>
+              <AppText style={[styles.toggleLabelDark, active && styles.toggleLabelOnGreen]}>
                 {code === 'en' ? 'EN' : 'हिन्दी'}
-              </Text>
+              </AppText>
             </Pressable>
           );
         })}
@@ -159,7 +163,7 @@ export function LanguageToggle({
         const active = current === code;
         return (
           <React.Fragment key={code}>
-            {inline && index > 0 && <Text style={styles.toggleSeparator}>/</Text>}
+            {inline && index > 0 && <AppText style={styles.toggleSeparator}>/</AppText>}
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
@@ -172,7 +176,7 @@ export function LanguageToggle({
               ]}
               testID={`language-${code}`}
             >
-              <Text
+              <AppText
                 style={[
                   styles.toggleLabel,
                   active && (inline ? styles.toggleLabelSelected : styles.toggleLabelActive),
@@ -180,7 +184,7 @@ export function LanguageToggle({
                 ]}
               >
                 {inline ? (code === 'en' ? 'English' : 'हिन्दी') : code === 'en' ? 'EN' : 'हिं'}
-              </Text>
+              </AppText>
             </Pressable>
           </React.Fragment>
         );
@@ -208,38 +212,7 @@ export function HeroDecoration({ size = 260, top = -90, right = -70 }) {
 }
 
 const styles = StyleSheet.create({
-  markCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[3],
-    alignItems: 'center',
-    alignSelf: 'center',
-  },
-  markCardSmall: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    alignSelf: 'flex-start',
-  },
-  markName: {
-    ...typography.h1,
-    color: colors.ink,
-    letterSpacing: 0.5,
-  },
-  markNameSmall: { ...typography.h3, color: colors.ink, letterSpacing: 0.4 },
-  markTagline: {
-    ...typography.caption,
-    color: colors.textMuted,
-    letterSpacing: 2.4,
-    marginTop: 2,
-  },
-  markTaglineSmall: {
-    ...typography.caption,
-    fontSize: 9,
-    lineHeight: 12,
-    color: colors.textMuted,
-    letterSpacing: 1.6,
-  },
+  mark: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
 
   wordmark: {
     ...typography.display,

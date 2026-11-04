@@ -10,7 +10,8 @@ import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import OwnerTypeScreen from '../OwnerTypeScreen';
-import { jsonResponse, renderWithStore } from '@/test-utils';
+import i18n from '@/i18n';
+import { jsonResponse, makeStore, renderWithStore } from '@/test-utils';
 
 const props = { onBack: jest.fn(), onContinue: jest.fn() };
 
@@ -74,6 +75,40 @@ describe('OwnerTypeScreen', () => {
     render();
 
     await waitFor(() => expect(screen.getByText(/You collect/)).toHaveTextContent(/₹ 100/));
+  });
+
+  it('says in Hindi who a member is and what a non-member is charged', async () => {
+    await i18n.changeLanguage('hi');
+    try {
+      mockBreeds([breed('MURRAH', '250.00')]);
+      render();
+
+      expect(
+        screen.getByText('श्वेतधारा की सदस्य हैं (श्वेतधारा को दुग्ध प्रदान करती हैं)'),
+      ).toBeTruthy();
+      // The figure still picked out of the sentence, so it carries the colour.
+      await waitFor(() =>
+        expect(screen.getByText(/श्वेतधारा से जुड़े हुए नहीं हैं/)).toHaveTextContent(
+          /AI का शुल्क ₹ 250 रखा गया है/,
+        ),
+      );
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('quotes the rate as it stands in the portal now, not as the app last saw it', async () => {
+    // A rate re-priced in the portal has to be the figure the next farmer hears. The app used
+    // to hold the breed list in memory, so a handset that stayed open quoted the old one.
+    const store = makeStore();
+    mockBreeds([breed('MURRAH', '250.00')]);
+    const first = renderWithStore(<OwnerTypeScreen {...props} />, { store });
+    await waitFor(() => expect(screen.getByText(/You collect/)).toHaveTextContent(/₹ 250/));
+    first.unmount();
+
+    mockBreeds([breed('MURRAH', '300.00')]);
+    renderWithStore(<OwnerTypeScreen {...props} />, { store });
+    await waitFor(() => expect(screen.getByText(/You collect/)).toHaveTextContent(/₹ 300/));
   });
 
   it('quotes nothing when the breeds are priced differently', async () => {
