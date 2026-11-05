@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, BackHandler, StyleSheet, View } from 'react-native';
+import { Alert, AppState, BackHandler, StyleSheet, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
@@ -1635,23 +1635,41 @@ export default function RootNavigator(): React.JSX.Element {
           // refuses is on the waiting list with its reason, as every queued record is.
           if (farmer?.kind === 'member') {
             // A member owes nothing in the yard, so the photo is the last thing the Mait does.
-            // The photo and the completion go up as ONE request (`finalizeEvent`), or one queued
-            // job when there is no signal — the server attaches the photo, records her verified
-            // deduction, deducts the straw and closes the event atomically. There is no
-            // in-between `photo_captured` state for a slow link to strand the capture in, and
-            // nothing for a lost completion to race. The Mait is told it is recorded at once and
-            // taken Home; anything the server refuses lands on the waiting list with its reason.
+            // Straight to the server, and the Mait waits for it: the photo + her verified
+            // deduction + the close go up as ONE request (`finalizeEvent` → `/finalize/`), and
+            // "recorded" is shown only once the server has actually completed the event — not a
+            // moment before. No optimistic hand-off to a background queue that might quietly
+            // fail; what the Mait sees is what the server did.
+            //
+            // The queue stays as the one safety net it must be: a capture made with genuinely no
+            // signal is saved and sent later, because losing a day's work to a dead village is
+            // the one thing this app may never do. But on a live connection it closes here, now.
+            // A refusal — an unpriced breed — is told plainly and the Mait kept on the photo,
+            // rather than shown a screen that says done over a capture the server turned away.
+            setUploading(true);
+            const outcome = await finalizeEvent(
+              event.id,
+              clientUuid,
+              photo,
+              accessToken,
+              captureLabel(),
+              setSending,
+            );
+            setUploading(false);
+            setSending(null);
+
+            if (!outcome.sent && !outcome.queued) {
+              Alert.alert(t('aiEvent.couldNotClose'), outcome.problem ?? t('errors.generic'));
+              return;
+            }
+            if (outcome.sent) {
+              setLastSyncAt(clockTime());
+              inventory.refetch();
+            }
+            // Closed on the server (or saved for a dead village); either way the lists it came
+            // from are out of date.
+            eventsChanged();
             setStep('done');
-            const label = captureLabel();
-            const capture = { id: event.id, uuid: clientUuid };
-            (async () => {
-              const outcome = await finalizeEvent(capture.id, capture.uuid, photo, accessToken, label);
-              if (outcome.sent) {
-                setLastSyncAt(clockTime());
-                // The capture is closed on the server; the lists it came from are out of date.
-                eventsChanged();
-              }
-            })().catch(() => undefined);
             return;
           }
 

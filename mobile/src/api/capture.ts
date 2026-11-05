@@ -63,7 +63,12 @@ import type {
  * holding the Mait forever.
  */
 const WRITE_CAP_MS = 12_000;
-const PHOTO_UPLOAD_CAP_MS = 25_000;
+// Generous on purpose: the member close now waits on this upload directly and shows the Mait a
+// real "completed" only when the server confirms it, so the cap has to be long enough for a
+// proof photo to finish over a weak village bar before it gives up and falls back to the queue.
+// Too short and a perfectly good connection is abandoned into the background, which is the very
+// "it didn't go" the direct path exists to end.
+const PHOTO_UPLOAD_CAP_MS = 45_000;
 
 /**
  * `fetch`, but it gives up after `ms` and lets the caller queue instead.
