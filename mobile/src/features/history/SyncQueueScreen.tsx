@@ -13,11 +13,17 @@
  * app cannot finish on its own: *Needs attention* is a payment whose code the farmer never
  * read back, and *Not accepted* is the server having looked at a record and refused it.
  *
- * A refusal is shown in the server's own words and the row is never removed. The commonest
- * one is real and unfixable from here — an animal sold, a farmer moved to another collection
- * point, a straw already spent — and a Mait needs to be able to read it out to the office. A
- * refused record that quietly disappeared would be a day's work gone with no account of where
- * it went, which is the exact fear this screen exists to answer.
+ * A refusal is shown in the server's own words and the row is never removed on its own. The
+ * commonest one is real and unfixable from here — an animal sold, a farmer moved to another
+ * collection point, a straw already spent — and a Mait needs to be able to read it out to the
+ * office. A refused record that quietly disappeared would be a day's work gone with no account
+ * of where it went, which is the exact fear this screen exists to answer.
+ *
+ * But a refusal that will never be accepted — a duplicate registration, a record the office
+ * has told the Mait to drop — would otherwise sit on this list for good, retrying forever. So a
+ * refused row also offers *Remove*: a deliberate, confirmed delete that takes it off the phone.
+ * It is never automatic and the confirm reminds the Mait to read the reason to the office first,
+ * so the record is let go on purpose rather than lost.
  *
  * Nothing here has to be tapped. The queue drains itself the moment the handset finds signal
  * (see the NetInfo listener in navigation), and this screen exists for the Mait who wants to
@@ -34,7 +40,7 @@
  */
 
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import AppText from '@/components/AppText';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -123,6 +129,8 @@ interface Props {
   onRetryAll: () => void;
   /** Put one refused capture back in the queue, once whatever it fell over has been fixed. */
   onRetryCapture: (capture: QueuedCapture) => void;
+  /** Take one refused capture off the phone for good — for a refusal that will never be accepted. */
+  onDiscardCapture: (capture: QueuedCapture) => void;
   onEnterCode: (capture: QueuedCapture) => void;
   onBack: () => void;
 }
@@ -230,10 +238,24 @@ export default function SyncQueueScreen({
   synced,
   onRetryAll,
   onRetryCapture,
+  onDiscardCapture,
   onEnterCode,
   onBack,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
+
+  // Deliberate and confirmed, never a swipe or a stray tap: the record is being let go for good,
+  // so the Mait says so to a dialog that reminds them to read its reason to the office first.
+  const confirmDiscard = (capture: QueuedCapture) => {
+    Alert.alert(t('queue.removeTitle'), t('queue.removeBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('queue.removeAction'),
+        style: 'destructive',
+        onPress: () => onDiscardCapture(capture),
+      },
+    ]);
+  };
 
   // The finished-sync line, built only when a manual sync has run and nothing is in flight.
   const summaryLine = !progress && summary ? syncSummaryLine(summary, t) : null;
@@ -335,6 +357,16 @@ export default function SyncQueueScreen({
               >
                 {t('queue.tryThisAgain')}
               </AppText>
+              {/* The quieter, deliberate way out, under the retry: for a refusal that will never
+                  be accepted. Muted, not red — the red lives in the confirm's destructive button,
+                  where the decision to let the record go is actually made. */}
+              <AppText
+                style={styles.remove}
+                onPress={() => confirmDiscard(capture)}
+                testID={`queue-remove-${capture.clientUuid}`}
+              >
+                {t('queue.removeThis')}
+              </AppText>
             </View>
           )}
 
@@ -402,5 +434,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     overflow: 'hidden',
+  },
+  // Secondary to the retry above it: a plain muted link, no box, so letting the record go reads
+  // as the deliberate smaller choice rather than a second button competing with Try again.
+  remove: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+    paddingTop: spacing[3],
   },
 });

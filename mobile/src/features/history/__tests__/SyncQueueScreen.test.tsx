@@ -6,6 +6,7 @@
  */
 
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, screen } from '@testing-library/react-native';
 
 import SyncQueueScreen, { toCaptures } from '../SyncQueueScreen';
@@ -122,6 +123,7 @@ describe('toCaptures', () => {
 describe('SyncQueueScreen', () => {
   const onRetryAll = jest.fn();
   const onRetryCapture = jest.fn();
+  const onDiscardCapture = jest.fn();
   const onEnterCode = jest.fn();
 
   afterEach(() => jest.resetAllMocks());
@@ -138,6 +140,7 @@ describe('SyncQueueScreen', () => {
         progress={progress}
         onRetryAll={onRetryAll}
         onRetryCapture={onRetryCapture}
+        onDiscardCapture={onDiscardCapture}
         onEnterCode={onEnterCode}
         onBack={jest.fn()}
       />,
@@ -236,6 +239,7 @@ describe('SyncQueueScreen', () => {
         summary={summary}
         onRetryAll={onRetryAll}
         onRetryCapture={onRetryCapture}
+        onDiscardCapture={onDiscardCapture}
         onEnterCode={onEnterCode}
         onBack={jest.fn()}
       />,
@@ -263,5 +267,50 @@ describe('SyncQueueScreen', () => {
 
     expect(screen.queryByTestId('queue-summary')).toBeNull();
     expect(screen.getByText('Sending 1 of 2…')).toBeTruthy();
+  });
+
+  // A refusal that will never be accepted — a duplicate registration, a record the office told
+  // the Mait to drop — must have a way off the phone, or it retries on this list forever.
+  const SHIVANI = job({
+    clientUuid: 'shivani',
+    kind: 'createEvent',
+    failed: true,
+    failedStatus: 400,
+    lastError: 'A farmer with that Aadhaar is already registered.',
+    label: { farmer: 'Shivani ji', kind: 'nonMember', amount: '250.00', mode: 'COD', at: '23:02' },
+  });
+
+  it('offers a remove on a refused row, and only there', () => {
+    renderScreen([SHIVANI, KAVITA]);
+
+    expect(screen.getByTestId('queue-remove-shivani')).toBeTruthy();
+    // A row that is merely waiting for signal is not something to remove — it will send itself.
+    expect(screen.queryByTestId('queue-remove-kavita')).toBeNull();
+  });
+
+  it('confirms before removing, and discards the capture once accepted', () => {
+    // Auto-accept the dialog's destructive button (the second one).
+    jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      buttons?.[1]?.onPress?.();
+    });
+
+    renderScreen([SHIVANI]);
+    fireEvent.press(screen.getByTestId('queue-remove-shivani'));
+
+    expect(onDiscardCapture).toHaveBeenCalledWith(
+      expect.objectContaining({ clientUuid: 'shivani' }),
+    );
+  });
+
+  it('does not discard when the confirmation is dismissed', () => {
+    // Fire the cancel button (the first one), which has no onPress.
+    jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      buttons?.[0]?.onPress?.();
+    });
+
+    renderScreen([SHIVANI]);
+    fireEvent.press(screen.getByTestId('queue-remove-shivani'));
+
+    expect(onDiscardCapture).not.toHaveBeenCalled();
   });
 });

@@ -44,6 +44,7 @@ import {
   describeQueue,
   enqueue,
   readQueue,
+  removeJob,
   retryFailed,
   subscribeQueue,
 } from '@api/queue';
@@ -1841,6 +1842,22 @@ export default function RootNavigator(): React.JSX.Element {
               .map(job => retryFailed(job.id)),
           );
           await sync();
+        }}
+        /**
+         * One refused capture, taken off the phone for good.
+         *
+         * For a refusal no retry will ever clear — a duplicate registration, a record the
+         * office has told the Mait to drop. Every job of that capture goes, not only the one
+         * marked refused, so the row leaves whole rather than stranding the jobs queued behind
+         * it. Nothing is sent and nothing server-side is touched: a refused record never
+         * reached the server to begin with. The queue's own change notice refreshes the list.
+         */
+        onDiscardCapture={async capture => {
+          await Promise.all(
+            queueJobs
+              .filter(job => job.clientUuid === capture.clientUuid)
+              .map(job => removeJob(job.id)),
+          );
         }}
         onEnterCode={enterCodeFor}
         // Home, the same place the back gesture goes. The list is reached from Home's tile, and
