@@ -1,6 +1,7 @@
 """Shared base models: timestamps, the audit trail, and idempotency storage."""
 
 from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 
 
@@ -86,7 +87,13 @@ class IdempotencyRecord(TimeStampedModel):
     endpoint = models.CharField(max_length=120)
     request_fingerprint = models.CharField(max_length=64)
     response_status = models.PositiveSmallIntegerField()
-    response_body = models.JSONField(default=dict)
+    # DjangoJSONEncoder, not the plain one: this stores a DRF serializer's `.data` as it is
+    # *before* the response is rendered, so the dict can still hold raw `date`, `datetime`,
+    # `Decimal` or `UUID` values the plain encoder cannot serialise. The plain encoder 500'd
+    # every member finalize/complete once the response carried a procurement period's raw dates
+    # — the write succeeded, then storing its own idempotency record raised, and the capture
+    # was stranded. This makes the store accept anything a response can legitimately contain.
+    response_body = models.JSONField(default=dict, encoder=DjangoJSONEncoder)
     expires_at = models.DateTimeField(db_index=True)
 
     class Meta:

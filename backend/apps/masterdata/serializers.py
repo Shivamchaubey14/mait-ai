@@ -266,8 +266,12 @@ class ProcurementFieldsMixin:
         }
         if latest is not None:
             block["period"] = {
-                "from_date": latest.from_date,
-                "to_date": latest.to_date,
+                # ISO strings, never raw `date` objects — see the matching note in
+                # `ai_events.serializers`. The idempotency layer stores this `.data` as JSON
+                # before DRF renders it, and a raw `date` there 500s the write; the mobile
+                # contract is a string, so this is also simply correct.
+                "from_date": latest.from_date.isoformat(),
+                "to_date": latest.to_date.isoformat(),
                 "qty": str(latest.qty),
                 "avg_fat": str(latest.avg_fat),
                 "avg_snf": str(latest.avg_snf),

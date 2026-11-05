@@ -290,8 +290,14 @@ class AIEventSerializer(serializers.ModelSerializer):
         }
         if latest is not None:
             block["period"] = {
-                "from_date": latest.from_date,
-                "to_date": latest.to_date,
+                # ISO strings, never raw `date` objects. DRF renders these to strings over HTTP
+                # either way, but the idempotency layer stores this serializer's `.data` as JSON
+                # *before* that render (`core.idempotency`), and a raw `date` there cannot be
+                # serialised — it 500s every finalize/complete of a member with procurement on
+                # record, which strands the capture on the queue for good. The mobile contract is
+                # a string (`MemberProcurement.period`), so this is also simply correct.
+                "from_date": latest.from_date.isoformat(),
+                "to_date": latest.to_date.isoformat(),
                 "qty": str(latest.qty),
                 "avg_fat": str(latest.avg_fat),
                 "avg_snf": str(latest.avg_snf),

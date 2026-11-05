@@ -266,6 +266,91 @@ class TestFinalize:
         assert entry.meta_json["to"] == "completed"
 
 
+class TestFinalizeWithProcurement:
+    """
+    A member with milk on record must finalise exactly like one without.
+
+    The regression this guards: the response carries her procurement, and its latest ``period``
+    block held raw ``date`` objects (``from_date``/``to_date``). The write succeeded, but the
+    idempotency layer then stored the response as JSON and the plain encoder could not serialise
+    a ``date`` — so **every** member who had ever poured milk got a 500 *after* the straw was
+    already spent, and her capture was stranded on the offline queue for good, retrying forever.
+    These were invisible to the rest of the suite because the test member pours nothing, so no
+    ``period`` block is emitted.
+    """
+
+    @pytest.fixture
+    def member_with_procurement(self, member):
+        from datetime import date
+
+        from apps.masterdata.models import MemberProcurement
+
+        MemberProcurement.objects.create(
+            member=member,
+            from_date=date(2026, 11, 4),
+            to_date=date(2026, 11, 4),
+            qty=Decimal("2.64"),
+            amount=Decimal("134.69"),
+            no_of_pouring_days=1,
+            no_of_pouring_shift=1,
+        )
+        return member
+
+    def test_it_closes_the_capture_and_stores_its_idempotency_record(
+        self, mait_client, straw_verified_member_event, priced_gir, member_with_procurement, mait
+    ):
+        from apps.core.models import IdempotencyRecord
+
+        event, straw = straw_verified_member_event()
+        key = str(event.client_uuid)
+
+        response = mait_client.post(
+            f"{BASE}/{event.id}/finalize/",
+            {"photo": a_photo(), "gps_lat": "26.8", "gps_lng": "80.9"},
+            format="multipart",
+            HTTP_IDEMPOTENCY_KEY=key,
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["status"] == "completed"
+        # The straw was consumed, so a 500 here (the old behaviour) would have stranded a
+        # finished insemination on the queue.
+        event.refresh_from_db()
+        assert event.status == AIEvent.Status.COMPLETED
+        assert available_straw_count(mait) == 0
+
+        # The crash was in *storing* the idempotency record, after the work was done. Its
+        # existence is the proof the response serialised — and the stored period dates are strings.
+        record = IdempotencyRecord.objects.get(key=key, endpoint="ai-events.finalize")
+        assert record.response_status == 200
+        period = record.response_body["procurement"]["period"]
+        assert period["from_date"] == "2026-11-04"
+        assert isinstance(period["from_date"], str) and isinstance(period["to_date"], str)
+
+    def test_a_replay_still_no_ops_for_a_member_with_procurement(
+        self, mait_client, straw_verified_member_event, priced_gir, member_with_procurement, mait
+    ):
+        """
+        The replay path returns the stored record — which only exists because the first store no
+        longer crashes. Without the fix the record was never written, so a retry re-ran the view
+        and 500'd again on an already-completed event, forever.
+        """
+        event, _ = straw_verified_member_event()
+        key = str(event.client_uuid)
+        payload = {"photo": a_photo(), "gps_lat": "26.8", "gps_lng": "80.9"}
+
+        first = mait_client.post(f"{BASE}/{event.id}/finalize/", payload, format="multipart",
+                                 HTTP_IDEMPOTENCY_KEY=key)
+        second = mait_client.post(f"{BASE}/{event.id}/finalize/",
+                                  {"photo": a_photo(), "gps_lat": "26.8", "gps_lng": "80.9"},
+                                  format="multipart", HTTP_IDEMPOTENCY_KEY=key)
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert MaitInventoryLedger.objects.filter(ref_id=event.id).count() == 1
+        assert available_straw_count(mait) == 0
+
+
 class TestFinalizeRefusals:
     def test_a_straw_verified_event_with_no_photo_is_refused(
         self, mait_client, straw_verified_member_event, priced_gir, mait
