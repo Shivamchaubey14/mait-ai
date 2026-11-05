@@ -92,6 +92,19 @@
   color: var(--color-info);
 }
 
+/* The office-completion panel: a yolk-washed `panel--warning`, so it reads as something still
+   waiting rather than something wrong. The note sets the stakes before the one button, and the
+   button spans the column — it is the panel's whole purpose, not one control among several. */
+.panel--action .panel__note {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+}
+.panel--action .btn {
+  width: 100%;
+}
+
 /* The rules between lines go. They were drawn for a white panel; on the wash the grey reads
    as a cool line across a warm ground, and a tomato one is a shout between two sheaths. The
    app's copy of this card has never had them — the padding separates the rows well enough at

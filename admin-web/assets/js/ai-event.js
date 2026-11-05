@@ -45,6 +45,103 @@
     return match ? match[1] : null;
   }
 
+  /* The office-side completion is the same back-office correction a delete is, so the same
+     admins get it — super_admin / admin, never a Normal User — and the API gates it to exactly
+     that set. Read once at boot from the profile cached at sign-in; this only decides whether to
+     draw the button, the server decides whether to honour it. Mirrors ai-events.js. */
+  let canComplete = false;
+
+  function readCanComplete() {
+    const profile = MaitAI.api.profile.get();
+    const role = profile && profile.role;
+    return role === 'super_admin' || role === 'admin';
+  }
+
+  /* An event the office may close: a member's capture the Mait left at photo_captured or
+     payment_pending whose deduction is already recorded and verified. A non-member is left out —
+     she authorises her own payment with a code the office cannot enter — as is any event whose
+     payment has not landed, which is finance's to record. The server enforces all of this; the
+     same test here just keeps the panel off a record it could never complete. */
+  function completable(event) {
+    return (
+      canComplete &&
+      event.owner_type === 'member' &&
+      (event.status === 'photo_captured' || event.status === 'payment_pending') &&
+      !!event.payment &&
+      event.payment.is_verified === true
+    );
+  }
+
+  /* Show the office-completion panel only where the event is one it could accept; hide it
+     everywhere else, including the moment after a completion lands, so the vanished button is
+     itself the confirmation. */
+  function renderAction(event) {
+    $('#office-action').prop('hidden', !completable(event));
+  }
+
+  /**
+   * Complete a stuck member capture from the office — the same thing the handset would do,
+   * barred to the Mait's own screen on purpose. One deliberate confirm, because it moves
+   * inventory. On success the event is re-read: it now reads Completed, the trail gains its
+   * closing lines, and the panel hides itself.
+   */
+  function runComplete(id) {
+    if (
+      !window.confirm(
+        'Complete event ' +
+          id +
+          "? This deducts the straw from the Mait's stock, records the insemination as done " +
+          'and books its pregnancy check.'
+      )
+    ) {
+      return;
+    }
+
+    const $btn = $('#office-complete');
+    $btn.prop('disabled', true).text('Completing…');
+
+    MaitAI.api
+      .officeCompleteAiEvent(id)
+      .done(function () {
+        load(id, 'Event ' + id + ' completed.');
+      })
+      .fail(function (problem) {
+        $btn.prop('disabled', false).text('Complete this event');
+        MaitAI.shell.alert(problem.detail);
+      });
+  }
+
+  /**
+   * Read the event and its trail and render both, with an optional success line.
+   *
+   * The one place the page loads from, so the boot and a completion land in exactly the same
+   * rendered state — `flash` is the only thing a completion adds.
+   */
+  function load(id, flash) {
+    MaitAI.shell.clearAlert();
+    MaitAI.api
+      .aiEvent(id)
+      .done(function (event) {
+        renderSummary(event);
+        if (flash) {
+          MaitAI.shell.alert(flash, 'good');
+        }
+        MaitAI.api
+          .aiEventTimeline(id)
+          .done(function (entries) {
+            renderTrail(entries, event);
+          })
+          .fail(function () {
+            $('#trail').html('<li class="trail__step">The trail could not be loaded.</li>');
+          });
+      })
+      .fail(function (problem) {
+        MaitAI.shell.alert(
+          problem.status === 404 ? 'No such event, or it is outside your scope.' : problem.detail
+        );
+      });
+  }
+
   function renderSummary(event) {
     $('#event-title').text('Event ' + event.id + ' · ' + event.owner_name);
     $('#event-meta').text(
@@ -113,6 +210,7 @@
     renderProof(event);
     renderAnimal(event);
     renderMap(event);
+    renderAction(event);
   }
 
   /**
@@ -586,23 +684,13 @@
       return;
     }
 
-    MaitAI.api
-      .aiEvent(id)
-      .done(function (event) {
-        renderSummary(event);
-        MaitAI.api
-          .aiEventTimeline(id)
-          .done(function (entries) {
-            renderTrail(entries, event);
-          })
-          .fail(function () {
-            $('#trail').html('<li class="trail__step">The trail could not be loaded.</li>');
-          });
-      })
-      .fail(function (problem) {
-        MaitAI.shell.alert(
-          problem.status === 404 ? 'No such event, or it is outside your scope.' : problem.detail
-        );
-      });
+    // Whether this operator may complete, decided once. The button lives in the DOM hidden, so
+    // it is bound here and revealed by renderAction only on an event the office could close.
+    canComplete = readCanComplete();
+    $('#office-complete').on('click', function () {
+      runComplete(id);
+    });
+
+    load(id);
   });
 })(window.MaitAI, jQuery);

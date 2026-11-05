@@ -10,7 +10,7 @@
     <!-- Versioned so a browser holding the pre-farmer-card stylesheet fetches this one rather
          than reusing a heuristically-"fresh" cached copy (the portal is served by Django's
          static serve, which sets no Cache-Control). Bump on any change to the file. -->
-    <link rel="stylesheet" href="assets/css/event.css?v=20261007" />
+    <link rel="stylesheet" href="assets/css/event.css?v=20261105" />
   </head>
 
   <body>
@@ -211,6 +211,44 @@
                of when. The wrapper is what keeps them one grid cell — dropped straight into
                the grid they would have become a second row, with the photo beside a gap. -->
           <div class="event__side">
+            <!-- The office's one action on this page: finish a member capture the Mait left
+                 stuck past its photo and payment. Hidden until ai-event.js finds an event the
+                 server would accept and an operator with the role for it — a page that cannot
+                 act grows no button that only ever returns 403. Same back-office completion the
+                 events list offers, brought onto the record it is about. -->
+            <section
+              class="panel panel--warning panel--action"
+              id="office-action"
+              aria-labelledby="office-action-title"
+              hidden
+            >
+              <div class="panel__head">
+                <h2 class="panel__title" id="office-action-title">
+                  <span class="panel__icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 3a9 9 0 1 0 9 9M8.5 12.5l2.5 2.5L21 5" />
+                    </svg>
+                  </span>
+                  Office completion
+                </h2>
+              </div>
+              <p class="panel__note" id="office-action-note">
+                This member capture reached payment but never got its final close. Completing it
+                here deducts the straw from the Mait's stock, records the insemination as done and
+                books its pregnancy check.
+              </p>
+              <button class="btn btn--warn" id="office-complete" type="button">
+                Complete this event
+              </button>
+            </section>
+
             <!-- Who the insemination was for, and the animal it was on. For a member the code
                  looks her up in SAP; for a non-member there is no SAP record, so the details
                  she registered with — her number, her Aadhaar (masked), the card on file — are
@@ -331,6 +369,6 @@
     <script src="assets/js/lightbox.js"></script>
     <!-- Versioned so the Farmer & animal card's code is fetched even when the browser has the
          older ai-event.js cached (Django's static serve sends no Cache-Control). Bump on change. -->
-    <script src="assets/js/ai-event.js?v=20261028"></script>
+    <script src="assets/js/ai-event.js?v=20261105"></script>
   </body>
 </html>
