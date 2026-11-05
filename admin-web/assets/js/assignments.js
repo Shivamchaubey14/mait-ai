@@ -39,25 +39,62 @@
 
   /* --- roster ----------------------------------------------------------------------------- */
 
-  /** Coverage as chips, capped: a Mait with forty MPPs would push the row off the screen. */
+  /**
+   * Every MPP the Mait covers, as chips — active and deactivated alike, none hidden.
+   *
+   * It used to cap at six with a "+34", which read the roster back as a number rather than the
+   * area it is. The whole set is shown now, deactivated ones marked and clustered last (the
+   * server sorts them that way), so an operator can see at a glance that a Mait's area still
+   * carries a collection point SAP has since switched off — a real case, since a deactivated
+   * MPP keeps naming the events recorded there. A count line sits under the chips when any are
+   * off, so the split is legible without reading every chip.
+   *
+   * Falls back to `mpp_codes` for a payload from before the server sent the richer `mpps`, so a
+   * stale cache still renders rather than blanking the column.
+   */
   function coverageCell(mait) {
-    const codes = mait.mpp_codes || [];
-    if (!codes.length) {
+    const mpps =
+      mait.mpps ||
+      (mait.mpp_codes || []).map(function (code) {
+        return { code: code, name: '', is_active: true };
+      });
+    if (!mpps.length) {
       return '<span class="table__sub">No MPPs — this Mait can record nothing</span>';
     }
-    const shown = codes.slice(0, 6);
-    return (
-      '<div class="codes">' +
-      shown
-        .map(function (code) {
-          return '<span class="code-chip">' + ui.escapeHtml(code) + '</span>';
-        })
-        .join('') +
-      (codes.length > shown.length
-        ? '<span class="code-chip code-chip--more">+' + (codes.length - shown.length) + '</span>'
-        : '') +
-      '</div>'
-    );
+
+    const chips = mpps
+      .map(function (mpp) {
+        const off = mpp.is_active === false;
+        const title = mpp.name
+          ? ui.escapeHtml(mpp.name) + (off ? ' · deactivated' : '')
+          : off
+            ? 'Deactivated'
+            : '';
+        return (
+          '<span class="code-chip' +
+          (off ? ' code-chip--off' : '') +
+          '"' +
+          (title ? ' title="' + title + '"' : '') +
+          '>' +
+          ui.escapeHtml(mpp.code) +
+          (off ? '<span class="code-chip__off">off</span>' : '') +
+          '</span>'
+        );
+      })
+      .join('');
+
+    const offCount = mpps.filter(function (mpp) {
+      return mpp.is_active === false;
+    }).length;
+    const summary = offCount
+      ? '<p class="codes__summary">' +
+        (mpps.length - offCount) +
+        ' active · ' +
+        offCount +
+        ' deactivated</p>'
+      : '';
+
+    return '<div class="codes">' + chips + '</div>' + summary;
   }
 
   function stateCell(mait) {

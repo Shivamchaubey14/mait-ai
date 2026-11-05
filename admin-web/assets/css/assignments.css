@@ -132,6 +132,36 @@
   border-style: dashed;
 }
 
+/* A deactivated MPP: still the Mait's, still named on old events, so shown — but muted and
+   dashed so the live area reads first. The "off" tag spells out what the tint only hints. */
+.code-chip--off {
+  color: var(--color-text-muted);
+  background: transparent;
+  border-style: dashed;
+  text-decoration: line-through;
+}
+
+.code-chip__off {
+  margin-left: var(--space-1);
+  padding: 0 4px;
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--color-surface);
+  background: var(--color-text-muted);
+  border-radius: var(--radius-pill);
+  vertical-align: middle;
+}
+
+/* The active/deactivated split under the chips, for a Mait whose area carries any switched-off
+   point — so the count is legible without reading every chip. */
+.codes__summary {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
 /* --- error report ------------------------------------------------------------------------ */
 .rejects {
   max-height: 320px;

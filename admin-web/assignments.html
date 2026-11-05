@@ -6,7 +6,9 @@
     <title>Assignments · Mait AI Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="assets/favicon.png" />
-    <link rel="stylesheet" href="assets/css/assignments.css" />
+    <!-- Versioned so a browser holding the pre-coverage stylesheet fetches this one (Django's
+         static serve sets no Cache-Control). Bump on any change to the file. -->
+    <link rel="stylesheet" href="assets/css/assignments.css?v=20261105" />
   </head>
 
   <body>
@@ -360,6 +362,7 @@
     <script src="assets/js/controls.js"></script>
     <script src="assets/js/shell.js"></script>
     <script src="assets/js/mait-editor.js"></script>
-    <script src="assets/js/assignments.js"></script>
+    <!-- Versioned for the same reason as the stylesheet above. Bump on any change to the file. -->
+    <script src="assets/js/assignments.js?v=20261105"></script>
   </body>
 </html>

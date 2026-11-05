@@ -431,10 +431,29 @@ class AdminUserViewSet(
                 # Maits screen reads this to tell a working account from a deactivated one — both
                 # of which have `activated: true`.
                 "account_active": mait.user.is_active if mait.user_id else None,
-                "mpp_codes": [mpp.mpp_code for mpp in mait.mpps.all()],
-                "mpp_count": len(mait.mpps.all()),
+                "mpp_codes": [mpp.mpp_code for mpp in covered],
+                "mpp_count": len(covered),
+                # Every MPP this Mait covers — active and deactivated alike. A deactivated MPP
+                # (is_active False) still belongs to the Mait and still names the events recorded
+                # there, so it is carried and marked, never dropped. Active first, then the
+                # deactivated, each by name, so the table reads the live area before the retired
+                # tail. Sorted in Python off the prefetched set so the ordering costs no query.
+                "mpps": [
+                    {
+                        "code": mpp.mpp_code,
+                        "name": mpp.mpp_name,
+                        "is_active": mpp.is_active,
+                    }
+                    for mpp in covered
+                ],
             }
             for mait in page
+            for covered in [
+                sorted(
+                    mait.mpps.all(),
+                    key=lambda mpp: (not mpp.is_active, mpp.mpp_name or "", mpp.mpp_code),
+                )
+            ]
         ]
         response = self.get_paginated_response(rows)
         response.data["summary"] = {
