@@ -752,7 +752,12 @@ export default function AiEventDetailScreen({
             testID="ai-event-send-now"
           >
             {sending ? (
-              <ActivityIndicator color={colors.surface} />
+              <>
+                <ActivityIndicator color={colors.surface} />
+                <AppText style={styles.ctaLabel} numberOfLines={1}>
+                  {t('aiEvent.sending')}
+                </AppText>
+              </>
             ) : (
               <>
                 <Ionicons name="cloud-upload" size={18} color={colors.surface} />
@@ -762,16 +767,26 @@ export default function AiEventDetailScreen({
               </>
             )}
           </Pressable>
-          {!!onResume && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => onResume(event)}
-              disabled={busy || sending}
-              style={styles.retake}
-              testID="ai-event-retake"
-            >
-              <AppText style={styles.retakeLabel}>{t('aiEvent.retakePhoto')}</AppText>
-            </Pressable>
+          {/* A photo is bytes, not a line of text, and over a village link it takes real
+              seconds to go — long enough that a Mait who tapped Send and saw nothing move would
+              tap again or walk off calling it broken. This says the upload is happening and to
+              hold on, so the wait reads as progress rather than failure. */}
+          {sending ? (
+            <AppText style={styles.sendingHint} testID="ai-event-sending-hint">
+              {t('aiEvent.sendingHint')}
+            </AppText>
+          ) : (
+            !!onResume && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onResume(event)}
+                disabled={busy}
+                style={styles.retake}
+                testID="ai-event-retake"
+              >
+                <AppText style={styles.retakeLabel}>{t('aiEvent.retakePhoto')}</AppText>
+              </Pressable>
+            )
           )}
         </View>
       ) : (
@@ -1205,5 +1220,15 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: ink[500],
     textDecorationLine: 'underline',
+  },
+
+  // The reassurance under the button while the photo uploads: centred where the retake link
+  // was, so the foot does not jump as one replaces the other.
+  sendingHint: {
+    ...typography.caption,
+    color: ink[500],
+    textAlign: 'center',
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[4],
   },
 });

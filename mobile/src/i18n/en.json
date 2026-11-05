@@ -2663,6 +2663,8 @@
     "photoQueuedTitle": "Photo taken — waiting to send",
     "photoQueuedBody": "It is on this phone and will go when there is signal. Tap Send now to try at once.",
     "sendNow": "Send now",
+    "sending": "Sending…",
+    "sendingHint": "Sending the photo — this can take a moment on slow signal. Keep this open.",
     "retakePhoto": "Retake the photo",
     "seeTheTrail": "See the audit trail",
     "auditTrail": "Audit trail",
