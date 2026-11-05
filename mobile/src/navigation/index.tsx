@@ -705,24 +705,6 @@ export default function RootNavigator(): React.JSX.Element {
     };
   }, [eventView, queueJobs]);
 
-  /**
-   * Send the open record's queued photo now, past any backoff.
-   *
-   * Clears the wait on every job of that capture — a backoff it earned, or a refusal the office
-   * has since cleared — and drains at once. This is the Mait's own "send it to the server now"
-   * when they are standing on signal and do not want to wait for the next tick.
-   */
-  const sendPendingNow = useCallback(async () => {
-    if (!pendingPhoto) {
-      return;
-    }
-    await Promise.all(
-      queueJobs
-        .filter(job => job.clientUuid === pendingPhoto.clientUuid)
-        .map(job => retryFailed(job.id)),
-    );
-    await sync();
-  }, [pendingPhoto, queueJobs, sync]);
 
   /**
    * Drain when the connection returns, and once on mount.
@@ -784,25 +766,28 @@ export default function RootNavigator(): React.JSX.Element {
   }, [sync]);
 
   /**
-   * Ask again, now and then, while anything is still waiting.
+   * Send what is waiting, on its own, while there is a usable network — no Mait tapping
+   * anything. This is the "it should just sync" the field asked for.
    *
-   * Cheap by construction: every job carries its own backoff, so a tick with nothing due
-   * sends no requests at all and this costs a read of one storage key. What it buys is the
-   * case above — a network that never changes state and a server that is briefly unwell —
-   * where without it the only way to move the queue is a Mait who happens to pull a screen.
+   * Every pass first clears the backoff on whatever is still queued, then drains. The backoff
+   * exists to stop a handset hammering a *sick* server between events; but a proof photo that
+   * failed once on a weak bar and then earned a ten-minute wait would otherwise sit untouched
+   * with the signal long since back, which reads to a Mait as the record being stuck. Waking it
+   * each pass means a live connection is all it takes — the photo goes up by itself, within a
+   * tick, every time. A refusal is never woken: it waits on a person, not a timer.
    *
-   * Stopped the moment the queue is empty, so an idle handset in a pocket does no work.
+   * Cheap by construction: the loop runs only while something is queued and the network is up,
+   * and stops the instant the queue empties — an idle handset in a pocket runs nothing.
    */
   useEffect(() => {
     if (!online || pending === 0) {
       return;
     }
     const timer = setInterval(() => {
-      // Never on top of a drain that is already running: two at once would send the same job
-      // twice, and while the server would answer the second as a replay, it is a request
-      // nobody needed to make.
+      // Never on top of a drain already running: two at once would send the same job twice,
+      // and while the server answers the second as a replay, it is a request nobody needed.
       if (!draining) {
-        sync();
+        wakeAll().then(sync);
       }
     }, RETRY_TICK_MS);
     return () => clearInterval(timer);
@@ -2032,9 +2017,9 @@ export default function RootNavigator(): React.JSX.Element {
             onResume={resumeCapture}
             busy={closing}
             // The photo sitting in the queue for this record, so the screen says "taken,
-            // waiting to send" instead of "never taken", and can push it now.
+            // sending automatically" instead of "never taken". The queue drains it on its own;
+            // `sending` just lets the screen show the upload is in flight.
             pendingPhoto={pendingPhoto}
-            onSendNow={sendPendingNow}
             sending={draining}
           />
         )}

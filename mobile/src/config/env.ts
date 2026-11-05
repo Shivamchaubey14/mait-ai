@@ -152,10 +152,14 @@ export const IDEMPOTENCY_TTL_HOURS = 168;
  * no backhaul, a captive portal and a server answering 502 all leave the handset "connected"
  * and unable to send, and none of them fire a connectivity event when they clear.
  *
- * A minute is short enough that a Mait riding past a village does not miss the window, and
- * long enough to be invisible on a battery. The timer stops entirely once the queue is empty.
+ * Fifteen seconds: short enough that a queued proof photo goes up on its own, without a Mait
+ * ever tapping anything, within moments of the signal being usable — the "it should just sync"
+ * the field asked for. Long enough to stay invisible on a battery, and the timer stops entirely
+ * once the queue is empty, so an idle handset in a pocket runs no loop at all. Each pass also
+ * clears the backoff on whatever is waiting (see the drain tick in navigation), so a job that
+ * failed earlier is not left sitting out a ten-minute wait while the network is in fact back.
  */
-export const RETRY_TICK_MS = 60_000;
+export const RETRY_TICK_MS = 15_000;
 
 /** SRS §6.5.1 */
 export const OTP_LENGTH = 6;

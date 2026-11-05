@@ -205,7 +205,6 @@ export default function AiEventDetailScreen({
   onResume,
   busy = false,
   pendingPhoto = null,
-  onSendNow,
   sending = false,
 }: {
   eventId: number;
@@ -230,9 +229,7 @@ export default function AiEventDetailScreen({
    * push it now rather than sending the Mait to retake one they already have.
    */
   pendingPhoto?: { photoUri: string | null; failed: boolean } | null;
-  /** Send the queued photo now, past any backoff. Absent where nothing is queued. */
-  onSendNow?: () => void;
-  /** A drain is in flight, so the Send-now button says so rather than inviting a second tap. */
+  /** A drain is in flight, so the auto-send status says "Sending…" rather than "will send". */
   sending?: boolean;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation();
@@ -736,57 +733,34 @@ export default function AiEventDetailScreen({
         </View>
       </Modal>
 
-      {/* A record whose photo is queued leads with "Send now" — the Mait's own push to the
-          server when they are standing on signal and do not want to wait for the next tick —
-          with retaking the photo kept as the quieter choice beneath, for the rare bad shot. A
-          record genuinely missing a step leads, as before, with the button that picks the
-          capture back up where it stopped. */}
-      {photoQueued && !!onSendNow ? (
+      {/* A record whose photo is queued shows that the photo is sending — on its own. There is
+          no button to press: the queue drains it automatically the moment there is signal, and
+          this only reports that it is happening, so the wait reads as progress and never as
+          something the Mait forgot to do. Retaking stays as the quieter choice beneath, for the
+          rare bad shot. A record genuinely missing a step leads, as before, with the button that
+          picks the capture back up where it stopped. */}
+      {photoQueued ? (
         <View style={[styles.foot, { paddingBottom: spacing[3] + insets.bottom }]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ busy: sending, disabled: sending }}
-            onPress={onSendNow}
-            disabled={sending}
-            style={({ pressed }) => [styles.cta, pressed && !sending && styles.ctaPressed]}
-            testID="ai-event-send-now"
-          >
+          <View style={styles.autosend} testID="ai-event-autosend">
             {sending ? (
-              <>
-                <ActivityIndicator color={colors.surface} />
-                <AppText style={styles.ctaLabel} numberOfLines={1}>
-                  {t('aiEvent.sending')}
-                </AppText>
-              </>
+              <ActivityIndicator color={colors.primary} />
             ) : (
-              <>
-                <Ionicons name="cloud-upload" size={18} color={colors.surface} />
-                <AppText style={styles.ctaLabel} numberOfLines={1}>
-                  {t('aiEvent.sendNow')}
-                </AppText>
-              </>
+              <Ionicons name="cloud-upload-outline" size={18} color={colors.primaryDark} />
             )}
-          </Pressable>
-          {/* A photo is bytes, not a line of text, and over a village link it takes real
-              seconds to go — long enough that a Mait who tapped Send and saw nothing move would
-              tap again or walk off calling it broken. This says the upload is happening and to
-              hold on, so the wait reads as progress rather than failure. */}
-          {sending ? (
-            <AppText style={styles.sendingHint} testID="ai-event-sending-hint">
-              {t('aiEvent.sendingHint')}
+            <AppText style={styles.autosendLabel} numberOfLines={2}>
+              {t(sending ? 'aiEvent.sending' : 'aiEvent.willSendAuto')}
             </AppText>
-          ) : (
-            !!onResume && (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => onResume(event)}
-                disabled={busy}
-                style={styles.retake}
-                testID="ai-event-retake"
-              >
-                <AppText style={styles.retakeLabel}>{t('aiEvent.retakePhoto')}</AppText>
-              </Pressable>
-            )
+          </View>
+          {!!onResume && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onResume(event)}
+              disabled={busy}
+              style={styles.retake}
+              testID="ai-event-retake"
+            >
+              <AppText style={styles.retakeLabel}>{t('aiEvent.retakePhoto')}</AppText>
+            </Pressable>
           )}
         </View>
       ) : (
@@ -1222,13 +1196,26 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  // The reassurance under the button while the photo uploads: centred where the retake link
-  // was, so the foot does not jump as one replaces the other.
-  sendingHint: {
-    ...typography.caption,
-    color: ink[500],
+  // The auto-send status, where the button used to be: a calm green-washed row, not a control,
+  // so it reads as the app working rather than a thing to tap. Same height as the CTA it stands
+  // in for, so the foot does not resize as a record moves between states.
+  autosend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    minHeight: 56,
+    paddingHorizontal: spacing[5],
+    borderRadius: radius.lg,
+    backgroundColor: colors.primaryWash,
+    borderWidth: 1,
+    borderColor: green[300],
+  },
+  autosendLabel: {
+    ...typography.bodyStrong,
+    fontSize: 15,
+    color: colors.primaryDark,
+    flexShrink: 1,
     textAlign: 'center',
-    marginTop: spacing[2],
-    paddingHorizontal: spacing[4],
   },
 });
