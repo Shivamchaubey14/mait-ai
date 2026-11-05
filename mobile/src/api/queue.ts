@@ -363,6 +363,19 @@ export async function retryFailed(id: string): Promise<void> {
 }
 
 /**
+ * Make every not-yet-refused job due again, clearing the backoff it earned.
+ *
+ * Called the moment the connection comes back. A job's backoff was almost always the network
+ * being gone, and holding a ready job for minutes *after* signal returns is exactly the "on
+ * full network, still waiting" a Mait reports — the reconnect fired, the drain ran, and the
+ * one job it came back for was not yet due. A refusal is left alone: it waits on a person, not
+ * a timer, and no amount of signal changes the answer.
+ */
+export async function wakeAll(): Promise<void> {
+  await mutate(jobs => jobs.map(job => (job.failed ? job : { ...job, nextAttemptAt: 0 })));
+}
+
+/**
  * Remember the id the server gave a row, so the jobs behind it can name it.
  *
  * Written the moment a create comes back — including a create that came back as a replay of

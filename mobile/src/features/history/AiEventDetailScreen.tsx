@@ -204,6 +204,9 @@ export default function AiEventDetailScreen({
   onBack,
   onResume,
   busy = false,
+  pendingPhoto = null,
+  onSendNow,
+  sending = false,
 }: {
   eventId: number;
   onBack: () => void;
@@ -218,6 +221,19 @@ export default function AiEventDetailScreen({
    * button a Mait taps four times.
    */
   busy?: boolean;
+  /**
+   * The proof photo for this record that is still on the phone's queue, waiting to send.
+   *
+   * This screen reads the server, which has not seen a queued photo yet — so without this it
+   * would show "proof photo never taken" over a photo that is right here and about to go. When
+   * present, the screen says the truth (taken, waiting), shows the local photo, and offers to
+   * push it now rather than sending the Mait to retake one they already have.
+   */
+  pendingPhoto?: { photoUri: string | null; failed: boolean } | null;
+  /** Send the queued photo now, past any backoff. Absent where nothing is queued. */
+  onSendNow?: () => void;
+  /** A drain is in flight, so the Send-now button says so rather than inviting a second tap. */
+  sending?: boolean;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -306,7 +322,14 @@ export default function AiEventDetailScreen({
         : t('aiEvent.notConfirmed');
 
   const located = !!event.gps_lat && !!event.gps_lng;
-  const photo = mediaUrl(event.ai_photo_url);
+  /**
+   * The photo on the phone's queue for this record, waiting to send — shown while the server
+   * has none of its own. A local `file://` URI, so it is used as-is and never run through
+   * `mediaUrl`, which would prepend the server origin and break it.
+   */
+  const queuedPhotoUri = (waiting && pendingPhoto?.photoUri) || null;
+  const photoQueued = waiting && !!pendingPhoto;
+  const photo = mediaUrl(event.ai_photo_url) || queuedPhotoUri || undefined;
   /**
    * A photo chosen from the gallery rather than taken here.
    *
@@ -318,11 +341,13 @@ export default function AiEventDetailScreen({
   const chosen = event.photo_source === 'gallery';
 
   /** Said in both places the photo appears, so the two can never disagree about it. */
-  const photoCaption = !photo
-    ? t('aiEvent.photoPending')
-    : t(chosen ? 'aiEvent.photoChosen' : 'aiEvent.photoCaption', {
-        when: shortStamp(event.performed_at ?? event.created_at),
-      });
+  const photoCaption = photoQueued
+    ? t('aiEvent.photoWaitingToSend')
+    : !photo
+      ? t('aiEvent.photoPending')
+      : t(chosen ? 'aiEvent.photoChosen' : 'aiEvent.photoCaption', {
+          when: shortStamp(event.performed_at ?? event.created_at),
+        });
 
   const trailRows = trail.data ?? [];
 
@@ -407,24 +432,43 @@ export default function AiEventDetailScreen({
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         {/* What is missing, before anything else on the screen. A Mait who opened this row
-            opened it because of this sentence. */}
-        {waiting && (
-          <View style={styles.alert} testID="ai-event-alert">
-            <View style={[styles.chipLarge, { backgroundColor: colors.error }]}>
-              <Ionicons name="alert" size={20} color={colors.surface} />
+            opened it because of this sentence.
+
+            But a record whose photo is on the queue is not missing it — the server simply has
+            not been reached yet. So that case gets a calm, yolk "taken, waiting to send" rather
+            than the red "never taken", which is the lie that sent Maits back to retake a photo
+            they already had. */}
+        {photoQueued ? (
+          <View style={[styles.alert, styles.alertWaiting]} testID="ai-event-alert">
+            <View style={[styles.chipLarge, { backgroundColor: yolk[500] }]}>
+              <Ionicons name="cloud-upload" size={20} color={colors.ink} />
             </View>
             <View style={styles.alertBody}>
-              <AppText style={styles.alertTitle}>{t(`aiEvent.missing_${missing}`)}</AppText>
-              <AppText style={styles.alertText}>
-                {/* The cash sentence only where cash was actually taken. A non-member at
-                    `photo_captured` has handed over nothing yet, and telling a Mait that
-                    money is unconfirmed when none was collected sends them looking for it. */}
-                {missing === 'payment_pending' && !member && charge
-                  ? t('aiEvent.missingBodyCash', { amount: `₹ ${Math.round(Number(charge))}` })
-                  : t(`aiEvent.missingBody_${missing}`)}
+              <AppText style={styles.alertTitle}>{t('aiEvent.photoQueuedTitle')}</AppText>
+              <AppText style={[styles.alertText, styles.alertTextWaiting]}>
+                {t('aiEvent.photoQueuedBody')}
               </AppText>
             </View>
           </View>
+        ) : (
+          waiting && (
+            <View style={styles.alert} testID="ai-event-alert">
+              <View style={[styles.chipLarge, { backgroundColor: colors.error }]}>
+                <Ionicons name="alert" size={20} color={colors.surface} />
+              </View>
+              <View style={styles.alertBody}>
+                <AppText style={styles.alertTitle}>{t(`aiEvent.missing_${missing}`)}</AppText>
+                <AppText style={styles.alertText}>
+                  {/* The cash sentence only where cash was actually taken. A non-member at
+                      `photo_captured` has handed over nothing yet, and telling a Mait that
+                      money is unconfirmed when none was collected sends them looking for it. */}
+                  {missing === 'payment_pending' && !member && charge
+                    ? t('aiEvent.missingBodyCash', { amount: `₹ ${Math.round(Number(charge))}` })
+                    : t(`aiEvent.missingBody_${missing}`)}
+                </AppText>
+              </View>
+            </View>
+          )
         )}
 
         <View style={styles.tiles}>
@@ -692,29 +736,69 @@ export default function AiEventDetailScreen({
         </View>
       </Modal>
 
-      {/* The way back into the capture, and only where there is a capture to go back into. */}
-      {waiting && !!onResume && (
+      {/* A record whose photo is queued leads with "Send now" — the Mait's own push to the
+          server when they are standing on signal and do not want to wait for the next tick —
+          with retaking the photo kept as the quieter choice beneath, for the rare bad shot. A
+          record genuinely missing a step leads, as before, with the button that picks the
+          capture back up where it stopped. */}
+      {photoQueued && !!onSendNow ? (
         <View style={[styles.foot, { paddingBottom: spacing[3] + insets.bottom }]}>
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ busy, disabled: busy }}
-            onPress={() => onResume(event)}
-            disabled={busy}
-            style={({ pressed }) => [styles.cta, pressed && !busy && styles.ctaPressed]}
-            testID="ai-event-resume"
+            accessibilityState={{ busy: sending, disabled: sending }}
+            onPress={onSendNow}
+            disabled={sending}
+            style={({ pressed }) => [styles.cta, pressed && !sending && styles.ctaPressed]}
+            testID="ai-event-send-now"
           >
-            {busy ? (
+            {sending ? (
               <ActivityIndicator color={colors.surface} />
             ) : (
               <>
+                <Ionicons name="cloud-upload" size={18} color={colors.surface} />
                 <AppText style={styles.ctaLabel} numberOfLines={1}>
-                  {t(`aiEvent.finish_${finishKey}`)}
+                  {t('aiEvent.sendNow')}
                 </AppText>
-                <Ionicons name="arrow-forward" size={18} color={colors.surface} />
               </>
             )}
           </Pressable>
+          {!!onResume && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onResume(event)}
+              disabled={busy || sending}
+              style={styles.retake}
+              testID="ai-event-retake"
+            >
+              <AppText style={styles.retakeLabel}>{t('aiEvent.retakePhoto')}</AppText>
+            </Pressable>
+          )}
         </View>
+      ) : (
+        waiting &&
+        !!onResume && (
+          <View style={[styles.foot, { paddingBottom: spacing[3] + insets.bottom }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ busy, disabled: busy }}
+              onPress={() => onResume(event)}
+              disabled={busy}
+              style={({ pressed }) => [styles.cta, pressed && !busy && styles.ctaPressed]}
+              testID="ai-event-resume"
+            >
+              {busy ? (
+                <ActivityIndicator color={colors.surface} />
+              ) : (
+                <>
+                  <AppText style={styles.ctaLabel} numberOfLines={1}>
+                    {t(`aiEvent.finish_${finishKey}`)}
+                  </AppText>
+                  <Ionicons name="arrow-forward" size={18} color={colors.surface} />
+                </>
+              )}
+            </Pressable>
+          </View>
+        )
       )}
     </View>
   );
@@ -809,9 +893,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.error,
   },
+  // Yolk, not red: a queued photo is in flight, not missing. Same wash the "waiting" tiles and
+  // standing pill on this screen already wear, so the record reads as one thing waiting rather
+  // than one thing wrong.
+  alertWaiting: { backgroundColor: colors.secondaryWash, borderColor: yolk[300] },
   alertBody: { flex: 1 },
   alertTitle: { ...typography.bodyStrong, color: colors.ink },
   alertText: { ...typography.caption, color: colors.error, marginTop: 2 },
+  alertTextWaiting: { color: yolk[800] },
 
   // -- tiles -----------------------------------------------------------------------------
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3], marginBottom: spacing[3] },
@@ -1103,4 +1192,18 @@ const styles = StyleSheet.create({
   },
   ctaPressed: { backgroundColor: colors.primaryPressed },
   ctaLabel: { ...typography.bodyStrong, fontSize: 16, color: colors.surface, flexShrink: 1 },
+
+  // The quieter choice under Send-now: retaking a photo already taken is the rare case, so it
+  // reads as a muted link rather than a second button competing with the one that sends.
+  retake: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: MIN_TOUCH_TARGET,
+    marginTop: spacing[2],
+  },
+  retakeLabel: {
+    ...typography.caption,
+    color: ink[500],
+    textDecorationLine: 'underline',
+  },
 });

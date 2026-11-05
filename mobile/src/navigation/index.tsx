@@ -43,10 +43,12 @@ import {
   clockTime,
   describeQueue,
   enqueue,
+  eventIdFor,
   readQueue,
   removeJob,
   retryFailed,
   subscribeQueue,
+  wakeAll,
 } from '@api/queue';
 import type { QueuedJob, QueuedLabel } from '@api/queue';
 import { drainQueue } from '@api/sync';
@@ -652,6 +654,77 @@ export default function RootNavigator(): React.JSX.Element {
   }, [showQueue]);
 
   /**
+   * The proof photo for the open record that is still on this phone, if there is one.
+   *
+   * The detail screen reads the *server*, so while a `finalize`/`attachPhoto` job sits in the
+   * queue waiting for signal it has no way to know the photo was ever taken — and it would tell
+   * the Mait "proof photo never taken" over a photo that is right here, about to send. This
+   * resolves the queued job for the event on screen (by the id on the job, or the one the
+   * create wrote down against its `client_uuid`) so the screen can say the truth and offer to
+   * send it now. Null when nothing of this event is queued.
+   */
+  const [pendingPhoto, setPendingPhoto] = useState<{
+    photoUri: string | null;
+    clientUuid: string;
+    failed: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (eventView === null) {
+        setPendingPhoto(null);
+        return;
+      }
+      const photoJobs = queueJobs.filter(
+        job => job.kind === 'finalize' || job.kind === 'attachPhoto',
+      );
+      for (const job of photoJobs) {
+        const onJob =
+          typeof job.payload.eventId === 'number' && job.payload.eventId > 0
+            ? job.payload.eventId
+            : null;
+        const resolved = onJob ?? (await eventIdFor(job.clientUuid));
+        if (resolved === eventView) {
+          if (alive) {
+            setPendingPhoto({
+              photoUri: (job.payload.photoUri as string) ?? null,
+              clientUuid: job.clientUuid,
+              failed: !!job.failed,
+            });
+          }
+          return;
+        }
+      }
+      if (alive) {
+        setPendingPhoto(null);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [eventView, queueJobs]);
+
+  /**
+   * Send the open record's queued photo now, past any backoff.
+   *
+   * Clears the wait on every job of that capture — a backoff it earned, or a refusal the office
+   * has since cleared — and drains at once. This is the Mait's own "send it to the server now"
+   * when they are standing on signal and do not want to wait for the next tick.
+   */
+  const sendPendingNow = useCallback(async () => {
+    if (!pendingPhoto) {
+      return;
+    }
+    await Promise.all(
+      queueJobs
+        .filter(job => job.clientUuid === pendingPhoto.clientUuid)
+        .map(job => retryFailed(job.id)),
+    );
+    await sync();
+  }, [pendingPhoto, queueJobs, sync]);
+
+  /**
    * Drain when the connection returns, and once on mount.
    *
    * A Mait finishes a round in a village with no signal and rides back through one. Waiting
@@ -685,6 +758,10 @@ export default function RootNavigator(): React.JSX.Element {
       }
       setOnline(reachable);
       if (reachable) {
+        // The link just came back, so the backoff every waiting job earned — almost always the
+        // signal having been gone — is cleared before the drain, or a job not yet due would sit
+        // under a live network for minutes. A refusal stays put; it waits on a person.
+        await wakeAll();
         sync();
       } else {
         again = setTimeout(ask, REACH_RETRY_MS);
@@ -1954,6 +2031,11 @@ export default function RootNavigator(): React.JSX.Element {
             // and where it lands cannot drift apart.
             onResume={resumeCapture}
             busy={closing}
+            // The photo sitting in the queue for this record, so the screen says "taken,
+            // waiting to send" instead of "never taken", and can push it now.
+            pendingPhoto={pendingPhoto}
+            onSendNow={sendPendingNow}
+            sending={draining}
           />
         )}
         {/* Pregnancy checks, layered over whichever tab opened them — Profile, where a Mait
