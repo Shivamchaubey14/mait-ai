@@ -544,6 +544,17 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
+     * Complete a member capture WITHOUT its proof photo — the deliberate no-proof close.
+     *
+     * For a capture stuck at straw_verified whose photo never reached the server and never
+     * will. Records the verified deduction and deducts the straw exactly as the ordinary close,
+     * but attaches no photo, so the record carries no evidence. The server marks it so.
+     */
+    forceCompleteAiEvent: function (id) {
+      return request({ path: '/ai-events/' + id + '/force-complete/', method: 'POST' });
+    },
+
+    /**
      * Maits from SAP who have no mobile number and so cannot sign in.
      *
      * 93% of the roster arrives in this state, which is why activation is a screen of its

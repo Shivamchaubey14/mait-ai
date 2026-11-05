@@ -72,11 +72,44 @@
     );
   }
 
-  /* Show the office-completion panel only where the event is one it could accept; hide it
-     everywhere else, including the moment after a completion lands, so the vanished button is
-     itself the confirmation. */
+  /* A member capture the office can finish only by waiving the proof photo: stuck at
+     straw_verified (no photo ever arrived), or short of a verified payment — the cases the
+     ordinary complete above refuses. The server still enforces every precondition; this only
+     decides whether to draw the graver button. */
+  function forceable(event) {
+    return (
+      canComplete &&
+      event.owner_type === 'member' &&
+      (event.status === 'straw_verified' ||
+        event.status === 'photo_captured' ||
+        event.status === 'payment_pending') &&
+      !completable(event)
+    );
+  }
+
+  /* Draw the office-completion panel in one of two modes, or not at all. A capture with its
+     photo and verified payment gets the ordinary "Complete this event"; one the Mait can never
+     finish from the phone gets "Complete without photo", with a note that says what is being
+     waived. Hidden everywhere else, including the moment after a completion lands — the vanished
+     panel is itself the confirmation. */
   function renderAction(event) {
-    $('#office-action').prop('hidden', !completable(event));
+    const normal = completable(event);
+    const force = !normal && forceable(event);
+    $('#office-action').prop('hidden', !(normal || force));
+    $('#office-complete').prop('hidden', !normal);
+    $('#office-force').prop('hidden', !force);
+    if (normal || force) {
+      $('#office-action-note').text(
+        force
+          ? 'This capture never got its proof photo, and cannot be finished from the phone. ' +
+              'Completing it here records the insemination with no photo — do this only when ' +
+              "the Mait genuinely cannot send one. It still deducts the straw from the Mait's " +
+              'stock and books the pregnancy check.'
+          : 'This member capture reached payment but never got its final close. Completing it ' +
+              "here deducts the straw from the Mait's stock, records the insemination as done " +
+              'and books its pregnancy check.'
+      );
+    }
   }
 
   /**
@@ -107,6 +140,40 @@
       })
       .fail(function (problem) {
         $btn.prop('disabled', false).text('Complete this event');
+        MaitAI.shell.alert(problem.detail);
+      });
+  }
+
+  /**
+   * Complete a capture WITHOUT its proof photo — the deliberate no-proof close.
+   *
+   * The graver sibling of runComplete: a stronger confirm that names what is being waived,
+   * because the record will carry no evidence photo. Same success path — the event is re-read
+   * and reads Completed, and the panel hides itself.
+   */
+  function runForce(id) {
+    if (
+      !window.confirm(
+        'Complete event ' +
+          id +
+          ' WITHOUT a proof photo? This records the insemination with no photo evidence, ' +
+          "deducts the straw from the Mait's stock and books the pregnancy check. Do this only " +
+          'when the photo can never come from the phone.'
+      )
+    ) {
+      return;
+    }
+
+    const $btn = $('#office-force');
+    $btn.prop('disabled', true).text('Completing…');
+
+    MaitAI.api
+      .forceCompleteAiEvent(id)
+      .done(function () {
+        load(id, 'Event ' + id + ' completed without a photo.');
+      })
+      .fail(function (problem) {
+        $btn.prop('disabled', false).text('Complete without photo');
         MaitAI.shell.alert(problem.detail);
       });
   }
@@ -689,6 +756,9 @@
     canComplete = readCanComplete();
     $('#office-complete').on('click', function () {
       runComplete(id);
+    });
+    $('#office-force').on('click', function () {
+      runForce(id);
     });
 
     load(id);

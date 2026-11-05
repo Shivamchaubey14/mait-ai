@@ -544,6 +544,39 @@ def finalize_member_capture(event: AIEvent, *, amount, actor=None) -> AIEvent:
 
 
 @transaction.atomic
+def office_force_complete(event: AIEvent, *, amount, actor=None, reason: str = "") -> AIEvent:
+    """
+    Close a member capture the office has decided to finish *without* its proof photo.
+
+    The deliberate exception to the rule that an insemination needs its photo to complete. A
+    capture the Mait left at ``straw_verified`` whose photo never reached the server — the
+    handset lost it, or it was never taken — and that the office nonetheless accepts as done.
+    It records the same verified deduction and deducts the same one straw the ordinary close
+    does; it simply attaches no photo, so the record carries no proof, which the audit and the
+    timeline both say plainly.
+
+    ``straw_verified`` has nowhere to go but ``photo_captured``, so the event is stepped through
+    that state with no photo and a note that says why — the proof is being waived on purpose and
+    on the record, not skipped quietly. From there the ordinary member back-half runs: the
+    verified deduction and the one-straw completion, with every guarantee ``complete_ai_event``
+    makes intact. Member only, like ``office_complete`` (a non-member authorises her own payment
+    with a code the office cannot enter); a replay of an already-completed event is a no-op.
+    """
+    event = AIEvent.objects.select_for_update().get(pk=event.pk)
+    if event.status == AIEvent.Status.COMPLETED:
+        return event
+    if event.status == AIEvent.Status.STRAW_VERIFIED:
+        _transition(
+            event,
+            AIEvent.Status.PHOTO_CAPTURED,
+            actor=actor,
+            note=reason or "Completed by the office without a proof photo",
+        )
+        event.save(update_fields=["status", "updated_at"])
+    return finalize_member_capture(event, amount=amount, actor=actor)
+
+
+@transaction.atomic
 def cancel_ai_event(event: AIEvent, *, reason: str = "", actor=None) -> AIEvent:
     """
     Abort a draft (SRS §11 `cancelled`).

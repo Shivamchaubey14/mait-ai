@@ -47,6 +47,7 @@ from .services import (
     complete_ai_event,
     finalize_member_capture,
     mark_payment_pending,
+    office_force_complete,
     photo_already_attached,
     start_ai_event,
 )
@@ -265,7 +266,7 @@ class AIEventViewSet(
         # Completing from the office is a back-office correction, like deleting: it closes a
         # capture the Mait left stuck, so it is gated to a real admin holding the section — not
         # to a Normal User, and never to the field — exactly as the delete routes are.
-        if self.action in ("destroy", "bulk_delete", "office_complete"):
+        if self.action in ("destroy", "bulk_delete", "office_complete", "force_complete"):
             return [CanDeleteAIEvent(), in_section(PortalSection.AI_EVENTS)()]
         # Reading is where the portal comes in, and two of its screens read this: the AI
         # events roster and the Reports query builder, which runs the same filters.
@@ -737,6 +738,87 @@ class AIEventViewSet(
             meta={
                 "to": event.status,
                 "office_complete": True,
+                "mait_id": event.mait_id,
+                "mpp_code": event.mpp.mpp_code,
+                "stock_deducted": event.stock_deducted,
+            },
+        )
+        return Response(AIEventSerializer(event).data)
+
+    @extend_schema(
+        summary="Complete a member capture WITHOUT its proof photo (office)",
+        description=(
+            "The deliberate exception to office completion: close a **member** capture the Mait "
+            "left stuck whose **proof photo never reached the server** — the handset lost it, or "
+            "it was never taken. It records the same verified ₹ deduction and deducts the same "
+            "one straw the ordinary close does, and books the pregnancy check — but attaches no "
+            "photo, so the record carries **no proof**. The timeline and the audit both say so.\n\n"
+            "This waives the evidence an insemination normally cannot complete without, so it is "
+            "for the records the Mait genuinely cannot finish from the phone, not a shortcut past "
+            "a photo that is merely on its way. Member only (a non-member authorises her own "
+            "payment with a code the office cannot enter), and an unpriced breed is refused "
+            "(`400`). A replay of an already-completed event is a no-op."
+        ),
+        request=None,
+        responses={200: AIEventSerializer},
+    )
+    @action(detail=True, methods=["post"], url_path="force-complete")
+    def force_complete(self, request, pk=None):
+        event = self.get_object()  # scoped by get_queryset, so an admin's zone still binds
+
+        if event.status == AIEvent.Status.COMPLETED:
+            return Response(AIEventSerializer(event).data)
+
+        if event.owner_type != AIEvent.OwnerType.MEMBER:
+            raise DomainError(
+                "Office completion is only for a member's capture. A non-member authorises her "
+                "own payment with a code, which the office cannot enter for her."
+            )
+        if event.status not in (
+            AIEvent.Status.STRAW_VERIFIED,
+            AIEvent.Status.PHOTO_CAPTURED,
+            AIEvent.Status.PAYMENT_PENDING,
+        ):
+            raise InvalidStateTransition(
+                "This capture is not in a state that can be completed — it has no straw held yet, "
+                "or it is already finished."
+            )
+
+        # Price the deduction first, exactly as the one-step finish does: an unpriced breed is a
+        # refusal no retry can clear, surfaced before anything is touched so the event is left as
+        # it was.
+        breed = getattr(event.semen_batch, "breed", "") if event.semen_batch_id else ""
+        amount = price_for(
+            breed=breed,
+            animal_type=event.animal.animal_type,
+            owner_type=event.owner_type,
+        )
+        if amount is None:
+            raise DomainError(
+                "This breed has no rate set for this kind of farmer. Ask the administrator to "
+                "price it before the capture can be closed."
+            )
+
+        event = office_force_complete(
+            event,
+            amount=amount,
+            actor=request.user,
+            reason="Completed by the office without a proof photo",
+        )
+
+        record_audit(
+            action="state_change",
+            entity_type="ai_event",
+            entity_id=event.id,
+            request=request,
+            meta={
+                "to": event.status,
+                "office_complete": True,
+                # The one that matters on this route: the record closed with no proof photo, by
+                # an office decision. Kept distinct from `office_complete` so a later reviewer can
+                # find every proof-less close without reading each event.
+                "force_complete": True,
+                "no_photo": not bool(event.ai_photo_url),
                 "mait_id": event.mait_id,
                 "mpp_code": event.mpp.mpp_code,
                 "stock_deducted": event.stock_deducted,

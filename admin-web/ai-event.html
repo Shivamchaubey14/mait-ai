@@ -244,8 +244,14 @@
                 here deducts the straw from the Mait's stock, records the insemination as done and
                 books its pregnancy check.
               </p>
-              <button class="btn btn--warn" id="office-complete" type="button">
+              <button class="btn btn--warn" id="office-complete" type="button" hidden>
                 Complete this event
+              </button>
+              <!-- The no-proof close, shown instead of the one above when the capture never got
+                   its photo. Outlined rather than solid: it is the graver of the two, and should
+                   not look like the default press. -->
+              <button class="btn btn--warn-outline" id="office-force" type="button" hidden>
+                Complete without photo
               </button>
             </section>
 
@@ -362,13 +368,15 @@
     </div>
 
     <script src="assets/vendor/jquery-3.7.1.min.js"></script>
-    <script src="assets/js/api.js"></script>
+    <!-- Versioned on this page so the force-complete method is fetched even when the browser has
+         an older api.js cached (Django's static serve sends no Cache-Control). -->
+    <script src="assets/js/api.js?v=20261105b"></script>
     <script src="assets/js/ui.js"></script>
     <script src="assets/js/controls.js"></script>
     <script src="assets/js/shell.js"></script>
     <script src="assets/js/lightbox.js"></script>
     <!-- Versioned so the Farmer & animal card's code is fetched even when the browser has the
          older ai-event.js cached (Django's static serve sends no Cache-Control). Bump on change. -->
-    <script src="assets/js/ai-event.js?v=20261105"></script>
+    <script src="assets/js/ai-event.js?v=20261105b"></script>
   </body>
 </html>

@@ -21,7 +21,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Role, User
 from apps.ai_events.models import AIEvent
-from apps.animals.models import Animal, AnimalType
+from apps.animals.models import Animal, AnimalType, BreedConfig
 from apps.core.models import AuditLog
 from apps.inventory.models import MaitInventoryLedger
 from apps.inventory.services import available_straw_count
@@ -262,6 +262,158 @@ class TestOfficeCompletePermissions:
         event, _ = stuck_member_event()
 
         assert normal_user_client.post(f"{BASE}/{event.id}/office-complete/").status_code == 403
+
+
+@pytest.fixture
+def priced(db):
+    """A member rate for the GIR cow the factories build, so force-complete can price the deduction."""
+    return BreedConfig.objects.create(
+        animal_type=AnimalType.COW,
+        code="GIR",
+        name="Gir",
+        rate=Decimal("100.00"),
+        non_member_rate=Decimal("150.00"),
+        is_active=True,
+    )
+
+
+@pytest.fixture
+def straw_verified_member(db, mait, mpp, member, animal, stocked_mait):
+    """A member capture with the straw held and nothing else: no photo, no payment, not done."""
+
+    def _make():
+        straw = stocked_mait(1)[0]
+        event = AIEvent.objects.create(
+            client_uuid=uuid.uuid4(),
+            mait=mait,
+            mpp=mpp,
+            owner_type=AIEvent.OwnerType.MEMBER,
+            member=member,
+            animal=animal,
+            semen_batch=straw,
+            straw_unique_no=straw.unique_straw_no,
+            status=AIEvent.Status.STRAW_VERIFIED,
+            performed_at=timezone.now(),
+        )
+        return event, straw
+
+    return _make
+
+
+class TestForceComplete:
+    """Completing a member capture WITHOUT its proof photo — the deliberate no-proof close."""
+
+    def test_it_completes_a_straw_verified_event_with_no_photo(
+        self, admin_client, straw_verified_member, priced, mait
+    ):
+        event, straw = straw_verified_member()
+        assert available_straw_count(mait) == 1
+
+        response = admin_client.post(f"{BASE}/{event.id}/force-complete/")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "completed"
+        event.refresh_from_db()
+        straw.refresh_from_db()
+        assert event.status == AIEvent.Status.COMPLETED
+        assert not event.ai_photo_url, "a force-complete attaches no proof photo"
+        assert straw.is_consumed is True
+        assert available_straw_count(mait) == 0
+        # The verified member deduction the ordinary close would have recorded.
+        payment = Payment.objects.get(ai_event=event)
+        assert payment.is_verified is True
+        assert payment.amount == Decimal("100.00")
+        # The question is still booked, exactly as a completion with a photo books it.
+        assert PregnancyCheck.objects.filter(ai_event=event).count() == 1
+
+    def test_it_deducts_exactly_one_straw(self, admin_client, straw_verified_member, priced):
+        event, _ = straw_verified_member()
+
+        admin_client.post(f"{BASE}/{event.id}/force-complete/")
+
+        ledger = MaitInventoryLedger.objects.filter(
+            ref_type=MaitInventoryLedger.RefType.AI_EVENT, ref_id=event.id
+        )
+        assert ledger.count() == 1
+        assert ledger.first().qty == -1
+
+    def test_a_replay_is_a_no_op(self, admin_client, straw_verified_member, priced, mait):
+        event, _ = straw_verified_member()
+
+        first = admin_client.post(f"{BASE}/{event.id}/force-complete/")
+        second = admin_client.post(f"{BASE}/{event.id}/force-complete/")
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert available_straw_count(mait) == 0
+        assert MaitInventoryLedger.objects.filter(ref_id=event.id).count() == 1
+
+    def test_it_is_audited_as_a_no_photo_force_complete(
+        self, admin_client, straw_verified_member, priced
+    ):
+        event, _ = straw_verified_member()
+
+        admin_client.post(f"{BASE}/{event.id}/force-complete/")
+
+        entry = AuditLog.objects.filter(
+            entity_type="ai_event", entity_id=event.id, action="state_change"
+        ).latest("id")
+        assert entry.meta_json["force_complete"] is True
+        assert entry.meta_json["no_photo"] is True
+        assert entry.meta_json["to"] == "completed"
+
+    def test_an_unpriced_breed_is_refused_and_touches_nothing(
+        self, admin_client, straw_verified_member, mait
+    ):
+        """No rate configured for the breed — refused, and the straw stays held."""
+        event, _ = straw_verified_member()
+
+        response = admin_client.post(f"{BASE}/{event.id}/force-complete/")
+
+        assert response.status_code == 400
+        event.refresh_from_db()
+        assert event.status == AIEvent.Status.STRAW_VERIFIED
+        assert available_straw_count(mait) == 1
+
+    def test_a_non_member_is_refused(self, admin_client, mait, mpp, stocked_mait, priced):
+        non_member = NonMember.objects.create(name="Walk-in", mpp=mpp, created_by_mait=mait)
+        animal = Animal.objects.create(
+            owner_type=Animal.OwnerType.NON_MEMBER,
+            non_member=non_member,
+            animal_type=AnimalType.COW,
+            breed="GIR",
+        )
+        straw = stocked_mait(1)[0]
+        event = AIEvent.objects.create(
+            client_uuid=uuid.uuid4(),
+            mait=mait,
+            mpp=mpp,
+            owner_type=AIEvent.OwnerType.NON_MEMBER,
+            non_member=non_member,
+            animal=animal,
+            semen_batch=straw,
+            straw_unique_no=straw.unique_straw_no,
+            status=AIEvent.Status.STRAW_VERIFIED,
+            performed_at=timezone.now(),
+        )
+
+        assert admin_client.post(f"{BASE}/{event.id}/force-complete/").status_code == 400
+        event.refresh_from_db()
+        assert event.status == AIEvent.Status.STRAW_VERIFIED
+
+    def test_a_mait_cannot_force_complete(self, mait_client, straw_verified_member, priced):
+        event, _ = straw_verified_member()
+
+        assert mait_client.post(f"{BASE}/{event.id}/force-complete/").status_code == 403
+        event.refresh_from_db()
+        assert event.status == AIEvent.Status.STRAW_VERIFIED
+
+    def test_a_normal_user_cannot_force_complete(
+        self, normal_user_client, straw_verified_member, priced
+    ):
+        event, _ = straw_verified_member()
+
+        assert normal_user_client.post(f"{BASE}/{event.id}/force-complete/").status_code == 403
 
     def test_anonymous_is_rejected(self, stuck_member_event):
         event, _ = stuck_member_event()
