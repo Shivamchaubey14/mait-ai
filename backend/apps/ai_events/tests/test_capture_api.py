@@ -319,8 +319,15 @@ class TestPhoto:
         assert response.status_code == 409
         assert response.json()["type"].endswith("/invalid-state-transition")
 
-    def test_gps_is_required(self, mait_client, mpp, member, animal, stocked_mait):
-        """The photo proves an animal; the pin ties it to the village it was billed to."""
+    def test_gps_is_optional(self, mait_client, mpp, member, animal, stocked_mait):
+        """
+        A capture with no location is still recordable — the photo alone is the proof.
+
+        GPS is optional (``AIEventPhotoSerializer``): a phone with location denied, an old
+        device, or an insemination done inside a shed must still be recordable, or the app
+        would strand the very capture it exists to save (SRS §6.9). A missing pin stores a null
+        coordinate; it does not refuse the photo.
+        """
         straw = stocked_mait(1)[0]
         event = mait_client.post(
             f"{BASE}/",
@@ -338,8 +345,10 @@ class TestPhoto:
             f"{BASE}/{event['id']}/photo/", {"photo": a_photo()}, format="multipart"
         )
 
-        assert response.status_code == 400
-        assert "gps_lat" in response.json()["errors"]
+        assert response.status_code == 200, response.json()
+        assert response.json()["status"] == AIEvent.Status.PHOTO_CAPTURED
+        assert response.json()["ai_photo_url"]
+        assert response.json()["gps_lat"] is None
 
 
 class TestComplete:

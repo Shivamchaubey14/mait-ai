@@ -12,6 +12,7 @@ import django_filters
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.http import QueryDict
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -69,8 +70,20 @@ def _drop_nullish_gps(data):
     stranded every no-GPS member capture at ``straw_verified`` for good. Dropping the key here
     lets the optional field default to None, so a capture taken with no location still closes.
     Returns a mutable copy; the original (an immutable multipart QueryDict) is untouched.
+
+    The copy is deliberately *shallow*. ``request.data`` on these endpoints is a multipart
+    ``QueryDict`` carrying the uploaded proof photo, and ``QueryDict.copy()`` deep-copies every
+    value — which raised an uncaught 500 on every photo upload, because an uploaded file object
+    cannot be deep-copied. Rebuilding a mutable ``QueryDict`` with ``setlist`` keeps the same file
+    object by reference and copies none of its bytes, so dropping the GPS keys is all this does.
     """
-    cleaned = data.copy()
+    if hasattr(data, "lists"):
+        cleaned = QueryDict(mutable=True)
+        for key, values in data.lists():
+            cleaned.setlist(key, values)
+    else:
+        # A plain dict (e.g. a JSON request or a test fixture): a shallow copy is enough.
+        cleaned = dict(data)
     for key in ("gps_lat", "gps_lng"):
         value = cleaned.get(key)
         if value is None or (isinstance(value, str) and value.strip().lower() in _NULLISH_GPS):
