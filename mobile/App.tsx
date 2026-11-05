@@ -15,6 +15,7 @@ import { NunitoSans_400Regular, NunitoSans_600SemiBold } from '@expo-google-font
 import { TiroDevanagariHindi_400Regular } from '@expo-google-fonts/tiro-devanagari-hindi';
 
 import { restoreLanguage } from '@/i18n';
+import { registerBackgroundSync } from '@api/backgroundSync';
 import { maitaiApi } from '@api/endpoints';
 import { profileRefreshed, sessionRestored } from '@/features/auth/authSlice';
 import { toAuthUser } from '@/features/auth/liveScope';
@@ -45,6 +46,11 @@ export default function App(): React.JSX.Element {
   // expires in fifteen minutes and refreshes itself, so the session lasts as long as the
   // refresh token does rather than as long as the app happens to stay in memory.
   useEffect(() => {
+    // Ask the OS to drain the offline queue in the background from now on, even with the app
+    // closed (see `api/backgroundSync`). Fire-and-forget and idempotent: it registers once and
+    // is a no-op on every launch after, and it stays silent where the OS forbids background work.
+    registerBackgroundSync();
+
     // The server's last known address first, before any request can go out — then ask whether
     // it has moved, without holding the launch up for the answer. The saved language beside it,
     // so the first screen is drawn in it rather than in English and then redrawn.

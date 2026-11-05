@@ -46,6 +46,7 @@
         }
       ],
       "expo-secure-store",
+      "expo-background-task",
       "expo-font",
       "expo-status-bar",
       [
