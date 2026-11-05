@@ -457,13 +457,15 @@ class MPPViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
         # SRS §6.2.3 — a Mait only ever sees their own MPPs. Enforced in the queryset rather
         # than by a filter the client supplies, so it cannot be bypassed by omitting one.
         #
-        # ...and only the *active* ones: a collection point the SAP master has retired should not
-        # appear in the field app's capture picker, where choosing it would open a flow against a
-        # point the dairy no longer collects at. An admin still sees every MPP in the portal
-        # directory (this branch is the Mait's alone), so a retired point stays manageable there.
+        # The Mait sees the *whole* set they are assigned, active and retired alike. A point the
+        # SAP master has marked inactive is not hidden: in a young deployment the master lags the
+        # ground, and a Mait who still visits a point the sheet calls retired must be able to
+        # record there — hiding it stranded exactly that work. The `is_active` flag rides along on
+        # each row (so the app can mark a retired one), but it no longer decides what the Mait can
+        # see or serve.
         mait = getattr(user, "mait_profile", None)
         if mait is not None and not user.is_admin:
-            queryset = queryset.filter(mait=mait, is_active=True)
+            queryset = queryset.filter(mait=mait)
         # And an office account to its zones. `plant_code` on the MPP itself, so this is the
         # one model where the scope needs no join at all.
         queryset = apply_scope(queryset, self.request, "plant_code")

@@ -91,11 +91,12 @@ class TestMaitScoping:
         assert codes == [mpp.mpp_code]
         assert "MPP999999" not in codes
 
-    def test_mait_does_not_see_a_retired_mpp(self, api_client, mait_user, mait, mpp):
+    def test_mait_sees_a_retired_mpp_marked_not_hidden(self, api_client, mait_user, mait, mpp):
         """
-        A collection point the SAP master has retired (``is_active=False``) drops out of the
-        field app's picker — choosing it would open a capture against a point the dairy no longer
-        collects at. An admin still sees it in the portal directory (covered elsewhere).
+        A collection point the SAP master has retired (``is_active=False``) is still shown to the
+        Mait, carrying its ``is_active`` flag so the app can mark it — it is not dropped. In a
+        young deployment the master lags the ground, and a Mait who still visits a point the sheet
+        calls retired must be able to find and serve it.
         """
         from apps.masterdata.models import MPP
 
@@ -104,11 +105,12 @@ class TestMaitScoping:
         )
 
         response = auth(api_client, mait_user).get(f"{BASE}/mpp/")
-        codes = [row["mpp_code"] for row in response.json()["results"]]
+        rows = {row["mpp_code"]: row for row in response.json()["results"]}
 
         assert response.status_code == 200
-        assert codes == [mpp.mpp_code]
-        assert "MPP777777" not in codes
+        assert "MPP777777" in rows, "a retired MPP is shown, not hidden"
+        assert rows["MPP777777"]["is_active"] is False
+        assert rows[mpp.mpp_code]["is_active"] is True
 
     def test_mait_cannot_see_another_maits_members(self, api_client, mait_user, member):
         from apps.masterdata.models import MPP, Mait

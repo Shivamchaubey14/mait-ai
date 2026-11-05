@@ -136,7 +136,18 @@ export default function SelectMppScreen({ onSelect, onBack }: Props): React.JSX.
           swatchLabel={initials(mpp.mpp_name)}
           tone="info"
           size="roomy"
-          pill={mpp.mpp_code === lastUsed ? t('aiFlow.lastUsed') : undefined}
+          // A point the SAP master has marked retired is shown and still recordable — the master
+          // lags the ground, and a Mait who still visits it must be able to serve it — but it is
+          // tagged so the Mait knows the sheet calls it closed. That takes the pill ahead of the
+          // "last used" note, since which point was used last matters less than one being retired.
+          pill={
+            mpp.is_active === false
+              ? t('aiFlow.mppRetired')
+              : mpp.mpp_code === lastUsed
+                ? t('aiFlow.lastUsed')
+                : undefined
+          }
+          pillTone={mpp.is_active === false ? 'muted' : 'primary'}
           selected={selected === mpp.mpp_code}
           // A tick on the chosen row and nothing on the others, as on every other choice in
           // the flow. An empty ring on each unchosen row is four controls asking to be read.

@@ -2063,6 +2063,7 @@
     "mppMembers_one": "{{count}} member",
     "mppMembers_other": "{{count}} members",
     "lastUsed": "Last used",
+    "mppRetired": "Retired",
     "mppChosen": "{{name}} selected",
     "selectMpp": "Select MPP",
     "selectFarmer": "Select farmer",

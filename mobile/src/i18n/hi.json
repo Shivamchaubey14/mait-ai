@@ -2119,6 +2119,7 @@
     "mppMembers_one": "{{count}} सदस्य",
     "mppMembers_other": "{{count}} सदस्य",
     "lastUsed": "पिछली बार",
+    "mppRetired": "बंद",
     "mppChosen": "{{name}} चुना गया",
     "whichMpp": "कौन सा संग्रह केंद्र?",
     "whichMppSubtitle": "सिर्फ़ एक होने पर यह चरण अगली बार छूट जाएगा।",

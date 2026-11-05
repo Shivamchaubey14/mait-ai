@@ -123,17 +123,16 @@ class OfflinePackView(APIView):
     )
     def get(self, request):
         mait = _mait_of(request)
-        # Every *active* MPP assigned to this Mait — the same set, counts and Mait fields the
-        # online `/mpp/` picker returns for a Mait, so the step-1 picker reads the same list
-        # whether the pack was built online or offline.
+        # Every MPP assigned to this Mait — active and retired alike — the same set, counts and
+        # Mait fields the online `/mpp/` picker returns for a Mait, so the step-1 picker reads the
+        # same list whether the pack was built online or offline.
         #
-        # Narrowed by `is_active`, matching `MPPViewSet`: a collection point the SAP master has
-        # retired should not appear in the capture picker, where choosing it would open a flow
-        # against a point the dairy no longer collects at. (A point freshly assigned to a Mait
-        # carries `is_active=True` by default, so this drops only the ones SAP has marked
-        # retired, not newly onboarded villages.)
+        # Not narrowed by `is_active`, matching `MPPViewSet`: a point the SAP master has marked
+        # retired is still shown and still recordable, because in a young deployment the master
+        # lags the ground and a Mait who still visits it must be able to record there. The
+        # `is_active` flag rides along so the app can mark a retired one.
         mpps = (
-            MPP.objects.filter(mait=mait, is_active=True)
+            MPP.objects.filter(mait=mait)
             .select_related("mait", "mait__user")
             # Count only active members, so the number on the step-1 card matches the member
             # list the Mait actually opens (the per-MPP pack serves active members only).
