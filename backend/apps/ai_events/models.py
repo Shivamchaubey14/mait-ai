@@ -122,6 +122,23 @@ class AIEvent(TimeStampedModel):
     )
 
     ai_photo_url = models.CharField(max_length=255, blank=True)
+    ai_photo_thumbnail_url = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=(
+            "A small variant of the proof photo, generated server-side on upload, for lists and "
+            "the portal to show without pulling the full image. Blank where generation failed — "
+            "the full photo is the record; the thumbnail is only a convenience."
+        ),
+    )
+    ai_photo_checksum = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=(
+            "SHA-256 of the uploaded photo bytes, so a stored image can be proved to be the one "
+            "the handset sent. Blank on records uploaded before this was recorded."
+        ),
+    )
     photo_source = models.CharField(
         max_length=10,
         choices=PhotoSource.choices,

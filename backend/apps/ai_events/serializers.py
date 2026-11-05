@@ -44,6 +44,24 @@ class PaymentSummarySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class AIEventPhotoStatusSerializer(serializers.Serializer):
+    """
+    The proof photo's state, served by ``GET /ai-events/{id}/photo-status/``.
+
+    A read-only poll for the mobile client to confirm an upload landed when the upload's own
+    response was lost on a village connection — the fallback the offline queue falls back to. It
+    answers whether the photo is on file and, once it is, the URLs and the checksum.
+    """
+
+    id = serializers.IntegerField()
+    status = serializers.CharField()
+    photo_uploaded = serializers.BooleanField()
+    ai_photo_url = serializers.CharField(allow_blank=True)
+    ai_photo_thumbnail_url = serializers.CharField(allow_blank=True)
+    ai_photo_checksum = serializers.CharField(allow_blank=True)
+    performed_at = serializers.DateTimeField(allow_null=True)
+
+
 class AIEventTimelineSerializer(serializers.ModelSerializer):
     """One step of the audit trail, served by ``GET /ai-events/{id}/timeline/``."""
 
@@ -171,6 +189,8 @@ class AIEventSerializer(serializers.ModelSerializer):
             "straw_unique_no",
             "stock_deducted",
             "ai_photo_url",
+            "ai_photo_thumbnail_url",
+            "ai_photo_checksum",
             "photo_source",
             "gps_lat",
             "gps_lng",

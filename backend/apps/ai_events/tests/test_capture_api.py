@@ -350,6 +350,66 @@ class TestPhoto:
         assert response.json()["ai_photo_url"]
         assert response.json()["gps_lat"] is None
 
+    def test_records_a_checksum_and_a_thumbnail(
+        self, mait_client, mpp, member, animal, stocked_mait
+    ):
+        """The upload stores a SHA-256 of the bytes and a small thumbnail beside the original."""
+        straw = stocked_mait(1)[0]
+        event = mait_client.post(
+            f"{BASE}/",
+            {
+                "client_uuid": "66666666-6666-4666-8666-666666666666",
+                "mpp_code": mpp.mpp_code,
+                "member_code": member.member_code,
+                "animal_id": animal.id,
+                "straw_unique_no": straw.unique_straw_no,
+            },
+            format="json",
+        ).json()
+
+        response = mait_client.patch(
+            f"{BASE}/{event['id']}/photo/",
+            {"photo": a_photo(), "gps_lat": "28.3670000", "gps_lng": "79.4304000"},
+            format="multipart",
+        )
+
+        assert response.status_code == 200, response.json()
+        body = response.json()
+        assert len(body["ai_photo_checksum"]) == 64  # hex SHA-256
+        assert body["ai_photo_thumbnail_url"]
+
+    def test_photo_status_poll_reports_before_and_after(
+        self, mait_client, mpp, member, animal, stocked_mait
+    ):
+        """The read-only fallback the offline client polls when an upload's response was lost."""
+        straw = stocked_mait(1)[0]
+        event = mait_client.post(
+            f"{BASE}/",
+            {
+                "client_uuid": "77777777-7777-4777-8777-777777777777",
+                "mpp_code": mpp.mpp_code,
+                "member_code": member.member_code,
+                "animal_id": animal.id,
+                "straw_unique_no": straw.unique_straw_no,
+            },
+            format="json",
+        ).json()
+
+        before = mait_client.get(f"{BASE}/{event['id']}/photo-status/")
+        assert before.status_code == 200
+        assert before.json()["photo_uploaded"] is False
+
+        mait_client.patch(
+            f"{BASE}/{event['id']}/photo/",
+            {"photo": a_photo(), "gps_lat": "28.3670000", "gps_lng": "79.4304000"},
+            format="multipart",
+        )
+
+        after = mait_client.get(f"{BASE}/{event['id']}/photo-status/").json()
+        assert after["photo_uploaded"] is True
+        assert after["status"] == AIEvent.Status.PHOTO_CAPTURED
+        assert len(after["ai_photo_checksum"]) == 64
+
 
 class TestComplete:
     def test_completing_deducts_the_straw(self, mait_client, mait, verified_event):

@@ -229,6 +229,8 @@ def attach_photo(
     event: AIEvent,
     *,
     photo_url: str,
+    thumbnail_url: str = "",
+    checksum: str = "",
     gps_lat=None,
     gps_lng=None,
     performed_at=None,
@@ -290,6 +292,10 @@ def attach_photo(
         note=("AI proof photo chosen from the gallery" if chosen else "AI proof photo captured"),
     )
     event.ai_photo_url = photo_url
+    # Empty when generation failed or an older caller did not pass them: written anyway, which is
+    # the same as leaving them blank, and keeps the save field-list stable rather than conditional.
+    event.ai_photo_thumbnail_url = thumbnail_url
+    event.ai_photo_checksum = checksum
     event.photo_source = photo_source
     event.gps_lat = gps_lat
     event.gps_lng = gps_lng
@@ -298,6 +304,8 @@ def attach_photo(
     event.save(
         update_fields=[
             "ai_photo_url",
+            "ai_photo_thumbnail_url",
+            "ai_photo_checksum",
             "photo_source",
             "gps_lat",
             "gps_lng",

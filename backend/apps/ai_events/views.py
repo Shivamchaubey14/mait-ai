@@ -38,6 +38,7 @@ from .serializers import (
     AIEventCreateSerializer,
     AIEventDetailSerializer,
     AIEventPhotoSerializer,
+    AIEventPhotoStatusSerializer,
     AIEventSerializer,
     AIEventTimelineSerializer,
     other_codes_by_vendor,
@@ -52,7 +53,7 @@ from .services import (
     photo_already_attached,
     start_ai_event,
 )
-from .storage import store_photo
+from .storage import store_photo_with_meta
 
 
 # The strings a multipart client sends for "no coordinate". A JSON null cannot ride in a
@@ -480,12 +481,15 @@ class AIEventViewSet(
         data = serializer.validated_data
 
         # Written before the transition, and outside any transaction: the upload takes as
-        # long as the village connection takes, and nothing else should wait on it.
-        photo_url = store_photo(event, data["photo"])
+        # long as the village connection takes, and nothing else should wait on it. The
+        # thumbnail and checksum are made here too, and never block: a failure leaves them empty.
+        stored = store_photo_with_meta(event, data["photo"])
 
         event = attach_photo(
             event,
-            photo_url=photo_url,
+            photo_url=stored.url,
+            thumbnail_url=stored.thumbnail_url,
+            checksum=stored.checksum,
             gps_lat=data.get("gps_lat"),
             gps_lng=data.get("gps_lng"),
             performed_at=data.get("performed_at"),
@@ -494,6 +498,34 @@ class AIEventViewSet(
             actor=request.user,
         )
         return Response(AIEventSerializer(event).data)
+
+    @extend_schema(
+        summary="Poll the proof photo's status",
+        description=(
+            "A read-only fallback for the mobile client to confirm a proof photo has landed, for "
+            "when the upload's own response was lost on a village connection. Returns whether the "
+            "photo is on file and, once it is, the full URL, the thumbnail URL and the SHA-256 "
+            "checksum. Writes nothing and is safe to poll."
+        ),
+        responses={200: AIEventPhotoStatusSerializer},
+    )
+    @action(detail=True, methods=["get"], url_path="photo-status")
+    def photo_status(self, request, pk=None):
+        event = self.get_object()
+        self._assert_own(event, request)
+        return Response(
+            AIEventPhotoStatusSerializer(
+                {
+                    "id": event.id,
+                    "status": event.status,
+                    "photo_uploaded": bool(event.ai_photo_url),
+                    "ai_photo_url": event.ai_photo_url,
+                    "ai_photo_thumbnail_url": event.ai_photo_thumbnail_url,
+                    "ai_photo_checksum": event.ai_photo_checksum,
+                    "performed_at": event.performed_at,
+                }
+            ).data
+        )
 
     @extend_schema(
         summary="Complete the event and deduct the straw",
@@ -598,10 +630,12 @@ class AIEventViewSet(
             photo_in = AIEventPhotoSerializer(data=_drop_nullish_gps(request.data))
             photo_in.is_valid(raise_exception=True)
             data = photo_in.validated_data
-            photo_url = store_photo(event, data["photo"])
+            stored = store_photo_with_meta(event, data["photo"])
             event = attach_photo(
                 event,
-                photo_url=photo_url,
+                photo_url=stored.url,
+                thumbnail_url=stored.thumbnail_url,
+                checksum=stored.checksum,
                 gps_lat=data.get("gps_lat"),
                 gps_lng=data.get("gps_lng"),
                 performed_at=data.get("performed_at"),
