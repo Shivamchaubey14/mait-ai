@@ -1,0 +1,150 @@
+/* --- Backup (W, Super Admin only) ----------------------------------------------------------
+ * One screen, one action: take a cold copy of the whole database as a ZIP. The portal's shared
+ * sheet (portal.css) draws the shell, the panel and the button; this file is only the pieces
+ * that are the backup screen's own — the lead paragraph, the "what's inside" list, and the
+ * progress bar that has to tell two different truths (building, then downloading) honestly.
+ */
+@import url('portal.css');
+
+.backup__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Measured a touch wider than the panel is tall-ish — a block of explanation reads better short
+   of the full width, so it does not stretch into a single thin line on a wide screen. */
+.backup__lead {
+  max-width: 64ch;
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+}
+
+/* What is actually in the archive. A plain list rather than a table — three rows do not earn a
+   header, and the file name beside its one line of plain English is the whole of the point. */
+.backup__facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  list-style: none;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.backup__fact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+/* The file name, set in the same monospace the rest of the portal uses for codes and paths, so
+   it reads as a thing on disk rather than as prose. */
+.backup__fact-key {
+  flex: none;
+  min-width: 11rem;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', monospace;
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.backup__fact-val {
+  font-size: var(--text-label);
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+}
+
+.backup__action {
+  display: flex;
+}
+
+/* The screen's one answer, so it is a touch larger than a toolbar button — this is what the
+   page is for, and it should read that way the moment it loads. */
+.backup__btn {
+  min-height: 44px;
+  padding: 0 var(--space-5);
+  font-size: var(--text-body);
+}
+
+/* Held while the archive is being built and sent: the green steps back so the button does not
+   look like it is still inviting a second click that would start a second whole-database copy. */
+.backup__btn:disabled {
+  color: var(--ink-100);
+  background: var(--ink-500);
+  border-color: var(--ink-500);
+  cursor: default;
+}
+
+/* --- the progress bar --------------------------------------------------------------------- */
+
+.backup__progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 64ch;
+}
+
+/* The same construction the SAP import progress uses (uploads.css): a track with a fill whose
+   width is what moves and so what is eased. */
+.backup__bar {
+  height: 10px;
+  overflow: hidden;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+.backup__fill {
+  width: 0;
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: var(--radius-pill);
+  transition: width 400ms ease;
+}
+
+/* While the server is still building the zip there is no fraction to be a fraction of yet — the
+   file is not finished and its length is not known. A stripe that travels says "working, length
+   unknown" and never has to run to the end and jump backwards, which is what a guessed total
+   does the moment the real one arrives. */
+.backup__bar.is-indeterminate .backup__fill {
+  width: 30%;
+  transition: none;
+  animation: backup-slide 1.1s ease-in-out infinite;
+}
+
+/* Finished: the bar fills green and holds, the screen's quiet confirmation beside the alert. */
+.backup__bar.is-done .backup__fill {
+  width: 100%;
+  background: var(--color-primary-dark);
+}
+
+/* Failed: the track carries the portal's error red so the bar itself says it, not only the
+   alert above it. */
+.backup__bar.is-error .backup__fill {
+  width: 100%;
+  background: var(--color-error);
+  animation: none;
+}
+
+@keyframes backup-slide {
+  from {
+    transform: translateX(-110%);
+  }
+
+  to {
+    transform: translateX(370%);
+  }
+}
+
+.backup__status {
+  margin: 0;
+  font-size: var(--text-caption);
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+}

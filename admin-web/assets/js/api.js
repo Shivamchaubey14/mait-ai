@@ -717,6 +717,20 @@ window.MaitAI = window.MaitAI || {};
     },
 
     /**
+     * The whole database as a backup ZIP (Super Admin only).
+     *
+     * Goes through `download` for the reason every export here does — it streams a file and
+     * needs the bearer token, which an `<a href>` cannot carry. The server records the taking
+     * of it in the audit trail before it builds the archive, so a download that never finishes
+     * is still accounted for. `onProgress` receives the same `{ phase, fraction }` the other
+     * exports report, so the sidebar card can show the wait honestly.
+     */
+    databaseBackup: function (onProgress) {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-');
+      return MaitAI.api.download('/admin/backup/', 'maitai-backup-' + stamp + '.zip', onProgress);
+    },
+
+    /**
      * The detail behind one Exceptions card.
      *
      * `queue` is `pending-payments`, `low-stock`, `stale-indents`, `overdue-checks` or

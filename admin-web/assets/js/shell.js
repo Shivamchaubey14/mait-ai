@@ -73,6 +73,12 @@ window.MaitAI = window.MaitAI || {};
        everybody did, including who opened a farmer's identity card. */
     logs: 'M12 3l8 4v5c0 5-3.4 8.3-8 9.5-4.6-1.2-8-4.5-8-9.5V7zM9 12l2 2 4-4',
 
+    /* A database cylinder with a download arrow dropping from it: a whole-system copy taken off
+       the server and kept. It is the one sidebar section that is a thing to *do* rather than a
+       place to read, so the glyph carries the arrow the reading sections do not. */
+    backup:
+      'M20 7c0 1.4-3.6 2.5-8 2.5S4 8.4 4 7s3.6-2.5 8-2.5S20 5.6 20 7M4 7v5c0 1.3 3.2 2.3 7.3 2.5M20 7v3.5M12 14v7M12 21l-3-3M12 21l3-3',
+
     /* Not sidebar sections: the filter bar's magnifier and the four notice tones. */
     search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4.3-4.3',
     /* Waiting, as opposed to wrong. The dashboard already draws this one for "Lifetime"; an
@@ -136,6 +142,12 @@ window.MaitAI = window.MaitAI || {};
     // Aadhaar card and who took a workbook of bank details away, and the desk that
     // administers accounts is the one that answers for it.
     { key: 'logs', label: 'Audit log', href: 'logs.html' },
+    // Directly under the Audit log, and the foot of the sidebar: taking a cold copy of the whole
+    // database is the one entry here that is an action rather than a screen to read, and the
+    // trail above it is where that action is recorded. `superAdminOnly` keeps it out of every
+    // other account's sidebar — it is not a portal section an admin can be granted, it is the
+    // keys to the building, and the endpoint behind it refuses anyone else regardless.
+    { key: 'backup', label: 'Backup', href: 'backup.html', superAdminOnly: true },
   ];
 
   /* `className` is optional — a notice's glyph is sized by its container, not by a class. */
@@ -173,17 +185,43 @@ window.MaitAI = window.MaitAI || {};
 
   function visibleSections() {
     const keys = assigned();
-    if (!keys) {
-      return SECTIONS;
-    }
     return SECTIONS.filter(function (section) {
-      return keys.indexOf(section.key) >= 0;
+      // A Super-Admin-only entry (the backup) is never in `portal_sections` — it is not a
+      // grantable section — so it would be filtered straight out below. It is decided by role
+      // on its own, and shown to no one else even while the profile is still loading.
+      if (section.superAdminOnly) {
+        return isSuperAdmin();
+      }
+      // `null` means the profile has not loaded yet: draw the whole menu and correct it when it
+      // arrives, the same bet renderSidebar documents.
+      return !keys || keys.indexOf(section.key) >= 0;
     });
   }
 
   function isAssigned(key) {
+    const section = SECTIONS.filter(function (s) {
+      return s.key === key;
+    })[0];
+    // The backup page is reached by role, not by an assigned section — checking it against
+    // `portal_sections` would refuse the Super Admin it is drawn for.
+    if (section && section.superAdminOnly) {
+      return isSuperAdmin();
+    }
     const keys = assigned();
     return !keys || !key || keys.indexOf(key) >= 0;
+  }
+
+  /**
+   * Whether this account is a Super Admin.
+   *
+   * The Backup section is drawn for them alone, because taking a cold copy of the whole database
+   * is not a portal *section* an admin can be given — it is the keys to the building, and the
+   * endpoint behind the page refuses anyone else regardless. Hiding it here is the courtesy;
+   * the server is the control.
+   */
+  function isSuperAdmin() {
+    const stored = MaitAI.api.profile.get();
+    return !!(stored && stored.role === 'super_admin');
   }
 
   function renderSidebar(active) {
@@ -386,6 +424,9 @@ window.MaitAI = window.MaitAI || {};
 
     /** Which sections this account may open — the access editor reads it. */
     assigned: assigned,
+
+    /** Whether the signed-in account is a Super Admin — the Backup page gates its action on it. */
+    isSuperAdmin: isSuperAdmin,
 
     /**
      * Where this account should land after signing in.

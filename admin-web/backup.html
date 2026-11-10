@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Backup · Mait AI Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/css/backup.css" />
+  </head>
+
+  <body>
+    <div class="shell" data-page="backup">
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 class="topbar__title">Backup</h1>
+            <p class="topbar__meta">
+              A cold copy of the whole database, as a ZIP you can keep or restore from.
+            </p>
+          </div>
+          <div class="topbar__actions">
+            <button class="btn btn--logout" id="account" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div id="alert-region" role="alert" aria-live="polite"></div>
+
+        <!-- Taking the backup is itself a personal-data read — it carries members' Aadhaar and
+             bank details — and the server records it in the audit trail before it builds the
+             file. Saying so here matters as much as recording it: whoever takes the copy should
+             know it is accounted for, and that the file leaves the building with PII inside. -->
+        <div class="notice notice--warn">
+          <span class="notice__icon" aria-hidden="true"></span>
+          <div>
+            <p class="notice__title">This archive contains personal data.</p>
+            <p class="notice__body">
+              Members' Aadhaar, mobile numbers and bank details are inside it. Taking the backup is
+              logged against your account in the audit trail. Keep the file somewhere only the
+              office can reach.
+            </p>
+          </div>
+        </div>
+
+        <section class="panel backup" aria-labelledby="backup-title">
+          <div class="panel__head">
+            <h2 class="panel__title" id="backup-title">
+              <span class="panel__icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M12 3c4.4 0 8 1.1 8 2.5S16.4 8 12 8 4 6.9 4 5.5 7.6 3 12 3M4 5.5v13C4 20 7.6 21 12 21s8-1 8-2.5v-13M4 12c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5"
+                  />
+                </svg>
+              </span>
+              Download a backup
+            </h2>
+          </div>
+
+          <div class="backup__body">
+            <p class="backup__lead">
+              Everything the portal holds — accounts and roles, the Mait and MPP masters, members
+              and non-members, AI events, inventory, indents, rates, payments and the audit trail —
+              is serialized to JSON and zipped, with a manifest and restore notes beside it. The
+              archive is built on the server before the download begins, so there is a pause on a
+              large database before the first byte arrives.
+            </p>
+
+            <!-- What is actually in the file, so an admin knows what they are holding and how to
+                 read it back without opening the zip to find out. -->
+            <ul class="backup__facts">
+              <li class="backup__fact">
+                <span class="backup__fact-key">data/maitai-data.json</span>
+                <span class="backup__fact-val">Every table, as a Django fixture.</span>
+              </li>
+              <li class="backup__fact">
+                <span class="backup__fact-key">manifest.json</span>
+                <span class="backup__fact-val">When it was taken, by whom, and row counts.</span>
+              </li>
+              <li class="backup__fact">
+                <span class="backup__fact-key">RESTORE.txt</span>
+                <span class="backup__fact-val">The steps to load it into a fresh database.</span>
+              </li>
+            </ul>
+
+            <div class="backup__action">
+              <button class="btn btn--primary backup__btn" id="backup-download" type="button">
+                <svg
+                  class="btn__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 3v11M12 14l-4-4M12 14l4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"
+                  />
+                </svg>
+                <!-- Its own element so the running status can replace the words without taking
+                     the glyph beside them with it. -->
+                <span id="backup-label">Download backup</span>
+              </button>
+            </div>
+
+            <!-- Hidden until a run starts. The bar is indeterminate while the server is still
+                 building the archive (there is no fraction to show yet) and becomes a filling
+                 bar once bytes are arriving against a known length. -->
+            <div class="backup__progress" id="backup-progress" hidden>
+              <div class="backup__bar is-indeterminate" id="backup-bar">
+                <div class="backup__fill" id="backup-fill"></div>
+              </div>
+              <p class="backup__status" id="backup-status">Preparing the archive…</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/vendor/jquery-3.7.1.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/shell.js"></script>
+    <script src="assets/js/backup.js"></script>
+  </body>
+</html>
